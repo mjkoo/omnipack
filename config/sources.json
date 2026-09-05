@@ -1,0 +1,15 @@
+{
+  "rjny": {
+    "repo": "",
+    "branch": "main",
+    "path": "src/applications.json"
+  },
+  "bboi": {
+    "codeberg_repo": "",
+    "single_asset_pattern": "Decomp-Recomp.V*.json",
+    "dual_asset_pattern": "Dual-Screen-Decomp-Recomp.V*.json"
+  },
+  "codm": {
+    "readme_url": ""
+  }
+}

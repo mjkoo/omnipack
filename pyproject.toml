@@ -1,0 +1,79 @@
+[project]
+name = "obtainium-pack"
+version = "0.1.0"
+description = "Curated Obtainium import pack: nightly-rebuilt union of upstream app catalogs with an overlay of fixes"
+readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE*"]
+requires-python = ">=3.14"
+dependencies = []
+classifiers = [
+  "Private :: Do Not Upload",
+  "Development Status :: 3 - Alpha",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.14",
+]
+authors = [
+    { name = "Maxwell Koo", email = "30420+mjkoo@users.noreply.github.com" }
+]
+
+[project.urls]
+Repository = "https://github.com/mjkoo/obtainium-emulation-pack"
+Issues = "https://github.com/mjkoo/obtainium-emulation-pack/issues"
+
+[project.scripts]
+pack = "obtainium_pack.cli:main"
+
+[dependency-groups]
+dev = [{ include-group = "lint" }, { include-group = "test" }]
+lint = [
+    "ruff>=0.16",
+    "ty>=0.0.73",
+]
+test = [
+    "pytest>=9",
+    "pytest-cov>=7",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.5,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.uv]
+required-version = ">=0.12.5"
+preview-features = ["audit-command"]
+
+# ruff's defaults are broad; extend-select only adds to them. Never set
+# `select`: it replaces the defaults.
+[tool.ruff.lint]
+extend-select = ["ARG"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ARG"]  # pytest fixtures are injected by name
+
+[tool.ruff.format]
+docstring-code-format = true
+
+[tool.ty.src]
+include = ["src", "tests"]
+
+[tool.pytest]
+minversion = "9.0"
+testpaths = ["tests"]
+addopts = ["-ra", "--import-mode=importlib"]
+strict = true
+filterwarnings = ["error"]
+
+[tool.coverage.run]
+source_pkgs = ["obtainium_pack"]
+branch = true
+
+[tool.coverage.report]
+show_missing = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "raise NotImplementedError",
+  "@(abc\\.)?abstractmethod",
+  "@overload",
+  "if __name__ == .__main__.:",
+]

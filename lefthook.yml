@@ -1,0 +1,40 @@
+colors: false
+
+pre-commit:
+  parallel: true
+  jobs:
+    - name: format-check
+      glob: "*.py"
+      run: just format-check
+
+    - name: lint-check
+      glob: "*.py"
+      run: just lint-check
+
+    - name: typecheck
+      glob: "{*.py,pyproject.toml,uv.lock}"
+      run: just typecheck
+
+    - name: lock-check
+      glob: "{pyproject.toml,uv.lock}"
+      run: just lock-check
+
+    - name: lint-actions
+      glob: ".github/workflows/*.yml"
+      run: just lint-actions
+
+    - name: no-fancy-dashes
+      glob: "*"
+      run: >
+        ! grep -nIE "$(printf '\342\200\222|\342\200\223|\342\200\224|\342\200\225|\342\210\222')" {staged_files} ||
+        { echo "Found em-dash or en-dash characters. Use plain hyphens instead."; exit 1; }
+
+commit-msg:
+  jobs:
+    - name: commitlint
+      run: npx --yes --package @commitlint/cli --package @commitlint/config-conventional -- commitlint --edit {1}
+
+    - name: no-fancy-dashes
+      run: >
+        ! grep -nE "$(printf '\342\200\222|\342\200\223|\342\200\224|\342\200\225|\342\210\222')" {1} ||
+        { echo "Commit message contains an em-dash or en-dash. Use plain hyphens instead."; exit 1; }

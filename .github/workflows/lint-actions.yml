@@ -1,0 +1,49 @@
+# Copy verbatim to .github/workflows/lint-actions.yml. Lints every workflow
+# with actionlint (syntax, expressions, shellcheck on run: blocks) and zizmor
+# (supply-chain and permission audits, default hash-pin policy). The two
+# tool versions and the action pins are examples; resolve current ones at
+# setup time (Dependabot keeps the action pins and their comments fresh; the
+# actionlint and zizmor versions are bumped by hand, together with the
+# actionlint tag in the download URL).
+name: Lint actions
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  lint-actions:
+    name: Lint actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: taiki-e/install-action@ba47c86ac325773530516bb756137ac718732518 # v2.86.5
+        with:
+          tool: zizmor@1.29.0
+
+      # actionlint is a Go binary with no install-action manifest (the
+      # cargo-binstall fallback cannot find it), so use its own downloader,
+      # pinned to the release tag of the version it installs.
+      - name: Install actionlint
+        run: |
+          mkdir -p "$RUNNER_TEMP/bin"
+          bash <(curl -sSfL "https://raw.githubusercontent.com/rhysd/actionlint/v1.7.12/scripts/download-actionlint.bash") 1.7.12 "$RUNNER_TEMP/bin"
+          echo "$RUNNER_TEMP/bin" >> "$GITHUB_PATH"
+
+      - name: actionlint
+        run: actionlint
+
+      - name: zizmor
+        run: zizmor --persona pedantic .github/workflows
