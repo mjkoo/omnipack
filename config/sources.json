@@ -1,15 +1,15 @@
 {
   "rjny": {
-    "repo": "",
+    "repo": "RJNY/Obtainium-Emulation-Pack",
     "branch": "main",
     "path": "src/applications.json"
   },
   "bboi": {
-    "codeberg_repo": "",
+    "codeberg_repo": "BBoi34/Obtainium-Recomp-Decomp",
     "single_asset_pattern": "Decomp-Recomp.V*.json",
     "dual_asset_pattern": "Dual-Screen-Decomp-Recomp.V*.json"
   },
   "codm": {
-    "readme_url": ""
+    "readme_url": "https://raw.githubusercontent.com/codm2000/Dual-Screen-Games/main/README.md"
   }
 }
