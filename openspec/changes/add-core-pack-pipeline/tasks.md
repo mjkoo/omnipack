@@ -1,10 +1,10 @@
 ## 1. Foundations
 
-- [ ] 1.1 Extend the normalized entry model to carry the variant a candidate
+- [x] 1.1 Extend the normalized entry model to carry the variant a candidate
   applies to, its name, its source type, its category list and its provenance,
   replacing the variant-set field; verify by a unit test constructing candidates for one
   package id in each variant and asserting they stay distinct.
-- [ ] 1.2 Add the standard-library HTTP helper with timeout, user agent and
+- [x] 1.2 Add the standard-library HTTP helper with timeout, user agent and
   bounded retries with backoff, used by all pipeline HTTP. Add dedicated
   `config/http.json` with default content
   `{"credentials": {"api.github.com": "GITHUB_TOKEN"}}`, mapping exact hosts
@@ -17,12 +17,12 @@
   unregistered hosts despite other tokens being set, no inferred subdomain or
   `www.` registration, and no source token forwarded across a cross-host
   redirect.
-- [ ] 1.3 Capture trimmed fixture snapshots of the RJNY source catalog, both
+- [x] 1.3 Capture trimmed fixture snapshots of the RJNY source catalog, both
   RJNY rendered exports, both BBoi34 release assets, the Codeberg release
   listing and the codm2000 README; verify the fixtures load and each carries
   the entries the later tests reference, including the duplicate ids and the
   non-GitHub README rows.
-- [ ] 1.4 Add the shared URL normalization used by the pipeline's two URL
+- [x] 1.4 Add the shared URL normalization used by the pipeline's two URL
   comparison sites, the already-contributed check on codm2000 links and the
   resolved-id cache key - discard the scheme, lowercase the host, drop a
   leading `www.`, drop a trailing slash and a trailing `.git`, and compare a
