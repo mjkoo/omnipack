@@ -155,7 +155,7 @@
 
 ## 4. Composition
 
-- [ ] 4.1 Drive the composition stages in a fixed order - union by precedence,
+- [x] 4.1 Drive the composition stages in a fixed order - union by precedence,
   denylist removal, overlay target validation, overlay application, then the
   dual-screen coverage check - with the denylist observing entries as their
   sources contributed them and never re-applied afterwards, which is safe
@@ -163,17 +163,17 @@
   verify by a test asserting an overlay whose patch carries the package-id
   field set to an id the denylist names fails the build, and a test asserting
   an overlay naming an id the denylist just removed fails the build.
-- [ ] 4.2 Implement the per-variant union keyed by package id with the
+- [x] 4.2 Implement the per-variant union keyed by package id with the
   precedence order extras, RJNY, BBoi34, generated, keeping the winning
   candidate whole, collapsing identical candidates that come from one source,
   and failing the build with the source, the variant and the package id when
   one source contributes differing candidates for the same id in one variant;
   verify by unit tests covering a two-source collision, an extras collision,
   an identical same-source duplicate, and a differing same-source duplicate.
-- [ ] 4.3 Report displaced candidates with the winning and losing source and
+- [x] 4.3 Report displaced candidates with the winning and losing source and
   the differing fields; verify by a unit test asserting a settings difference
   between a winner and a loser appears in the report.
-- [ ] 4.4 Implement denylist removal by package id, with an optional variant
+- [x] 4.4 Implement denylist removal by package id, with an optional variant
   on an entry scoping both the removal and the match test to that variant alone,
   reporting each removal with the recorded reason, treating an entry whose
   package id matches nothing in the variants it applies to as a no-op recorded
@@ -190,14 +190,14 @@
   and an entry naming an
   unknown variant asserting the build fails with an error naming the entry and
   the value.
-- [ ] 4.5 Validate overlay targets before applying them: the common overlay
+- [x] 4.5 Validate overlay targets before applying them: the common overlay
   must name a package id present in at least one composed variant, and the
   dual-screen overlay one present in the composed dual-screen variant; verify
   by unit tests for a common overlay naming an id present in neither variant
   and a dual-screen overlay naming an id absent from the dual-screen variant,
   and by a test asserting a common overlay naming an id present in one variant
   only succeeds and patches that variant.
-- [ ] 4.6 Implement overlay application as a JSON Merge Patch keyed by package
+- [x] 4.6 Implement overlay application as a JSON Merge Patch keyed by package
   id, applying the common overlay to whichever composed variants contain the
   named id and the dual-screen overlay to the dual-screen variant on top of it,
   requiring each patch to be an object and rejecting with an error naming the
@@ -212,7 +212,7 @@
   one mapping the package-id field to null each failing the same way, and a
   package id mapped directly to null - and to a non-object value - failing the
   build with an error naming that package id rather than removing the entry.
-- [ ] 4.7 Fail the build when a package id in the composed single-screen
+- [x] 4.7 Fail the build when a package id in the composed single-screen
   variant is absent from the dual-screen variant, exempting an id a denylist
   entry names for the dual-screen variant whether or not that entry actually
   removed anything; verify by a unit test for the failing case, one asserting a
