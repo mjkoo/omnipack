@@ -4,10 +4,30 @@ from __future__ import annotations
 
 import argparse
 from collections.abc import Sequence
+from pathlib import Path
+
+from obtainium_pack.http import HttpClient, HttpConfig
+from obtainium_pack.package_id import PackageIdCache, PackageIdResolver
+from obtainium_pack.sources import IngestionResult, ingest_all, load_json
 
 
-def build(args: argparse.Namespace) -> int:
-    raise NotImplementedError
+def build(_args: argparse.Namespace) -> int:
+    _ingest_for_build(Path.cwd())
+    # Composition, rendering, and atomic publication are implemented by the
+    # later pipeline groups. Reaching here proves all sources were ingested.
+    raise NotImplementedError("build output pipeline is not implemented")
+
+
+def _ingest_for_build(root: Path) -> IngestionResult:
+    source_config = load_json(root / "config/sources.json", "sources")
+    if not isinstance(source_config, dict):
+        from obtainium_pack.sources import SourceError
+
+        raise SourceError("sources", "configuration must be an object")
+    extras_config = load_json(root / "config/extras.json", "extras")
+    http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
+    resolver = PackageIdResolver(http, PackageIdCache(root / "config/package-ids.json"))
+    return ingest_all(http, source_config, extras_config, resolver)
 
 
 def verify(args: argparse.Namespace) -> int:

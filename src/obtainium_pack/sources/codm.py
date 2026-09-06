@@ -9,9 +9,69 @@ Generated entries map to the dual variant only.
 
 from __future__ import annotations
 
-from obtainium_pack.model import App
+import re
+from collections.abc import Mapping, Sequence
+from typing import cast
+from urllib.parse import urlsplit
+
+from obtainium_pack.model import App, Variant
+from obtainium_pack.package_id import PackageIdResolver, generated_project_entry
+from obtainium_pack.sources import IngestionReport
+from obtainium_pack.sources.common import HttpGetter, ProjectResolver, SourceError
+from obtainium_pack.urls import normalize_project_url
+
+LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)")
 
 
-def fetch() -> list[App]:
+def fetch(
+    http: HttpGetter,
+    config: Mapping[str, object],
+    resolver: ProjectResolver,
+    higher_precedence: Sequence[App],
+    report: IngestionReport,
+) -> list[App]:
     """Return generated entries for codm2000's GitHub-hosted catalog rows."""
-    raise NotImplementedError
+    try:
+        readme_url = config.get("readme_url")
+        if not isinstance(readme_url, str) or not readme_url.strip():
+            raise SourceError("codm", "configured location is empty")
+        text = http.get(readme_url).body.decode("utf-8")
+        covered = {
+            normalize_project_url(app.url)
+            for app in higher_precedence
+            if app.variant is Variant.DUAL
+        }
+        result: list[App] = []
+        seen: set[str] = set()
+        for url in LINK_RE.findall(text):
+            parsed = urlsplit(url)
+            parts = [part for part in parsed.path.split("/") if part]
+            if (parsed.hostname or "").lower().removeprefix(
+                "www."
+            ) != "github.com" or len(parts) != 2:
+                report.skipped.append(
+                    {
+                        "source": "codm2000",
+                        "url": url,
+                        "reason": "not a GitHub repository",
+                    }
+                )
+                continue
+            normalized = normalize_project_url(url)
+            if normalized in covered or normalized in seen:
+                continue
+            seen.add(normalized)
+            generated = generated_project_entry(url, cast(PackageIdResolver, resolver))
+            report.record_resolution(
+                url,
+                generated.app,
+                generated.resolution.status,
+                generated.resolution.failure,
+            )
+            if generated.app is not None:
+                result.append(generated.app)
+        return result
+    except SourceError:
+        raise
+    except Exception as error:
+        raise SourceError("codm", str(error)) from error

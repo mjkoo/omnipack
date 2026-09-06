@@ -1,0 +1,121 @@
+"""Shared normalization and diagnostics for source catalogs."""
+
+from __future__ import annotations
+
+import json
+from collections.abc import Mapping
+from typing import Any, Protocol
+from urllib.parse import urlsplit
+
+from obtainium_pack.http import HttpResponse
+from obtainium_pack.model import App, Provenance, SourceType, Variant
+from obtainium_pack.package_id import ResolutionResult
+
+
+class HttpGetter(Protocol):
+    def get(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        max_bytes: int | None = None,
+        method: str = "GET",
+    ) -> HttpResponse: ...
+
+
+class ProjectResolver(Protocol):
+    def resolve(self, project_url: str, /) -> ResolutionResult: ...
+
+
+class SourceError(RuntimeError):
+    """A configured source could not be fetched or normalized."""
+
+    def __init__(self, source: str, message: str) -> None:
+        self.source = source
+        super().__init__(f"{source}: {message}")
+
+
+def source_type(value: object, *, source: str, entry: str) -> SourceType:
+    try:
+        return SourceType(value)
+    except (TypeError, ValueError) as error:
+        raise SourceError(
+            source, f"entry {entry!r} has unsupported source type {value!r}"
+        ) from error
+
+
+def derived_source_type(url: str) -> SourceType:
+    parsed = urlsplit(url if "://" in url else f"https://{url}")
+    return (
+        SourceType.GITHUB
+        if (parsed.hostname or "").lower().removeprefix("www.") == "github.com"
+        else SourceType.HTML
+    )
+
+
+def settings(value: object, *, source: str, entry: str) -> dict[str, Any]:
+    if value is None:
+        return {}
+    if isinstance(value, str):
+        try:
+            value = json.loads(value)
+        except json.JSONDecodeError as error:
+            raise SourceError(
+                source, f"entry {entry!r} has malformed additionalSettings"
+            ) from error
+    if not isinstance(value, dict):
+        raise SourceError(
+            source, f"entry {entry!r} additionalSettings must decode to an object"
+        )
+    return dict(value)
+
+
+def normalize_record(
+    record: object,
+    *,
+    source: str,
+    variant: Variant,
+    derive_type: bool = False,
+) -> App:
+    if not isinstance(record, dict):
+        raise SourceError(source, "catalog entry must be an object")
+    label = record.get("name") or record.get("id") or "unnamed entry"
+    for field in ("id", "url", "name"):
+        if not isinstance(record.get(field), str) or not record[field].strip():
+            raise SourceError(source, f"entry {label!r} is missing {field}")
+    categories = record.get("categories", [])
+    if not isinstance(categories, list) or not all(
+        isinstance(item, str) for item in categories
+    ):
+        raise SourceError(
+            source, f"entry {label!r} categories must be a list of strings"
+        )
+    url = record["url"]
+    kind = (
+        derived_source_type(url)
+        if derive_type
+        else source_type(record.get("overrideSource"), source=source, entry=str(label))
+    )
+    modeled = {
+        "id",
+        "url",
+        "name",
+        "overrideSource",
+        "categories",
+        "additionalSettings",
+        "meta",
+        "variants",
+    }
+    return App(
+        id=record["id"],
+        url=url,
+        name=record["name"],
+        source_type=kind,
+        categories=tuple(categories),
+        variant=variant,
+        provenance=Provenance(source, url),
+        additional_settings=settings(
+            record.get("additionalSettings"), source=source, entry=str(label)
+        ),
+        raw={key: value for key, value in record.items() if key not in modeled},
+    )

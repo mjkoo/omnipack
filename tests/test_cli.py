@@ -9,7 +9,7 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", ["build", "verify", "report"])
+@pytest.mark.parametrize("command", ["verify", "report"])
 def test_commands_are_registered_but_not_yet_implemented(command: str) -> None:
     with pytest.raises(NotImplementedError):
         main([command])
