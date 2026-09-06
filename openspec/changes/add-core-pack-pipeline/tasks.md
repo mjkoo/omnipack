@@ -102,21 +102,21 @@
 
 ## 3. Source ingestion
 
-- [ ] 3.1 Implement RJNY ingestion: fetch the configured path on the
+- [x] 3.1 Implement RJNY ingestion: fetch the configured path on the
   configured branch, drop entries excluded from export, apply the per-variant
   opt-outs, ignore the presentation-only name and URL overrides, and normalize
   per-app settings to structured data; verify by unit tests over the fixture
   covering each flag and a test asserting the name override is not applied.
-- [ ] 3.2 Add the differential test asserting RJNY ingestion reproduces the id
+- [x] 3.2 Add the differential test asserting RJNY ingestion reproduces the id
   set and per-id URL of both committed upstream exports, including the id that
   resolves to a different project per variant.
-- [ ] 3.3 Implement BBoi34 ingestion: resolve the newest release, match both
+- [x] 3.3 Implement BBoi34 ingestion: resolve the newest release, match both
   asset patterns, map the single-screen asset to both variants and the
   dual-screen asset to the dual-screen variant, and decode the string-encoded
   per-app settings; verify by unit tests over the fixtures covering the four
   ids present in both assets and a test asserting a malformed settings string
   fails the build.
-- [ ] 3.4 Implement codm2000 ingestion: extract README project links, keep
+- [x] 3.4 Implement codm2000 ingestion: extract README project links, keep
   GitHub repository links, skip other hosts, skip a link only when a
   higher-precedence source already contributes that project as a candidate for
   the dual-screen variant - the variant generated entries supply - with the two
@@ -131,7 +131,7 @@
   single-screen variant only still produces a generated dual-screen entry, and
   that a generated entry's name is its repository name and its category list is
   empty.
-- [ ] 3.5 Implement extras ingestion from configuration: fail the build with an
+- [x] 3.5 Implement extras ingestion from configuration: fail the build with an
   error naming the entry on an entry missing a package id, a URL or a name, make
   an entry a candidate for both variants by default, honour an optional
   per-entry variants field naming the subset it applies to, and fail the build
@@ -140,7 +140,7 @@
   naming one variant reaches only that variant, and that a missing package id, a
   missing URL, a missing name and an unknown variant each fail the build with an
   error naming the entry.
-- [ ] 3.6 Establish every ingested entry's source type: take it from the
+- [x] 3.6 Establish every ingested entry's source type: take it from the
   upstream record's source field, derive it from the URL for generated and
   extras entries with a github.com repository taking the GitHub type and any
   other URL the HTML type, and fail the build with an error naming the entry
@@ -148,7 +148,7 @@
   over an upstream entry of each type, a generated entry and an extras entry
   deriving GitHub from a github.com URL, an extras entry deriving HTML from
   another host, and an upstream entry declaring an unsupported type.
-- [ ] 3.7 Make any fetch or parse failure abort the build before anything is
+- [x] 3.7 Make any fetch or parse failure abort the build before anything is
   rendered, naming the failing source; verify by unit tests that simulate an
   unreachable source and an unparseable response, and assert existing output
   files are untouched.
