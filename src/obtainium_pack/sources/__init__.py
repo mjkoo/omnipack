@@ -51,6 +51,7 @@ def ingest_all(
     source_config: Mapping[str, object],
     extras_config: object,
     resolver: ProjectResolver,
+    report: IngestionReport | None = None,
 ) -> IngestionResult:
     """Fetch every source in precedence order and retain structured outcomes."""
     from . import bboi, codm, extras, rjny
@@ -63,7 +64,7 @@ def ingest_all(
 
     if not isinstance(extras_config, list):
         raise SourceError("extras", "configuration must be a list")
-    report = IngestionReport()
+    report = report or IngestionReport()
     rjny_apps = rjny.fetch(http, section("rjny"))
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)

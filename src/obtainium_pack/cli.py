@@ -3,22 +3,70 @@
 from __future__ import annotations
 
 import argparse
+import sys
 from collections.abc import Sequence
 from pathlib import Path
+from typing import Any
 
+from obtainium_pack.build import previous_ids, publish_build
 from obtainium_pack.http import HttpClient, HttpConfig
+from obtainium_pack.merge import CompositionResult, compose
 from obtainium_pack.package_id import PackageIdCache, PackageIdResolver
-from obtainium_pack.sources import IngestionResult, ingest_all, load_json
+from obtainium_pack.report import write_report
+from obtainium_pack.sources import (
+    IngestionReport,
+    IngestionResult,
+    SourceError,
+    ingest_all,
+    load_json,
+)
 
 
 def build(_args: argparse.Namespace) -> int:
-    _ingest_for_build(Path.cwd())
-    # Composition, rendering, and atomic publication are implemented by the
-    # later pipeline groups. Reaching here proves all sources were ingested.
-    raise NotImplementedError("build output pipeline is not implemented")
+    root = Path.cwd()
+    ingestion_report = IngestionReport()
+    composition: CompositionResult | None = None
+    stage = "ingestion"
+    try:
+        ingested = _ingest_for_build(root, ingestion_report)
+        stage = "composition"
+        composition = compose(
+            ingested.apps,
+            _object_list(root / "config/deny.json", "denylist"),
+            _object(root / "config/overlay.json", "overlay"),
+            _object(root / "config/overlay.dual.json", "dual overlay"),
+        )
+        stage = "rendering and publication"
+        publish_build(
+            root,
+            composition,
+            _object(root / "config/settings.json", "settings"),
+            ingestion_report,
+        )
+    except Exception as error:  # noqa: BLE001 - CLI converts build failures to status
+        try:
+            write_report(
+                root,
+                previous_ids(root),
+                composition,
+                ingestion_report,
+                stage=stage,
+                error=error,
+            )
+        except Exception as report_error:  # noqa: BLE001 - preserve original diagnostic
+            print(
+                f"build failed during {stage}: {error}; report failed: {report_error}",
+                file=sys.stderr,
+            )
+            return 1
+        print(f"build failed during {stage}: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
-def _ingest_for_build(root: Path) -> IngestionResult:
+def _ingest_for_build(
+    root: Path, report: IngestionReport | None = None
+) -> IngestionResult:
     source_config = load_json(root / "config/sources.json", "sources")
     if not isinstance(source_config, dict):
         from obtainium_pack.sources import SourceError
@@ -27,7 +75,21 @@ def _ingest_for_build(root: Path) -> IngestionResult:
     extras_config = load_json(root / "config/extras.json", "extras")
     http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
     resolver = PackageIdResolver(http, PackageIdCache(root / "config/package-ids.json"))
-    return ingest_all(http, source_config, extras_config, resolver)
+    return ingest_all(http, source_config, extras_config, resolver, report)
+
+
+def _object(path: Path, source: str) -> dict[str, Any]:
+    value = load_json(path, source)
+    if not isinstance(value, dict):
+        raise SourceError(source, "configuration must be an object")
+    return value
+
+
+def _object_list(path: Path, source: str) -> list[dict[str, str]]:
+    value = load_json(path, source)
+    if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
+        raise SourceError(source, "configuration must be a list of objects")
+    return value
 
 
 def verify(args: argparse.Namespace) -> int:

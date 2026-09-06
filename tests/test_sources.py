@@ -339,7 +339,10 @@ def test_settings_json_string_must_decode_to_object() -> None:
 
 @pytest.mark.parametrize("failure", ["unreachable", "malformed"])
 def test_build_ingestion_failure_leaves_existing_outputs_untouched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    failure: str,
 ) -> None:
     dist = tmp_path / "dist"
     dist.mkdir()
@@ -360,8 +363,8 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         return HttpResponse(request.full_url, 200, Message(), b"not json")
 
     monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
-    with pytest.raises(SourceError, match="rjny"):
-        cli.main(["build"])
+    assert cli.main(["build"]) == 1
+    assert "rjny" in capsys.readouterr().err
     assert requests and set(requests) == {
         "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     }

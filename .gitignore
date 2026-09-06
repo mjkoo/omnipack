@@ -21,3 +21,4 @@ result-*
 
 # Scratch notes and review ledgers, never committed
 .scratch/
+.build/

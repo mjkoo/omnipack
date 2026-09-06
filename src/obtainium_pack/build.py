@@ -1,0 +1,89 @@
+"""Render and publish the two import files as one recoverable pair."""
+
+from __future__ import annotations
+
+import json
+from pathlib import Path
+from typing import Any
+
+from obtainium_pack.merge import CompositionResult
+from obtainium_pack.model import Variant
+from obtainium_pack.render import render
+from obtainium_pack.sources import IngestionReport
+
+OUTPUTS = {
+    Variant.SINGLE: "single-screen.json",
+    Variant.DUAL: "dual-screen.json",
+}
+
+
+def previous_ids(root: Path) -> dict[Variant, set[str]]:
+    """Read package ids from the output pair before publication begins."""
+    result: dict[Variant, set[str]] = {}
+    for variant, name in OUTPUTS.items():
+        path = root / "dist" / name
+        if not path.exists():
+            result[variant] = set()
+            continue
+        try:
+            document = json.loads(path.read_text(encoding="utf-8"))
+        except OSError, json.JSONDecodeError:
+            result[variant] = set()
+            continue
+        apps = document.get("apps", []) if isinstance(document, dict) else []
+        result[variant] = {
+            item["id"]
+            for item in apps
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+    return result
+
+
+def publish_build(
+    root: Path,
+    composition: CompositionResult,
+    settings: dict[str, Any],
+    ingestion: IngestionReport,
+) -> None:
+    """Render both variants, publish them together, then write a report."""
+    before = previous_ids(root)
+    rendered = {
+        variant: render(composition.apps[variant], settings).encode()
+        for variant in Variant
+    }
+    from obtainium_pack.report import write_report
+
+    write_report(root, before, composition, ingestion)
+    _replace_pair(root / "dist", rendered)
+
+
+def _replace_pair(dist: Path, rendered: dict[Variant, bytes]) -> None:
+    paths = {variant: dist / name for variant, name in OUTPUTS.items()}
+    snapshots = {
+        variant: path.read_bytes() if path.exists() else None
+        for variant, path in paths.items()
+    }
+    dist.mkdir(parents=True, exist_ok=True)
+    temporary: dict[Variant, Path] = {}
+    for variant, path in paths.items():
+        temp = path.with_suffix(path.suffix + ".tmp")
+        temp.write_bytes(rendered[variant])
+        temporary[variant] = temp
+    replaced: list[Variant] = []
+    try:
+        for variant in Variant:
+            temporary[variant].replace(paths[variant])
+            replaced.append(variant)
+    except Exception:
+        for variant in replaced:
+            snapshot = snapshots[variant]
+            if snapshot is None:
+                paths[variant].unlink(missing_ok=True)
+            else:
+                backup = paths[variant].with_suffix(paths[variant].suffix + ".rollback")
+                backup.write_bytes(snapshot)
+                backup.replace(paths[variant])
+        raise
+    finally:
+        for path in temporary.values():
+            path.unlink(missing_ok=True)
