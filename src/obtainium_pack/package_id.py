@@ -1,7 +1,10 @@
 """Resolve Android package IDs from release APK manifests.
 
 The binary Android XML and ZIP parsing code is adapted from RJNY's package-id
-resolver. It is free and unencumbered software released into the public domain;
+resolver: https://github.com/RJNY/Obtainium-Emulation-Pack/blob/main/scripts/package_id.py
+Fetched source blob: df1b2f8ebb9a83368c4609ec8185e18828d067ef
+https://api.github.com/repos/RJNY/Obtainium-Emulation-Pack/git/blobs/df1b2f8ebb9a83368c4609ec8185e18828d067ef
+It is free and unencumbered software released into the public domain;
 see <https://unlicense.org>.
 """
 
@@ -174,7 +177,15 @@ class PackageIdResolver:
             try:
                 manifest = extract_android_manifest_from_apk_url(self.http, url)
                 resolved.append(parse_axml_package_id(manifest))
-            except (HttpError, ValueError, KeyError, TypeError, zlib.error) as error:
+            except (
+                HttpError,
+                ValueError,
+                KeyError,
+                TypeError,
+                IndexError,
+                struct.error,
+                zlib.error,
+            ) as error:
                 raise ValueError(
                     f"cannot read eligible APK {name!r}: {error}"
                 ) from error
@@ -229,7 +240,7 @@ def extract_android_manifest_from_apk_url(http: HttpClient, url: str) -> bytes:
                 if size <= 0:
                     raise ValueError("invalid APK content length")
                 return _extract_manifest_with_ranges(http, url, size)
-            except HttpError, ValueError, zlib.error:
+            except HttpError, ValueError, struct.error, zlib.error:
                 pass
     response = http.get(url, max_bytes=MAX_APK_FULL_DOWNLOAD)
     return extract_android_manifest_from_apk(response.body)

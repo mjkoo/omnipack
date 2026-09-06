@@ -549,3 +549,95 @@ def test_cache_write_failure_aborts_successful_resolution(
     monkeypatch.setattr(Path, "replace", fail_replace)
     with pytest.raises(OSError):
         package_resolver.resolve(PROJECT)
+
+
+def malformed_manifest(encoding: str) -> bytes:
+    # A two-unit length prefix ends before its continuation unit.
+    raw = b"\x80" if encoding == "utf8" else b"\x00\x80"
+    pool = (
+        struct.pack(
+            "<HHI5II",
+            1,
+            28,
+            32 + len(raw),
+            1,
+            0,
+            256 if encoding == "utf8" else 0,
+            32,
+            0,
+            0,
+        )
+        + raw
+    )
+    manifest = struct.pack("<HHI", 3, 8, 8 + len(pool)) + pool
+    stream = BytesIO()
+    with zipfile.ZipFile(stream, "w") as archive:
+        archive.writestr("AndroidManifest.xml", manifest)
+    return stream.getvalue()
+
+
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize(
+    "body",
+    [malformed_manifest("utf8"), malformed_manifest("utf16"), b"PK\x05\x06"],
+    ids=["utf8-length", "utf16-length", "truncated-zip"],
+)
+def test_malformed_apk_is_reported_without_losing_cached_entry(
+    tmp_path: Path, cached: bool, body: bytes
+) -> None:
+    path = tmp_path / "ids.json"
+    if cached:
+        seed(path)
+    transport = ReleaseTransport(release(2, [("app.apk", ASSET)]), {ASSET: body})
+    package_resolver = resolver(tmp_path, transport)
+    result = generated_project_entry(PROJECT, package_resolver)
+    assert result.resolution.failure
+    if cached:
+        assert result.app is not None and result.app.id == "org.cached.app"
+        assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.cached.app", 1)
+        transport.assets[ASSET] = apk("org.recovered.app")
+        retried = generated_project_entry(PROJECT, package_resolver)
+        assert retried.app is not None and retried.app.id == "org.recovered.app"
+        assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.recovered.app", 2)
+    else:
+        assert result.app is None
+        assert result.resolution.status is ResolutionStatus.UNRESOLVED
+        assert not path.exists()
+
+
+def test_cached_size_failure_retains_entry_and_retries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FullDownload(ReleaseTransport):
+        def __call__(
+            self, request: Request, timeout: float, max_bytes: int | None
+        ) -> HttpResponse:
+            if request.method == "HEAD":
+                self.requests.append((request, max_bytes))
+                return response(request.full_url)
+            return super().__call__(request, timeout, max_bytes)
+
+    monkeypatch.setattr("obtainium_pack.package_id.MAX_APK_FULL_DOWNLOAD", 1024)
+    path = tmp_path / "ids.json"
+    seed(path)
+    transport = FullDownload(release(2, [("app.apk", ASSET)]), {ASSET: b"x" * 1025})
+    package_resolver = resolver(tmp_path, transport)
+    result = generated_project_entry(PROJECT, package_resolver)
+    assert result.app is not None and result.app.id == "org.cached.app"
+    assert "exceeds" in (result.resolution.failure or "")
+    assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.cached.app", 1)
+    transport.assets[ASSET] = apk("org.recovered.app")
+    retried = generated_project_entry(PROJECT, package_resolver)
+    assert retried.app is not None and retried.app.id == "org.recovered.app"
+    assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.recovered.app", 2)
+
+
+def test_uncached_asset_fetch_failure_omits_generated_entry(tmp_path: Path) -> None:
+    transport = ReleaseTransport(
+        release(2, [("app.apk", ASSET)]), {ASSET: urllib.error.URLError("offline")}
+    )
+    result = generated_project_entry(PROJECT, resolver(tmp_path, transport))
+    assert result.app is None
+    assert result.resolution.status is ResolutionStatus.UNRESOLVED
+    assert "cannot read eligible APK" in (result.resolution.failure or "")
+    assert not (tmp_path / "ids.json").exists()
