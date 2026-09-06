@@ -252,6 +252,39 @@ def test_overlay_rejects_identity_fields_even_when_null(
         compose([candidate], [], {"guarded": {field: value}}, {})
 
 
+@pytest.mark.parametrize("overlay_scope", ["common", "dual"])
+def test_overlay_cannot_move_a_surviving_app_to_a_denied_id(
+    overlay_scope: str,
+) -> None:
+    candidates = [
+        app(package_id, "rjny", variant)
+        for package_id in ("survivor", "denied")
+        for variant in Variant
+    ]
+    denylist = [{"id": "denied", "reason": "broken"}]
+    overlay: dict[str, object] = {"survivor": {"id": "denied"}}
+
+    with pytest.raises(
+        CompositionError, match=r"overlay for 'survivor'.*protected field id"
+    ):
+        compose(
+            candidates,
+            denylist,
+            overlay if overlay_scope == "common" else {},
+            overlay if overlay_scope == "dual" else {},
+        )
+
+    assert [candidate.id for candidate in candidates] == [
+        "survivor",
+        "survivor",
+        "denied",
+        "denied",
+    ]
+    result = compose(candidates, denylist, {}, {})
+    for variant in Variant:
+        assert set(by_variant(result, variant)) == {"survivor"}
+
+
 @pytest.mark.parametrize("patch", [None, "replacement", ["replacement"]])
 def test_overlay_patch_must_be_an_object(patch: object) -> None:
     candidate = app("guarded", "rjny", Variant.DUAL)
