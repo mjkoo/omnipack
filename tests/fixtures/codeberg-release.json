@@ -1,0 +1,14 @@
+{
+  "id": 11622551,
+  "tag_name": "v3.2.0",
+  "assets": [
+    {
+      "name": "Decomp-Recomp.V3.2.json",
+      "browser_download_url": "https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Decomp-Recomp.V3.2.json"
+    },
+    {
+      "name": "Dual-Screen-Decomp-Recomp.V3.2.json",
+      "browser_download_url": "https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Dual-Screen-Decomp-Recomp.V3.2.json"
+    }
+  ]
+}

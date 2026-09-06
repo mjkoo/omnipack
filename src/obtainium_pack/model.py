@@ -14,6 +14,13 @@ class Variant(str, Enum):
     DUAL = "dual"
 
 
+class SourceType(str, Enum):
+    """Obtainium source implementations supported by the pack."""
+
+    GITHUB = "GitHub"
+    HTML = "HTML"
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Where an entry came from, for the build report."""
@@ -22,7 +29,7 @@ class Provenance:
     url: str
 
 
-@dataclass(slots=True)
+@dataclass(frozen=True, slots=True)
 class App:
     """One Obtainium app entry, normalized across upstream sources.
 
@@ -34,7 +41,10 @@ class App:
 
     id: str
     url: str
-    additional_settings: dict[str, Any]
-    variants: frozenset[Variant]
+    name: str
+    source_type: SourceType
+    categories: tuple[str, ...]
+    variant: Variant
     provenance: Provenance
+    additional_settings: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
