@@ -224,23 +224,23 @@
 
 ## 5. Rendering
 
-- [ ] 5.1 Commit the per-source-type settings defaults table for the GitHub
+- [x] 5.1 Commit the per-source-type settings defaults table for the GitHub
   and HTML source types, seeded from the values upstream exports carry, and
   record in it the Obtainium version its key set was seeded from - the release
   current when the table is committed; verify by a test asserting each type's
   key set matches the fixture exports and that the recorded version is
   present.
-- [ ] 5.2 Implement settings hydration filling every key defined for the source
+- [x] 5.2 Implement settings hydration filling every key defined for the source
   type the entry carries from ingestion, preserving entry-set and overlaid
   values and emitting unknown keys after the known ones; verify by unit tests
   covering a sparse entry of each source type, an overlaid value that also has
   a default, and an unknown key.
-- [ ] 5.3 Add the differential test asserting hydration of an entry shared
+- [x] 5.3 Add the differential test asserting hydration of an entry shared
   with RJNY reproduces the settings its rendered export carries.
-- [ ] 5.4 Encode per-app settings as a JSON string in the rendered output;
+- [x] 5.4 Encode per-app settings as a JSON string in the rendered output;
   verify by a unit test asserting the field is a string that decodes to the
   structured settings.
-- [ ] 5.5 Implement deterministic ordering by primary category - the first
+- [x] 5.5 Implement deterministic ordering by primary category - the first
   category in an entry's category list, taken as the empty string when the list
   is empty - then name, then package id, with pinned serialization; verify by
   unit tests asserting two renderings of the same composed input are
@@ -253,7 +253,7 @@
   sequence of package ids from several permutations of the input order so that
   all three sort keys and the first-category rule are proven rather than only
   the tie-break.
-- [ ] 5.6 Render the settings block from configuration with the category list
+- [x] 5.6 Render the settings block from configuration with the category list
   as a JSON-encoded string mapping each category used in that variant to an
   ARGB integer, taking a configured category's colour from configuration and
   deriving any other category's colour from the first three bytes of the
@@ -262,7 +262,7 @@
   and its stability across runs, that a configured category renders the
   configured value, that a configured category no entry uses is omitted, and
   that an entry carrying no category adds nothing to the category list.
-- [ ] 5.7 Fail the build rather than render a variant containing two apps
+- [x] 5.7 Fail the build rather than render a variant containing two apps
   with the same package id; verify by a unit test.
 
 ## 6. Build command
