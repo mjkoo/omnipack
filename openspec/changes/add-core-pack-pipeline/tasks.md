@@ -35,14 +35,14 @@
 
 ## 2. Package-id resolution
 
-- [ ] 2.1 Vendor the upstream package-id resolver as a module, dropping its
+- [x] 2.1 Vendor the upstream package-id resolver as a module, dropping its
   command-line entry point and dotenv handling and recording its public-domain
   origin in the file. Route all its release metadata requests, ranged APK
   reads and full asset downloads through the shared HTTP helper; verify by a
   unit test resolving a package id from a
   fixture APK tail and by the lint and type checks passing on the vendored
   module.
-- [ ] 2.2 Implement the cache read and write over the resolved-id file, keyed
+- [x] 2.2 Implement the cache read and write over the resolved-id file, keyed
   by the normalized project URL and recording alongside each id the
   host-assigned identifier of the release it was resolved from - the stable
   identifier the release host assigns to a release, not its tag name, compared
@@ -66,7 +66,7 @@
   a failure to read the latest
   release identifier with no cached id leaves the project unresolved with no
   entry produced.
-- [ ] 2.3 Resolve a project's package id from every eligible APK asset of its
+- [x] 2.3 Resolve a project's package id from every eligible APK asset of its
   latest release - every release asset whose filename ends in `.apk` compared
   case-insensitively - using the id only when every eligible asset is readable
   and all declare the same id. Treat no eligible APK, disagreement between
@@ -81,13 +81,13 @@
   cached fields remain unchanged; assert no cached id produces no entry and an
   unresolved report. For each cached failure, run a later build against the same
   release and assert it retries resolution.
-- [ ] 2.4 Ensure generated entries never use a placeholder id: verify the
+- [x] 2.4 Ensure generated entries never use a placeholder id: verify the
   generated-entry path for no eligible APK, disagreeing APK ids and an
   unreadable APK, each with and without a cached id, asserting it retains an
   entry with the cached id and reports the failure when available, and otherwise
   omits the entry and reports the project as unresolved.
 
-- [ ] 2.5 Add a fixture-backed cold-cache generated-project integration test
+- [x] 2.5 Add a fixture-backed cold-cache generated-project integration test
   through the actual resolver and shared HTTP helper, intercepting only network
   transport. Load the default `config/http.json` mapping and set a fake
   `GITHUB_TOKEN`; assert the latest-release request to
