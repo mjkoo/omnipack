@@ -2,8 +2,11 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.request
 from email.message import Message
+from io import BytesIO
 from typing import TYPE_CHECKING
+from urllib.response import addinfourl
 
 import pytest
 
@@ -170,3 +173,47 @@ def test_redirect_to_unregistered_host_strips_source_token(
     )
 
     assert redirected.get_header("Authorization") is None
+
+
+@pytest.mark.parametrize("destination_registered", [False, True])
+def test_urllib_redirect_selects_destination_credentials(
+    monkeypatch: pytest.MonkeyPatch, destination_registered: bool
+) -> None:
+    monkeypatch.setenv("SOURCE_TOKEN", "source-secret")
+    monkeypatch.setenv("DEST_TOKEN", "destination-secret")
+    credentials = {"source.example": "SOURCE_TOKEN"}
+    if destination_registered:
+        credentials["destination.example"] = "DEST_TOKEN"
+    requests: list[Request] = []
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(
+        handler: urllib.request.HTTPSHandler, request: Request
+    ) -> FixtureResponse:
+        requests.append(request)
+        headers = Message()
+        if request.full_url == "https://source.example/data":
+            headers["Location"] = "https://destination.example/file"
+            return FixtureResponse(BytesIO(b""), headers, request.full_url, 302)
+        assert request.full_url == "https://destination.example/file"
+        return FixtureResponse(BytesIO(b"payload"), headers, request.full_url, 200)
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+    client = HttpClient(
+        HttpConfig(credentials), timeout=7.5, user_agent="fixture-client/2", retries=0
+    )
+
+    result = client.get("https://source.example/data")
+
+    assert result.body == b"payload"
+    assert result.url == "https://destination.example/file"
+    assert len(requests) == 2
+    assert requests[0].get_header("Authorization") == "Bearer source-secret"
+    assert requests[1].get_header("Authorization") == (
+        "Bearer destination-secret" if destination_registered else None
+    )
+    for request in requests:
+        assert request.timeout == 7.5
+        assert request.get_header("User-agent") == "fixture-client/2"

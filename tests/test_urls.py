@@ -11,6 +11,14 @@ from obtainium_pack.urls import normalize_project_url, project_urls_equal
         ("https://example.com/Owner/Repo/", "example.com/Owner/Repo"),
         ("https://example.com/Owner/Repo.git", "example.com/Owner/Repo"),
         ("https://GitHub.com/OWNER/Repo", "github.com/owner/repo"),
+        ("https://github.com/Owner/Repo/releases", "github.com/owner/repo"),
+        ("https://github.com/Owner/Repo.git/releases", "github.com/owner/repo"),
+        ("https://github.com/Owner/Repo?tab=readme", "github.com/owner/repo"),
+        ("https://github.com/Owner/Repo#readme", "github.com/owner/repo"),
+        (
+            "http://WWW.GITHUB.COM/Owner/Repo.git/releases/latest?x=1#download",
+            "github.com/owner/repo",
+        ),
     ],
 )
 def test_normalize_project_url(url: str, normalized: str) -> None:

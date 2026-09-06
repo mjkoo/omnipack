@@ -12,17 +12,17 @@ def normalize_project_url(url: str) -> str:
     host = host.removeprefix("www.")
 
     path = parsed.path.rstrip("/")
+    query, fragment = parsed.query, parsed.fragment
+    if host == "github.com":
+        path = "/".join(path.split("/")[:3]).lower()
+        query = fragment = ""
     if path.lower().endswith(".git"):
         path = path[:-4]
-    if host == "github.com":
-        path = path.lower()
 
     authority = host
     if parsed.port is not None:
         authority = f"{authority}:{parsed.port}"
-    return urlunsplit(
-        ("", authority, path, parsed.query, parsed.fragment)
-    ).removeprefix("//")
+    return urlunsplit(("", authority, path, query, fragment)).removeprefix("//")
 
 
 def project_urls_equal(left: str, right: str) -> bool:
