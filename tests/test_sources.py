@@ -379,6 +379,8 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         ("https://github.com/orgs/example/repositories", SourceType.HTML),
         ("https://github.com/settings/profile", SourceType.HTML),
         ("https://github.com/features/actions", SourceType.HTML),
+        ("https://github.com/codespaces/new", SourceType.HTML),
+        ("https://github.com/stars/example", SourceType.HTML),
         ("https://github.com/owner/repo", SourceType.GITHUB),
         ("https://www.github.com/owner/repo/releases/latest", SourceType.GITHUB),
         ("https://github.com/owner/repo/tree/main", SourceType.GITHUB),
