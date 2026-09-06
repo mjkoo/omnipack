@@ -1,14 +1,17 @@
 from __future__ import annotations
 
 import json
+import shutil
 from email.message import Message
 from pathlib import Path
 from typing import Any
+from urllib.error import URLError
+from urllib.request import Request
 
 import pytest
 
 from obtainium_pack import cli
-from obtainium_pack.http import HttpError, HttpResponse
+from obtainium_pack.http import HttpClient, HttpError, HttpResponse
 from obtainium_pack.model import App, Provenance, SourceType, Variant
 from obtainium_pack.package_id import ResolutionResult, ResolutionStatus
 from obtainium_pack.sources import (
@@ -71,11 +74,13 @@ def test_rjny_matches_both_upstream_exports() -> None:
             "path": "src/applications.json",
         },
     )
-    for variant, export_name in (
-        (Variant.SINGLE, "rjny-single.json"),
-        (Variant.DUAL, "rjny-dual.json"),
+    for variant, export_name, count in (
+        (Variant.SINGLE, "rjny-single.json", 62),
+        (Variant.DUAL, "rjny-dual.json", 66),
     ):
         expected = json.loads(fixture(export_name))["apps"]
+        assert len(expected) == count
+        assert len([app for app in apps if app.variant is variant]) == count
         assert {(app.id, app.url) for app in apps if app.variant is variant} == {
             (entry["id"], entry["url"]) for entry in expected
         }
@@ -131,22 +136,26 @@ def test_bboi_latest_release_maps_assets_and_dual_overrides_same_id() -> None:
     )
     dual_ids = [app.id for app in apps if app.variant is Variant.DUAL]
     assert len(dual_ids) == len(set(dual_ids))
-    assert (
-        next(
-            app.name
-            for app in apps
-            if app.variant is Variant.DUAL and app.id == "com.samyost1.zelda3android"
-        )
-        == "Zelda: A Link to the Past DS"
-    )
-    assert (
-        next(
-            app.name
-            for app in apps
-            if app.variant is Variant.SINGLE and app.id == "com.samyost1.zelda3android"
-        )
-        == "Zelda: A Link to the Past"
-    )
+    overlapping_ids = {
+        "com.aure.banjorecomp",
+        "com.igawa6.harvestmoon64",
+        "com.samyost1.zelda3android",
+        "com.samyost1.tmcandroid",
+    }
+    for variant, asset in (
+        (Variant.SINGLE, "bboi-single.json"),
+        (Variant.DUAL, "bboi-dual.json"),
+    ):
+        expected = {entry["id"]: entry for entry in json.loads(fixture(asset))["apps"]}
+        actual = {app.id: app for app in apps if app.variant is variant}
+        assert set(actual) == set(expected) == overlapping_ids
+        for app_id in overlapping_ids:
+            entry, app = expected[app_id], actual[app_id]
+            assert app.name == entry["name"]
+            assert app.url == entry["url"]
+            assert app.categories == tuple(entry["categories"])
+            assert app.source_type is SourceType(entry["overrideSource"])
+            assert app.additional_settings == json.loads(entry["additionalSettings"])
 
 
 def test_bboi_rejects_malformed_settings() -> None:
@@ -234,6 +243,7 @@ def test_codm_extracts_all_github_links_skips_other_hosts_and_deduplicates_dual(
     assert "https://github.com/Josh-Daniels/OpenMW-DS" in urls
     assert "https://github.com/cylonid/NativeAlphaForAndroid" in urls
     assert all(app.variant is Variant.DUAL and not app.categories for app in apps)
+    assert all(app.source_type is SourceType.GITHUB for app in apps)
     assert (
         next(app for app in apps if app.url.endswith("OpenMW-DS")).name == "OpenMW-DS"
     )
@@ -327,21 +337,72 @@ def test_settings_json_string_must_decode_to_object() -> None:
         )
 
 
+@pytest.mark.parametrize("failure", ["unreachable", "malformed"])
 def test_build_ingestion_failure_leaves_existing_outputs_untouched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, failure: str
 ) -> None:
     dist = tmp_path / "dist"
     dist.mkdir()
     single, dual = dist / "single-screen.json", dist / "dual-screen.json"
     single.write_text("old single", encoding="utf-8")
     dual.write_text("old dual", encoding="utf-8")
+    shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
+    before = {path.name: path.read_bytes() for path in dist.iterdir()}
     monkeypatch.chdir(tmp_path)
+    requests: list[str] = []
 
-    def fail(_root: Path) -> object:
-        raise SourceError("rjny", "unreachable")
+    def transport(
+        _client: HttpClient, request: Request, timeout: float, max_bytes: int | None
+    ) -> HttpResponse:
+        requests.append(request.full_url)
+        if failure == "unreachable":
+            raise URLError("source unreachable")
+        return HttpResponse(request.full_url, 200, Message(), b"not json")
 
-    monkeypatch.setattr(cli, "_ingest_for_build", fail)
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
     with pytest.raises(SourceError, match="rjny"):
         cli.main(["build"])
+    assert requests and set(requests) == {
+        "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
+    }
+    assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
     assert single.read_text(encoding="utf-8") == "old single"
     assert dual.read_text(encoding="utf-8") == "old dual"
+
+
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://github.com", SourceType.HTML),
+        ("https://github.com/owner", SourceType.HTML),
+        ("https://github.com/topics/android", SourceType.HTML),
+        ("https://github.com/orgs/example/repositories", SourceType.HTML),
+        ("https://github.com/settings/profile", SourceType.HTML),
+        ("https://github.com/features/actions", SourceType.HTML),
+        ("https://github.com/owner/repo", SourceType.GITHUB),
+        ("https://www.github.com/owner/repo/releases/latest", SourceType.GITHUB),
+        ("https://github.com/owner/repo/tree/main", SourceType.GITHUB),
+    ],
+)
+def test_extras_derives_github_only_for_repository_urls(
+    url: str, expected: SourceType
+) -> None:
+    apps = extras.fetch([{"id": "app.test", "url": url, "name": "Example"}])
+    assert {app.source_type for app in apps} == {expected}
+
+
+@pytest.mark.parametrize("declared", [SourceType.GITHUB, SourceType.HTML])
+def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> None:
+    url = "https://raw.githubusercontent.com/r/main/p"
+    record = {
+        "id": "app.test",
+        "name": "Example",
+        "url": "https://github.com/owner/repo",
+        "overrideSource": declared.value,
+    }
+    apps = rjny.fetch(
+        FakeHttp({url: json.dumps({"apps": [record]})}),
+        {"repo": "r", "branch": "main", "path": "p"},
+    )
+    assert len(apps) == 2
+    assert all(app.source_type is declared for app in apps)

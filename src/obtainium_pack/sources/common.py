@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import re
 from collections.abc import Mapping
 from typing import Any, Protocol
 from urllib.parse import urlsplit
@@ -46,11 +47,51 @@ def source_type(value: object, *, source: str, entry: str) -> SourceType:
 
 def derived_source_type(url: str) -> SourceType:
     parsed = urlsplit(url if "://" in url else f"https://{url}")
-    return (
-        SourceType.GITHUB
-        if (parsed.hostname or "").lower().removeprefix("www.") == "github.com"
-        else SourceType.HTML
-    )
+    host = (parsed.hostname or "").lower().removeprefix("www.")
+    parts = parsed.path.strip("/").split("/")
+    # GitHub site routes share the host but do not identify repositories.
+    site_routes = {
+        "about",
+        "account",
+        "apps",
+        "collections",
+        "contact",
+        "customer-stories",
+        "enterprise",
+        "events",
+        "explore",
+        "features",
+        "issues",
+        "join",
+        "login",
+        "marketplace",
+        "new",
+        "notifications",
+        "organizations",
+        "orgs",
+        "pricing",
+        "pulls",
+        "search",
+        "security",
+        "sessions",
+        "settings",
+        "signup",
+        "site",
+        "sponsors",
+        "topics",
+        "trending",
+        "users",
+    }
+    if (
+        host == "github.com"
+        and len(parts) >= 2
+        and parts[0].lower() not in site_routes
+        and re.fullmatch(r"[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*", parts[0])
+        and re.fullmatch(r"[A-Za-z0-9_.-]+", parts[1])
+        and parts[1] not in {".", ".."}
+    ):
+        return SourceType.GITHUB
+    return SourceType.HTML
 
 
 def settings(value: object, *, source: str, entry: str) -> dict[str, Any]:
