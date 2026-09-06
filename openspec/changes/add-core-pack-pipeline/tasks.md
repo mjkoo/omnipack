@@ -267,15 +267,15 @@
 
 ## 6. Build command
 
-- [ ] 6.1 Implement the build command driving ingestion, composition,
+- [x] 6.1 Implement the build command driving ingestion, composition,
   rendering and writing for both variants; verify by an end-to-end test over
   the fixtures asserting both files are written and the command exits zero.
-- [ ] 6.2 Narrow the existing command-registration test to the commands that
+- [x] 6.2 Narrow the existing command-registration test to the commands that
   remain unimplemented, `verify` and `report`, replacing its build case with
   the end-to-end assertion that the build command runs; verify by the test
   module passing with no expectation that building raises a not-implemented
   error.
-- [ ] 6.3 Publish both output files as a unit once both variants render, using
+- [x] 6.3 Publish both output files as a unit once both variants render, using
   a strategy that restores the previous pair when publication fails partway -
   the previous contents of both files, or the absence of both on a first run -
   so a failure at any stage leaves existing output unchanged, while leaving the
@@ -286,7 +286,7 @@
   first run leaves neither file present, that a first-run failure before the
   write phase creates no files, and that a build failing after a new package id
   resolved leaves the output untouched but keeps the newly cached id.
-- [ ] 6.4 Write the build report as a JSON document to `.build/report.json`,
+- [x] 6.4 Write the build report as a JSON document to `.build/report.json`,
   outside the distribution directory, adding `.build/` to the repository's
   version-control ignore file so the report is never committed, on a failed
   build as well as a successful one, recording
@@ -309,7 +309,7 @@
   ones, by a test that aborts the build on an unreachable upstream and
   asserts the report exists and names the failing stage and error, and by a
   check asserting the report path is ignored by version control.
-- [ ] 6.5 Persist newly resolved package ids as part of the build; verify by
+- [x] 6.5 Persist newly resolved package ids as part of the build; verify by
   an end-to-end test asserting the cache file gains an entry.
 
 ## 7. Integration
