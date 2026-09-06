@@ -181,8 +181,9 @@ def test_cached_resolution_survives_a_later_render_failure(
         assert json.loads((dist / name).read_text()) == before
 
 
+@pytest.mark.parametrize("existing", [False, True])
 def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
 ) -> None:
     config = tmp_path / "config"
     config.mkdir()
@@ -199,7 +200,9 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "sources.json": source_config,
         "http.json": {"credentials": {}},
         "extras.json": [],
-        "package-ids.json": {},
+        "package-ids.json": {
+            "github.com/fixture/retained": {"packageId": "app.retained", "releaseId": 1}
+        },
         "deny.json": [],
         "overlay.json": {},
         "overlay.dual.json": {},
@@ -213,6 +216,11 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "name": "Fixture",
         "overrideSource": "HTML",
     }
+    if existing:
+        (tmp_path / "dist").mkdir()
+        (tmp_path / "dist/dual-screen.json").write_text(
+            json.dumps({"apps": [{"id": "app.generated"}]})
+        )
     responses = {
         "https://raw.githubusercontent.com/fixture/rjny/main/apps.json": json.dumps(
             {"apps": [record]}
@@ -233,7 +241,12 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         ),
         "https://fixture.test/single": '{"apps":[]}',
         "https://fixture.test/dual": '{"apps":[]}',
-        "https://fixture.test/readme": "[website](https://example.test/page) [generated](https://github.com/fixture/generated)",
+        "https://fixture.test/readme": (
+            "[website](https://example.test/page) "
+            "[generated](https://github.com/fixture/generated) "
+            "[missing](https://github.com/fixture/missing) "
+            "[retained](https://github.com/fixture/retained)"
+        ),
         "https://api.github.com/repos/fixture/generated/releases/latest": json.dumps(
             {
                 "id": 7,
@@ -246,6 +259,11 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
             }
         ),
     }
+
+    for project in ("missing", "retained"):
+        responses[f"https://api.github.com/repos/fixture/{project}/releases/latest"] = (
+            json.dumps({"id": 8, "assets": []})
+        )
 
     def transport(
         _client: HttpClient, request: Request, _timeout: float, _max_bytes: int | None
@@ -268,8 +286,116 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         json.loads((tmp_path / ".build/report.json").read_text())["skipped"][0]["url"]
         == "https://example.test/page"
     )
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["status"] == "success"
+    assert report["generated"] == [
+        {
+            "source": "codm2000",
+            "url": "https://github.com/fixture/generated",
+            "id": "app.generated",
+            "status": "resolved",
+        },
+        {
+            "source": "codm2000",
+            "url": "https://github.com/fixture/retained",
+            "id": "app.retained",
+            "status": "reused",
+        },
+    ]
+    failure = "APK resolution failed: latest release has no eligible APK assets"
+    assert report["unresolved"] == [
+        {
+            "source": "codm2000",
+            "url": "https://github.com/fixture/missing",
+            "failure": failure,
+        }
+    ]
+    assert report["retainedFailures"] == [
+        {
+            "source": "codm2000",
+            "url": "https://github.com/fixture/retained",
+            "id": "app.retained",
+            "failure": failure,
+        }
+    ]
+    assert report["changes"]["dual"] == {
+        "added": ["app.fixture", "app.retained"]
+        if existing
+        else ["app.fixture", "app.generated", "app.retained"],
+        "removed": [],
+    }
+    assert not (tmp_path / "dist/report.json").exists()
     cache = json.loads((config / "package-ids.json").read_text())
     assert cache["github.com/fixture/generated"] == {
         "packageId": "app.generated",
         "releaseId": 7,
     }
+
+
+@pytest.mark.parametrize("stage", ["rendering", "report writing", "publication"])
+@pytest.mark.parametrize("existing", [False, True])
+def test_failed_build_reports_exact_stage_and_preserves_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str, existing: bool
+) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    for name, value in (
+        ("deny.json", []),
+        ("overlay.json", {}),
+        ("overlay.dual.json", {}),
+        ("settings.json", {}),
+    ):
+        (config / name).write_text(json.dumps(value))
+    before = b'{"apps":[{"id":"before.id"}]}\n'
+    paths = [
+        tmp_path / "dist" / name for name in ("single-screen.json", "dual-screen.json")
+    ]
+    if existing:
+        paths[0].parent.mkdir()
+        for path in paths:
+            path.write_bytes(before)
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, report: IngestionResult([], report)
+    )
+    if stage == "rendering":
+        from obtainium_pack import build as build_module
+
+        real_render = build_module.render
+        renders = 0
+
+        def render(*args):
+            nonlocal renders
+            renders += 1
+            if renders == 2:
+                raise ValueError("injected rendering failure")
+            return real_render(*args)
+
+        monkeypatch.setattr(build_module, "render", render)
+    else:
+        real_replace = Path.replace
+        failed = False
+
+        def replace(source: Path, target: Path) -> Path:
+            nonlocal failed
+            target_path = Path(target)
+            selected = (
+                target_path.name == "report.json"
+                if stage == "report writing"
+                else target_path.name == "dual-screen.json"
+            )
+            if selected and not failed:
+                failed = True
+                raise OSError(f"injected {stage} failure")
+            return real_replace(source, target)
+
+        monkeypatch.setattr(Path, "replace", replace)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    for path in paths:
+        if existing:
+            assert path.read_bytes() == before
+        else:
+            assert not path.exists()
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == stage
+    assert report["error"] == f"injected {stage} failure"

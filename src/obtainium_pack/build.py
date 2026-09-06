@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 
@@ -44,8 +45,12 @@ def publish_build(
     composition: CompositionResult,
     settings: dict[str, Any],
     ingestion: IngestionReport,
+    *,
+    on_stage: Callable[[str], None] | None = None,
 ) -> None:
-    """Render both variants, publish them together, then write a report."""
+    """Render both variants, write their report, and publish them together."""
+    if on_stage is not None:
+        on_stage("rendering")
     before = previous_ids(root)
     rendered = {
         variant: render(composition.apps[variant], settings).encode()
@@ -53,7 +58,11 @@ def publish_build(
     }
     from obtainium_pack.report import write_report
 
+    if on_stage is not None:
+        on_stage("report writing")
     write_report(root, before, composition, ingestion)
+    if on_stage is not None:
+        on_stage("publication")
     _replace_pair(root / "dist", rendered)
 
 

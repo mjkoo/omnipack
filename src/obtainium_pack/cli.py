@@ -27,6 +27,11 @@ def build(_args: argparse.Namespace) -> int:
     ingestion_report = IngestionReport()
     composition: CompositionResult | None = None
     stage = "ingestion"
+
+    def record_stage(value: str) -> None:
+        nonlocal stage
+        stage = value
+
     try:
         ingested = _ingest_for_build(root, ingestion_report)
         stage = "composition"
@@ -36,12 +41,13 @@ def build(_args: argparse.Namespace) -> int:
             _object(root / "config/overlay.json", "overlay"),
             _object(root / "config/overlay.dual.json", "dual overlay"),
         )
-        stage = "rendering and publication"
+        stage = "rendering"
         publish_build(
             root,
             composition,
             _object(root / "config/settings.json", "settings"),
             ingestion_report,
+            on_stage=record_stage,
         )
     except Exception as error:  # noqa: BLE001 - CLI converts build failures to status
         try:
