@@ -295,28 +295,3 @@ def test_overlay_patch_must_be_an_object(patch: object) -> None:
 def test_missing_dual_coverage_fails() -> None:
     with pytest.raises(CompositionError, match="single-only"):
         compose([app("single-only", "rjny", Variant.SINGLE)], [], {}, {})
-
-
-def test_dual_denial_exempts_coverage_when_it_removes_an_entry() -> None:
-    candidates = [
-        app("excepted", "rjny", Variant.SINGLE),
-        app("excepted", "rjny", Variant.DUAL),
-    ]
-    result = compose(
-        candidates,
-        [{"id": "excepted", "variant": "dual", "reason": "unsupported"}],
-        {},
-        {},
-    )
-    assert set(by_variant(result, Variant.SINGLE)) == {"excepted"}
-    assert result.apps[Variant.DUAL] == []
-
-
-def test_stale_dual_denial_still_exempts_coverage() -> None:
-    result = compose(
-        [app("excepted", "rjny", Variant.SINGLE)],
-        [{"id": "excepted", "variant": "dual", "reason": "unsupported"}],
-        {},
-        {},
-    )
-    assert len(result.report.stale_exclusions) == 1

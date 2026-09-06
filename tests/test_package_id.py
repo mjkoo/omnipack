@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import struct
 import urllib.error
@@ -361,25 +362,6 @@ def test_ignored_range_response_uses_bounded_full_download(
     )
 
 
-def test_full_download_size_bound_is_a_resolution_failure(tmp_path: Path) -> None:
-    class TooLarge(ReleaseTransport):
-        def __call__(
-            self, request: Request, timeout: float, max_bytes: int | None
-        ) -> HttpResponse:
-            if request.method == "HEAD":
-                self.requests.append((request, max_bytes))
-                return response(request.full_url)
-            return super().__call__(request, timeout, max_bytes)
-
-    transport = TooLarge(release(2, [("app.apk", ASSET)]), {ASSET: b"x" * 64})
-    original = MAX_APK_FULL_DOWNLOAD
-    assert original > 64
-    transport.assets[ASSET] = HttpError("response exceeds 41943040 bytes")
-    result = resolver(tmp_path, transport).resolve(PROJECT)
-    assert result.status is ResolutionStatus.UNRESOLVED
-    assert "exceeds" in (result.failure or "")
-
-
 @pytest.mark.parametrize("token", [None, ""])
 def test_cold_cache_default_http_config_resolves_without_optional_token(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, token: str | None
@@ -605,33 +587,6 @@ def test_malformed_apk_is_reported_without_losing_cached_entry(
         assert not path.exists()
 
 
-def test_cached_size_failure_retains_entry_and_retries(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    class FullDownload(ReleaseTransport):
-        def __call__(
-            self, request: Request, timeout: float, max_bytes: int | None
-        ) -> HttpResponse:
-            if request.method == "HEAD":
-                self.requests.append((request, max_bytes))
-                return response(request.full_url)
-            return super().__call__(request, timeout, max_bytes)
-
-    monkeypatch.setattr("obtainium_pack.package_id.MAX_APK_FULL_DOWNLOAD", 1024)
-    path = tmp_path / "ids.json"
-    seed(path)
-    transport = FullDownload(release(2, [("app.apk", ASSET)]), {ASSET: b"x" * 1025})
-    package_resolver = resolver(tmp_path, transport)
-    result = generated_project_entry(PROJECT, package_resolver)
-    assert result.app is not None and result.app.id == "org.cached.app"
-    assert "exceeds" in (result.resolution.failure or "")
-    assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.cached.app", 1)
-    transport.assets[ASSET] = apk("org.recovered.app")
-    retried = generated_project_entry(PROJECT, package_resolver)
-    assert retried.app is not None and retried.app.id == "org.recovered.app"
-    assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.recovered.app", 2)
-
-
 def test_uncached_asset_fetch_failure_omits_generated_entry(tmp_path: Path) -> None:
     transport = ReleaseTransport(
         release(2, [("app.apk", ASSET)]), {ASSET: urllib.error.URLError("offline")}
@@ -641,3 +596,114 @@ def test_uncached_asset_fetch_failure_omits_generated_entry(tmp_path: Path) -> N
     assert result.resolution.status is ResolutionStatus.UNRESOLVED
     assert "cannot read eligible APK" in (result.resolution.failure or "")
     assert not (tmp_path / "ids.json").exists()
+
+
+@pytest.mark.parametrize("cached", [False, True])
+@pytest.mark.parametrize("failure", ["truncated", "oserror"])
+def test_http_body_failure_is_reported_and_retried_without_losing_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: bool, failure: str
+) -> None:
+    path = tmp_path / "ids.json"
+    if cached:
+        seed(path)
+    requests: list[Request] = []
+    sleeps: list[float] = []
+
+    class BrokenBody(BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            raise OSError("body read failed")
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    class Socket:
+        def makefile(self, mode: str) -> BytesIO:
+            return BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nshort!")
+
+    def open_fixture(handler: urllib.request.HTTPSHandler, request: Request):
+        requests.append(request)
+        if failure == "oserror":
+            headers = Message()
+            return FixtureResponse(BrokenBody(), headers, request.full_url, 200)
+        stream = http.client.HTTPResponse(Socket())  # ty: ignore[invalid-argument-type]
+        stream.begin()
+        stream.url = request.full_url
+        return stream
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+    package_resolver = PackageIdResolver(
+        HttpClient(HttpConfig({}), retries=1, sleep=sleeps.append), PackageIdCache(path)
+    )
+    for _ in range(2):
+        result = generated_project_entry(PROJECT, package_resolver)
+        assert "failed after 2 attempts" in (result.resolution.failure or "")
+        if cached:
+            assert result.app is not None and result.app.id == "org.cached.app"
+            assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.cached.app", 1)
+        else:
+            assert result.app is None
+            assert result.resolution.status is ResolutionStatus.UNRESOLVED
+            assert not path.exists()
+    assert len(requests) == 4
+    assert sleeps == [0.5, 0.5]
+
+
+@pytest.mark.parametrize("cached", [False, True])
+def test_real_http_full_download_bound_retains_cache_or_omits_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: bool
+) -> None:
+    monkeypatch.setattr("obtainium_pack.package_id.MAX_APK_FULL_DOWNLOAD", 1024)
+    path = tmp_path / "ids.json"
+    if cached:
+        seed(path)
+    assets = {ASSET: apk("org.recovered.app"), ASSET + "2": b"x" * 1025}
+    reads: list[int | None] = []
+    requests: list[Request] = []
+
+    class ObservedBody(BytesIO):
+        def read(self, size: int | None = -1) -> bytes:
+            reads.append(size)
+            return super().read(size)
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(handler: urllib.request.HTTPSHandler, request: Request):
+        requests.append(request)
+        if request.full_url == API:
+            body = json.dumps(
+                release(2, [("one.apk", ASSET), ("two.apk", ASSET + "2")])
+            ).encode()
+            stream = BytesIO(body)
+        else:
+            stream = ObservedBody(
+                b"" if request.method == "HEAD" else assets[request.full_url]
+            )
+        return FixtureResponse(stream, Message(), request.full_url, 200)
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+    package_resolver = PackageIdResolver(
+        HttpClient(HttpConfig({}), retries=0), PackageIdCache(path)
+    )
+    for _ in range(2):
+        result = generated_project_entry(PROJECT, package_resolver)
+        assert "exceeds 1024 bytes" in (result.resolution.failure or "")
+        if cached:
+            assert result.app is not None and result.app.id == "org.cached.app"
+            assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.cached.app", 1)
+        else:
+            assert result.app is None
+            assert result.resolution.status is ResolutionStatus.UNRESOLVED
+            assert not path.exists()
+    assert reads == [1, 1025, 1, 1025] * 2
+    assert (
+        sum(
+            request.full_url == ASSET + "2" and request.method == "GET"
+            for request in requests
+        )
+        == 2
+    )
+    assets[ASSET + "2"] = apk("org.recovered.app")
+    retried = generated_project_entry(PROJECT, package_resolver)
+    assert retried.app is not None and retried.app.id == "org.recovered.app"
+    assert PackageIdCache(path).get(PROJECT) == CacheEntry("org.recovered.app", 2)

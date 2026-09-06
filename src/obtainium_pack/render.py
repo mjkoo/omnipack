@@ -37,6 +37,14 @@ _APP_FIELD_ORDER = (
 )
 
 
+def _canonical_value(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _canonical_value(value[key]) for key in sorted(value)}
+    if isinstance(value, list):
+        return [_canonical_value(item) for item in value]
+    return deepcopy(value)
+
+
 def hydrate_settings(source_type: str, values: dict[str, Any]) -> dict[str, Any]:
     """Fill source defaults, retaining entry values and future keys."""
     try:
@@ -46,9 +54,9 @@ def hydrate_settings(source_type: str, values: dict[str, Any]) -> dict[str, Any]
     result = deepcopy(defaults)
     for key in defaults:
         if key in values:
-            result[key] = deepcopy(values[key])
+            result[key] = _canonical_value(values[key])
     for key in sorted(values.keys() - defaults.keys()):
-        result[key] = deepcopy(values[key])
+        result[key] = _canonical_value(values[key])
     return result
 
 
@@ -123,9 +131,9 @@ def _render_app(app: ComposedApp) -> dict[str, Any]:
     ordered: dict[str, Any] = {}
     for field in _APP_FIELD_ORDER:
         if field in data:
-            ordered[field] = data[field]
+            ordered[field] = _canonical_value(data[field])
     for field in sorted(data.keys() - ordered.keys()):
-        ordered[field] = data[field]
+        ordered[field] = _canonical_value(data[field])
     return ordered
 
 
@@ -159,7 +167,7 @@ def _render_settings(
             raise RenderError(f"category {category!r} color must be an integer")
         categories[category] = color
 
-    result = {key: configured[key] for key in sorted(configured)}
+    result = {key: _canonical_value(configured[key]) for key in sorted(configured)}
     result["categories"] = json.dumps(categories, separators=(",", ":"))
     return result
 

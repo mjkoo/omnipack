@@ -10,7 +10,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
-from http.client import HTTPMessage
+from http.client import HTTPException, HTTPMessage
 from pathlib import Path
 from typing import IO, Any, Protocol
 from urllib.parse import urlsplit
@@ -128,7 +128,7 @@ class HttpClient:
             request = self.build_request(url, headers=headers, method=method)
             try:
                 return self.transport(request, self.timeout, max_bytes)
-            except (urllib.error.URLError, TimeoutError) as error:
+            except (OSError, HTTPException) as error:
                 if not _is_transient(error) or attempt + 1 == attempts:
                     raise HttpError(
                         f"request to {url} failed after {attempt + 1} attempts"
@@ -192,7 +192,7 @@ class HttpClient:
             )
 
 
-def _is_transient(error: urllib.error.URLError | TimeoutError) -> bool:
+def _is_transient(error: OSError | HTTPException) -> bool:
     return not isinstance(error, urllib.error.HTTPError) or error.code in {
         408,
         425,

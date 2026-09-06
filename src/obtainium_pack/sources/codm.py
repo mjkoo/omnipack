@@ -11,13 +11,13 @@ from __future__ import annotations
 
 import re
 from collections.abc import Mapping, Sequence
-from typing import cast
+from itertools import pairwise
 from urllib.parse import urlsplit
 
-from obtainium_pack.model import App, Variant
-from obtainium_pack.package_id import PackageIdResolver, generated_project_entry
+from obtainium_pack.model import App, SourceType, Variant
+from obtainium_pack.package_id import ProjectResolver, generated_project_entry
 from obtainium_pack.sources import IngestionReport
-from obtainium_pack.sources.common import HttpGetter, ProjectResolver, SourceError
+from obtainium_pack.sources.common import HttpGetter, SourceError, derived_source_type
 from obtainium_pack.urls import normalize_project_url
 
 LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)")
@@ -36,6 +36,13 @@ def fetch(
         if not isinstance(readme_url, str) or not readme_url.strip():
             raise SourceError("codm", "configured location is empty")
         text = http.get(readme_url).body.decode("utf-8")
+        lines = text.splitlines()
+        if not any(
+            re.match(r"^\s*\|\s*Project\s*\|", header, re.IGNORECASE)
+            and re.fullmatch(r"\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*", separator)
+            for header, separator in pairwise(lines)
+        ):
+            raise SourceError("codm", "README lacks a Project catalog table")
         covered = {
             normalize_project_url(app.url)
             for app in higher_precedence
@@ -46,9 +53,7 @@ def fetch(
         for url in LINK_RE.findall(text):
             parsed = urlsplit(url)
             parts = [part for part in parsed.path.split("/") if part]
-            if (parsed.hostname or "").lower().removeprefix(
-                "www."
-            ) != "github.com" or len(parts) != 2:
+            if derived_source_type(url) is not SourceType.GITHUB or len(parts) != 2:
                 report.skipped.append(
                     {
                         "source": "codm2000",
@@ -61,7 +66,7 @@ def fetch(
             if normalized in covered or normalized in seen:
                 continue
             seen.add(normalized)
-            generated = generated_project_entry(url, cast(PackageIdResolver, resolver))
+            generated = generated_project_entry(url, resolver)
             report.record_resolution(
                 url,
                 generated.app,

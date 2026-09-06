@@ -110,16 +110,10 @@ def test_rjny_fetch_and_parse_failures_name_source(response: object) -> None:
 
 def test_bboi_latest_release_maps_assets_and_dual_overrides_same_id() -> None:
     api = "https://codeberg.org/api/v1/repos/BBoi34/Obtainium-Recomp-Decomp/releases/latest"
-    single_url, dual_url = "https://assets/single.json", "https://assets/dual.json"
-    release = {
-        "assets": [
-            {"name": "Decomp-Recomp.V9.json", "browser_download_url": single_url},
-            {
-                "name": "Dual-Screen-Decomp-Recomp.V9.json",
-                "browser_download_url": dual_url,
-            },
-        ]
-    }
+    release = json.loads(fixture("codeberg-release.json"))
+    single_url, dual_url = (
+        asset["browser_download_url"] for asset in release["assets"]
+    )
     apps = bboi.fetch(
         FakeHttp(
             {
@@ -255,7 +249,7 @@ def test_codm_extracts_all_github_links_skips_other_hosts_and_deduplicates_dual(
 
 def test_codm_reports_unresolved_and_cached_resolution_failures() -> None:
     readme_url = "https://example/readme"
-    readme = "[Project](https://github.com/owner/repo)"
+    readme = "| Project |\n| --- |\n| [Project](https://github.com/owner/repo) |"
     unresolved_report = IngestionReport()
     apps = codm.fetch(
         FakeHttp({readme_url: readme}),
@@ -293,8 +287,15 @@ def test_codm_reports_unresolved_and_cached_resolution_failures() -> None:
 
 
 @pytest.mark.parametrize("missing", ["id", "url", "name"])
-def test_extras_requires_named_fields(missing: str) -> None:
-    entry = {"id": "app.id", "url": "https://example.test/app", "name": "Example"}
+@pytest.mark.parametrize("variants", [None, []])
+def test_extras_requires_named_fields(missing: str, variants: list[str] | None) -> None:
+    entry: dict[str, Any] = {
+        "id": "app.id",
+        "url": "https://example.test/app",
+        "name": "Example",
+    }
+    if variants is not None:
+        entry["variants"] = variants
     del entry[missing]
     with pytest.raises(SourceError, match="extras.*(Example|app.id|entry 1)"):
         extras.fetch([entry])
@@ -411,3 +412,64 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
     )
     assert len(apps) == 2
     assert all(app.source_type is declared for app in apps)
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "<html>upstream error</html>",
+        "unrecognized text",
+        "| Project |\nmissing separator",
+    ],
+)
+def test_codm_malformed_catalog_aborts_before_publication(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
+) -> None:
+    from obtainium_pack.sources import IngestionResult
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    before = {
+        name: (name + " previous").encode()
+        for name in ("single-screen.json", "dual-screen.json")
+    }
+    for name, content in before.items():
+        (dist / name).write_bytes(content)
+
+    def ingest(root: Path, report: IngestionReport) -> IngestionResult:
+        apps = codm.fetch(
+            FakeHttp({"https://fixture/readme": body}),
+            {"readme_url": "https://fixture/readme"},
+            StubResolver(),
+            [],
+            report,
+        )
+        return IngestionResult(apps, report)
+
+    shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
+    monkeypatch.setattr(cli, "_ingest_for_build", ingest)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert "codm" in report["error"]
+    assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
+
+
+def test_codm_skips_github_site_routes_in_project_table() -> None:
+    url = "https://fixture/readme"
+    report = IngestionReport()
+    apps = codm.fetch(
+        FakeHttp(
+            {
+                url: "| Project |\n| --- |\n| [Settings](https://github.com/settings/profile) |\n| [App](https://github.com/owner/repo) |"
+            }
+        ),
+        {"readme_url": url},
+        StubResolver(),
+        [],
+        report,
+    )
+    assert [app.url for app in apps] == ["https://github.com/owner/repo"]
+    assert [item["url"] for item in report.skipped] == [
+        "https://github.com/settings/profile"
+    ]

@@ -203,3 +203,21 @@ def test_settings_categories_use_configured_and_derived_colors_for_observed_unio
 def test_render_rejects_duplicate_package_ids() -> None:
     with pytest.raises(RenderError, match="duplicate package id.*same"):
         render([composed("same"), composed("same", name="Other")], {})
+
+
+def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None:
+    left = {"z": [{"second": 2, "first": 1}], "a": [3, 1, 2]}
+    right = {"a": [3, 1, 2], "z": [{"first": 1, "second": 2}]}
+    first_app = composed(settings={"intermediateLink": [left]})
+    second_app = composed(settings={"intermediateLink": [right]})
+    first_app.data["future"] = left
+    second_app.data["future"] = right
+    first = render([first_app], {"future": left})
+    second = render([second_app], {"future": right})
+    assert first == second
+    decoded = json.loads(first)
+    assert decoded["settings"]["future"] == left
+    assert decoded["apps"][0]["future"] == left
+    assert json.loads(decoded["apps"][0]["additionalSettings"])["intermediateLink"] == [
+        left
+    ]

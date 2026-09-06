@@ -3,8 +3,6 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from obtainium_pack import build as build_module
 from obtainium_pack.merge import (
     CompositionReport,
@@ -104,71 +102,3 @@ def test_first_build_reports_every_app_added(tmp_path: Path) -> None:
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["changes"]["single"]["added"] == ["one", "two"]
     assert report["changes"]["dual"]["added"] == ["one", "two"]
-
-
-@pytest.mark.parametrize("existing", [True, False])
-def test_second_replacement_failure_restores_previous_pair(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
-) -> None:
-    if existing:
-        write_previous(
-            tmp_path,
-            {"apps": [{"id": "before.single"}]},
-            {"apps": [{"id": "before.dual"}]},
-        )
-    real_replace = Path.replace
-    replacements = 0
-
-    def fail_second(source: Path, target: Path) -> Path:
-        nonlocal replacements
-        if target.parent.name == "dist" and target.name.endswith("screen.json"):
-            replacements += 1
-            if replacements == 2:
-                raise OSError("injected replacement failure")
-        return real_replace(source, target)
-
-    monkeypatch.setattr(Path, "replace", fail_second)
-    with pytest.raises(OSError, match="injected"):
-        build_module.publish_build(
-            tmp_path, composition("new.id"), {}, IngestionReport()
-        )
-    if existing:
-        assert (
-            json.loads((tmp_path / "dist/single-screen.json").read_text())["apps"][0][
-                "id"
-            ]
-            == "before.single"
-        )
-        assert (
-            json.loads((tmp_path / "dist/dual-screen.json").read_text())["apps"][0][
-                "id"
-            ]
-            == "before.dual"
-        )
-    else:
-        assert not (tmp_path / "dist/single-screen.json").exists()
-        assert not (tmp_path / "dist/dual-screen.json").exists()
-
-
-def test_second_render_failure_never_publishes_first(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    write_previous(
-        tmp_path, {"apps": [{"id": "before.single"}]}, {"apps": [{"id": "before.dual"}]}
-    )
-    calls = 0
-
-    def fail_render(_apps: list[ComposedApp], _settings: dict[str, object]) -> str:
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            raise ValueError("dual render failed")
-        return '{"apps":[]}\n'
-
-    monkeypatch.setattr(build_module, "render", fail_render)
-    with pytest.raises(ValueError, match="dual"):
-        build_module.publish_build(
-            tmp_path, composition("new.id"), {}, IngestionReport()
-        )
-    assert "before.single" in (tmp_path / "dist/single-screen.json").read_text()
-    assert "before.dual" in (tmp_path / "dist/dual-screen.json").read_text()

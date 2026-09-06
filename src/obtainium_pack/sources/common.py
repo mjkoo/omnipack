@@ -10,7 +10,6 @@ from urllib.parse import urlsplit
 
 from obtainium_pack.http import HttpResponse
 from obtainium_pack.model import App, Provenance, SourceType, Variant
-from obtainium_pack.package_id import ResolutionResult
 
 
 class HttpGetter(Protocol):
@@ -22,10 +21,6 @@ class HttpGetter(Protocol):
         max_bytes: int | None = None,
         method: str = "GET",
     ) -> HttpResponse: ...
-
-
-class ProjectResolver(Protocol):
-    def resolve(self, project_url: str, /) -> ResolutionResult: ...
 
 
 class SourceError(RuntimeError):

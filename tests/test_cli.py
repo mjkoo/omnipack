@@ -242,6 +242,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "https://fixture.test/single": '{"apps":[]}',
         "https://fixture.test/dual": '{"apps":[]}',
         "https://fixture.test/readme": (
+            "| Project |\n| --- |\n"
             "[website](https://example.test/page) "
             "[generated](https://github.com/fixture/generated) "
             "[missing](https://github.com/fixture/missing) "

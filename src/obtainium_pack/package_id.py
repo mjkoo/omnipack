@@ -17,7 +17,7 @@ import zlib
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from obtainium_pack.http import HttpClient, HttpError
@@ -54,6 +54,10 @@ class ResolutionResult:
     status: ResolutionStatus
     release_id: str | int | None
     failure: str | None = None
+
+
+class ProjectResolver(Protocol):
+    def resolve(self, project_url: str, /) -> ResolutionResult: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -199,7 +203,7 @@ class PackageIdResolver:
 
 
 def generated_project_entry(
-    project_url: str, resolver: PackageIdResolver
+    project_url: str, resolver: ProjectResolver
 ) -> GeneratedProjectResult:
     """Resolve one README project into a generated dual-screen candidate."""
     resolution = resolver.resolve(project_url)

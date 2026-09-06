@@ -9,9 +9,9 @@ from os import PathLike
 from typing import Any
 
 from obtainium_pack.model import App
-from obtainium_pack.package_id import ResolutionStatus
+from obtainium_pack.package_id import ProjectResolver, ResolutionStatus
 
-from .common import HttpGetter, ProjectResolver, SourceError
+from .common import HttpGetter, SourceError
 
 
 @dataclass(slots=True)

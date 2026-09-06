@@ -14,7 +14,6 @@ FIXTURES = Path(__file__).parent / "fixtures"
         "rjny-dual.json",
         "bboi-single.json",
         "bboi-dual.json",
-        "codeberg-release.json",
     ],
 )
 def test_json_fixture_loads(name: str) -> None:
@@ -61,15 +60,6 @@ def test_bboi_fixtures_preserve_all_cross_asset_ids() -> None:
         "com.igawa6.harvestmoon64",
         "com.samyost1.zelda3android",
         "com.samyost1.tmcandroid",
-    }
-
-
-def test_codeberg_release_fixture_references_both_catalog_assets() -> None:
-    release = json.loads((FIXTURES / "codeberg-release.json").read_text())
-
-    assert {asset["name"] for asset in release["assets"]} == {
-        "Decomp-Recomp.V3.2.json",
-        "Dual-Screen-Decomp-Recomp.V3.2.json",
     }
 
 
