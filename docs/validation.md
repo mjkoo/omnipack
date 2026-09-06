@@ -55,18 +55,23 @@ entries. It preserved every supplied value. The committed defaults table
 matches the upstream export fixtures; its version records provenance and
 does not promise that the importer will never add further settings.
 
-Two consecutive `uv run --no-sync pack build` executions succeeded with
-byte-identical output, also identical to the files imported above. The
-second report contained no additions or removals. SHA-256 values:
+After nested object-key ordering was finalized, two consecutive
+`uv run --no-sync pack build` executions succeeded with byte-identical
+output. Decoding each app's settings confirms the final packs carry
+exactly the same app data as the exhaustive UI inspection above. Both
+final files were imported again, and all 87/107 expected stored ids, URLs,
+source types and supplied settings matched. Play! and RetroArch's forms
+were also reopened: all 22/28 switch labels and states matched the earlier
+inspection. The second build report contained no additions or removals. SHA-256 values:
 
 | File | SHA-256 |
 | --- | --- |
-| `dist/single-screen.json` | `447f870805e3cd80fccd4752cfde4b6689719400f0300e0884401608bbf26520` |
-| `dist/dual-screen.json` | `c2ce616c5e5c7a02f8dc0102cf876863da5df9916687d2d9abb5f04b7d636ca2` |
+| `dist/single-screen.json` | `87942ea73ac15119780e5dcf5d9810e9ee641aa340d3218c41e28066ad7a4f63` |
+| `dist/dual-screen.json` | `bc428c6005465d59deb5c08986a575947d5f1c5c4078fcd3d34bebe8171a313c` |
 
 `just check-all` passed: lock consistency, Ruff formatting and lint, ty,
-dependency audit, source and wheel builds, all 165 pytest tests with
+dependency audit, source and wheel builds, all 170 pytest tests with
 coverage, actionlint, zizmor, Nix formatting, and Nix flake checks.
 Nix built for the current `aarch64-darwin` host and reported that incompatible
 systems were omitted. Zizmor reported no findings with one configured
-suppression. The working-tree warning came from pending validation artifacts.
+suppression. Earlier working-tree warnings came from pending validation artifacts.
