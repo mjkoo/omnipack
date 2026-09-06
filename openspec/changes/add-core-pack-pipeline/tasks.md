@@ -314,11 +314,11 @@
 
 ## 7. Integration
 
-- [ ] 7.1 Run a live build against the real upstreams and review the two
+- [x] 7.1 Run a live build against the real upstreams and review the two
   rendered files and the report by hand, confirming the entry counts and the
   per-variant resolution of the id that differs between variants.
-- [ ] 7.2 Import the rendered single-screen file into Obtainium on a device
+- [x] 7.2 Import the rendered single-screen file into Obtainium on a device
   and confirm every app is added and its settings UI shows the full set of
   switches.
-- [ ] 7.3 Confirm the whole check suite passes and that a second build with no
+- [x] 7.3 Confirm the whole check suite passes and that a second build with no
   upstream change rewrites both files byte-identically.
