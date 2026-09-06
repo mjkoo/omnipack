@@ -22,11 +22,32 @@ supplied settings key and value. The app already tracked itself, giving
 88 stored entries after the single-screen import and 108 after importing
 the dual-screen pack. The Cemu entry changed to the dual-screen project.
 
-The GitHub settings form was inspected using aPS3e and the HTML settings
-form using Dolphin, including scrolling through their additional options.
-All apps were checked through their stored settings; the two source-type
-forms were checked visually. This validates import and settings display,
-not installation or operation of every exported app.
+All 87 single-screen apps passed the per-app settings UI check recorded
+in `import-validation.json`.
+The check opened each app by name, confirmed its package id and URL on
+the detail screen, and inspected its actual additional-options form through
+Android UI Automator. Every supported switch was present with a checked
+state matching the imported value. This validates
+import and settings display, not installation or operation of every
+exported app.
+
+The first two forms were inspected with overlapping scrolling at the
+emulator's original display density. The remaining forms were inspected
+at a temporary density of 120 dpi, making the full form visible together.
+The original density was restored afterwards. The checklist records the
+observed switches and hashes of the captured form XML for each app.
+
+GitHub exposes 18 top-level switches, including the importer-added tarball
+option. HTML exposes 16 top-level switches. The HTML source leaves
+`showReleaseDateAsVersionToggle` and `allowIncludeZips` disabled, so
+Obtainium omits those two controls even though the imported settings retain
+`releaseDateAsVersion` and `includeZips`. This follows the official
+[source provider](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/providers/source_provider.dart)
+and [HTML source](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/html.dart).
+Play! additionally exposes six switches for its intermediate link, and
+RetroArch exposes twelve across its two intermediate links. These nested
+controls were also checked against their supplied values and importer
+defaults.
 
 Obtainium's import compatibility layer added `minimumUpdateAgeDays` to both
 source types, plus `includeTarballs` and `tarballedApkFilterRegEx` to GitHub
