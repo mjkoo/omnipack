@@ -1,0 +1,329 @@
+"""Live source resolution, bounded probing, and version classification."""
+
+from __future__ import annotations
+
+import json
+import re
+from collections.abc import Mapping
+from dataclasses import dataclass
+from enum import Enum
+from typing import Any
+
+from obtainium_pack.http import HttpClient, HttpError, HttpResponse, redact_url
+from obtainium_pack.offline import Finding, ValidatedEntry
+from obtainium_pack.resolution.github import resolve_github
+from obtainium_pack.resolution.html import resolve_html
+from obtainium_pack.resolution.types import ResolutionError, ResolutionResult
+
+
+class VersionClass(str, Enum):
+    """How an effective version participates in GitHub numeric linting."""
+
+    NUMERIC = "numeric"
+    NONNUMERIC = "nonnumeric"
+    TRACK_ONLY = "track-only"
+    DETECTION_DISABLED = "version-detection-disabled"
+    DATE = "date-version"
+    NOT_APPLICABLE = "not-applicable"
+
+
+@dataclass(frozen=True, slots=True)
+class CandidateEvidence:
+    """A selected download candidate safe to include in evidence."""
+
+    name: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class ResolutionEvidence:
+    """Sanitized source-selection evidence."""
+
+    raw_version: str
+    effective_version: str
+    version_origin: str
+    candidates: tuple[CandidateEvidence, ...]
+    selected: dict[str, Any] | None
+    inspected_count: int | None
+    window_limit: int | None
+
+
+@dataclass(frozen=True, slots=True)
+class ProbeEvidence:
+    """The outcome of one bounded candidate request."""
+
+    name: str
+    url: str
+    success: bool
+    response_url: str | None = None
+    status: int | None = None
+    bytes_read: int = 0
+
+
+@dataclass(frozen=True, slots=True)
+class LiveEntryResult:
+    """Resolution and probe outcome for one variant entry."""
+
+    variant: str
+    entry_id: str
+    index: int
+    source: str
+    resolution: ResolutionEvidence | None
+    probes: tuple[ProbeEvidence, ...]
+    version_class: VersionClass | None
+    errors: tuple[Finding, ...]
+    warnings: tuple[Finding, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+
+@dataclass(frozen=True, slots=True)
+class LiveResult:
+    """All live outcomes, including aggregate findings."""
+
+    entries: tuple[LiveEntryResult, ...]
+    errors: tuple[Finding, ...]
+    warnings: tuple[Finding, ...]
+
+    @property
+    def ok(self) -> bool:
+        return not self.errors
+
+
+_NUMERIC_VERSION = re.compile(
+    r"[vV]?\d+(?:\.\d+)+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?\Z"
+)
+_URL_IN_MESSAGE = re.compile(r"https?://[^\s\"'<>]+")
+
+
+def verify_live(
+    entries: Mapping[str, tuple[ValidatedEntry, ...]], http: HttpClient
+) -> LiveResult:
+    """Resolve and probe every entry, collecting independent failures."""
+    cached_http = _CachingHttpClient(http)
+    resolutions: dict[tuple[str, str, str], ResolutionResult] = {}
+    results: list[LiveEntryResult] = []
+    errors: list[Finding] = []
+    warnings: list[Finding] = []
+
+    for variant_entries in entries.values():
+        for entry in variant_entries:
+            result = _verify_entry(entry, cached_http, resolutions)
+            results.append(result)
+            errors.extend(result.errors)
+            warnings.extend(result.warnings)
+    return LiveResult(tuple(results), tuple(errors), tuple(warnings))
+
+
+def classify_version(
+    source: str,
+    settings: Mapping[str, object],
+    resolution: ResolutionResult,
+) -> tuple[VersionClass, Finding | None]:
+    """Classify a resolved version and return its optional lint finding."""
+    if source != "GitHub":
+        return VersionClass.NOT_APPLICABLE, None
+    if settings.get("trackOnly") is True:
+        return VersionClass.TRACK_ONLY, None
+    if settings.get("versionDetection") is False:
+        return VersionClass.DETECTION_DISABLED, None
+    if settings.get("releaseDateAsVersion") is True:
+        return VersionClass.DATE, None
+    if _NUMERIC_VERSION.fullmatch(resolution.effective_version) is not None:
+        return VersionClass.NUMERIC, None
+    return (
+        VersionClass.NONNUMERIC,
+        Finding(
+            "version-lint",
+            "github-version-format",
+            "effective GitHub version does not match the numeric version shape",
+        ),
+    )
+
+
+def _verify_entry(
+    entry: ValidatedEntry,
+    http: _CachingHttpClient,
+    resolutions: dict[tuple[str, str, str], ResolutionResult],
+) -> LiveEntryResult:
+    key = (
+        entry.source,
+        str(entry.raw.get("url", "")),
+        json.dumps(entry.settings, sort_keys=True, separators=(",", ":")),
+    )
+    try:
+        resolution = resolutions.get(key)
+        if resolution is None:
+            resolver = resolve_github if entry.source == "GitHub" else resolve_html
+            resolution = resolver(entry.raw, http)
+            resolutions[key] = resolution
+    except ResolutionError as error:
+        finding = _finding(
+            entry, "resolution", error.code, _sanitize_message(str(error))
+        )
+        return LiveEntryResult(
+            entry.variant,
+            entry.entry_id,
+            entry.index,
+            entry.source,
+            None,
+            (),
+            None,
+            (finding,),
+            (),
+        )
+    except (HttpError, OSError, ValueError) as error:
+        finding = _finding(
+            entry,
+            "resolution",
+            "source-resolution-failed",
+            _sanitize_message(str(error)) or "source resolution failed",
+        )
+        return LiveEntryResult(
+            entry.variant,
+            entry.entry_id,
+            entry.index,
+            entry.source,
+            None,
+            (),
+            None,
+            (finding,),
+            (),
+        )
+
+    version_class, lint = classify_version(entry.source, entry.settings, resolution)
+    entry_warnings: list[Finding] = []
+    if lint is not None:
+        entry_warnings.append(_finding(entry, lint.stage, lint.code, lint.message))
+
+    probes: list[ProbeEvidence] = []
+    entry_errors: list[Finding] = []
+    if entry.settings.get("trackOnly") is not True:
+        succeeded = False
+        for candidate in resolution.candidates:
+            try:
+                response = http.probe(candidate.url)
+            except HttpError, OSError, ValueError:
+                probes.append(
+                    ProbeEvidence(
+                        candidate.name,
+                        _safe_redact_url(candidate.url),
+                        False,
+                    )
+                )
+                continue
+            probes.append(
+                ProbeEvidence(
+                    candidate.name,
+                    _safe_redact_url(candidate.url),
+                    True,
+                    _safe_redact_url(response.url),
+                    response.status,
+                    len(response.body),
+                )
+            )
+            succeeded = True
+            break
+        if succeeded:
+            entry_warnings.extend(
+                _finding(
+                    entry,
+                    "probe",
+                    "candidate-probe-failed",
+                    "an earlier selected candidate was unreachable",
+                )
+                for probe in probes
+                if not probe.success
+            )
+        else:
+            entry_errors.append(
+                _finding(
+                    entry,
+                    "probe",
+                    "candidate-probes-failed",
+                    "no selected download candidate was reachable",
+                )
+            )
+
+    return LiveEntryResult(
+        entry.variant,
+        entry.entry_id,
+        entry.index,
+        entry.source,
+        _resolution_evidence(resolution),
+        tuple(probes),
+        version_class,
+        tuple(entry_errors),
+        tuple(entry_warnings),
+    )
+
+
+def _finding(entry: ValidatedEntry, stage: str, code: str, message: str) -> Finding:
+    return Finding(
+        stage,
+        code,
+        message,
+        entry.variant,
+        entry.entry_id,
+        entry.index,
+    )
+
+
+def _resolution_evidence(result: ResolutionResult) -> ResolutionEvidence:
+    return ResolutionEvidence(
+        result.raw_version,
+        result.effective_version,
+        result.version_origin,
+        tuple(
+            CandidateEvidence(candidate.name, _safe_redact_url(candidate.url))
+            for candidate in result.candidates
+        ),
+        _sanitize_selected(result.selected),
+        result.inspected_count,
+        result.window_limit,
+    )
+
+
+def _sanitize_selected(value: dict[str, Any] | None) -> dict[str, Any] | None:
+    if value is None:
+        return None
+    return {
+        key: _safe_redact_url(item)
+        if isinstance(item, str) and "url" in key.casefold()
+        else item
+        for key, item in value.items()
+    }
+
+
+def _sanitize_message(message: str) -> str:
+    return _URL_IN_MESSAGE.sub(lambda match: _safe_redact_url(match.group(0)), message)
+
+
+def _safe_redact_url(url: str) -> str:
+    try:
+        return redact_url(url)
+    except ValueError:
+        return "<invalid-url>"
+
+
+class _CachingHttpClient(HttpClient):
+    """Invocation-local exact metadata cache with uncached bounded probes."""
+
+    def __init__(self, delegate: HttpClient) -> None:
+        self._delegate = delegate
+        self._metadata: dict[tuple[str, tuple[tuple[str, str], ...]], HttpResponse] = {}
+
+    def get_metadata(
+        self, url: str, *, headers: Mapping[str, str] | None = None
+    ) -> HttpResponse:
+        key = (url, tuple(sorted((headers or {}).items())))
+        if key not in self._metadata:
+            self._metadata[key] = self._delegate.get_metadata(url, headers=headers)
+        return self._metadata[key]
+
+    def probe(
+        self, url: str, *, headers: Mapping[str, str] | None = None
+    ) -> HttpResponse:
+        return self._delegate.probe(url, headers=headers)
