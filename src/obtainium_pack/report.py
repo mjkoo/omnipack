@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from obtainium_pack.merge import (
+    CompositionReport,
     CompositionResult,
     Displacement,
     Removal,
@@ -23,23 +24,24 @@ def write_report(
     composition: CompositionResult | None,
     ingestion: IngestionReport,
     *,
+    composition_report: CompositionReport | None = None,
     stage: str | None = None,
     error: Exception | None = None,
 ) -> None:
-    current = (
-        {variant: {app.id for app in composition.apps[variant]} for variant in Variant}
-        if composition is not None
-        else {variant: set() for variant in Variant}
-    )
+    changes = None
+    if composition is not None:
+        changes = {}
+        for variant in Variant:
+            current = {app.id for app in composition.apps[variant]}
+            before = previous.get(variant, set())
+            changes[variant.value] = {
+                "added": sorted(current - before),
+                "removed": sorted(before - current),
+            }
+        composition_report = composition.report
     document: dict[str, Any] = {
         "status": "failed" if error else "success",
-        "changes": {
-            variant.value: {
-                "added": sorted(current[variant] - previous.get(variant, set())),
-                "removed": sorted(previous.get(variant, set()) - current[variant]),
-            }
-            for variant in Variant
-        },
+        "changes": changes,
         "skipped": ingestion.skipped,
         "unresolved": ingestion.unresolved,
         "generated": ingestion.generated,
@@ -48,15 +50,15 @@ def write_report(
         "denylistRemovals": [],
         "staleExclusions": [],
     }
-    if composition is not None:
+    if composition_report is not None:
         document["displacements"] = [
-            _record(item) for item in composition.report.displacements
+            _record(item) for item in composition_report.displacements
         ]
         document["denylistRemovals"] = [
-            _record(item) for item in composition.report.removals
+            _record(item) for item in composition_report.removals
         ]
         document["staleExclusions"] = [
-            _record(item) for item in composition.report.stale_exclusions
+            _record(item) for item in composition_report.stale_exclusions
         ]
     if error is not None:
         document["stage"] = stage

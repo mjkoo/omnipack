@@ -70,7 +70,13 @@ and was already in the previous output appears in none of the other lists.
 
 The report SHALL be written on a successful build and on a failed one alike,
 and a failed build's report SHALL record the stage that was running and the
-error that stopped it. The previous output a report compares against is the
+error that stopped it. If composition has not completed, the report SHALL set
+`changes` to null because no complete candidate output exists to compare;
+this SHALL NOT be interpreted as an empty pack. The report SHALL preserve
+precedence displacements, denylist removals, and stale exclusions collected
+before a composition failure. Once composition completes, the report SHALL
+compare its candidate apps with the previous output even if a later stage fails.
+The previous output a report compares against is the
 contents of the import files as they stood before the build, so the system
 SHALL read them before it replaces either import file; when a variant's import
 file does not yet exist, every app in that variant SHALL be reported as added.
@@ -107,6 +113,19 @@ unchanged rebuild look like a change.
 - **WHEN** a build aborts because an upstream is unreachable
 - **THEN** the report is still written and names the stage that was running and
   the error that stopped the build
+
+#### Scenario: An early failure cannot compute output changes
+
+- **WHEN** a build fails before composition completes and previous import files exist
+- **THEN** the report sets `changes` to null instead of listing existing apps as removed
+- **AND** the previous import files remain unchanged
+
+#### Scenario: Composition diagnostics survive invalid overlays
+
+- **WHEN** precedence and denylist processing collect diagnostics and an overlay
+  subsequently fails validation
+- **THEN** the failed report preserves the collected displacements, denylist removals,
+  and stale exclusions, and sets `changes` to null
 
 #### Scenario: The first build has no previous output
 

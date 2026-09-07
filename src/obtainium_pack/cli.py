@@ -10,7 +10,7 @@ from typing import Any
 
 from obtainium_pack.build import previous_ids, publish_build
 from obtainium_pack.http import HttpClient, HttpConfig
-from obtainium_pack.merge import CompositionResult, compose
+from obtainium_pack.merge import CompositionReport, CompositionResult, compose
 from obtainium_pack.package_id import PackageIdCache, PackageIdResolver
 from obtainium_pack.report import write_report
 from obtainium_pack.sources import (
@@ -25,6 +25,7 @@ from obtainium_pack.sources import (
 def build(_args: argparse.Namespace) -> int:
     root = Path.cwd()
     ingestion_report = IngestionReport()
+    composition_report = CompositionReport()
     composition: CompositionResult | None = None
     stage = "ingestion"
 
@@ -40,6 +41,7 @@ def build(_args: argparse.Namespace) -> int:
             _object_list(root / "config/deny.json", "denylist"),
             _object(root / "config/overlay.json", "overlay"),
             _object(root / "config/overlay.dual.json", "dual overlay"),
+            report=composition_report,
         )
         stage = "rendering"
         publish_build(
@@ -56,6 +58,7 @@ def build(_args: argparse.Namespace) -> int:
                 previous_ids(root),
                 composition,
                 ingestion_report,
+                composition_report=composition_report,
                 stage=stage,
                 error=error,
             )

@@ -12,7 +12,7 @@ from obtainium_pack import cli
 from obtainium_pack.cli import main
 from obtainium_pack.http import HttpClient, HttpResponse
 from obtainium_pack.merge import CompositionReport, CompositionResult
-from obtainium_pack.model import Provenance, Variant
+from obtainium_pack.model import App, Provenance, SourceType, Variant
 from obtainium_pack.overlay import ComposedApp
 from obtainium_pack.sources import IngestionReport, IngestionResult, SourceError
 
@@ -102,7 +102,7 @@ def test_build_writes_both_variants_and_report(
         "_ingest_for_build",
         lambda root, report=None: IngestionResult([], report or IngestionReport()),
     )
-    monkeypatch.setattr(cli, "compose", lambda *args: composed)
+    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.chdir(tmp_path)
 
     assert cli.main(["build"]) == 0
@@ -123,6 +123,11 @@ def test_build_writes_both_variants_and_report(
 def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    before = b'{"apps":[{"id":"existing.app"}]}\n'
+    for name in ("single-screen.json", "dual-screen.json"):
+        (dist / name).write_bytes(before)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         cli,
@@ -137,6 +142,9 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     assert report["status"] == "failed"
     assert report["stage"] == "ingestion"
     assert "HTTP 503" in report["error"]
+    assert report["changes"] is None
+    for name in ("single-screen.json", "dual-screen.json"):
+        assert (dist / name).read_bytes() == before
 
 
 def test_cached_resolution_survives_a_later_render_failure(
@@ -169,7 +177,7 @@ def test_cached_resolution_survives_a_later_render_failure(
         return IngestionResult([], report or IngestionReport())
 
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
-    monkeypatch.setattr(cli, "compose", lambda *args: composed)
+    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.setattr(
         "obtainium_pack.build.render",
         lambda *_args: (_ for _ in ()).throw(ValueError("render failed")),
@@ -400,3 +408,71 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == stage
     assert report["error"] == f"injected {stage} failure"
+    assert report["changes"] == {
+        variant.value: {"added": [], "removed": ["before.id"] if existing else []}
+        for variant in Variant
+    }
+
+
+def test_composition_failure_preserves_collected_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    for name, value in (
+        (
+            "deny.json",
+            [
+                {"id": "removed.app", "reason": "excluded"},
+                {"id": "stale.app", "reason": "obsolete"},
+            ],
+        ),
+        ("overlay.json", {"missing.app": {"name": "Missing"}}),
+        ("overlay.dual.json", {}),
+    ):
+        (config / name).write_text(json.dumps(value), encoding="utf-8")
+    apps = [
+        App(
+            package_id,
+            "https://example.test/app",
+            source,
+            SourceType.HTML,
+            (),
+            variant,
+            Provenance(source, "https://example.test/catalog"),
+        )
+        for variant in Variant
+        for package_id, source in (
+            ("collision.app", "rjny"),
+            ("collision.app", "extras"),
+            ("removed.app", "extras"),
+        )
+    ]
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, report: IngestionResult(apps, report)
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "composition"
+    assert "missing.app" in report["error"]
+    assert report["displacements"] == [
+        {
+            "id": "collision.app",
+            "variant": variant.value,
+            "winner_source": "extras",
+            "loser_source": "rjny",
+            "differing_fields": ["name"],
+        }
+        for variant in Variant
+    ]
+    assert report["denylistRemovals"] == [
+        {"id": "removed.app", "variant": variant.value, "reason": "excluded"}
+        for variant in Variant
+    ]
+    assert report["staleExclusions"] == [
+        {"id": "stale.app", "variant": None, "reason": "obsolete"}
+    ]
+    assert report["changes"] is None
+    assert not (tmp_path / "dist").exists()

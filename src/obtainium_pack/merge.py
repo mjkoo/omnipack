@@ -57,9 +57,12 @@ def compose(
     denylist: list[dict[str, str]],
     common_overlay: dict[str, object],
     dual_overlay: dict[str, object],
+    *,
+    report: CompositionReport | None = None,
 ) -> CompositionResult:
     """Run all composition stages in their required order."""
-    report = CompositionReport()
+    if report is None:
+        report = CompositionReport()
     apps = _union(candidates, report)
     dual_exemptions = _apply_denylist(apps, denylist, report)
     _validate_targets(apps, common_overlay, dual_overlay)
