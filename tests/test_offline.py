@@ -1,0 +1,301 @@
+from __future__ import annotations
+
+import hashlib
+import json
+from copy import deepcopy
+from pathlib import Path
+from typing import Any
+
+import pytest
+
+from obtainium_pack.offline import OfflineInputs, validate_offline
+from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+
+ROOT = Path(__file__).parents[1]
+
+
+def encoded(value: object) -> bytes:
+    return json.dumps(value, allow_nan=True).encode()
+
+
+def app(package_id: str = "org.example.app", source: str = "GitHub") -> dict[str, Any]:
+    return {
+        "id": package_id,
+        "url": "https://example.com/app",
+        "author": "Example",
+        "name": "Example",
+        "additionalSettings": json.dumps(SETTINGS_DEFAULTS[source]),
+        "categories": ["Emulator"],
+        "overrideSource": source,
+    }
+
+
+def inputs(
+    single_apps: list[dict[str, Any]] | None = None,
+    dual_apps: list[dict[str, Any]] | None = None,
+    *,
+    deny: object = None,
+    common: object = None,
+    dual_overlay: object = None,
+    settings: object = None,
+) -> OfflineInputs:
+    single_apps = [app()] if single_apps is None else single_apps
+    dual_apps = deepcopy(single_apps) if dual_apps is None else dual_apps
+    configured = (
+        {"categories": {"Emulator": 0xFF010203}} if settings is None else settings
+    )
+
+    def rendered(apps: list[dict[str, Any]]) -> dict[str, str]:
+        names = sorted(
+            {
+                name
+                for item in apps
+                for name in item.get("categories", [])
+                if isinstance(name, str)
+            }
+        )
+        configured_colors = (
+            configured.get("categories", {}) if isinstance(configured, dict) else {}
+        )
+        colors = {
+            name: configured_colors.get(
+                name,
+                int.from_bytes(b"\xff" + hashlib.sha256(name.encode()).digest()[:3]),
+            )
+            for name in names
+        }
+        return {"categories": json.dumps(colors, separators=(",", ":"))}
+
+    return OfflineInputs(
+        single=encoded({"settings": rendered(single_apps), "apps": single_apps}),
+        dual=encoded({"settings": rendered(dual_apps), "apps": dual_apps}),
+        deny=encoded([] if deny is None else deny),
+        common_overlay=encoded({} if common is None else common),
+        dual_overlay=encoded({} if dual_overlay is None else dual_overlay),
+        settings=encoded(configured),
+    )
+
+
+def codes(result) -> set[str]:
+    return {finding.code for finding in result.findings}
+
+
+def test_valid_entries_retain_raw_objects_and_decoded_settings() -> None:
+    raw = app("release-notes")
+    raw["futureField"] = {"retained": True}
+    additional = json.loads(raw["additionalSettings"])
+    additional["futureSetting"] = {"retained": True}
+    raw["additionalSettings"] = json.dumps(additional)
+    result = validate_offline(inputs([raw]))
+
+    assert result.ok
+    entry = result.entries["single"][0]
+    assert entry.raw is raw or entry.raw == raw
+    assert entry.raw["futureField"] == {"retained": True}
+    assert entry.settings["futureSetting"] == {"retained": True}
+
+
+@pytest.mark.parametrize(
+    "field", ["single", "dual", "deny", "common_overlay", "dual_overlay", "settings"]
+)
+def test_missing_snapshots_are_reported(field: str) -> None:
+    snapshots = inputs()
+    object.__setattr__(snapshots, field, None)
+    result = validate_offline(snapshots)
+    assert "input_missing" in codes(result)
+
+
+@pytest.mark.parametrize(
+    ("document", "code"),
+    [
+        (b"{", "invalid_json"),
+        (b"[]", "invalid_root"),
+        (encoded({"settings": {}, "apps": {}}), "invalid_apps"),
+        (encoded({"settings": [], "apps": []}), "invalid_document_settings"),
+        (encoded({"settings": {}, "apps": [None]}), "invalid_entry"),
+        (b'{"settings":{},"apps":[],"x":NaN}', "non_finite_number"),
+        (b'{"settings":{},"apps":[],"x":1e999}', "non_finite_number"),
+        (b"null", "invalid_root"),
+    ],
+)
+def test_malformed_serialized_documents_are_rejected(
+    document: bytes, code: str
+) -> None:
+    snapshots = inputs([], [])
+    object.__setattr__(snapshots, "single", document)
+    assert code in codes(validate_offline(snapshots))
+
+
+def test_independent_variant_errors_are_collected() -> None:
+    duplicate = app("same")
+    wrong = app("other")
+    values = json.loads(wrong["additionalSettings"])
+    values["trackOnly"] = "yes"
+    wrong["additionalSettings"] = json.dumps(values)
+    result = validate_offline(inputs([duplicate, deepcopy(duplicate)], [wrong]))
+    assert {("single", "duplicate_id"), ("dual", "wrong_setting_type")} <= {
+        (finding.variant, finding.code) for finding in result.findings
+    }
+
+
+@pytest.mark.parametrize(
+    ("mutate", "code"),
+    [
+        (lambda value: value.pop("name"), "missing_field"),
+        (lambda value: value.update(id=""), "invalid_field"),
+        (lambda value: value.update(url="ftp://example.com/a"), "invalid_url"),
+        (lambda value: value.update(author=1), "invalid_field"),
+        (lambda value: value.update(categories=[1]), "invalid_categories"),
+        (
+            lambda value: value.update(overrideSource="F-Droid Third Party Repo"),
+            "unsupported_source",
+        ),
+        (
+            lambda value: value.update(additionalSettings={}),
+            "invalid_additional_settings",
+        ),
+        (
+            lambda value: value.update(preferredApkIndex=True),
+            "invalid_preferred_apk_index",
+        ),
+    ],
+    ids=(
+        "missing-name",
+        "empty-id",
+        "non-http-url",
+        "invalid-author",
+        "invalid-categories",
+        "source",
+        "encoded-settings",
+        "preferred-index",
+    ),
+)
+def test_required_entry_fields_are_validated(mutate, code: str) -> None:
+    value = app()
+    mutate(value)
+    assert code in codes(validate_offline(inputs([value], [])))
+
+
+def test_track_only_id_need_not_be_an_android_package_name() -> None:
+    value = app("Release Notes")
+    settings = json.loads(value["additionalSettings"])
+    settings["trackOnly"] = True
+    value["additionalSettings"] = json.dumps(settings)
+    assert validate_offline(inputs([value])).ok
+
+
+def test_defaults_are_required_and_known_types_are_checked() -> None:
+    missing = app("missing")
+    missing_settings = json.loads(missing["additionalSettings"])
+    missing_settings.pop("about")
+    missing["additionalSettings"] = json.dumps(missing_settings)
+    wrong = app("wrong")
+    wrong_settings = json.loads(wrong["additionalSettings"])
+    wrong_settings["trackOnly"] = 1
+    wrong["additionalSettings"] = json.dumps(wrong_settings)
+    result = validate_offline(inputs([missing, wrong], []))
+    assert {"missing_setting_default", "wrong_setting_type"} <= codes(result)
+
+
+def test_nested_html_steps_and_headers_are_validated() -> None:
+    value = app(source="HTML")
+    settings = json.loads(value["additionalSettings"])
+    settings["intermediateLink"] = [{"customLinkFilterRegex": 1}]
+    settings["requestHeader"] = [{"requestHeader": False}]
+    value["additionalSettings"] = json.dumps(settings)
+    result = validate_offline(inputs([value], []))
+    assert {"invalid_html_step", "invalid_request_header"} <= codes(result)
+
+
+def test_categories_must_exactly_match_observed_names_and_valid_colors() -> None:
+    snapshots = inputs()
+    assert snapshots.single is not None
+    single = json.loads(snapshots.single)
+    single["settings"]["categories"] = json.dumps(
+        {"Extra": 0xFF000000, "Emulator": True}
+    )
+    object.__setattr__(snapshots, "single", encoded(single))
+    result = validate_offline(snapshots)
+    assert {"category_mapping_mismatch", "invalid_category_color"} <= codes(result)
+
+
+def test_configured_argb_color_rejects_boolean_and_out_of_range_values() -> None:
+    result = validate_offline(inputs(settings={"categories": {"Unused": True}}))
+    assert "invalid_category_color" in codes(result)
+
+
+def test_configured_and_derived_category_colors_and_other_settings_agree() -> None:
+    configured = {"categories": {"Configured": 0xFF123456}, "groupByCategory": True}
+    apps = [app("a"), app("b")]
+    apps[0]["categories"] = ["Configured"]
+    apps[1]["categories"] = ["Derived"]
+    snapshots = inputs(apps, settings=configured)
+    derived = int.from_bytes(b"\xff" + hashlib.sha256(b"Derived").digest()[:3])
+    rendered = {
+        "categories": json.dumps(
+            {"Configured": 0xFF123456, "Derived": derived}, separators=(",", ":")
+        ),
+        "groupByCategory": False,
+    }
+    for field in ("single", "dual"):
+        document = json.loads(getattr(snapshots, field))
+        document["settings"] = rendered
+        object.__setattr__(snapshots, field, encoded(document))
+    assert "configured_setting_mismatch" in codes(validate_offline(snapshots))
+
+
+@pytest.mark.parametrize(
+    ("kwargs", "code"),
+    [
+        ({"common": {"org.example.app": None}}, "invalid_overlay_patch"),
+        ({"common": {"org.example.app": {"id": "changed"}}}, "forbidden_overlay_field"),
+        ({"common": {"missing": {"name": "x"}}}, "stale_common_overlay"),
+        ({"dual_overlay": {"missing": {"name": "x"}}}, "stale_dual_overlay"),
+        ({"deny": [{"id": "org.example.app", "reason": "x"}]}, "denied_id_present"),
+    ],
+)
+def test_local_composition_constraints(kwargs: dict[str, Any], code: str) -> None:
+    assert code in codes(validate_offline(inputs(**kwargs)))
+
+
+def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
+    assert validate_offline(
+        inputs([], [app()], common={"org.example.app": {"name": "x"}})
+    ).ok
+
+
+def test_stale_denial_is_allowed_and_dual_denial_exempts_coverage() -> None:
+    assert validate_offline(inputs(deny=[{"id": "stale", "reason": "gone"}])).ok
+    result = validate_offline(
+        inputs(
+            [app("single")],
+            [],
+            deny=[{"id": "single", "variant": "dual", "reason": "excluded"}],
+        )
+    )
+    assert result.ok
+
+
+def test_unexempted_dual_coverage_gap_fails() -> None:
+    result = validate_offline(inputs([app("single")], []))
+    assert "dual_coverage_gap" in codes(result)
+
+
+def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None:
+    import urllib.request
+
+    monkeypatch.setattr(
+        urllib.request, "urlopen", lambda *args, **kwargs: pytest.fail("network used")
+    )
+    snapshots = OfflineInputs(
+        single=(ROOT / "dist/single-screen.json").read_bytes(),
+        dual=(ROOT / "dist/dual-screen.json").read_bytes(),
+        deny=(ROOT / "config/deny.json").read_bytes(),
+        common_overlay=(ROOT / "config/overlay.json").read_bytes(),
+        dual_overlay=(ROOT / "config/overlay.dual.json").read_bytes(),
+        settings=(ROOT / "config/settings.json").read_bytes(),
+    )
+    before = snapshots.single, snapshots.dual
+    result = validate_offline(snapshots)
+    assert result.ok, result.findings
+    assert (snapshots.single, snapshots.dual) == before
