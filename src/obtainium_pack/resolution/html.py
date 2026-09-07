@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html as html_module
 import json
 import re
 from collections.abc import Mapping
@@ -219,23 +218,25 @@ def _select_links(body: str, base_url: str, settings: Mapping[str, Any]) -> list
 
 
 def _raw_links(body: str, base_url: str, *, prefer_json: bool) -> list[_Link]:
-    values: list[str]
     if prefer_json:
         try:
             values = _json_strings(json.loads(body))
         except json.JSONDecodeError:
-            values = [body]
-    else:
-        values = [body]
-    result: list[_Link] = []
-    for value in values:
-        absolute = urljoin(base_url, value)
-        candidates = [absolute] if absolute != value and not _URL.search(value) else []
-        candidates.extend(match.group(0) for match in _URL.finditer(value))
-        for candidate in candidates:
-            candidate = html_module.unescape(candidate).rstrip("'\"],}")
-            result.append(_Link(candidate, _filename(candidate)))
-    return result
+            return _links_in_lines(body)
+        links = _links_in_lines("\n".join(values))
+        if links:
+            return links
+        return _links_in_lines(
+            "\n".join(urljoin(base_url, value.strip()) for value in values)
+        )
+    return _links_in_lines(body)
+
+
+def _links_in_lines(lines: str) -> list[_Link]:
+    return [
+        _Link(match.group(0), match.group(0).rsplit("/", 1)[-1])
+        for match in _URL.finditer(lines)
+    ]
 
 
 def _json_strings(value: object) -> list[str]:

@@ -89,6 +89,52 @@ def test_raw_text_url_is_extracted_when_document_is_not_json_or_html() -> None:
     assert result.effective_version == "7"
 
 
+@pytest.mark.parametrize(
+    "body", ["release-9.apk", '<a href="release-9.apk">download</a>']
+)
+def test_outside_anchor_matching_does_not_resolve_arbitrary_page_as_url(
+    body: str,
+) -> None:
+    with pytest.raises(ResolutionError) as raised:
+        resolve(
+            body,
+            {
+                "matchLinksOutsideATags": True,
+                "customLinkFilterRegex": "release-9",
+                "versionExtractionRegEx": r"release-(\d+)",
+                "matchGroupToUse": "$1",
+            },
+        )
+    assert raised.value.code == "html-final-empty"
+
+
+def test_json_absolute_links_prevent_relative_fallback_across_all_strings() -> None:
+    result, _ = resolve(
+        json.dumps({"url": "https://cdn.example/app-2.apk", "notes": "app-99.apk"}),
+        {"versionExtractionRegEx": r"app-(\d+)", "matchGroupToUse": "$1"},
+    )
+    assert result.candidates[0].url == "https://cdn.example/app-2.apk"
+    assert result.effective_version == "2"
+
+
+def test_json_relative_strings_are_used_when_no_absolute_link_exists() -> None:
+    result, _ = resolve(
+        json.dumps({"nested": ["app-2.apk", {"file": "app-10.apk"}]}),
+        {"versionExtractionRegEx": r"app-(\d+)", "matchGroupToUse": "$1"},
+    )
+    assert result.candidates[0].url == "https://example.com/releases/app-10.apk"
+    assert result.effective_version == "10"
+
+
+def test_raw_url_match_preserves_non_whitespace_suffix() -> None:
+    with pytest.raises(ResolutionError) as raised:
+        resolve(
+            'download https://cdn.example/app-7.apk" now',
+            {"versionExtractionRegEx": r"app-(\d+)", "matchGroupToUse": "$1"},
+        )
+    assert raised.value.code == "html-final-empty"
+
+
 def test_natural_and_last_segment_sort_choose_different_links() -> None:
     body = (
         '<a href="https://z.example/app-2.apk">two</a>'
@@ -299,6 +345,20 @@ def test_active_pseudo_versioning_without_extraction_fails(track_only: bool) -> 
             },
         )
     assert raised.value.code == "unsupported-setting"
+
+
+def test_explicit_extraction_ignores_nonempty_pseudo_versioning_default() -> None:
+    result, transport = resolve(
+        '<a href="app-12.apk">app</a>',
+        {
+            "defaultPseudoVersioningMethod": "partialAPKHash",
+            "versionExtractionRegEx": r"app-(\d+)",
+            "matchGroupToUse": "$1",
+        },
+    )
+    assert result.effective_version == "12"
+    assert result.candidates[0].url == "https://example.com/releases/app-12.apk"
+    assert len(transport.requests) == 1
 
 
 @pytest.mark.parametrize(
