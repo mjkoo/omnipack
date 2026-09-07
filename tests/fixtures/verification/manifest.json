@@ -1,0 +1,20 @@
+{
+  "baseline": "Obtainium v1.6.14",
+  "cases": [
+    {"source":"HTML","id":"org.dolphinemu.dolphinemu","pattern":"last-segment-sort","fixture":"html-dolphin.json"},
+    {"source":"HTML","id":"com.github.stenzek.duckstation","pattern":"whole-page","fixture":"html-duckstation.json"},
+    {"source":"HTML","id":"dev.eden.eden_emulator","pattern":"json-links","fixture":"html-eden.json"},
+    {"source":"HTML","id":"org.ppsspp.ppsspp","pattern":"concatenated-groups","fixture":"html-ppsspp.json"},
+    {"source":"HTML","id":"com.virtualapplications.play","pattern":"one-step-traversal","fixture":"html-play.json"},
+    {"source":"HTML","id":"487343354","pattern":"two-step-traversal","fixture":"html-retroarch.json"},
+    {"source":"HTML","id":"org.scummvm.scummvm","pattern":"apk-filter","fixture":"html-scummvm.json"},
+    {"source":"GitHub","id":"fixture.direct","pattern":"direct-apk","fixture":"github-release-patterns.json","case":"direct-apk"},
+    {"source":"GitHub","id":"fixture.filter","pattern":"asset-filter","fixture":"github-release-patterns.json","case":"asset-filter"},
+    {"source":"GitHub","id":"fixture.prerelease","pattern":"prerelease","fixture":"github-release-patterns.json","case":"prerelease"},
+    {"source":"GitHub","id":"fixture.title","pattern":"release-title-version","fixture":"github-release-patterns.json","case":"release-title-version"},
+    {"source":"GitHub","id":"fixture.date","pattern":"release-date-asset-date","fixture":"github-release-patterns.json","case":"release-date-asset-date"},
+    {"source":"GitHub","id":"fixture.regex","pattern":"regex-concatenation","fixture":"github-release-patterns.json","case":"regex-concatenation"},
+    {"source":"GitHub","id":"fixture.track","pattern":"track-only-release","fixture":"github-track-only.json"},
+    {"source":"GitHub","id":"fixture.tags","pattern":"track-only-tags-fallback","fixture":"github-track-only-tags.json"}
+  ]
+}
