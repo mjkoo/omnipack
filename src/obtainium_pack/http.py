@@ -13,7 +13,12 @@ from email.message import Message
 from http.client import HTTPException, HTTPMessage
 from pathlib import Path
 from typing import IO, Any, Protocol
-from urllib.parse import urlsplit
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
+
+METADATA_MAX_BYTES = 10 * 1024 * 1024
+PROBE_BYTES = 1024
+MAX_REDIRECTS = 10
+_FORBIDDEN_CALLER_HEADERS = frozenset({"authorization", "cookie"})
 
 
 class HttpError(RuntimeError):
@@ -70,6 +75,8 @@ class Transport(Protocol):
 
 
 class _CredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
+    max_redirections = MAX_REDIRECTS
+
     def __init__(self, client: HttpClient) -> None:
         self.client = client
 
@@ -123,15 +130,68 @@ class HttpClient:
         """Fetch one URL, retrying transient failures up to the configured bound."""
         if max_bytes is not None and max_bytes < 0:
             raise ValueError("max_bytes must be nonnegative")
+        return self._request(url, headers=headers, max_bytes=max_bytes, method=method)
+
+    def get_metadata(
+        self, url: str, *, headers: Mapping[str, str] | None = None
+    ) -> HttpResponse:
+        """Fetch metadata and reject responses larger than the live policy limit."""
+        return self.get(url, headers=headers, max_bytes=METADATA_MAX_BYTES)
+
+    def probe(
+        self, url: str, *, headers: Mapping[str, str] | None = None
+    ) -> HttpResponse:
+        """Read a nonempty response prefix without downloading the whole resource."""
+        probe_headers = dict(headers or {})
+        probe_headers["Range"] = f"bytes=0-{PROBE_BYTES - 1}"
+        if self.transport == self._urllib_transport:
+            response = self._request(
+                url, headers=probe_headers, max_bytes=PROBE_BYTES, prefix=True
+            )
+        else:
+            response = self._request(url, headers=probe_headers, max_bytes=PROBE_BYTES)
+            if len(response.body) > PROBE_BYTES:
+                response = HttpResponse(
+                    response.url,
+                    response.status,
+                    response.headers,
+                    response.body[:PROBE_BYTES],
+                )
+        if response.status not in {200, 206}:
+            raise HttpError(
+                f"probe of {redact_url(response.url)} returned status {response.status}"
+            )
+        if not response.body:
+            raise HttpError(
+                f"probe of {redact_url(response.url)} returned an empty response"
+            )
+        return response
+
+    def _request(
+        self,
+        url: str,
+        *,
+        headers: Mapping[str, str] | None = None,
+        max_bytes: int | None = None,
+        method: str = "GET",
+        prefix: bool = False,
+    ) -> HttpResponse:
         attempts = self.retries + 1
         for attempt in range(attempts):
             request = self.build_request(url, headers=headers, method=method)
             try:
+                if prefix:
+                    return self._urllib_transport(
+                        request, self.timeout, max_bytes, prefix=True
+                    )
                 return self.transport(request, self.timeout, max_bytes)
             except (OSError, HTTPException) as error:
+                if isinstance(error, urllib.error.HTTPError):
+                    error.close()
                 if not _is_transient(error) or attempt + 1 == attempts:
                     raise HttpError(
-                        f"request to {url} failed after {attempt + 1} attempts"
+                        f"request to {redact_url(url)} failed after "
+                        f"{attempt + 1} attempts"
                     ) from error
                 self.sleep(self.backoff * (2**attempt))
         raise AssertionError("request loop did not return or raise")
@@ -144,10 +204,21 @@ class HttpClient:
         method: str = "GET",
     ) -> urllib.request.Request:
         """Build a request and attach credentials registered for its exact host."""
+        parsed = urlsplit(url)
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("embedded URL credentials are not allowed")
+        forbidden = [
+            name
+            for name in (headers or {})
+            if name.lower() in _FORBIDDEN_CALLER_HEADERS
+        ]
+        if forbidden:
+            raise ValueError(f"caller credential header is not allowed: {forbidden[0]}")
         request = urllib.request.Request(
             url, headers=dict(headers or {}), method=method
         )
-        request.add_header("User-Agent", self.user_agent)
+        if not request.has_header("User-agent"):
+            request.add_header("User-Agent", self.user_agent)
         self._set_authorization(request)
         return request
 
@@ -177,13 +248,23 @@ class HttpClient:
             request.add_unredirected_header("Authorization", f"Bearer {token}")
 
     def _urllib_transport(
-        self, request: urllib.request.Request, timeout: float, max_bytes: int | None
+        self,
+        request: urllib.request.Request,
+        timeout: float,
+        max_bytes: int | None,
+        *,
+        prefix: bool = False,
     ) -> HttpResponse:
         opener = urllib.request.build_opener(_CredentialRedirectHandler(self))
         with opener.open(request, timeout=timeout) as stream:
-            body = stream.read(None if max_bytes is None else max_bytes + 1)
-            if max_bytes is not None and len(body) > max_bytes:
-                raise HttpError(f"response from {stream.url} exceeds {max_bytes} bytes")
+            if prefix:
+                body = stream.read(max_bytes)
+            else:
+                body = stream.read(None if max_bytes is None else max_bytes + 1)
+            if not prefix and max_bytes is not None and len(body) > max_bytes:
+                raise HttpError(
+                    f"response from {redact_url(stream.url)} exceeds {max_bytes} bytes"
+                )
             return HttpResponse(
                 url=stream.url,
                 status=stream.status,
@@ -202,3 +283,20 @@ def _is_transient(error: OSError | HTTPException) -> bool:
         503,
         504,
     }
+
+
+def redact_url(url: str) -> str:
+    """Remove user information and query values from a diagnostic URL."""
+    parsed = urlsplit(url)
+    host = parsed.hostname or ""
+    if ":" in host:
+        host = f"[{host}]"
+    if parsed.port is not None:
+        host = f"{host}:{parsed.port}"
+    query = urlencode(
+        [
+            (name, "REDACTED")
+            for name, _ in parse_qsl(parsed.query, keep_blank_values=True)
+        ]
+    )
+    return urlunsplit((parsed.scheme, host, parsed.path, query, parsed.fragment))

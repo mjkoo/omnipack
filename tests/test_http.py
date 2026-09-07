@@ -10,7 +10,15 @@ from urllib.response import addinfourl
 
 import pytest
 
-from obtainium_pack.http import HttpClient, HttpConfig, HttpError, HttpResponse
+from obtainium_pack.http import (
+    METADATA_MAX_BYTES,
+    PROBE_BYTES,
+    HttpClient,
+    HttpConfig,
+    HttpError,
+    HttpResponse,
+    redact_url,
+)
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -21,11 +29,13 @@ class RecordingTransport:
     def __init__(self, outcomes: list[HttpResponse | Exception]) -> None:
         self.outcomes = iter(outcomes)
         self.requests: list[Request] = []
+        self.max_bytes: list[int | None] = []
 
     def __call__(
         self, request: Request, timeout: float, max_bytes: int | None
     ) -> HttpResponse:
         self.requests.append(request)
+        self.max_bytes.append(max_bytes)
         outcome = next(self.outcomes)
         if isinstance(outcome, Exception):
             raise outcome
@@ -58,6 +68,38 @@ def test_head_method_and_response_metadata_are_available() -> None:
     assert result.headers["Content-Length"] == "42"
 
 
+def test_metadata_uses_the_live_response_limit() -> None:
+    transport = RecordingTransport([response()])
+    client = HttpClient(HttpConfig({}), transport=transport)
+
+    client.get_metadata("https://example.com/releases")
+
+    assert transport.requests[0].method == "GET"
+    assert transport.max_bytes == [METADATA_MAX_BYTES]
+
+
+def test_metadata_rejects_an_oversized_real_response(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(
+        handler: urllib.request.HTTPSHandler, request: Request
+    ) -> FixtureResponse:
+        return FixtureResponse(
+            BytesIO(b"x" * (METADATA_MAX_BYTES + 1)),
+            Message(),
+            request.full_url,
+            200,
+        )
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+
+    with pytest.raises(HttpError, match="exceeds 10485760 bytes"):
+        HttpClient(HttpConfig({}), retries=0).get_metadata("https://example.com/data")
+
+
 def test_retries_transient_failures_with_bounded_backoff() -> None:
     sleeps: list[float] = []
     transport = RecordingTransport(
@@ -88,6 +130,31 @@ def test_exhausted_retries_raise_http_error() -> None:
 
     with pytest.raises(HttpError, match="after 3 attempts"):
         client.get("https://example.com/data")
+
+
+def test_rate_limit_retries_but_nontransient_http_error_does_not() -> None:
+    rate_limited = urllib.error.HTTPError(
+        "https://example.com", 429, "limited", Message(), None
+    )
+    missing = urllib.error.HTTPError(
+        "https://example.com", 404, "missing", Message(), None
+    )
+    retry_transport = RecordingTransport([rate_limited, response()])
+    fail_transport = RecordingTransport([missing])
+
+    assert (
+        HttpClient(HttpConfig({}), sleep=lambda _: None, transport=retry_transport)
+        .get_metadata("https://example.com")
+        .body
+        == b"ok"
+    )
+    with pytest.raises(HttpError, match="after 1 attempts"):
+        HttpClient(HttpConfig({}), transport=fail_transport).get_metadata(
+            "https://example.com"
+        )
+
+    assert len(retry_transport.requests) == 2
+    assert len(fail_transport.requests) == 1
 
 
 @pytest.mark.parametrize("token", [None, ""])
@@ -217,3 +284,136 @@ def test_urllib_redirect_selects_destination_credentials(
     for request in requests:
         assert request.timeout == 7.5
         assert request.get_header("User-agent") == "fixture-client/2"
+
+
+def test_caller_user_agent_is_preserved() -> None:
+    transport = RecordingTransport([response()])
+    client = HttpClient(HttpConfig({}), user_agent="default/1", transport=transport)
+
+    client.get("https://example.com", headers={"User-Agent": "configured/2"})
+
+    assert transport.requests[0].get_header("User-agent") == "configured/2"
+
+
+@pytest.mark.parametrize("name", ["Authorization", "authorization", "Cookie"])
+def test_pack_credentials_are_rejected(name: str) -> None:
+    client = HttpClient(HttpConfig({}), transport=RecordingTransport([]))
+
+    with pytest.raises(ValueError, match="credential header"):
+        client.get("https://example.com", headers={name: "secret"})
+
+
+def test_embedded_url_credentials_are_rejected() -> None:
+    client = HttpClient(HttpConfig({}), transport=RecordingTransport([]))
+
+    with pytest.raises(ValueError, match="embedded URL credentials"):
+        client.get("https://user:pass@example.com/app")
+
+
+def test_probe_reads_only_prefix_and_closes_ignored_range(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Request] = []
+    streams: list[TrackingBody] = []
+
+    class TrackingBody(BytesIO):
+        def __init__(self, body: bytes) -> None:
+            super().__init__(body)
+            self.read_sizes: list[int | None] = []
+
+        def read(self, size: int | None = -1) -> bytes:
+            self.read_sizes.append(size)
+            return super().read(size)
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(
+        handler: urllib.request.HTTPSHandler, request: Request
+    ) -> FixtureResponse:
+        requests.append(request)
+        body = TrackingBody(b"x" * (PROBE_BYTES * 4))
+        streams.append(body)
+        return FixtureResponse(body, Message(), request.full_url, 200)
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+
+    result = HttpClient(HttpConfig({}), retries=0).probe("https://example.com/app.apk")
+
+    assert result.status == 200
+    assert len(result.body) == PROBE_BYTES
+    assert requests[0].method == "GET"
+    assert requests[0].get_header("Range") == f"bytes=0-{PROBE_BYTES - 1}"
+    assert streams[0].read_sizes == [PROBE_BYTES]
+    assert streams[0].closed
+
+
+@pytest.mark.parametrize("status", [200, 206])
+def test_probe_accepts_nonempty_success_from_injected_transport(status: int) -> None:
+    transport = RecordingTransport(
+        [HttpResponse("https://cdn.example/app.apk", status, Message(), b"prefix")]
+    )
+
+    result = HttpClient(HttpConfig({}), transport=transport).probe(
+        "https://example.com/app.apk"
+    )
+
+    assert result.body == b"prefix"
+    assert transport.requests[0].get_header("Range") == "bytes=0-1023"
+    assert transport.max_bytes == [PROBE_BYTES]
+
+
+def test_probe_rejects_empty_or_unexpected_responses() -> None:
+    client = HttpClient(
+        HttpConfig({}),
+        transport=RecordingTransport(
+            [
+                HttpResponse("https://example.com", 200, Message(), b""),
+                HttpResponse("https://example.com", 204, Message(), b"prefix"),
+            ]
+        ),
+    )
+
+    with pytest.raises(HttpError, match="empty response"):
+        client.probe("https://example.com/empty")
+    with pytest.raises(HttpError, match="status 204"):
+        client.probe("https://example.com/no-content")
+
+
+def test_redirect_limit_is_ten(monkeypatch: pytest.MonkeyPatch) -> None:
+    requests: list[Request] = []
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(
+        handler: urllib.request.HTTPSHandler, request: Request
+    ) -> FixtureResponse:
+        requests.append(request)
+        headers = Message()
+        redirect_number = int(request.full_url.rsplit("/", 1)[-1])
+        headers["Location"] = f"https://example.com/{redirect_number + 1}"
+        return FixtureResponse(BytesIO(), headers, request.full_url, 302)
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+
+    with pytest.raises(HttpError, match="after 1 attempts"):
+        HttpClient(HttpConfig({}), retries=0).probe("https://example.com/0")
+
+    assert len(requests) == 11
+
+
+def test_diagnostic_urls_redact_credentials_and_query_values() -> None:
+    assert redact_url("https://user:pass@example.com/app?q=secret&flag=#part") == (
+        "https://example.com/app?q=REDACTED&flag=REDACTED#part"
+    )
+    transport = RecordingTransport([urllib.error.URLError("down")])
+
+    with pytest.raises(HttpError) as raised:
+        HttpClient(HttpConfig({}), retries=0, transport=transport).get_metadata(
+            "https://example.com/app?token=secret"
+        )
+
+    message = str(raised.value)
+    assert "secret" not in message
+    assert "token=REDACTED" in message
