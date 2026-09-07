@@ -1,14 +1,11 @@
 # Version detection in Obtainium imports
 
-Obtainium shows an update when the recorded installed version differs from
-the latest version after reconciliation. Reconciliation needs both strings
-to share a standard numeric format (`1.2.3`, `1.2.3-beta1`, ...); a `v`
-prefix reconciles. Tags like `continuous` or dates never reconcile.
-
-On every import, Obtainium resets `installedVersion` to the OS-reported
-versionName, so an app whose recorded and latest versions were already equal
-before the import will show one spurious update right after it. There is no
-export setting that avoids this; it comes from the reset itself.
+Update detection depends on the installed version and the effective upstream
+version after Obtainium's reconciliation. Matching numeric formats such as
+`1.2.3` and `v1.2.3` can help, but numeric syntax alone does not prove agreement
+with an APK's versionName. A re-import does not necessarily cause a spurious
+update for every numeric version. Rolling tags and date versions need deliberate
+configuration and device testing.
 
 ## Recipes
 
@@ -21,8 +18,8 @@ export setting that avoids this; it comes from the reset itself.
   usually paired with an extraction regex.
 - **Rolling tag** (`continuous`, `nightly`, `latest`): `releaseDateAsVersion:
   true` (optionally `useLatestAssetDateAsReleaseDate`) so new builds are
-  still detected as updates. This still shows one spurious update after
-  every re-import, same as the numeric case; nothing avoids that.
+  still detected as updates. This intentionally compares a source observation
+  date rather than claiming a match with the installed APK's versionName.
 - **Multiple APKs per release**: `apkFilterRegEx` (e.g. `app-release`) so a
   debug build is never selected.
 - **Prerelease tags that aren't app builds** (e.g. a dependency-bump tag):
@@ -30,8 +27,18 @@ export setting that avoids this; it comes from the reset itself.
 
 ## Lint
 
-The build's version-format lint flags any GitHub-sourced app whose latest
-version does not match a standard numeric format, unless the entry already
-opts out via `versionDetection: false`, `releaseDateAsVersion`,
-`releaseTitleAsVersion`, or a `versionExtractionRegEx`. This list is the
-backlog to declare per-app fixes against in the overlay.
+`pack verify --live` lints the effective GitHub version after successful
+extraction. Its anchored heuristic accepts an optional `v` or `V`, at least
+two dot-separated numeric components, and optional `-` prerelease and `+`
+build suffixes made of ASCII letters, digits, dots, or hyphens. Examples include
+`1.2`, `v1.2.3-beta1`, and `1.2.3+build.4`.
+
+Track-only entries, disabled version detection, and intentional date versions
+have distinct classifications without numeric-shape warnings. A title or regex
+setting alone is not an exemption: an extracted `continuous` still warns.
+Warnings do not fail verification; extraction failures do. Offline builds
+perform structural validation and do not run this live lint.
+
+Review findings with `uv run pack report`. Treat the warning list as evidence
+for deliberate configuration changes, not automatic overlay repairs. See
+[verification](verification.md) for the compatibility boundary and report freshness.

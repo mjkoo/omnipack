@@ -1,76 +1,76 @@
 ## 1. Compatibility boundary and fixtures
 
-- [ ] 1.1 Record the immutable RJNY revision and licence for any adapted helpers,
+- [x] 1.1 Record the immutable RJNY revision and licence for any adapted helpers,
   and document the Obtainium v1.6.14 source references and supported-setting table
   in `docs/verification.md`. Verify every setting in both committed packs is
   classified as implemented, harmless/device-specific, inactive unsupported, or
   an explicit live error; test that an unknown key cannot silently pass live checks.
-- [ ] 1.2 Capture trimmed release/page fixtures for each distinct configured
+- [x] 1.2 Capture trimmed release/page fixtures for each distinct configured
   resolution pattern, including all seven HTML entries and track-only resources.
   Verify fixtures have recorded provenance and expected selections/versions that
   can be checked independently against the pinned source behavior.
 
 ## 2. Offline artifact validation
 
-- [ ] 2.1 Implement validation of both serialized documents, required app fields,
+- [x] 2.1 Implement validation of both serialized documents, required app fields,
   finite JSON values, source types, unique ids and string-encoded settings. Test
   missing files, malformed roots/entries, object-valued additional settings,
   duplicate ids, missing defaults, wrong known types, unknown retained fields,
   and track-only ids that are not Android package names.
-- [ ] 2.2 Validate nested HTML step/header shapes, category mappings and configured
+- [x] 2.2 Validate nested HTML step/header shapes, category mappings and configured
   settings agreement. Test invalid nested values, booleans used as integers,
   invalid ARGB range, missing/extra categories, configured and derived colours,
   and the committed output pair passing without hydration or rewriting.
-- [ ] 2.3 Add local overlay/deny validation and coverage checks using existing
+- [x] 2.3 Add local overlay/deny validation and coverage checks using existing
   composition semantics. Test forbidden overlay edits, stale common/dual targets,
   a common target in only one variant, a denied id still present, stale denials,
   and both allowed and disallowed dual-coverage gaps. Assert no source fetch occurs.
 
 ## 3. Shared HTTP and bounded probing
 
-- [ ] 3.1 Add a prefix-read probe operation separate from metadata size limits.
+- [x] 3.1 Add a prefix-read probe operation separate from metadata size limits.
   Test real transport stream consumption and closure for 200 ignoring Range,
   206 honoring Range, empty bodies, errors and redirect limits. Assert at most
   1024 body bytes are read per probe, no HEAD dependency and no full download.
-- [ ] 3.2 Preserve caller-provided non-secret User-Agent and enforce credential
+- [x] 3.2 Preserve caller-provided non-secret User-Agent and enforce credential
   boundaries for live headers and redirects. Test exact-host tokens, cross-host
   redirect stripping, rejected Authorization/Cookie pack headers, no credentials
   in diagnostics, and existing package-id resolver HTTP tests remaining green.
-- [ ] 3.3 Apply the live metadata size limit, request timeout and bounded retry
+- [x] 3.3 Apply the live metadata size limit, request timeout and bounded retry
   policy. Verify transient success, retry exhaustion, rate limits, nontransient
   failures and oversized metadata with transport-backed tests and bounded attempts.
 
 ## 4. Version extraction and GitHub resolution
 
-- [ ] 4.1 Implement compatible version extraction and unsupported-pattern
+- [x] 4.1 Implement compatible version extraction and unsupported-pattern
   diagnostics. Test last-match selection, default group, numeric and `$N` group
   templates, concatenation, optional and escaped groups, invalid groups, no match,
   empty output and incompatible regex constructs. Include the actual PPSSPP and
   Cocoon extraction templates as discriminating fixtures.
-- [ ] 4.2 Implement GitHub release-window acquisition, date/API ordering,
+- [x] 4.2 Implement GitHub release-window acquisition, date/API ordering,
   draft/prerelease handling, title/notes filters and older-release fallback.
   Test the 100-release boundary, date ties under baseline behavior, skipped
   drafts/prereleases and title/notes mismatches with fallback both enabled and off.
-- [ ] 4.3 Add direct APK asset selection, filename filters and inversion, and
+- [x] 4.3 Add direct APK asset selection, filename filters and inversion, and
   track-only release/tags behavior. Test mixed APK/non-APK assets, filtered-empty
   releases, no-APK track-only success, filtered tags fallback and network failures
   not triggering fallback. Verify unsupported active features fail by name.
-- [ ] 4.4 Compute tag/title, extracted and release/asset-date versions in the
+- [x] 4.4 Compute tag/title, extracted and release/asset-date versions in the
   correct order. Test title fallback, raw versus effective reporting, exact epoch
   microseconds, asset-date selection and missing dates. Assert no regex failure
   becomes a raw-version success.
 
 ## 5. HTML resolution
 
-- [ ] 5.1 Adapt link extraction, filtering and sorting with URL/link-text pairs,
+- [x] 5.1 Adapt link extraction, filtering and sorting with URL/link-text pairs,
   relative URLs, JSON/raw-text extraction, decoding and configured headers. Test
   redirected relative bases, text-vs-URL filters, escaped JSON URLs, alphanumeric
   order, last-segment order and independent skip/reverse behavior.
-- [ ] 5.2 Implement intermediate traversal and final candidate selection. Test
+- [x] 5.2 Implement intermediate traversal and final candidate selection. Test
   the Play! and RetroArch step chains, last-link selection at each stage, empty
   intermediate matches, installable empty final matches, excessive depth and
   ignored empty step filters under the pinned baseline. Assert no alternate older link rescues a failed probe.
-- [ ] 5.3 Add URL and normalized whole-page version extraction. Run all seven
+- [x] 5.3 Add URL and normalized whole-page version extraction. Run all seven
   committed HTML configurations through resolver-plus-HTTP fixture tests with
   asserted final URL and effective version. Verify no-match/empty output fails,
   unused pseudo defaults are allowed and active unsupported pseudo-versioning

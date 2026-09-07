@@ -41,6 +41,10 @@ audit:
 test:
     uv run pytest --cov
 
+# Validate committed pack bytes and local configuration without network access
+verify:
+    uv run pack verify
+
 # Build sdist and wheel (not `dist/`: that holds the rendered pack output)
 build:
     uv build --no-sources --out-dir build/python-dist
@@ -67,4 +71,4 @@ docker-load:
     $(nix build .#docker --no-link --print-out-paths) | docker image load
 
 # Everything CI runs
-check-all: lock-check format-check lint-check typecheck audit build test lint-actions nix-fmt-check flake-check
+check-all: lock-check format-check lint-check typecheck audit build test verify lint-actions nix-fmt-check flake-check

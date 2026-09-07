@@ -52,6 +52,9 @@ jobs:
       - name: Test
         run: just test
 
+      - name: Verify committed packs offline
+        run: just verify
+
   nix:
     name: Nix
     runs-on: ubuntu-latest
