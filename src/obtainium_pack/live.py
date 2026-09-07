@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import re
+import urllib.error
 from collections.abc import Mapping
 from dataclasses import dataclass
 from enum import Enum
@@ -58,6 +59,7 @@ class ProbeEvidence:
     response_url: str | None = None
     status: int | None = None
     bytes_read: int = 0
+    failure_reason: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -205,12 +207,13 @@ def _verify_entry(
         for candidate in resolution.candidates:
             try:
                 response = http.probe(candidate.url)
-            except HttpError, OSError, ValueError:
+            except (HttpError, OSError, ValueError) as error:
                 probes.append(
                     ProbeEvidence(
                         candidate.name,
                         _safe_redact_url(candidate.url),
                         False,
+                        failure_reason=_probe_failure_reason(error),
                     )
                 )
                 continue
@@ -232,7 +235,7 @@ def _verify_entry(
                     entry,
                     "probe",
                     "candidate-probe-failed",
-                    "an earlier selected candidate was unreachable",
+                    f"selected candidate {probe.url} failed: {probe.failure_reason}",
                 )
                 for probe in probes
                 if not probe.success
@@ -243,7 +246,10 @@ def _verify_entry(
                     entry,
                     "probe",
                     "candidate-probes-failed",
-                    "no selected download candidate was reachable",
+                    "no selected download candidate was reachable"
+                    + "".join(
+                        f"; {probe.url}: {probe.failure_reason}" for probe in probes
+                    ),
                 )
             )
 
@@ -327,3 +333,19 @@ class _CachingHttpClient(HttpClient):
         self, url: str, *, headers: Mapping[str, str] | None = None
     ) -> HttpResponse:
         return self._delegate.probe(url, headers=headers)
+
+
+def _probe_failure_reason(error: Exception) -> str:
+    cause = error.__cause__
+    if isinstance(cause, urllib.error.HTTPError):
+        detail = f"HTTP {cause.code}"
+    elif isinstance(cause, TimeoutError):
+        detail = "request timed out"
+    elif isinstance(cause, urllib.error.URLError):
+        detail = str(cause.reason)
+    elif cause is not None:
+        detail = str(cause) or type(cause).__name__
+    else:
+        detail = ""
+    message = str(error) or type(error).__name__
+    return _sanitize_message(f"{message}: {detail}" if detail else message)

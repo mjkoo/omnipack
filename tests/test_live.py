@@ -131,6 +131,8 @@ def test_github_probes_candidates_until_success_and_warns_for_prior_failure() ->
     assert entry.version_class is VersionClass.NUMERIC
     assert [probe.success for probe in entry.probes] == [False, True]
     assert [warning.code for warning in entry.warnings] == ["candidate-probe-failed"]
+    assert "down" in entry.warnings[0].message
+    assert "down" in (entry.probes[0].failure_reason or "")
     assert transport.max_bytes[-2:] == [PROBE_BYTES, PROBE_BYTES]
     assert all(request.method == "GET" for request in transport.requests)
     assert (
@@ -419,3 +421,140 @@ def test_each_invocation_makes_fresh_requests() -> None:
     assert verify_live(entries, http).ok
     assert verify_live(entries, http).ok
     assert len(transport.requests) == 2
+
+
+@pytest.mark.parametrize(
+    "failure, reason",
+    [
+        (
+            urllib.error.HTTPError(
+                "https://downloads.example/dead.apk",
+                429,
+                "rate limited",
+                Message(),
+                None,
+            ),
+            "HTTP 429",
+        ),
+        (TimeoutError("timed out"), "timed out"),
+        (urllib.error.URLError("DNS unavailable"), "DNS unavailable"),
+        (response("https://downloads.example/dead.apk", b""), "empty response"),
+        (
+            urllib.error.URLError(
+                "failed https://user:password@example.test/file?token=secret"
+            ),
+            "token=REDACTED",
+        ),
+    ],
+)
+def test_failed_probe_preserves_actionable_reason(
+    failure: Exception | HttpResponse, reason: str
+) -> None:
+    api = "https://api.github.com/repos/example/app/releases?per_page=100"
+    dead = "https://downloads.example/dead.apk"
+    http, _ = client(
+        {
+            api: [response(api, json.dumps([release("v1.2", dead)]).encode())],
+            dead: [failure],
+        }
+    )
+    result = verify_live({"single": (github_entry(),)}, http)
+    assert reason in (result.entries[0].probes[0].failure_reason or "")
+    assert reason in result.errors[0].message
+    assert "password" not in json.dumps(asdict(result))
+    assert "token=secret" not in json.dumps(asdict(result))
+
+
+def test_dead_selected_release_is_not_rescued_by_reachable_older_release() -> None:
+    api = "https://api.github.com/repos/example/app/releases?per_page=100"
+    dead, old = (
+        "https://downloads.example/dead.apk",
+        "https://downloads.example/old.apk",
+    )
+    http, transport = client(
+        {
+            api: [
+                response(
+                    api,
+                    json.dumps(
+                        [
+                            release("v2.0", dead),
+                            release("v1.0", old, published_at="2026-08-01T00:00:00Z"),
+                        ]
+                    ).encode(),
+                )
+            ],
+            dead: [urllib.error.URLError("dead")],
+            old: [response(old, b"apk")],
+        }
+    )
+    result = verify_live(
+        {"single": (github_entry(settings={"fallbackToOlderReleases": True}),)}, http
+    )
+    assert not result.ok
+    assert result.entries[0].resolution is not None
+    assert result.entries[0].resolution.effective_version == "v2.0"
+    assert old not in [request.full_url for request in transport.requests]
+
+
+def test_nonnumeric_version_warning_only_live_result_succeeds() -> None:
+    api, apk = (
+        "https://api.github.com/repos/example/app/releases?per_page=100",
+        "https://downloads.example/app.apk",
+    )
+    http, _ = client(
+        {
+            api: [response(api, json.dumps([release("rolling", apk)]).encode())],
+            apk: [response(apk, b"apk")],
+        }
+    )
+    result = verify_live({"single": (github_entry(),)}, http)
+    assert result.ok and not result.errors
+    assert [warning.code for warning in result.warnings] == ["github-version-format"]
+
+
+def test_seeded_package_id_cache_does_not_hide_dead_source(
+    tmp_path, monkeypatch
+) -> None:
+    from obtainium_pack.package_id import CacheEntry, PackageIdCache
+    from obtainium_pack.verify import run_verification
+
+    config = tmp_path / "config"
+    config.mkdir()
+    for name, value in [
+        ("deny.json", []),
+        ("overlay.json", {}),
+        ("overlay.dual.json", {}),
+        ("settings.json", {}),
+        ("http.json", {"credentials": {}}),
+    ]:
+        (config / name).write_text(json.dumps(value))
+    entry = github_entry()
+    cache = PackageIdCache(config / "package-ids.json")
+    cache.put(entry.raw["url"], CacheEntry(entry.entry_id, 42))
+    before = cache.path.read_bytes()
+    (tmp_path / "dist").mkdir()
+    for variant in ("single", "dual"):
+        (tmp_path / "dist" / f"{variant}-screen.json").write_text(
+            json.dumps({"settings": {"categories": "{}"}, "apps": [entry.raw]})
+        )
+    api, dead = (
+        "https://api.github.com/repos/example/app/releases?per_page=100",
+        "https://downloads.example/dead.apk",
+    )
+    http, transport = client(
+        {
+            api: [response(api, json.dumps([release("v1.2", dead)]).encode())],
+            dead: [urllib.error.URLError("dead"), urllib.error.URLError("dead")],
+        }
+    )
+    monkeypatch.setattr("obtainium_pack.verify.HttpClient", lambda _: http)
+    result = run_verification(tmp_path, live=True)
+    assert result["status"] == "failed"
+    assert len(result["entries"]) == 2
+    assert all(
+        entry["errors"][0]["code"] == "candidate-probes-failed"
+        for entry in result["entries"]
+    )
+    assert Counter(request.full_url for request in transport.requests)[dead] == 2
+    assert cache.path.read_bytes() == before
