@@ -66,3 +66,24 @@ def test_extraction_failures_have_stable_codes(
     with pytest.raises(ResolutionError) as raised:
         extract_version(raw, pattern, template)
     assert raised.value.code == code
+
+
+@pytest.mark.parametrize("template", [r"\$1-$1", r"$1-\$1"])
+def test_repeated_reference_globally_expands_after_unescaping(template: str) -> None:
+    assert extract_version("v12", r"v(\d+)", template) == "12-12"
+
+
+@pytest.mark.parametrize(
+    ("template", "expected"), [("$1-$10", "a-a0"), ("$10-$1", "j-a")]
+)
+def test_overlapping_group_references_expand_in_template_order(
+    template: str, expected: str
+) -> None:
+    assert (
+        extract_version("abcdefghij", "(a)(b)(c)(d)(e)(f)(g)(h)(i)(j)", template)
+        == expected
+    )
+
+
+def test_later_group_reference_expands_text_inserted_by_earlier_group() -> None:
+    assert extract_version("$2-b", r"(\$2)-(b)", "$1-$2") == "b-b"

@@ -91,7 +91,16 @@ def _validate_support(settings: dict[str, Any]) -> None:
 
 
 def _repository(url: str) -> tuple[str, str]:
-    parsed = urlsplit(url)
+    try:
+        parsed = urlsplit(url)
+    except ValueError as error:
+        raise ResolutionError(
+            "github-url-invalid", "GitHub repository URL is malformed"
+        ) from error
+    if parsed.username is not None or parsed.password is not None:
+        raise ResolutionError(
+            "github-url-invalid", "embedded credentials are unsupported"
+        )
     if parsed.hostname not in {"github.com", "www.github.com"}:
         raise ResolutionError(
             "github-url-invalid", "entry URL is not a GitHub repository"
@@ -248,31 +257,21 @@ def _result(
 def _resolve_tag(
     tags: list[object], settings: dict[str, Any], inspected_count: int
 ) -> ResolutionResult:
-    for tag in tags:
-        if isinstance(tag, dict) and isinstance(tag.get("name"), str) and tag["name"]:
-            raw = tag["name"]
-            effective = raw
-            origin = "tag"
-            pattern = settings.get("versionExtractionRegEx")
-            if isinstance(pattern, str) and pattern:
-                effective = extract_version(
-                    raw, pattern, settings.get("matchGroupToUse")
-                )
-                origin = "extracted"
-            if settings.get("releaseDateAsVersion") is True:
-                raise ResolutionError(
-                    "github-date-missing", "selected tag has no usable date"
-                )
-            return ResolutionResult(
-                raw,
-                effective,
-                origin,
-                (),
-                {"kind": "tag", "tag": raw},
-                inspected_count,
-                RELEASE_WINDOW,
-            )
-    raise ResolutionError("github-no-release", "no release or tag supplies a version")
+    selected = _select_release(tags, settings)
+    if selected is None:
+        raise ResolutionError(
+            "github-no-release", "no release or tag supplies a version"
+        )
+    result = _result(selected, settings, inspected_count)
+    return ResolutionResult(
+        result.raw_version,
+        result.effective_version,
+        result.version_origin,
+        result.candidates,
+        {"kind": "tag", "tag": result.raw_version},
+        result.inspected_count,
+        result.window_limit,
+    )
 
 
 def _release_date(

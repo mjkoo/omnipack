@@ -326,24 +326,137 @@ def test_regex_no_match_never_becomes_raw_version_success() -> None:
     assert raised.value.code == "regex-no-match"
 
 
-def test_compatibility_fixture_cases_resolve_expected_release_evidence() -> None:
-    fixture = json.loads(
-        Path("tests/fixtures/verification/github-release-patterns.json").read_text()
-    )
-    for case in fixture["cases"].values():
-        result, _ = resolver(fixture["releases"], case["settings"])
-        assert result.effective_version == case["expected"]["version"]
-        assert result.candidates[0].url == case["expected"]["selected_url"]
+_FIXTURE_ROOT = Path("tests/fixtures/verification")
+_GITHUB_CASES = [
+    item
+    for item in json.loads((_FIXTURE_ROOT / "manifest.json").read_text())["cases"]
+    if item["source"] == "GitHub"
+]
 
 
-def test_track_only_compatibility_fixture_resolves_without_candidates() -> None:
-    fixture = json.loads(
-        Path("tests/fixtures/verification/github-track-only.json").read_text()
-    )
+@pytest.mark.parametrize("item", _GITHUB_CASES, ids=lambda item: item["pattern"])
+def test_every_manifest_github_fixture_derives_its_expected_evidence(
+    item: dict[str, str],
+) -> None:
+    fixture = json.loads((_FIXTURE_ROOT / item["fixture"]).read_text())
+    if "case" in item:
+        selected_case = fixture["cases"][item["case"]]
+        settings = selected_case["settings"]
+        expected = selected_case["expected"]
+        releases = fixture["releases"]
+        tags: object = ()
+    else:
+        settings = fixture["settings"]
+        expected = fixture["expected"]
+        releases = fixture["responses"]["releases"]
+        tags = fixture["responses"]["tags"]
+
+    result, transport = resolver(releases, settings, tags=tags)
+
+    assert result.effective_version == expected["version"]
+    if expected["selected_url"]:
+        assert result.candidates[0].url == expected["selected_url"]
+    else:
+        assert result.candidates == ()
+    if item["pattern"] == "track-only-tags-fallback":
+        assert result.selected == {"kind": "tag", "tag": expected["version"]}
+        assert result.raw_version == expected["version"]
+        assert result.inspected_count == 0
+        assert [request.full_url for request in transport.requests] == [
+            "https://api.github.com/repos/example/emulator/releases?per_page=100",
+            "https://api.github.com/repos/example/emulator/tags?per_page=100",
+        ]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://user:secret@github.com/example/emulator",
+        "https://user@github.com/example/emulator",
+        "https://@github.com/example/emulator",
+        "https://[github.com/example/emulator",
+    ],
+)
+def test_invalid_repository_url_is_rejected_before_request(url: str) -> None:
+    entry = app()
+    entry["url"] = url
+    transport = GitHubTransport({})
+    with pytest.raises(ResolutionError) as raised:
+        resolve_github(
+            entry, HttpClient(HttpConfig({}), retries=0, transport=transport)
+        )
+    assert raised.value.code == "github-url-invalid"
+    assert "secret" not in str(raised.value)
+    assert transport.requests == []
+
+
+@pytest.mark.parametrize(
+    "setting", ["filterReleaseTitlesByRegEx", "filterReleaseNotesByRegEx"]
+)
+def test_title_and_notes_mismatches_fall_back_when_enabled(setting: str) -> None:
     result, _ = resolver(
-        fixture["responses"]["releases"],
-        fixture["settings"],
-        tags=fixture["responses"]["tags"],
+        [
+            release("latest", name="wrong", body="wrong"),
+            release("older", name="wanted", body="wanted"),
+        ],
+        {
+            "sortMethodChoice": "none",
+            "fallbackToOlderReleases": True,
+            setting: "wanted",
+        },
     )
-    assert result.effective_version == fixture["expected"]["version"]
-    assert result.candidates == ()
+    assert result.raw_version == "older"
+
+
+@pytest.mark.parametrize("name", [None, "", "   "])
+def test_title_version_falls_back_to_tag_when_name_is_empty(name: str | None) -> None:
+    value = release("v2.4", name=name)
+    if name is None:
+        value.pop("name")
+    result, _ = resolver([value], {"releaseTitleAsVersion": True})
+    assert result.raw_version == "v2.4"
+    assert result.effective_version == "v2.4"
+    assert result.version_origin == "title"
+    assert result.selected is not None
+    assert result.selected["title"] == "v2.4"
+
+
+@pytest.mark.parametrize("fallback", [True, False])
+def test_tags_fallback_applies_title_filter_and_older_release_boundary(
+    fallback: bool,
+) -> None:
+    settings: dict[str, object] = {
+        "trackOnly": True,
+        "sortMethodChoice": "none",
+        "filterReleaseTitlesByRegEx": "wanted",
+        "fallbackToOlderReleases": fallback,
+    }
+    tags = [{"name": "wrong"}, {"name": "wanted"}]
+    if fallback:
+        result, _ = resolver([], settings, tags=tags)
+        assert result.raw_version == "wanted"
+    else:
+        with pytest.raises(ResolutionError) as raised:
+            resolver([], settings, tags=tags)
+        assert raised.value.code == "github-no-release"
+
+
+def test_tags_fallback_applies_notes_filter_to_empty_body() -> None:
+    with pytest.raises(ResolutionError) as raised:
+        resolver(
+            [],
+            {"trackOnly": True, "filterReleaseNotesByRegEx": "wanted"},
+            tags=[{"name": "v2"}],
+        )
+    assert raised.value.code == "github-no-release"
+
+
+@pytest.mark.parametrize(("sort", "expected"), [("date", "v1"), ("none", "v2")])
+def test_tags_fallback_applies_date_tie_or_api_order(sort: str, expected: str) -> None:
+    result, _ = resolver(
+        [],
+        {"trackOnly": True, "sortMethodChoice": sort},
+        tags=[{"name": "v2"}, {"name": "v1"}],
+    )
+    assert result.raw_version == expected
+    assert result.selected == {"kind": "tag", "tag": expected}
