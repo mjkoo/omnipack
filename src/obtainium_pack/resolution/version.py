@@ -60,6 +60,7 @@ def extract_version(raw: str, pattern: str, group_template: str | None) -> str:
 
     match = matches[-1]
     output = template
+    # Global replacement in template order also affects escaped and inserted text.
     for reference in references:
         token = reference.group(0)
         index = int(token[1:])
