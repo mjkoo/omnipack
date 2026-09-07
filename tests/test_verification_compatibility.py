@@ -14,6 +14,7 @@ def test_every_default_setting_has_an_explicit_live_classification() -> None:
         classifications = classify_settings(source, defaults)
         assert classifications.keys() == defaults.keys()
         assert all(item.classification is not None for item in classifications.values())
+        assert all("unknown" not in item.reason for item in classifications.values())
 
 
 def test_unknown_setting_is_a_live_error_even_when_false() -> None:
