@@ -167,6 +167,7 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["status"] == "failed"
     assert report["stage"] == "ingestion"
+    assert report["offlineVerification"] == {"status": "not-run", "findings": []}
     assert "HTTP 503" in report["error"]
     assert report["changes"] is None
     for name in ("single-screen.json", "dual-screen.json"):
@@ -216,8 +217,9 @@ def test_cached_resolution_survives_a_later_render_failure(
 
 
 @pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("invalid_gate", [False, True])
 def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, invalid_gate: bool
 ) -> None:
     config = tmp_path / "config"
     config.mkdir()
@@ -309,20 +311,47 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
             body = responses[request.full_url].encode()
         return HttpResponse(request.full_url, 200, Message(), body)
 
+    if invalid_gate:
+        from obtainium_pack import build as build_module
+
+        real_render = build_module.render
+
+        def invalid_render(apps: list[ComposedApp], settings: dict) -> str:
+            rendered = json.loads(real_render(apps, settings))
+            rendered["settings"]["categories"] = "not JSON"
+            return json.dumps(rendered)
+
+        monkeypatch.setattr(build_module, "render", invalid_render)
+    (tmp_path / ".cache").mkdir()
+    (tmp_path / ".cache/sentinel").write_bytes(b"unrelated cache")
+    before_outputs = {
+        path.name: path.read_bytes() for path in (tmp_path / "dist").glob("*.json")
+    }
     monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
     monkeypatch.chdir(tmp_path)
-    assert main(["build"]) == 0
-    for name in ("single-screen.json", "dual-screen.json"):
-        assert (
-            json.loads((tmp_path / "dist" / name).read_text())["apps"][0]["id"]
-            == "app.fixture"
-        )
+    assert main(["build"]) == (1 if invalid_gate else 0)
+    assert (tmp_path / ".cache/sentinel").read_bytes() == b"unrelated cache"
+    if invalid_gate:
+        assert {
+            path.name: path.read_bytes() for path in (tmp_path / "dist").glob("*.json")
+        } == before_outputs
+    else:
+        for name in ("single-screen.json", "dual-screen.json"):
+            assert (
+                json.loads((tmp_path / "dist" / name).read_text())["apps"][0]["id"]
+                == "app.fixture"
+            )
     assert (
         json.loads((tmp_path / ".build/report.json").read_text())["skipped"][0]["url"]
         == "https://example.test/page"
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["status"] == "success"
+    assert report["status"] == ("failed" if invalid_gate else "success")
+    assert report["offlineVerification"]["status"] == (
+        "failed" if invalid_gate else "success"
+    )
+    if invalid_gate:
+        assert report["stage"] == "offline verification"
     assert report["generated"] == [
         {
             "source": "codm2000",

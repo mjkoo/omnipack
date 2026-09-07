@@ -195,10 +195,10 @@ def _plain(value: Any) -> Any:
 def _redact(value: Any, secrets: tuple[str, ...]) -> Any:
     if isinstance(value, dict):
         return {key: _redact(item, secrets) for key, item in value.items()}
-    if isinstance(value, list):
+    if isinstance(value, (tuple, list)):
         return [_redact(item, secrets) for item in value]
     if isinstance(value, str):
-        text = _URL.sub(lambda match: redact_url(match.group()), value)
+        text = _URL.sub(lambda match: _safe_redact_url(match.group()), value)
         for secret in secrets:
             text = text.replace(secret, "REDACTED")
         return text
@@ -223,3 +223,10 @@ def _write_atomic(
 
 def _now() -> str:
     return datetime.now(UTC).isoformat()
+
+
+def _safe_redact_url(value: str) -> str:
+    try:
+        return redact_url(value)
+    except ValueError:
+        return "<invalid-url>"

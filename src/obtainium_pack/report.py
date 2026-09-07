@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 import json
+import re
 from dataclasses import asdict
+from datetime import datetime
 from pathlib import Path
 from typing import Any
 
@@ -164,14 +166,14 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
 
 def _validate_verification_report(value: dict[str, Any]) -> None:
     schema = value.get("schemaVersion")
-    if schema != 1:
+    if type(schema) is not int or schema != 1:
         raise ReportFormatError(f"unsupported verification report schema {schema!r}")
     verifier = value.get("verifier")
     inputs = value.get("inputs")
     if (
-        value.get("status") not in {"running", "success", "failed"}
+        value.get("status") not in ("running", "success", "failed")
         or not isinstance(value.get("complete"), bool)
-        or value.get("mode") not in {"offline", "live"}
+        or value.get("mode") not in ("offline", "live")
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
         or not all(
@@ -194,6 +196,123 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
         )
     ):
         raise ReportFormatError("malformed verification report")
+
+    if (
+        "completedAt" not in value
+        or not _timestamp(value["startedAt"])
+        or (value["complete"] and not _timestamp(value.get("completedAt")))
+        or (not value["complete"] and value.get("completedAt") is not None)
+        or (value["status"] == "running") == value["complete"]
+        or (value["status"] == "success" and bool(value["errors"]))
+        or (value["status"] == "failed" and not value["errors"])
+        or not all(_fingerprint(item) for item in inputs.values())
+        or not all(_valid_finding(item) for item in value["errors"] + value["warnings"])
+        or not all(_valid_entry(item) for item in value["entries"])
+    ):
+        raise ReportFormatError("malformed verification report records")
+
+
+def _timestamp(value: object) -> bool:
+    if not isinstance(value, str):
+        return False
+    try:
+        return datetime.fromisoformat(value).tzinfo is not None
+    except ValueError:
+        return False
+
+
+def _fingerprint(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    state = value.get("state")
+    if state == "present":
+        digest = value.get("sha256")
+        return (
+            set(value) == {"state", "sha256"}
+            and isinstance(digest, str)
+            and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+        )
+    if state == "missing":
+        return set(value) == {"state"}
+    if state == "unreadable":
+        return set(value) == {"state", "error"} and isinstance(value.get("error"), str)
+    return False
+
+
+def _valid_finding(value: object) -> bool:
+    return (
+        isinstance(value, dict)
+        and all(isinstance(value.get(key), str) for key in ("stage", "code", "message"))
+        and all(
+            value.get(key) is None or isinstance(value[key], str)
+            for key in ("variant", "entry_id")
+        )
+        and (value.get("index") is None or type(value["index"]) is int)
+    )
+
+
+def _valid_entry(value: object) -> bool:
+    if not isinstance(value, dict):
+        return False
+    from obtainium_pack.live import VersionClass
+
+    if (
+        not all(
+            isinstance(value.get(key), str) for key in ("variant", "entry_id", "source")
+        )
+        or type(value.get("index")) is not int
+        or value.get("version_class")
+        not in (None, *(item.value for item in VersionClass))
+        or not all(
+            isinstance(value.get(key), list) for key in ("errors", "warnings", "probes")
+        )
+        or not all(_valid_finding(item) for item in value["errors"] + value["warnings"])
+        or not all(_valid_probe(item) for item in value["probes"])
+        or not {"resolution", "version_class"} <= value.keys()
+    ):
+        return False
+    resolution = value["resolution"]
+    if resolution is None:
+        return True
+    return (
+        isinstance(resolution, dict)
+        and {"selected", "inspected_count", "window_limit"} <= resolution.keys()
+        and all(
+            isinstance(resolution.get(key), str)
+            for key in ("raw_version", "effective_version", "version_origin")
+        )
+        and isinstance(resolution.get("candidates"), list)
+        and all(_candidate(item) for item in resolution["candidates"])
+        and (
+            resolution.get("selected") is None
+            or isinstance(resolution["selected"], dict)
+        )
+        and all(
+            resolution.get(key) is None or type(resolution[key]) is int
+            for key in ("inspected_count", "window_limit")
+        )
+    )
+
+
+def _candidate(value: object) -> bool:
+    return isinstance(value, dict) and all(
+        isinstance(value.get(key), str) for key in ("name", "url")
+    )
+
+
+def _valid_probe(value: object) -> bool:
+    return (
+        _candidate(value)
+        and isinstance(value, dict)
+        and {"response_url", "status"} <= value.keys()
+        and type(value.get("success")) is bool
+        and type(value.get("bytes_read")) is int
+        and (value.get("status") is None or type(value["status"]) is int)
+        and all(
+            value.get(key) is None or isinstance(value[key], str)
+            for key in ("response_url", "failure_reason")
+        )
+    )
 
 
 def _record(value: Displacement | Removal | StaleExclusion) -> dict[str, Any]:

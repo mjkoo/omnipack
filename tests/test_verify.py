@@ -24,8 +24,9 @@ def test_offline_evidence_fingerprints_exact_seven_inputs(tmp_path: Path) -> Non
     assert result["complete"] is True
     assert result["mode"] == "offline"
     assert set(result["inputs"]) == set(verify.INPUT_PATHS)
-    expected = hashlib.sha256((tmp_path / "config/http.json").read_bytes()).hexdigest()
-    assert result["inputs"]["http"] == {"state": "present", "sha256": expected}
+    for name, relative in verify.INPUT_PATHS.items():
+        expected = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
+        assert result["inputs"][name] == {"state": "present", "sha256": expected}
     assert json.loads((tmp_path / verify.VERIFY_PATH).read_text()) == result
 
 
@@ -101,9 +102,58 @@ def test_changed_input_prevents_success(
     assert result["status"] == "failed"
 
 
-def test_report_write_error_is_concise(tmp_path: Path) -> None:
+def test_initial_report_write_error_is_wrapped(tmp_path: Path) -> None:
     (tmp_path / ".build").write_text("occupied")
     with pytest.raises(
         verify.VerificationReportError, match="cannot write verification report"
     ):
         verify.run_verification(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "https://example.test/?token=nested-token",
+        "https://[malformed/?token=nested-token",
+    ],
+)
+def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, url: str
+) -> None:
+    from obtainium_pack.live import LiveEntryResult, LiveResult, ProbeEvidence
+    from obtainium_pack.offline import Finding
+
+    copy_inputs(tmp_path)
+    monkeypatch.setenv("PACK_TEST_TOKEN", "nested-token")
+    (tmp_path / "config/http.json").write_text(
+        '{"credentials":{"example.test":"PACK_TEST_TOKEN"}}'
+    )
+    finding = Finding("probe", "candidate-probes-failed", f"failed {url}")
+    entry = LiveEntryResult(
+        "single",
+        "app.example",
+        0,
+        "GitHub",
+        None,
+        (
+            ProbeEvidence(
+                "nested-token",
+                "https://example.test/file?token=nested-token",
+                False,
+                failure_reason="nested-token",
+            ),
+        ),
+        None,
+        (finding,),
+        (),
+    )
+    monkeypatch.setattr(
+        "obtainium_pack.live.verify_live",
+        lambda *_: LiveResult((entry,), (finding,), ()),
+    )
+    result = verify.run_verification(tmp_path, live=True)
+    serialized = (tmp_path / verify.VERIFY_PATH).read_text()
+    assert "nested-token" not in serialized
+    assert result["entries"][0]["probes"][0]["name"] == "REDACTED"
+    if "[malformed" in url:
+        assert "<invalid-url>" in serialized
