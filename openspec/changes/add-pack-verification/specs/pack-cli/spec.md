@@ -39,8 +39,10 @@ diff. Building SHALL NOT replace `.build/verify.json` or claim live health.
 
 The system SHALL implement `pack verify` to check both current distribution
 files and local configuration offline without network requests. It SHALL
-implement `pack verify --live` to add live checks only after offline success.
-Both modes SHALL record verification evidence and exit zero only on a complete,
+implement `pack verify --live` to add metadata resolution and version checks only
+after offline success, without download probes. `pack verify --live --probe-assets`
+SHALL add explicit bounded reachability diagnostics. `--probe-assets` without
+`--live` SHALL be rejected. All modes SHALL record verification evidence and exit zero only on a complete,
 error-free run; warnings alone SHALL not fail the command. Report write failure
 SHALL cause a nonzero exit with a concise stderr diagnostic. Verification SHALL
 not rebuild, update package ids, alter distribution/configuration files or
@@ -59,9 +61,21 @@ overwrite the last build report.
 
 #### Scenario: Live check has warnings only
 
-- **WHEN** every entry resolves and meets reachability requirements but some
-  versions receive lint warnings
+- **WHEN** every entry resolves a version and any required eligible candidates,
+  but some versions receive lint warnings
 - **THEN** `pack verify --live` records the warnings and exits zero
+
+#### Scenario: Routine live verification avoids asset traffic
+
+- **WHEN** `pack verify --live` succeeds
+- **THEN** no selected download is requested and the report identifies metadata-only
+  mode without claiming reachability
+
+#### Scenario: Asset diagnostics require explicit selection
+
+- **WHEN** `pack verify --live --probe-assets` runs
+- **THEN** selected download candidates are probed and evidence identifies
+  `live-probe` mode separately from ordinary `live` mode
 
 ### Requirement: The report command displays available evidence and its freshness
 

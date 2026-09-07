@@ -1,6 +1,110 @@
 # Verification validation
 
-## Live observation
+## Current contract and request budget
+
+Routine `pack verify --live` now checks metadata and effective versions without
+requesting download bodies. `--live --probe-assets` retains comprehensive bounded
+reachability diagnostics. Offline verification remains the ordinary CI gate.
+The observations below used verifier 0.1.0, when `--live` also probed assets; they
+are historical evidence, not a claim that the current implementation was run
+against all upstreams again.
+
+The committed pair has 194 entries. After excluding unsupported GitHub settings,
+92 distinct GitHub repository URLs remain. A cold metadata run therefore needs
+about one release-list request per supported repository, plus any tags fallback
+and HTML traversal requests. Different variant settings reuse that response.
+The first comprehensive observation made 173 probes for 96 distinct reported
+asset URLs; routine metadata verification eliminates all those probes. Explicit
+diagnostics deduplicate identical probe requests within their invocation.
+Redirects and bounded retries can increase actual wire request counts.
+
+A two-second per-host interval limits bursts; configured authentication avoids
+the 60-request unauthenticated GitHub hourly pool. Conditional revalidation saves
+transfer, and authenticated 304 responses do not consume GitHub's primary quota.
+See [GitHub's request guidance](https://docs.github.com/en/rest/using-the-rest-api/best-practices-for-using-the-rest-api).
+The client suppresses a host after rate limiting rather than repeatedly failing
+requests for later entries. Cached bodies require fresh revalidation; no old
+verification pass or asset probe is accepted as current evidence.
+
+These limits are tested with controlled responses and injected time, without
+repeating a full live pull solely to validate code changes. Metadata success does
+not prove unchanged downloads remain reachable. Future publishing can use actual
+asset downloads as evidence when it already needs them.
+
+## Refreshed observation after diagnostic and schema fixes
+
+`uv run pack verify --live` completed from 2026-09-07T21:52:00.700360+00:00 to 2026-09-07T21:53:26.175669+00:00
+using implementation commit `af8cd3e`, verifier `0.1.0`, baseline `1.6.14`,
+and verification schema `1`. The input fingerprints below are unchanged.
+All 194 entries were checked; the complete run exited 1. Every resulting error
+and warning was inspected. Protected distribution, configuration, cache, and
+build-report bytes still match the pre-validation snapshots.
+
+| Variant | Entries | Passed | Errors | Warnings | Download probes |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| single | 87 | 68 | 19 | 10 | 67 |
+| dual | 107 | 68 | 39 | 9 | 67 |
+
+The 58 errors comprise the same 13 active `verifyLatestTag` compatibility errors
+listed below and 45 `github-request-failed` metadata failures. No download
+probe failed. The metadata failures are network-stage failures, not proof of
+bad local configuration or missing upstream releases. They remain publishing
+blockers, and previous successful observations were not reused.
+
+After this run, a quota check using the same configured client returned a
+60-request core limit with one request remaining. A representative failed source
+then returned HTTP 200 with zero remaining and a quota reset timestamp of
+`2026-09-07T22:11:50+00:00`. This is consistent with quota pressure, but the
+recorded generic metadata error does not establish that every failure had the
+same cause. The diagnostic request did not rerun or replace the full observation.
+
+| Entry with metadata failure | Variants |
+| --- | --- |
+| `767644078` | single, dual |
+| `904332840` | single, dual |
+| `994078275` | single, dual |
+| `app.nanostack.pixelguide` | single, dual |
+| `com.andreyvelsk.skyrimwebmonitor` | dual |
+| `com.aure.clustertune` | single, dual |
+| `com.balatro.dualscreen` | dual |
+| `com.chimeragaming.pokemonzmap` | dual |
+| `com.ctrnative` | dual |
+| `com.cylonid.nativealpha` | dual |
+| `com.emulnk` | dual |
+| `com.enrpau.dualscreendex` | dual |
+| `com.esde.companion` | dual |
+| `com.exojosh.minecraftsecondscreen` | dual |
+| `com.igawa6.dusklight` | dual |
+| `com.jakobkhansen.silksong` | dual |
+| `com.joshdaniels.openmwds` | dual |
+| `com.kei.pulse` | single, dual |
+| `com.moonbench.bifrost` | single, dual |
+| `com.pokeemerald.dualscreen` | dual |
+| `com.producdevity.emureadylite` | single, dual |
+| `com.quantumsoul.esde_android` | single, dual |
+| `com.raofflineproxy` | single, dual |
+| `com.stormpanda.megingiard` | dual |
+| `com.thor.mph` | dual |
+| `de.langerhans.odintools` | single, dual |
+| `igawa6.dualsouls` | dual |
+| `info.cemu.cemu` | dual |
+| `it.ottaviomiele.chd` | single, dual |
+| `org.pkforge.app` | dual |
+| `pup.app.mimir` | single, dual |
+| `xyz.blacksheep.mjolnir` | dual |
+
+The 19 non-blocking numeric-shape warnings have the same values and explanations
+as the initial warning table below, excluding dual-screen `info.cemu.cemu` and
+`xyz.blacksheep.mjolnir`: those two entries failed metadata acquisition in this
+run and therefore had no successful version to lint. A reduced warning count
+does not imply those versions were repaired.
+
+`just check-all` passed after these corrections: 419 tests, 91% coverage, offline
+validation, and all repository checks. Ordinary CI remains offline. The source
+and reachability limits below still apply to every successful record.
+
+
+## Initial live observation
 
 `uv run pack verify --live` completed from 2026-09-07T21:39:55.835165+00:00 to 2026-09-07T21:41:10.379334+00:00.
 Verifier version: `0.1.0`. Obtainium compatibility baseline: `1.6.14`.

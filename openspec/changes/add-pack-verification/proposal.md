@@ -11,8 +11,12 @@ identify version-format problems from evidence.
   their local configuration; run the same checks before a build replaces output.
 - Implement `pack verify --live` for GitHub and HTML source resolution using
   the entries' configured release, link, APK and version settings. Installable
-  entries must resolve a nonempty version and at least one reachable APK
-  candidate; track-only entries require a version without requiring an APK.
+  entries must resolve a nonempty version and at least one eligible APK candidate;
+  track-only entries require a version without requiring an APK. Download
+  reachability is an explicit `--probe-assets` diagnostic, not the live default.
+- Reuse release metadata across variants, pace necessary requests, require
+  configured GitHub authentication, and conditionally revalidate cached metadata.
+  Stop contacting rate-limited hosts for the remainder of a run.
 - Cover the resolution settings exercised by the existing packs, including
   prereleases, older-release fallback, HTML intermediate pages, release titles,
   release dates and regex group substitution. Reject active unsupported
@@ -29,8 +33,8 @@ identify version-format problems from evidence.
 
 ### New Capabilities
 
-- `pack-verification`: rendered-output validation, live resolution and bounded
-  download reachability, effective-version lint, and verification evidence.
+- `pack-verification`: rendered-output validation, live metadata resolution,
+  opt-in bounded download reachability, effective-version lint, and evidence.
 
 ### Modified Capabilities
 

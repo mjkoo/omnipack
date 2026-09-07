@@ -31,6 +31,8 @@ evidence to distinguish a broken configuration from an unavailable upstream.
 during ordinary verification, claiming that numeric version syntax proves a
 match with installed versionName, and adding persistent live-success caching.
 The live guarantee is evaluated before device-specific architecture selection.
+Ordinary live verification resolves metadata and versions without fetching asset
+bodies. An explicit `--probe-assets` diagnostic adds bounded reachability checks.
 
 ## Decisions
 
@@ -132,7 +134,21 @@ suppress it. This intentionally avoids claiming full Obtainium reconciliation
 parity or an APK versionName comparison. Failed resolution has no successful
 effective version to lint.
 
-### Probe downloads with bounded GET reads
+### Keep routine verification on metadata
+
+`pack verify` remains offline. `pack verify --live` adds source metadata, version
+extraction and eligible-candidate selection, without any download probes.
+`pack verify --live --probe-assets` adds the reachability diagnostic below;
+`--probe-assets` without `--live` is invalid. Reports distinguish `offline`,
+`live` and `live-probe`, so a metadata success cannot imply a download was checked.
+
+Resolve a repository response once per invocation and apply each variant's
+settings locally. Probes consume the selected candidate URLs directly and never
+resolve latest again. If a future publishing pipeline downloads a selected asset,
+it should use that download as evidence rather than issue a separate probe.
+Connecting that pipeline remains outside this change.
+
+### Probe downloads only when explicitly requested
 
 Add a shared-client operation for reading a response prefix, distinct from the
 existing maximum-size operation that rejects oversized metadata. Request
@@ -147,23 +163,32 @@ entry. HTML has one selected candidate. Never use network probe failure as
 grounds to fall back to an older release. Preserve candidate and final response
 URLs internally while redacting credentials/query tokens from reports.
 
-Use the existing 30-second request timeout, two transient retries and host-scoped
-credentials. Enforce at most ten redirects and a 10 MiB metadata response limit.
-Honor HTML non-secret request headers, including User-Agent; the current helper
-overwrites a caller's User-Agent and requires a targeted fix. Credentials come
-only from `config/http.json` environment mappings; redirects rebuild them for
-the destination host. Do not forward arbitrary Authorization/Cookie headers from
-pack data. Timeouts and exhausted rate limits produce errors, not stale passes.
+Use the existing 30-second request timeout, at most two transient retries and
+host-scoped credentials. Enforce at most ten redirects and a 10 MiB metadata
+response limit. Preserve HTML non-secret headers, including User-Agent, and
+reject pack Authorization/Cookie headers and embedded credentials. Redirects
+rebuild credentials for the destination host.
 
-Process entries sequentially initially, reusing identical metadata requests and
-resolution results only within the invocation. Resolution cache keys include
-source type, the exact configured request URL and the complete additional
-settings. For HTML, preserve scheme, authority, path, trailing slash and query;
-project URL normalization is not a resolution identity and must not enter these
-keys. Distinct configured URLs cannot share resolution results unless request
-equivalence is established. Keep separate
-per-variant result records, since identical package ids do not imply equivalent
-resolution. No concurrency framework or persistent probe cache is needed.
+Live requests use a minimum two-second interval per host, including retries and
+redirects. Require a configured, nonempty exact-host GitHub API credential before
+contacting that API; do not consume the unauthenticated quota for the pack.
+Honor server retry delays within a bounded wait, and suppress a rate-limited host
+for the rest of the invocation instead of repeatedly requesting each entry.
+Unrelated hosts continue. Network errors remain errors, not stale passes.
+
+Persist only a bounded GitHub metadata response/validator cache under `.build/`
+for conditional requests. Each invocation still contacts the API; a cached body
+is usable only after a fresh authenticated 304. Never cache verification success,
+probe success across runs, credentials or credential-derived identities. Invalid
+cache data is discarded and falls back to normal acquisition. A missing or failed
+live response cannot use cached metadata as evidence.
+
+Reuse identical metadata responses and failures within the invocation, and reuse
+identical probe responses and failures only in diagnostic mode. Resolution keys
+include source, exact configured request URL and complete settings. For HTML,
+preserve scheme, authority, path, trailing slash and query; project normalization
+is not a resolution identity. Keep each variant's result even when work is reused.
+No concurrency framework or persistent probe cache is needed.
 
 ### Separate build history from verification evidence
 
@@ -214,7 +239,9 @@ failed build gate. CI runs unit/integration fixtures plus `pack verify` against
 committed dist, never a live upstream build. A manual live verification records
 actual failures and warnings in durable validation documentation. It does not
 require all third-party sources to be healthy to establish correct diagnostics.
-Document any remaining live failures as blockers for subsequent nightly publishing.
+Document any remaining metadata/configuration failures as blockers for subsequent
+nightly publishing. Diagnostic probe failures describe reachability at their
+observation time; routine metadata verification does not claim that reachability.
 
 ## Risks / Trade-offs
 
@@ -227,8 +254,8 @@ Document any remaining live failures as blockers for subsequent nightly publishi
 - Strict failures may initially expose broken sources or unsupported new keys.
   Report all of them; do not add silent exceptions to make the first run green.
 - Full live checks consume network requests. Bound requests, reuse metadata
-  within one run and keep ordinary CI offline. Measure the first full run before
-  adding parallel execution or wider caching.
+  and conditional validators, skip routine asset probes, and keep ordinary CI
+  offline. The historical full runs motivate this smaller nightly contract.
 
 ## Migration Plan
 

@@ -21,7 +21,8 @@ Run commands from the repository root:
 | Command | Work performed |
 | --- | --- |
 | `uv run pack verify` or `just verify` | Validate both existing serialized packs and local composition settings without network access |
-| `uv run pack verify --live` | Run offline validation, then resolve sources and probe selected downloads |
+| `uv run pack verify --live` | Run offline validation, then resolve source metadata, versions and eligible candidates without probing downloads |
+| `uv run pack verify --live --probe-assets` | Add bounded download reachability diagnostics |
 | `uv run pack report` | Display available build and standalone verification evidence without fetching or writing files |
 | `uv run pack build` | Ingest and compose sources, validate newly rendered bytes offline, then publish the pair |
 
@@ -67,9 +68,11 @@ knowing its semantics.
 | Authorization or Cookie request headers and device-dependent intermediate filtering | Live error | Rejected before a request is made |
 | Any unknown additional setting | Live error | Requires an intentional compatibility decision |
 
-The check establishes source resolution and bounded HTTP reachability. It does
-not establish APK identity, signature, installation success, architecture
-coverage, or behavior on a particular Android device.
+The ordinary live check establishes source metadata resolution and version
+extraction, including eligible candidates for installable entries. It does not
+request selected downloads or claim they are reachable. The explicit asset
+diagnostic adds bounded HTTP reachability. Neither mode establishes APK identity,
+signature, installation success, architecture coverage, or behavior on a device.
 
 GitHub selection is limited to the first 100 releases, so failure does not rule
 out a usable release beyond that window. Drafts and excluded prereleases do not
@@ -91,21 +94,55 @@ atomic/conditional groups, possessive quantifiers, and unsupported Unicode
 property syntax are rejected explicitly. A configured date override runs after
 extraction and requires a usable date, represented in epoch microseconds.
 
-Each download probe sends a GET Range request and reads at most 1024 bytes,
+In `--live --probe-assets` mode, each download probe sends a GET Range request and reads at most 1024 bytes,
 closing the response even if the server ignores Range. Nonempty 200 or 206
 responses establish reachability. GitHub candidates are tried in metadata order
 until one succeeds; failed candidates become warnings when another succeeds.
 Probe failure does not select an older release. Track-only entries need a version
 and do not require a probe.
 
-Requests use a 30-second timeout, at most two transient retries, at most ten
-redirects, and a 10 MiB metadata limit. Credentials come from exact-host environment
-mappings in `config/http.json` and are rebuilt at redirects. Non-secret configured
-headers, including User-Agent, are honored; embedded URL credentials and pack
-Authorization/Cookie headers fail. Diagnostic URLs redact credentials and query
-values. Identical metadata and resolution inputs may share work within one run;
-different exact HTML URLs, including trailing-slash differences, stay distinct.
-No prior run's success or package-id cache can turn a failed source into a pass.
+## Request policy
+
+`pack verify` and ordinary CI remain offline. Use metadata-only `--live` for
+routine source checks; reserve `--live --probe-assets` for reachability diagnosis.
+`--probe-assets` without `--live` is an error. Report modes are `offline`, `live`
+(metadata only), and `live-probe`, with observation times for each. A previous
+version's evidence is stale when its verifier identity differs.
+
+Necessary live requests are sequential with at least two seconds between request
+starts to the same host, including retries and redirects. They use a 30-second
+timeout, at most two transient retries, at most ten redirects and a 10 MiB
+metadata limit. Server retry instructions take precedence over shorter local
+backoff, within a 60-second wait bound. A rate-limited host, or one requesting a
+longer wait, receives no more requests during that invocation. Affected entries
+record errors while unrelated hosts can continue.
+
+Credentials come from exact-host environment mappings in `config/http.json` and
+are rebuilt at redirects. GitHub API access requires the configured nonempty
+credential (currently `GITHUB_TOKEN`); missing credentials fail before an API
+request. Do not put tokens into pack settings or checked-in configuration.
+Non-secret configured headers, including User-Agent, are honored; embedded URL
+credentials and pack Authorization/Cookie headers fail. Diagnostic URLs redact
+credentials and query values.
+
+Identical metadata requests, including failures, share work within a run. Release
+responses can serve different variant settings, but each variant selects its own
+version and assets. Resolution reuse requires the exact source URL and settings;
+HTML trailing-slash differences remain distinct. Explicit probes reuse identical
+requests within the run and consume the already-selected URLs without another
+release lookup.
+
+A bounded GitHub metadata cache under `.build/live-http-cache/` stores response
+bodies and conditional validators, without credentials. A later run must obtain a
+fresh authenticated 304 before using a cached body. Errors never fall back to old
+metadata. This saves response transfer on unchanged repositories, while preserving
+a current observation. There is no persistent asset-probe or verification-success
+cache, and a package-id cache cannot turn a failed source into a pass.
+
+Nightly workflow wiring remains separate. A publisher that already downloads a
+selected asset should use that download as evidence instead of requesting an
+additional probe. The routine contract deliberately does not establish fresh
+reachability for every unchanged asset each night.
 
 Effective GitHub versions receive the non-blocking
 [numeric-shape lint](version-detection.md#lint). A title or extraction regex alone
@@ -113,7 +150,8 @@ does not suppress a warning. The lint does not compare with Android versionName.
 
 Ordinary CI runs fixtures and offline verification of committed distribution
 files. It does not rebuild from upstreams or run live checks. A full manual live
-observation and any blockers for future nightly publishing are recorded in
+observation from the original comprehensive mode, the request-reduction rationale,
+and blockers for future nightly publishing are recorded in
 `docs/verification-validation.md`.
 
 ## Fixture evidence

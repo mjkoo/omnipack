@@ -128,7 +128,8 @@ metadata selects a release, failed reachability SHALL NOT select an older one.
 
 #### Scenario: Selected release has dead downloads
 
-- **WHEN** every eligible APK candidate in the selected release is unreachable
+- **WHEN** asset probing is explicitly enabled and every eligible APK candidate
+  in the selected release is unreachable
 - **THEN** the entry fails even if an older release has a reachable APK
 
 ### Requirement: HTML resolution follows the configured path
@@ -158,7 +159,8 @@ SHALL require a usable final selected URL, including for track-only entries.
 
 #### Scenario: Selected HTML download is unavailable
 
-- **WHEN** the final selected link fails the reachability check
+- **WHEN** asset probing is explicitly enabled and the final selected link fails
+  the reachability check
 - **THEN** the entry fails without probing an older link as a substitute
 
 #### Scenario: Track-only HTML page has a version but no download links
@@ -211,8 +213,11 @@ report SHALL identify the raw value, effective value and version origin.
 
 ### Requirement: Reachability checks are bounded and do not prove binary identity
 
-An installable entry SHALL pass live verification only if resolution succeeds
-and at least one selected eligible APK candidate responds to a bounded GET with
+Ordinary live verification SHALL require successful metadata resolution, a
+nonempty effective version and eligible candidates for installable entries,
+without requesting those downloads or claiming reachability. Only when asset
+probing is explicitly enabled SHALL an installable entry additionally require
+at least one selected eligible APK candidate to respond to a bounded GET with
 status 200 or 206 and a nonempty response prefix. The system SHALL read at most
 1024 response-body bytes per probe and close the response, including when the
 server ignores Range. It SHALL NOT require HEAD support or download a whole APK.
@@ -220,7 +225,7 @@ The system SHALL report attempted candidate failures as warnings when another
 candidate succeeds, and as an entry failure when none succeeds. Track-only
 entries SHALL not require download probes.
 
-The guarantee SHALL be described as source resolution and HTTP reachability,
+The diagnostic guarantee SHALL be described as source resolution and HTTP reachability,
 without asserting APK identity, signatures, installability, architecture coverage
 or correctness of a server's content. A probe SHALL use at most three attempts
 with bounded backoff and a 30-second per-request timeout, and follow at most ten
@@ -237,6 +242,53 @@ SHALL be errors and SHALL NOT be replaced by a prior run's success.
 - **WHEN** the first APK candidate fails and a second candidate in the same
   selected release responds successfully with data
 - **THEN** the entry passes with the first failure recorded as a warning
+
+### Requirement: Live requests minimize work and respect host limits
+
+The system SHALL reuse identical metadata responses and failures within a run,
+including release responses shared by variants with different selection settings.
+Probe diagnostics SHALL also reuse identical requests and failures within a run.
+Selected candidate URLs SHALL be passed directly to probes without re-resolving
+the latest release. Separate per-variant evidence SHALL remain available.
+
+Live requests SHALL have a minimum two-second per-host interval, including
+retries and redirects. GitHub API requests SHALL require a nonempty credential
+from the configured exact-host environment mapping before any API request.
+Server-directed retry delays SHALL be honored within a bounded wait. A host
+that reports rate limiting or a server delay beyond that bound SHALL receive no
+more requests in that invocation; unrelated hosts SHALL continue. Suppressed
+entries SHALL record network errors, not successful skips.
+
+GitHub metadata MAY persist in a bounded conditional-response cache under
+`.build/`. Every use in a later invocation SHALL require a fresh authenticated
+304 response for the exact metadata request. Cache identities and values SHALL
+exclude credentials and credential-derived hashes. Invalid cache data SHALL
+fall back to a normal request. Failed acquisition SHALL NOT use stale metadata
+or an earlier verification success. Probe results SHALL NOT persist across runs.
+
+#### Scenario: Both variants select from one repository
+
+- **WHEN** variants reference the same GitHub metadata request with different
+  release or APK settings
+- **THEN** one response is fetched and each variant applies its own selection
+- **AND** later asset diagnostics do not fetch releases again
+
+#### Scenario: GitHub authentication is missing
+
+- **WHEN** a live GitHub API request has no configured credential value
+- **THEN** it fails clearly before contacting the API
+
+#### Scenario: A host reports rate limiting
+
+- **WHEN** a response reports a rate limit or an excessive retry delay
+- **THEN** subsequent entries for that host produce errors without another request
+- **AND** entries using other hosts can still run
+
+#### Scenario: Metadata is unchanged on a later night
+
+- **WHEN** GitHub returns an authenticated 304 for cached metadata validators
+- **THEN** that response revalidates the cached body for current resolution
+- **AND** a timeout or error instead would fail without using the cached body
 
 ### Requirement: Live requests preserve credential boundaries
 
@@ -281,7 +333,8 @@ Warnings SHALL NOT cause a nonzero verification result.
 
 Standalone verification SHALL write `.build/verify.json` separately from the
 build report. It SHALL include schema and verifier versions, the compatibility
-baseline, mode, observation times, completion and status, input fingerprints,
+baseline, mode (`offline`, `live`, or `live-probe`), observation times, completion
+and status, input fingerprints,
 errors, warnings, and per-variant entry results with resolution and probe evidence.
 Fingerprints SHALL cover exact bytes of both output files, the denylist, both
 overlays, pack settings and HTTP configuration, identifying missing/unreadable
@@ -292,7 +345,7 @@ The system SHALL write an incomplete running record before live requests and
 atomically replace it on completion, including failed completion. Offline errors
 SHALL prevent live requests. After offline success, independent live failures
 SHALL be collected across both variants instead of stopping at the first entry.
-Equivalent resolution inputs MAY share requests within a run, but each variant
+Equivalent resolution inputs SHALL share requests within a run, but each variant
 and id SHALL retain its own result. HTML resolution identity SHALL preserve the
 exact configured request URL, including scheme, authority, path, trailing slash
 and query, unless request equivalence is established; project URL normalization

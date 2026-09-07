@@ -30,7 +30,10 @@ previous output pair; successfully resolved ids remain cached for later runs.
 
 Run `uv run pack verify` (or `just verify`) to validate the committed output
 and local configuration without network access. `uv run pack verify --live`
-also resolves configured GitHub and HTML sources and checks download reachability.
+also resolves configured GitHub and HTML metadata and versions without probing
+downloads. Use `uv run pack verify --live --probe-assets` for explicit asset
+reachability diagnostics. GitHub live requests require the `GITHUB_TOKEN`
+environment variable mapped in `config/http.json`.
 Verification leaves distribution files, configuration, package-id caches, and
 the build report unchanged. Standalone evidence is written to `.build/verify.json`.
 

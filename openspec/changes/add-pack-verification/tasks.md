@@ -82,7 +82,7 @@
 
 ## 6. Live orchestration and version lint
 
-- [ ] 6.1 Orchestrate resolution followed by bounded candidate probes, with
+- [ ] 6.1 Orchestrate metadata-only live resolution and opt-in bounded candidate probes, with
   track-only exemption and per-variant findings. Test first-candidate failure
   followed by success, every candidate failing, no older-release rescue,
   same-id different-variant configurations and equivalent-input request reuse
@@ -91,7 +91,7 @@
   normalization. Add same-settings HTML fixtures at slash-distinct endpoints
   with different versions and relative download bases; assert separate requests,
   versions and resolved download URLs while identical inputs still reuse work.
-- [ ] 6.2 Implement the documented numeric-shape lint on effective GitHub
+- [x] 6.2 Implement the documented numeric-shape lint on effective GitHub
   versions. Test numeric/prerelease/build forms, rolling/date/raw strings,
   regex/title values that remain nonnumeric, and separate classifications for
   track-only, disabled detection and intentional date versions. Assert warnings
@@ -103,20 +103,22 @@
 
 ## 7. Evidence and command integration
 
-- [ ] 7.1 Implement versioned verification evidence, exact-byte input fingerprints,
+- [x] 7.1 Implement versioned verification evidence, exact-byte input fingerprints,
   running/incomplete records, atomic completion and redaction. Test missing inputs,
   interrupted attempts, successful and failed completions, report write errors,
   changed inputs during a run, and absence of secret values in serialized reports.
-- [ ] 7.2 Implement `pack verify` and `pack verify --live`. Test both exit codes,
+- [ ] 7.2 Implement `pack verify`, metadata-only `pack verify --live`, and explicit
+  `pack verify --live --probe-assets`; reject probing without live mode. Test exit codes,
   warning-only success, absent build report, offline errors preventing all live
   requests, no-network offline operation, concise stderr on report failure, and
   byte-identical dist/config/cache/build-report files after standalone checks.
-- [ ] 7.3 Gate build publication on offline validation of the newly rendered
+- [x] 7.3 Gate build publication on offline validation of the newly rendered
   bytes and include the verdict in build diagnostics. Test invalid second-variant
   bytes preserving both old files, first-run rejection leaving no files,
   candidate diff and earlier diagnostics surviving failure, `not-run` on early
   failure, retained package-id work and untouched standalone verification evidence.
-- [ ] 7.4 Implement human-readable `pack report`. Test current and stale
+- [ ] 7.4 Implement human-readable `pack report`. Distinguish offline, metadata-only
+  live and live-probe evidence. Test current and stale
   fingerprints, changed verifier identity, incomplete runs, observation time and
   mode, build-only/verification-only reports, missing-both and corrupt/unsupported
   schemas, legacy build reports, failure-report display exiting zero, and no
@@ -124,7 +126,7 @@
 
 ## 8. Integration and documentation
 
-- [ ] 8.1 Add offline verification of committed dist to ordinary CI using the
+- [x] 8.1 Add offline verification of committed dist to ordinary CI using the
   existing uv/just conventions. Verify the workflow does not run upstream builds
   or live checks and passes actionlint plus the project's normal check suite.
 - [ ] 8.2 Update README, version-detection documentation and verification usage
@@ -135,10 +137,27 @@
   committed variants pass offline validation, all supported resolution patterns
   have end-to-end fixture evidence, and previous ingestion/cache/publication
   behavior has not regressed.
-- [ ] 8.4 Perform one full live verification and inspect every error/warning.
+- [ ] 8.4 Preserve the completed full live observations and inspected error/warning
+  evidence, clearly labeled as historical comprehensive-probe behavior.
   Record timestamp, compatibility/verifier identity, input hashes, aggregate
   results and unresolved blockers in durable validation documentation. Verify
   diagnostics distinguish configuration failures, unsupported behavior and
   network failures; any remaining external failure is explicitly a blocker for
-  future nightly publishing, not a reason to weaken verification or silently
-  modify overlays. Confirm dist/config/cache were unchanged by verification.
+  future nightly publishing under the applicable mode, not a reason to silently
+  modify overlays. Confirm dist/config/package-id cache were unchanged by verification.
+  Validate the narrowed request contract with deterministic transport fixtures;
+  do not repeat full upstream runs solely to re-prove code changes.
+
+## 9. Polite metadata verification
+
+- [ ] 9.1 Add live-specific per-host pacing through retries and redirects, require
+  configured GitHub authentication, honor bounded server retry delays, and stop
+  contacting rate-limited hosts within a run. Test with injected time/transport,
+  including unrelated hosts continuing, without adding delays to ordinary builds.
+- [ ] 9.2 Add bounded GitHub conditional metadata caching with fresh authenticated
+  304 revalidation, malformed-cache fallback and no stale success on failures.
+  Test no credential persistence and no persistent probe or verification-success cache.
+- [ ] 9.3 Prove metadata-only commands send no asset requests; shared repository
+  metadata is selected independently per variant; duplicate metadata/probe failures
+  are reused; probes use selected URLs without another latest-release lookup.
+  Record fixture request counts and the guarantee's limits in durable docs.
