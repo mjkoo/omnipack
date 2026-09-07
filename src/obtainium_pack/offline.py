@@ -172,25 +172,29 @@ def _validate_document(
     seen: set[str] = set()
     categories: set[str] = set()
     for index, raw in enumerate(apps):
+        if isinstance(raw, dict):
+            entry_id = raw.get("id")
+            if isinstance(entry_id, str) and entry_id:
+                if entry_id in seen:
+                    _add(
+                        findings,
+                        "entry",
+                        "duplicate_id",
+                        "duplicate id",
+                        variant,
+                        entry_id,
+                        index,
+                        "id",
+                    )
+                seen.add(entry_id)
+            raw_categories = raw.get("categories")
+            if isinstance(raw_categories, list):
+                categories.update(
+                    item for item in raw_categories if isinstance(item, str)
+                )
         entry = _validate_entry(variant, index, raw, findings)
-        if entry is None:
-            continue
-        if entry.entry_id in seen:
-            _add(
-                findings,
-                "entry",
-                "duplicate_id",
-                "duplicate id",
-                variant,
-                entry.entry_id,
-                index,
-                "id",
-            )
-        seen.add(entry.entry_id)
-        raw_categories = raw.get("categories")
-        if isinstance(raw_categories, list):
-            categories.update(item for item in raw_categories if isinstance(item, str))
-        result.append(entry)
+        if entry is not None:
+            result.append(entry)
     if rendered_settings is not None:
         _validate_pack_settings(
             variant, rendered_settings, configured, categories, findings
@@ -239,8 +243,12 @@ def _validate_entry(
             )
     url = raw.get("url")
     if isinstance(url, str):
-        parsed = urlsplit(url)
-        if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+        try:
+            parsed = urlsplit(url)
+            valid_url = parsed.scheme in {"http", "https"} and bool(parsed.netloc)
+        except ValueError:
+            valid_url = False
+        if not valid_url:
             _add(
                 findings,
                 "entry",
@@ -266,7 +274,7 @@ def _validate_entry(
             "categories",
         )
     source = raw.get("overrideSource")
-    if source not in SETTINGS_DEFAULTS:
+    if not isinstance(source, str) or source not in SETTINGS_DEFAULTS:
         _add(
             findings,
             "entry",
@@ -561,8 +569,12 @@ def _validate_pack_settings(
                             variant,
                         )
                     )
-    for key, expected in configured.items():
-        if key != "categories" and rendered.get(key) != expected:
+    for key in sorted((configured.keys() | rendered.keys()) - {"categories"}):
+        if (
+            key not in configured
+            or key not in rendered
+            or rendered[key] != configured[key]
+        ):
             findings.append(
                 Finding(
                     "document",
@@ -629,7 +641,9 @@ def _validate_composition(
                 continue
             entry_id = item["id"]
             variant = item.get("variant")
-            if variant not in {None, "single", "dual"}:
+            if variant is not None and (
+                not isinstance(variant, str) or variant not in {"single", "dual"}
+            ):
                 findings.append(
                     Finding(
                         "config",

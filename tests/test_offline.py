@@ -144,6 +144,7 @@ def test_independent_variant_errors_are_collected() -> None:
         (lambda value: value.pop("name"), "missing_field"),
         (lambda value: value.update(id=""), "invalid_field"),
         (lambda value: value.update(url="ftp://example.com/a"), "invalid_url"),
+        (lambda value: value.update(url="https://[invalid"), "invalid_url"),
         (lambda value: value.update(author=1), "invalid_field"),
         (lambda value: value.update(categories=[1]), "invalid_categories"),
         (
@@ -163,6 +164,7 @@ def test_independent_variant_errors_are_collected() -> None:
         "missing-name",
         "empty-id",
         "non-http-url",
+        "malformed-http-url",
         "invalid-author",
         "invalid-categories",
         "source",
@@ -184,6 +186,54 @@ def test_track_only_id_need_not_be_an_android_package_name() -> None:
     assert validate_offline(inputs([value])).ok
 
 
+@pytest.mark.parametrize("source", [{}, [], None, 1, True])
+def test_malformed_source_produces_findings_without_stopping_other_entries(
+    source: object,
+) -> None:
+    malformed = app("malformed")
+    malformed["overrideSource"] = source
+    other = app("other")
+    other.pop("name")
+    result = validate_offline(inputs([malformed], [other]))
+    assert {
+        ("single", "malformed", "overrideSource", "unsupported_source"),
+        ("dual", "other", "name", "missing_field"),
+    } <= {
+        (finding.variant, finding.entry_id, finding.field, finding.code)
+        for finding in result.findings
+    }
+
+
+@pytest.mark.parametrize("field", ["overrideSource", "additionalSettings"])
+def test_raw_ids_and_categories_survive_other_entry_errors(field: str) -> None:
+    malformed = app("present")
+    malformed[field] = None
+    result = validate_offline(
+        inputs(
+            [malformed, deepcopy(malformed)],
+            [deepcopy(malformed)],
+            common={"present": {}},
+            dual_overlay={"present": {}},
+            deny=[{"id": "present", "reason": "excluded"}],
+        )
+    )
+    assert {
+        ("single", "duplicate_id"),
+        ("single", "denied_id_present"),
+        ("dual", "denied_id_present"),
+    } <= {(finding.variant, finding.code) for finding in result.findings}
+    assert not {
+        "stale_common_overlay",
+        "stale_dual_overlay",
+        "category_mapping_mismatch",
+        "dual_coverage_gap",
+    } & codes(result)
+    assert result.entries == {"single": (), "dual": ()}
+
+    missing_dual = validate_offline(inputs([malformed], []))
+    assert "dual_coverage_gap" in codes(missing_dual)
+
+
 def test_defaults_are_required_and_known_types_are_checked() -> None:
     missing = app("missing")
     missing_settings = json.loads(missing["additionalSettings"])
@@ -197,14 +247,25 @@ def test_defaults_are_required_and_known_types_are_checked() -> None:
     assert {"missing_setting_default", "wrong_setting_type"} <= codes(result)
 
 
-def test_nested_html_steps_and_headers_are_validated() -> None:
+@pytest.mark.parametrize(
+    ("field", "nested", "code"),
+    [
+        ("intermediateLink", [{"customLinkFilterRegex": 1}], "invalid_html_step"),
+        ("requestHeader", [{"requestHeader": False}], "invalid_request_header"),
+    ],
+)
+def test_nested_html_steps_and_headers_are_validated(
+    field: str, nested: object, code: str
+) -> None:
     value = app(source="HTML")
     settings = json.loads(value["additionalSettings"])
-    settings["intermediateLink"] = [{"customLinkFilterRegex": 1}]
-    settings["requestHeader"] = [{"requestHeader": False}]
+    settings[field] = nested
     value["additionalSettings"] = json.dumps(settings)
     result = validate_offline(inputs([value], []))
-    assert {"invalid_html_step", "invalid_request_header"} <= codes(result)
+    assert ("single", "org.example.app", field, code) in {
+        (finding.variant, finding.entry_id, finding.field, finding.code)
+        for finding in result.findings
+    }
 
 
 def test_categories_must_exactly_match_observed_names_and_valid_colors() -> None:
@@ -245,6 +306,35 @@ def test_configured_and_derived_category_colors_and_other_settings_agree() -> No
 
 
 @pytest.mark.parametrize(
+    ("configured", "rendered", "mismatch"),
+    [
+        ({}, {"unexpected": True}, "unexpected"),
+        ({"nullable": None}, {}, "nullable"),
+        (
+            {"futureSetting": {"enabled": True}},
+            {"futureSetting": {"enabled": True}},
+            None,
+        ),
+    ],
+)
+def test_non_category_pack_settings_match_configured_keys_and_values(
+    configured: dict[str, Any], rendered: dict[str, Any], mismatch: str | None
+) -> None:
+    snapshots = inputs(settings=configured)
+    assert snapshots.single is not None
+    document = json.loads(snapshots.single)
+    document["settings"].update(rendered)
+    object.__setattr__(snapshots, "single", encoded(document))
+    result = validate_offline(snapshots)
+    mismatched_fields = {
+        finding.field
+        for finding in result.findings
+        if finding.variant == "single" and finding.code == "configured_setting_mismatch"
+    }
+    assert mismatched_fields == ({mismatch} if mismatch is not None else set())
+
+
+@pytest.mark.parametrize(
     ("kwargs", "code"),
     [
         ({"common": {"org.example.app": None}}, "invalid_overlay_patch"),
@@ -262,6 +352,16 @@ def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
     assert validate_offline(
         inputs([], [app()], common={"org.example.app": {"name": "x"}})
     ).ok
+
+
+@pytest.mark.parametrize("variant", [{}, [], True, 1])
+def test_malformed_deny_variant_is_reported(variant: object) -> None:
+    result = validate_offline(
+        inputs(
+            deny=[{"id": "org.example.app", "reason": "excluded", "variant": variant}]
+        )
+    )
+    assert "invalid_denylist_variant" in codes(result)
 
 
 def test_stale_denial_is_allowed_and_dual_denial_exempts_coverage() -> None:
