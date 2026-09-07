@@ -62,10 +62,36 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize("command", ["verify", "report"])
-def test_commands_are_registered_but_not_yet_implemented(command: str) -> None:
-    with pytest.raises(NotImplementedError):
-        main([command])
+def test_verify_missing_inputs_fails_and_report_displays_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.chdir(tmp_path)
+    assert main(["verify"]) == 1
+    assert main(["report"]) == 0
+
+
+def test_live_verification_stops_before_network_when_offline_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    for name, value in (
+        ("deny.json", []),
+        ("overlay.json", {}),
+        ("overlay.dual.json", {}),
+        ("settings.json", {}),
+        ("http.json", {"credentials": {}}),
+    ):
+        (config / name).write_text(json.dumps(value))
+    (tmp_path / "dist").mkdir()
+    (tmp_path / "dist/single-screen.json").write_text("not json")
+    (tmp_path / "dist/dual-screen.json").write_text("not json")
+    monkeypatch.setattr(
+        "obtainium_pack.live.verify_live",
+        lambda *_: pytest.fail("live verification must not run"),
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["verify", "--live"]) == 1
 
 
 def test_build_writes_both_variants_and_report(
@@ -476,3 +502,55 @@ def test_composition_failure_preserves_collected_diagnostics(
     ]
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
+
+
+def test_offline_gate_preserves_pair_and_standalone_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    for name, value in (
+        ("deny.json", []),
+        ("overlay.json", {}),
+        ("overlay.dual.json", {}),
+        ("settings.json", {}),
+    ):
+        (config / name).write_text(json.dumps(value))
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    before = b'{"settings":{"categories":"{}"},"apps":[]}\n'
+    for name in ("single-screen.json", "dual-screen.json"):
+        (dist / name).write_bytes(before)
+    verify_path = tmp_path / ".build/verify.json"
+    verify_path.parent.mkdir()
+    verify_path.write_bytes(b'{"keep":true}\n')
+    composed = CompositionResult(
+        {variant: [] for variant in Variant}, CompositionReport()
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, report: IngestionResult([], report)
+    )
+    monkeypatch.setattr(cli, "compose", lambda *_args, **_kwargs: composed)
+    calls = 0
+
+    def render(*_args: object) -> str:
+        nonlocal calls
+        calls += 1
+        return (
+            '{"settings":{"categories":"{}"},"apps":[]}\n' if calls == 1 else "not json"
+        )
+
+    monkeypatch.setattr("obtainium_pack.build.render", render)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    assert all(
+        (dist / name).read_bytes() == before
+        for name in ("single-screen.json", "dual-screen.json")
+    )
+    assert verify_path.read_bytes() == b'{"keep":true}\n'
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "offline verification"
+    assert report["offlineVerification"]["status"] == "failed"
+    assert report["changes"] == {
+        variant.value: {"added": [], "removed": []} for variant in Variant
+    }

@@ -12,7 +12,7 @@ from obtainium_pack.build import previous_ids, publish_build
 from obtainium_pack.http import HttpClient, HttpConfig
 from obtainium_pack.merge import CompositionReport, CompositionResult, compose
 from obtainium_pack.package_id import PackageIdCache, PackageIdResolver
-from obtainium_pack.report import write_report
+from obtainium_pack.report import format_reports, write_report
 from obtainium_pack.sources import (
     IngestionReport,
     IngestionResult,
@@ -20,6 +20,7 @@ from obtainium_pack.sources import (
     ingest_all,
     load_json,
 )
+from obtainium_pack.verify import VerificationReportError, run_verification
 
 
 def build(_args: argparse.Namespace) -> int:
@@ -61,6 +62,11 @@ def build(_args: argparse.Namespace) -> int:
                 composition_report=composition_report,
                 stage=stage,
                 error=error,
+                offline_verification=(
+                    {"status": "failed", "findings": error.findings}
+                    if hasattr(error, "findings")
+                    else None
+                ),
             )
         except Exception as report_error:  # noqa: BLE001 - preserve original diagnostic
             print(
@@ -102,11 +108,24 @@ def _object_list(path: Path, source: str) -> list[dict[str, str]]:
 
 
 def verify(args: argparse.Namespace) -> int:
-    raise NotImplementedError
+    try:
+        result = run_verification(Path.cwd(), live=args.live)
+    except VerificationReportError as error:
+        print(f"verify failed: {error}", file=sys.stderr)
+        return 1
+    if result["status"] != "success":
+        print(f"verify failed with {len(result['errors'])} error(s)", file=sys.stderr)
+        return 1
+    return 0
 
 
-def report(args: argparse.Namespace) -> int:
-    raise NotImplementedError
+def report(_args: argparse.Namespace) -> int:
+    try:
+        print(format_reports(Path.cwd()), end="")
+    except ValueError as error:
+        print(f"report failed: {error}", file=sys.stderr)
+        return 1
+    return 0
 
 
 def _parser() -> argparse.ArgumentParser:

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
+from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
@@ -16,6 +17,14 @@ OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
     Variant.DUAL: "dual-screen.json",
 }
+
+
+class OfflineVerificationError(ValueError):
+    """Newly rendered output failed the pure publication gate."""
+
+    def __init__(self, findings: list[dict[str, Any]]) -> None:
+        super().__init__(f"offline verification failed with {len(findings)} finding(s)")
+        self.findings = findings
 
 
 def previous_ids(root: Path) -> dict[Variant, set[str]]:
@@ -56,11 +65,43 @@ def publish_build(
         variant: render(composition.apps[variant], settings).encode()
         for variant in Variant
     }
+    from obtainium_pack.offline import OfflineInputs, validate_offline
     from obtainium_pack.report import write_report
 
     if on_stage is not None:
+        on_stage("offline verification")
+    config_paths = (
+        "config/deny.json",
+        "config/overlay.json",
+        "config/overlay.dual.json",
+    )
+    snapshots = [(root / path).read_bytes() for path in config_paths]
+    result = validate_offline(
+        OfflineInputs(
+            rendered[Variant.SINGLE],
+            rendered[Variant.DUAL],
+            snapshots[0],
+            snapshots[1],
+            snapshots[2],
+            (root / "config/settings.json").read_bytes(),
+        )
+    )
+    findings = [
+        {key: value for key, value in asdict(item).items() if value is not None}
+        for item in result.findings
+    ]
+    if findings:
+        raise OfflineVerificationError(findings)
+
+    if on_stage is not None:
         on_stage("report writing")
-    write_report(root, before, composition, ingestion)
+    write_report(
+        root,
+        before,
+        composition,
+        ingestion,
+        offline_verification={"status": "success", "findings": []},
+    )
     if on_stage is not None:
         on_stage("publication")
     _replace_pair(root / "dist", rendered)

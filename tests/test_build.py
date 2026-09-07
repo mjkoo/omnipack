@@ -51,6 +51,17 @@ def write_previous(root: Path, single: object | None, dual: object | None) -> No
             (root / "dist" / name).write_text(json.dumps(value), encoding="utf-8")
 
 
+def write_config(root: Path) -> None:
+    (root / "config").mkdir(exist_ok=True)
+    for name, value in (
+        ("deny.json", []),
+        ("overlay.json", {}),
+        ("overlay.dual.json", {}),
+        ("settings.json", {}),
+    ):
+        (root / "config" / name).write_text(json.dumps(value), encoding="utf-8")
+
+
 def test_report_compares_with_previous_output_and_keeps_source_details(
     tmp_path: Path,
 ) -> None:
@@ -59,6 +70,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         {"apps": [{"id": "old.id"}, {"id": "kept.id"}]},
         {"apps": [{"id": "kept.id"}]},
     )
+    write_config(tmp_path)
     ingestion = IngestionReport(
         skipped=[{"source": "codm2000", "url": "https://covered"}],
         unresolved=[
@@ -96,6 +108,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
 
 
 def test_first_build_reports_every_app_added(tmp_path: Path) -> None:
+    write_config(tmp_path)
     build_module.publish_build(
         tmp_path, composition("one", "two"), {}, IngestionReport()
     )
