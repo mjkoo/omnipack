@@ -135,19 +135,45 @@ def finalize_publication(
         issue = _safe_issue_call(issues.report_recovery, issue_body, secrets)
     else:
         issue = _safe_issue_call(issues.report_failure, issue_body, secrets)
-    summary = _summary(outcome, run_url, issue, secrets)
     workflow_status = (
         "success"
         if publication_status in ("published", "no-op") and issue.status != "failed"
         else "failed"
     )
-    return FinalizationResult(
+    summary_suffix = (
+        f"\n- Workflow status: {workflow_status}\n- Diagnostic upload: pending"
+    )
+    summary = (
+        _summary(outcome, run_url, issue, secrets)[
+            : SUMMARY_LIMIT - len(summary_suffix)
+        ]
+        + summary_suffix
+    )
+    finalization = FinalizationResult(
         workflow_status,
         publication_status,
         issue.status,
         summary,
         artifacts,
     )
+    _record_finalization(output_dir, finalization)
+    return finalization
+
+
+def record_upload_status(output_dir: Path, status: str) -> str:
+    """Persist the artifact step outcome and return the resulting workflow status."""
+    result = output_dir / RESULT_NAME
+    try:
+        document = json.loads(result.read_bytes())
+    except _RESULT_READ_ERRORS as error:
+        raise OSError("cannot read the orchestration result") from error
+    if not isinstance(document, dict):
+        raise OSError("orchestration result is not an object")
+    document["diagnostic_upload_status"] = status
+    if status != "success":
+        document["workflow_status"] = "failed"
+    _write_json(result, document, ())
+    return str(document.get("workflow_status", "failed"))
 
 
 def finalize_setup_failure(
@@ -328,6 +354,25 @@ def _write_json(path: Path, value: object, secrets: Sequence[str]) -> Path:
     document = json.dumps(redact(value, secrets), indent=2, sort_keys=True) + "\n"
     path.write_text(document, encoding="utf-8")
     return path
+
+
+def _record_finalization(output_dir: Path, finalization: FinalizationResult) -> None:
+    result = output_dir / RESULT_NAME
+    try:
+        document = json.loads(result.read_bytes())
+    except _RESULT_READ_ERRORS as error:
+        raise OSError("cannot update the orchestration result") from error
+    if not isinstance(document, dict):
+        raise OSError("orchestration result is not an object")
+    document.update(
+        {
+            "publication_status": finalization.publication_status,
+            "issue_status": finalization.issue_status,
+            "workflow_status": finalization.workflow_status,
+            "diagnostic_upload_status": "pending",
+        }
+    )
+    _write_json(result, document, ())
 
 
 def _redact_url(value: str) -> str:
