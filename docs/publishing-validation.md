@@ -8,12 +8,18 @@ successful live nightly refresh or a GitHub Actions dispatch.
 
 | Check | Result |
 | --- | --- |
-| Focused `tests/test_nightly_*.py` suite | 67 passed |
-| `just check-all` | Passed, including all 637 Python tests |
+| Focused `tests/test_nightly_*.py` suite with scoped `init.defaultBranch=master` | 78 passed |
+| `just check-all` | Passed, including all 648 Python tests |
 | `actionlint .github/workflows/nightly.yml` | Passed with actionlint 1.7.12 |
 | `zizmor --persona pedantic .github/workflows/nightly.yml` | No findings with zizmor 1.30.0 |
 | Runtime-independent entrypoint and reporting syntax | Python 3.10 grammar accepted |
-| Distribution and configuration integrity | SHA-256 comparison unchanged for every file; no Git diff |
+| Distribution and configuration integrity | All 11 file SHA-256 hashes unchanged; no Git diff |
+
+These are the final results after review fixes. The focused suite took 16.88
+seconds; the Python suite in `just check-all` took 20.44 seconds. The Git default
+was set only for the focused test process using `GIT_CONFIG_COUNT=1`,
+`GIT_CONFIG_KEY_0=init.defaultBranch`, and `GIT_CONFIG_VALUE_0=master`; no user
+Git configuration changed.
 
 `just check-all` included lock consistency, formatting, lint, types, dependency
 audit, source/wheel builds, tests, offline pack verification, workflow lint,
@@ -28,10 +34,25 @@ checks. These tool notices do not establish validation on other platforms.
 | Surface | Representative proving tests |
 | --- | --- |
 | Fresh gates and exact bytes | `test_refresh_orders_checks_build_and_metadata_only_verification`, `test_bad_live_evidence_rejects_candidate`, `test_candidate_rejects_staged_content_mismatch` |
+| Byte-only publication and staging races | `test_candidate_ignores_mode_changes_and_preserves_base_mode`, `test_publication_uses_byte_changes_without_mode_drift`, `test_candidate_rejects_unrelated_mutation_after_capture` |
+| Selected-revision verifier contracts | `test_retry_validates_evidence_with_selected_revision_runtime` |
 | Publication and retry races | `test_publishes_one_allowlisted_commit_with_metadata`, `test_main_advancement_discards_candidate_and_runs_fresh_attempt`, `test_lost_push_ack_is_reconciled_by_remote_ancestry` |
 | Issue ownership and recovery | `test_failure_discovers_every_page_and_normalizes_owned_issues`, `test_ambiguous_create_rediscovers_before_any_retry`, `test_published_result_survives_issue_failure_and_later_success_retries_closure` |
 | Redaction and artifact selection | `test_diagnostics_are_per_attempt_redacted_and_identify_missing_reports`, `test_artifact_selection_is_an_explicit_regular_file_allowlist` |
+| Cleanup after confirmed publication | `test_cleanup_failure_preserves_confirmed_publication_and_fails_workflow` |
 | Workflow boundary | `test_system_python_module_entrypoint_does_not_import_project_runtime`, `test_helper_fallback_reloads_confirmed_outcome_instead_of_resetting_it`, `test_upload_outcome_updates_persistent_result_and_summary` |
+
+The regression tests reproduced mode-only commits, executable-bit drift,
+unrelated tracked mutations after capture and during staging, cleanup errors
+escaping after a successful push, valid newer-revision evidence being rejected,
+and Git fixtures failing under a master default before the fixes. Each passes
+with the fixes. The mode cases also check actual local remote commit counts
+and tree modes. The selected-revision test executes copied committed runtime
+source in separate Python processes, advances verifier identity, schema, and an
+input path, accepts matching evidence, and rejects each old-contract mismatch.
+The cleanup test exercises the workflow entrypoint and helper fallback after a
+real local push: workflow failure stays visible, confirmed SHA and both reports
+survive, and the existing issue-recovery policy creates no failure issue.
 
 Process/API responses are controlled, and real Git transport tests use only
 temporary local repositories. No test pushed to GitHub, created a real issue,
