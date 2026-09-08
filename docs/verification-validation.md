@@ -43,8 +43,12 @@ asset downloads as evidence when it already needs them.
 `just check-all` passed at implementation commit `866975a`: 503 tests, 91%
 coverage, offline validation of both committed packs, format/lint/type and lock
 checks, dependency audit, Python distribution builds, workflow checks, Nix
-formatting and native flake checks. Verifier identity is `0.2.0`; report schema
+formatting and native flake checks. That run used verifier identity `0.2.0`; report schema
 remains `1` with distinct `offline`, `live` and `live-probe` modes.
+
+Verifier identity `0.2.1` additionally preserves bounded server cooldowns after
+retry exhaustion and rejects ambiguous leading closing brackets in regex
+character classes. Reports from `0.2.0` are stale under this identity.
 
 The fixtures prove request reuse, zero routine asset requests, authenticated
 conditional revalidation, pacing through redirects and retries, host suppression,

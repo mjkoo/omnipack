@@ -140,7 +140,7 @@ def test_malformed_verification_records_are_rejected(
 def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
-    report["verifier"]["version"] = "future"
+    report["verifier"]["version"] = "0.2.0"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
 

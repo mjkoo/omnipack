@@ -16,7 +16,7 @@ from obtainium_pack.offline import Finding, OfflineInputs, validate_offline
 from obtainium_pack.settings_defaults import OBTAINIUM_VERSION
 
 SCHEMA_VERSION = 1
-VERIFIER_VERSION = "0.2.0"
+VERIFIER_VERSION = "0.2.1"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),
