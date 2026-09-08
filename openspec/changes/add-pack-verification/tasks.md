@@ -12,7 +12,7 @@
 
 ## 2. Offline artifact validation
 
-- [ ] 2.1 Implement validation of both serialized documents, required app fields,
+- [x] 2.1 Implement validation of both serialized documents, required app fields,
   finite JSON values, source types, unique ids and string-encoded settings. Test
   missing files, malformed roots/entries, object-valued additional settings,
   duplicate ids, missing defaults, wrong known types, unknown retained fields,
@@ -42,7 +42,7 @@
 
 ## 4. Version extraction and GitHub resolution
 
-- [ ] 4.1 Implement compatible version extraction and unsupported-pattern
+- [x] 4.1 Implement compatible version extraction and unsupported-pattern
   diagnostics. Test last-match selection, default group, numeric and `$N` group
   templates, concatenation, optional and escaped groups, invalid groups, no match,
   empty output and incompatible regex constructs. Include the actual PPSSPP and
@@ -66,7 +66,7 @@
   relative URLs, JSON/raw-text extraction, decoding and configured headers. Test
   redirected relative bases, text-vs-URL filters, escaped JSON URLs, alphanumeric
   order, last-segment order and independent skip/reverse behavior.
-- [ ] 5.2 Implement intermediate traversal and final candidate selection. Test
+- [x] 5.2 Implement intermediate traversal and final candidate selection. Test
   the Play! and RetroArch step chains, last-link selection at each stage, empty
   intermediate matches, installable empty final matches, excessive depth and
   ignored empty step filters under the pinned baseline. Assert no alternate older link rescues a failed probe.
@@ -82,7 +82,7 @@
 
 ## 6. Live orchestration and version lint
 
-- [ ] 6.1 Orchestrate metadata-only live resolution and opt-in bounded candidate probes, with
+- [x] 6.1 Orchestrate metadata-only live resolution and opt-in bounded candidate probes, with
   track-only exemption and per-variant findings. Test first-candidate failure
   followed by success, every candidate failing, no older-release rescue,
   same-id different-variant configurations and equivalent-input request reuse
@@ -96,18 +96,18 @@
   regex/title values that remain nonnumeric, and separate classifications for
   track-only, disabled detection and intentional date versions. Assert warnings
   alone leave verification successful.
-- [ ] 6.3 Collect independent live failures and avoid persistent success reuse.
+- [x] 6.3 Collect independent live failures and avoid persistent success reuse.
   Test two entries failing at different stages while later entries still run,
   a cached package id not masking a dead source, and a second invocation making
   fresh requests despite a successful prior report.
 
 ## 7. Evidence and command integration
 
-- [ ] 7.1 Implement versioned verification evidence, exact-byte input fingerprints,
+- [x] 7.1 Implement versioned verification evidence, exact-byte input fingerprints,
   running/incomplete records, atomic completion and redaction. Test missing inputs,
   interrupted attempts, successful and failed completions, report write errors,
   changed inputs during a run, and absence of secret values in serialized reports.
-- [ ] 7.2 Implement `pack verify`, metadata-only `pack verify --live`, and explicit
+- [x] 7.2 Implement `pack verify`, metadata-only `pack verify --live`, and explicit
   `pack verify --live --probe-assets`; reject probing without live mode. Test exit codes,
   warning-only success, absent build report, offline errors preventing all live
   requests, no-network offline operation, concise stderr on report failure, and
@@ -117,7 +117,7 @@
   bytes preserving both old files, first-run rejection leaving no files,
   candidate diff and earlier diagnostics surviving failure, `not-run` on early
   failure, retained package-id work and untouched standalone verification evidence.
-- [ ] 7.4 Implement human-readable `pack report`. Distinguish offline, metadata-only
+- [x] 7.4 Implement human-readable `pack report`. Distinguish offline, metadata-only
   live and live-probe evidence. Test current and stale
   fingerprints, changed verifier identity, incomplete runs, observation time and
   mode, build-only/verification-only reports, missing-both and corrupt/unsupported
@@ -129,15 +129,15 @@
 - [x] 8.1 Add offline verification of committed dist to ordinary CI using the
   existing uv/just conventions. Verify the workflow does not run upstream builds
   or live checks and passes actionlint plus the project's normal check suite.
-- [ ] 8.2 Update README, version-detection documentation and verification usage
+- [x] 8.2 Update README, version-detection documentation and verification usage
   docs. Verify they describe implemented commands, supported settings, warning
   policy, report freshness and the reachability/device limits without claiming
   all numeric-version re-imports necessarily cause an update.
-- [ ] 8.3 Run the complete fixture integration and repository checks. Verify both
+- [x] 8.3 Run the complete fixture integration and repository checks. Verify both
   committed variants pass offline validation, all supported resolution patterns
   have end-to-end fixture evidence, and previous ingestion/cache/publication
   behavior has not regressed.
-- [ ] 8.4 Preserve the completed full live observations and inspected error/warning
+- [x] 8.4 Preserve the completed full live observations and inspected error/warning
   evidence, clearly labeled as historical comprehensive-probe behavior.
   Record timestamp, compatibility/verifier identity, input hashes, aggregate
   results and unresolved blockers in durable validation documentation. Verify
@@ -150,14 +150,14 @@
 
 ## 9. Polite metadata verification
 
-- [ ] 9.1 Add live-specific per-host pacing through retries and redirects, require
+- [x] 9.1 Add live-specific per-host pacing through retries and redirects, require
   configured GitHub authentication, honor bounded server retry delays, and stop
   contacting rate-limited hosts within a run. Test with injected time/transport,
   including unrelated hosts continuing, without adding delays to ordinary builds.
-- [ ] 9.2 Add bounded GitHub conditional metadata caching with fresh authenticated
+- [x] 9.2 Add bounded GitHub conditional metadata caching with fresh authenticated
   304 revalidation, malformed-cache fallback and no stale success on failures.
   Test no credential persistence and no persistent probe or verification-success cache.
-- [ ] 9.3 Prove metadata-only commands send no asset requests; shared repository
+- [x] 9.3 Prove metadata-only commands send no asset requests; shared repository
   metadata is selected independently per variant; duplicate metadata/probe failures
   are reused; probes use selected URLs without another latest-release lookup.
   Record fixture request counts and the guarantee's limits in durable docs.

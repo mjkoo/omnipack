@@ -38,6 +38,25 @@ repeating a full live pull solely to validate code changes. Metadata success doe
 not prove unchanged downloads remain reachable. Future publishing can use actual
 asset downloads as evidence when it already needs them.
 
+## Current implementation checks
+
+`just check-all` passed at implementation commit `866975a`: 503 tests, 91%
+coverage, offline validation of both committed packs, format/lint/type and lock
+checks, dependency audit, Python distribution builds, workflow checks, Nix
+formatting and native flake checks. Verifier identity is `0.2.0`; report schema
+remains `1` with distinct `offline`, `live` and `live-probe` modes.
+
+The fixtures prove request reuse, zero routine asset requests, authenticated
+conditional revalidation, pacing through redirects and retries, host suppression,
+no repeated permanent failures, and bounded redirect/final response reads.
+Malformed configuration and reports fail with actionable diagnostics. Historical
+live observations remain below; the changed request policy was verified with
+controlled transports, without another comprehensive upstream pull.
+
+Distribution/configuration/package-id-cache and build-report bytes still match
+the pre-validation snapshots. Expected check notices are limited to Nix omitting
+nonnative systems and zizmor using its normal offline mode.
+
 ## Refreshed observation after diagnostic and schema fixes
 
 `uv run pack verify --live` completed from 2026-09-07T21:52:00.700360+00:00 to 2026-09-07T21:53:26.175669+00:00
