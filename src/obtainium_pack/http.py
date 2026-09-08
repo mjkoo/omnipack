@@ -108,6 +108,9 @@ class HttpClient:
         backoff: float = 0.5,
         sleep: Callable[[float], None] = time.sleep,
         transport: Transport | None = None,
+        request_gate: Callable[[str], None] | None = None,
+        returned_http_statuses: frozenset[int] = frozenset(),
+        response_hook: Callable[[HttpResponse], None] | None = None,
     ) -> None:
         if retries < 0 or backoff < 0:
             raise ValueError("retries and backoff must be nonnegative")
@@ -118,6 +121,9 @@ class HttpClient:
         self.backoff = backoff
         self.sleep = sleep
         self.transport = transport or self._urllib_transport
+        self.request_gate = request_gate
+        self.returned_http_statuses = returned_http_statuses
+        self.response_hook = response_hook
 
     def get(
         self,
@@ -180,11 +186,16 @@ class HttpClient:
         for attempt in range(attempts):
             request = self.build_request(url, headers=headers, method=method)
             try:
+                self.gate_request(request.full_url)
                 if prefix:
-                    return self._urllib_transport(
+                    response = self._urllib_transport(
                         request, self.timeout, max_bytes, prefix=True
                     )
-                return self.transport(request, self.timeout, max_bytes)
+                else:
+                    response = self.transport(request, self.timeout, max_bytes)
+                if self.response_hook is not None:
+                    self.response_hook(response)
+                return response
             except (OSError, HTTPException) as error:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
@@ -195,6 +206,11 @@ class HttpClient:
                     ) from error
                 self.sleep(self.backoff * (2**attempt))
         raise AssertionError("request loop did not return or raise")
+
+    def gate_request(self, url: str) -> None:
+        """Apply an optional policy immediately before a real request."""
+        if self.request_gate is not None:
+            self.request_gate(url)
 
     def build_request(
         self,
@@ -238,6 +254,7 @@ class HttpClient:
             new_url, headers=headers, method=request.method
         )
         self._set_authorization(redirected)
+        self.gate_request(redirected.full_url)
         return redirected
 
     def _set_authorization(self, request: urllib.request.Request) -> None:
@@ -256,18 +273,33 @@ class HttpClient:
         prefix: bool = False,
     ) -> HttpResponse:
         opener = urllib.request.build_opener(_CredentialRedirectHandler(self))
-        with opener.open(request, timeout=timeout) as stream:
+        stream: Any
+        try:
+            stream = opener.open(request, timeout=timeout)
+        except urllib.error.HTTPError as error:
+            if error.code not in self.returned_http_statuses:
+                raise
+            stream = error
+        with stream:
             if prefix:
+                assert max_bytes is not None
                 body = stream.read(max_bytes)
             else:
-                body = stream.read(None if max_bytes is None else max_bytes + 1)
+                body = (
+                    stream.read() if max_bytes is None else stream.read(max_bytes + 1)
+                )
             if not prefix and max_bytes is not None and len(body) > max_bytes:
                 raise HttpError(
                     f"response from {redact_url(stream.url)} exceeds {max_bytes} bytes"
                 )
+            status = stream.status
+            if not isinstance(status, int):
+                raise HttpError(
+                    f"response from {redact_url(stream.url)} has no HTTP status"
+                )
             return HttpResponse(
                 url=stream.url,
-                status=stream.status,
+                status=status,
                 headers=stream.headers,
                 body=body,
             )

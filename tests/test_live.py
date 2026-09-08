@@ -10,7 +10,13 @@ from urllib.request import Request
 
 import pytest
 
-from obtainium_pack.http import PROBE_BYTES, HttpClient, HttpConfig, HttpResponse
+from obtainium_pack.http import (
+    PROBE_BYTES,
+    HttpClient,
+    HttpConfig,
+    HttpError,
+    HttpResponse,
+)
 from obtainium_pack.live import VersionClass, classify_version, verify_live
 from obtainium_pack.offline import ValidatedEntry
 from obtainium_pack.resolution.types import ResolutionResult
@@ -124,7 +130,7 @@ def test_github_probes_candidates_until_success_and_warns_for_prior_failure() ->
         }
     )
 
-    result = verify_live({"single": (github_entry(),)}, http)
+    result = verify_live({"single": (github_entry(),)}, http, probe_assets=True)
 
     assert result.ok
     entry = result.entries[0]
@@ -157,7 +163,11 @@ def test_all_candidates_failing_is_one_entry_error_and_later_entries_continue() 
         }
     )
 
-    result = verify_live({"single": (github_entry(), html_entry(page, "single"))}, http)
+    result = verify_live(
+        {"single": (github_entry(), html_entry(page, "single"))},
+        http,
+        probe_assets=True,
+    )
 
     assert not result.ok
     assert [error.code for error in result.entries[0].errors] == [
@@ -199,6 +209,7 @@ def test_resolution_and_probe_failures_are_both_collected_before_later_success()
             )
         },
         http,
+        probe_assets=True,
     )
 
     assert [entry.ok for entry in result.entries] == [False, False, True]
@@ -255,7 +266,7 @@ def test_malformed_candidate_url_is_recorded_without_stopping_later_probe() -> N
         }
     )
 
-    result = verify_live({"single": (github_entry(),)}, http)
+    result = verify_live({"single": (github_entry(),)}, http, probe_assets=True)
 
     assert result.ok
     assert [probe.success for probe in result.entries[0].probes] == [False, True]
@@ -327,7 +338,7 @@ def test_identical_resolution_inputs_reuse_metadata_but_keep_entry_results() -> 
         "dual": (github_entry("dual"),),
     }
 
-    result = verify_live(entries, http)
+    result = verify_live(entries, http, probe_assets=True)
 
     counts = Counter(request.full_url for request in transport.requests)
     assert result.ok
@@ -336,7 +347,108 @@ def test_identical_resolution_inputs_reuse_metadata_but_keep_entry_results() -> 
         ("dual", "org.example.app"),
     }
     assert counts[releases_url] == 1
-    assert counts[apk] == 2
+    assert counts[apk] == 1
+    assert all(entry.probes[0].success for entry in result.entries)
+
+
+def test_metadata_only_resolves_candidates_without_asset_requests() -> None:
+    releases_url = "https://api.github.com/repos/example/app/releases?per_page=100"
+    apk = "https://downloads.example/app.apk"
+    http, transport = client(
+        {
+            releases_url: [
+                response(releases_url, json.dumps([release("v1.2", apk)]).encode())
+            ]
+        }
+    )
+
+    result = verify_live({"single": (github_entry(),)}, http)
+
+    assert result.ok
+    assert result.entries[0].probes == ()
+    assert result.entries[0].resolution is not None
+    assert [item.url for item in result.entries[0].resolution.candidates] == [apk]
+    assert [request.full_url for request in transport.requests] == [releases_url]
+
+
+def test_identical_metadata_failures_are_cached_with_per_entry_findings() -> None:
+    releases_url = "https://api.github.com/repos/example/app/releases?per_page=100"
+    http, transport = client(
+        {
+            releases_url: [
+                urllib.error.URLError("offline"),
+                urllib.error.URLError("offline"),
+            ]
+        }
+    )
+    entries = {
+        "single": (github_entry("single"),),
+        "dual": (github_entry("dual"),),
+    }
+
+    result = verify_live(entries, http)
+
+    assert not result.ok
+    assert len(result.entries) == 2
+    assert all(
+        entry.errors[0].code == "github-request-failed" for entry in result.entries
+    )
+    assert [entry.errors[0].variant for entry in result.entries] == ["single", "dual"]
+    assert (
+        Counter(request.full_url for request in transport.requests)[releases_url] == 1
+    )
+    assert not verify_live(entries, http).ok
+    assert (
+        Counter(request.full_url for request in transport.requests)[releases_url] == 2
+    )
+
+
+def test_wrapped_metadata_failure_keeps_actionable_reason() -> None:
+    releases_url = "https://api.github.com/repos/example/app/releases?per_page=100"
+    reason = "authenticated GitHub metadata requires a configured credential"
+    http, _ = client({releases_url: [HttpError(reason)]})
+
+    result = verify_live({"single": (github_entry(),)}, http)
+
+    assert not result.ok
+    assert reason in result.errors[0].message
+
+
+def test_identical_probe_failures_are_cached_with_per_entry_evidence() -> None:
+    releases_url = "https://api.github.com/repos/example/app/releases?per_page=100"
+    apk = "https://downloads.example/dead.apk"
+    http, transport = client(
+        {
+            releases_url: [
+                response(releases_url, json.dumps([release("v1.2", apk)]).encode()),
+                response(releases_url, json.dumps([release("v1.2", apk)]).encode()),
+            ],
+            apk: [
+                urllib.error.URLError("offline"),
+                urllib.error.URLError("offline"),
+            ],
+        }
+    )
+    entries = {
+        "single": (github_entry("single"),),
+        "dual": (github_entry("dual"),),
+    }
+
+    result = verify_live(
+        entries,
+        http,
+        probe_assets=True,
+    )
+
+    assert not result.ok
+    assert len(result.entries) == 2
+    assert all(entry.probes[0].failure_reason for entry in result.entries)
+    assert [entry.errors[0].variant for entry in result.entries] == ["single", "dual"]
+    counts = Counter(request.full_url for request in transport.requests)
+    assert counts[releases_url] == counts[apk] == 1
+    assert not verify_live(entries, http, probe_assets=True).ok
+    counts = Counter(request.full_url for request in transport.requests)
+    assert counts[releases_url] == counts[apk] == 2
 
 
 def test_different_settings_reuse_same_metadata_request_but_resolve_separately() -> (
@@ -356,7 +468,7 @@ def test_different_settings_reuse_same_metadata_request_but_resolve_separately()
         "dual": (github_entry("dual", settings={"versionDetection": False}),),
     }
 
-    result = verify_live(entries, http)
+    result = verify_live(entries, http, probe_assets=True)
 
     assert result.entries[0].version_class is VersionClass.NUMERIC
     assert result.entries[1].version_class is VersionClass.DETECTION_DISABLED
@@ -387,6 +499,7 @@ def test_slash_distinct_html_urls_resolve_separate_versions_and_relative_bases()
             "dual": (html_entry(slash, "dual"),),
         },
         http,
+        probe_assets=True,
     )
 
     assert result.ok
@@ -458,7 +571,7 @@ def test_failed_probe_preserves_actionable_reason(
             dead: [failure],
         }
     )
-    result = verify_live({"single": (github_entry(),)}, http)
+    result = verify_live({"single": (github_entry(),)}, http, probe_assets=True)
     assert reason in (result.entries[0].probes[0].failure_reason or "")
     assert reason in result.errors[0].message
     assert "password" not in json.dumps(asdict(result))
@@ -489,7 +602,9 @@ def test_dead_selected_release_is_not_rescued_by_reachable_older_release() -> No
         }
     )
     result = verify_live(
-        {"single": (github_entry(settings={"fallbackToOlderReleases": True}),)}, http
+        {"single": (github_entry(settings={"fallbackToOlderReleases": True}),)},
+        http,
+        probe_assets=True,
     )
     assert not result.ok
     assert result.entries[0].resolution is not None
@@ -548,13 +663,15 @@ def test_seeded_package_id_cache_does_not_hide_dead_source(
             dead: [urllib.error.URLError("dead"), urllib.error.URLError("dead")],
         }
     )
-    monkeypatch.setattr("obtainium_pack.verify.HttpClient", lambda _: http)
-    result = run_verification(tmp_path, live=True)
+    monkeypatch.setattr(
+        "obtainium_pack.live_http.LiveHttpClient", lambda *_, **__: http
+    )
+    result = run_verification(tmp_path, live=True, probe_assets=True)
     assert result["status"] == "failed"
     assert len(result["entries"]) == 2
     assert all(
         entry["errors"][0]["code"] == "candidate-probes-failed"
         for entry in result["entries"]
     )
-    assert Counter(request.full_url for request in transport.requests)[dead] == 2
+    assert Counter(request.full_url for request in transport.requests)[dead] == 1
     assert cache.path.read_bytes() == before

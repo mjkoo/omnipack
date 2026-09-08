@@ -78,6 +78,24 @@ def test_metadata_uses_the_live_response_limit() -> None:
     assert transport.max_bytes == [METADATA_MAX_BYTES]
 
 
+def test_request_gate_covers_each_retry_attempt() -> None:
+    transport = RecordingTransport([OSError("temporary"), response()])
+    gated: list[str] = []
+    client = HttpClient(
+        HttpConfig({}),
+        retries=1,
+        transport=transport,
+        request_gate=gated.append,
+    )
+
+    client.get_metadata("https://example.com/releases")
+
+    assert gated == [
+        "https://example.com/releases",
+        "https://example.com/releases",
+    ]
+
+
 def test_metadata_rejects_an_oversized_real_response(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

@@ -77,10 +77,27 @@ def test_offline_cli_succeeds_without_network_or_protected_file_changes(
     )
 
 
-def test_live_warning_only_cli_succeeds_and_report_display_is_read_only(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+@pytest.mark.parametrize(
+    ("command", "request_count", "mode"),
+    [
+        (["verify", "--live"], 1, "live"),
+        (["verify", "--live", "--probe-assets"], 2, "live-probe"),
+    ],
+)
+def test_live_cli_modes_are_explicit_and_report_display_is_read_only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: list[str],
+    request_count: int,
+    mode: str,
 ) -> None:
-    before = inputs(tmp_path)
+    inputs(tmp_path)
+    (tmp_path / "config/http.json").write_text(
+        json.dumps({"credentials": {"api.github.com": "PACK_TEST_GITHUB_TOKEN"}})
+    )
+    monkeypatch.setenv("PACK_TEST_GITHUB_TOKEN", "fixture-token")
+    before = snapshot(tmp_path)
     requests = []
 
     def transport(
@@ -120,12 +137,13 @@ def test_live_warning_only_cli_succeeds_and_report_display_is_read_only(
 
     monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
     monkeypatch.chdir(tmp_path)
-    assert cli.main(["verify", "--live"]) == 0
-    assert len(requests) == 3
+    assert cli.main(command) == 0
+    assert len(requests) == request_count
     report_path = tmp_path / ".build/verify.json"
     report_bytes = report_path.read_bytes()
     report = json.loads(report_bytes)
     assert report["status"] == "success"
+    assert report["mode"] == mode
     assert len(report["warnings"]) == 2
     assert {item["code"] for item in report["warnings"]} == {"github-version-format"}
     assert snapshot(tmp_path) == before
@@ -145,7 +163,7 @@ def test_live_warning_only_cli_succeeds_and_report_display_is_read_only(
     assert (
         "Evidence: current" in output
         and "Warning:" in output
-        and "Mode: live" in output
+        and f"Mode: {mode}" in output
     )
     assert report_path.read_bytes() == report_bytes
     assert snapshot(tmp_path) == before

@@ -414,3 +414,16 @@ def test_all_seven_captured_html_fixtures_resolve_through_http() -> None:
         assert result.candidates[0].url == fixture["expected"]["selected_url"]
         assert result.effective_version == fixture["expected"]["version"]
         assert transport.requests
+
+
+def test_requested_date_version_fails_when_html_has_no_release_date() -> None:
+    with pytest.raises(ResolutionError, match="release date") as raised:
+        resolve(
+            '<a href="app-2.apk">Android</a>',
+            {
+                "versionExtractionRegEx": r"app-(\d+)",
+                "matchGroupToUse": "$1",
+                "releaseDateAsVersion": True,
+            },
+        )
+    assert raised.value.code == "version-date-missing"

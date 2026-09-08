@@ -92,7 +92,8 @@ numeric or `$N` group substitution. Invalid patterns, invalid groups, no match,
 and empty output fail. Python-only constructs, inline flags, named groups,
 atomic/conditional groups, possessive quantifiers, and unsupported Unicode
 property syntax are rejected explicitly. A configured date override runs after
-extraction and requires a usable date, represented in epoch microseconds.
+extraction and requires a usable date, represented in epoch microseconds. HTML
+resolution supplies no release date, so enabling that override produces an error.
 
 In `--live --probe-assets` mode, each download probe sends a GET Range request and reads at most 1024 bytes,
 closing the response even if the server ignores Range. Nonempty 200 or 206

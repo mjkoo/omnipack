@@ -62,6 +62,15 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
+def test_probe_assets_without_live_is_rejected(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    with pytest.raises(SystemExit) as raised:
+        main(["verify", "--probe-assets"])
+    assert raised.value.code == 2
+    assert "--probe-assets requires --live" in capsys.readouterr().err
+
+
 def test_verify_missing_inputs_fails_and_report_displays_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

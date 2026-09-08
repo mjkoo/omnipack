@@ -125,7 +125,7 @@ def format_reports(root: Path) -> str:
             "Verification report",
             f"Status: {verify['status']}",
             f"Evidence: {freshness}",
-            f"Mode: {verify['mode']}",
+            _format_verification_mode(verify),
             f"Observed: {observed}",
             f"Complete: {'yes' if verify['complete'] else 'no'}",
         ]
@@ -135,6 +135,17 @@ def format_reports(root: Path) -> str:
     else:
         sections.append("Verification report\nNo standalone verification recorded")
     return "\n\n".join(sections) + "\n"
+
+
+def _format_verification_mode(value: dict[str, Any]) -> str:
+    from obtainium_pack.verify import verifier_identity
+
+    mode = value["mode"]
+    if mode == "live-probe":
+        return "Mode: live-probe (asset probing requested)"
+    if mode == "live" and value.get("verifier") == verifier_identity():
+        return "Mode: live (metadata only; assets not probed)"
+    return f"Mode: {mode}"
 
 
 def _read_document(path: Path, label: str) -> dict[str, Any]:
@@ -173,7 +184,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
     if (
         value.get("status") not in ("running", "success", "failed")
         or not isinstance(value.get("complete"), bool)
-        or value.get("mode") not in ("offline", "live")
+        or value.get("mode") not in ("offline", "live", "live-probe")
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
         or not all(

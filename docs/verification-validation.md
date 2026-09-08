@@ -26,6 +26,13 @@ The client suppresses a host after rate limiting rather than repeatedly failing
 requests for later entries. Cached bodies require fresh revalidation; no old
 verification pass or asset probe is accepted as current evidence.
 
+The command fixture has the same repository in both variants: metadata-only
+verification sends one release request and zero asset requests; explicit
+diagnostics send that one release request plus one shared asset probe. Both
+variants retain their own results. Separate fixtures change variant settings
+while retaining one shared metadata fetch, and preserve failures without
+repeating requests.
+
 These limits are tested with controlled responses and injected time, without
 repeating a full live pull solely to validate code changes. Metadata success does
 not prove unchanged downloads remain reachable. Future publishing can use actual

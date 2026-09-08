@@ -101,18 +101,25 @@ _URL_IN_MESSAGE = re.compile(r"https?://[^\s\"'<>]+")
 
 
 def verify_live(
-    entries: Mapping[str, tuple[ValidatedEntry, ...]], http: HttpClient
+    entries: Mapping[str, tuple[ValidatedEntry, ...]],
+    http: HttpClient,
+    *,
+    probe_assets: bool = False,
 ) -> LiveResult:
-    """Resolve and probe every entry, collecting independent failures."""
+    """Resolve every entry and optionally probe its selected asset candidates."""
     cached_http = _CachingHttpClient(http)
-    resolutions: dict[tuple[str, str, str], ResolutionResult] = {}
+    resolutions: dict[
+        tuple[str, str, str], tuple[ResolutionResult | None, Exception | None]
+    ] = {}
     results: list[LiveEntryResult] = []
     errors: list[Finding] = []
     warnings: list[Finding] = []
 
     for variant_entries in entries.values():
         for entry in variant_entries:
-            result = _verify_entry(entry, cached_http, resolutions)
+            result = _verify_entry(
+                entry, cached_http, resolutions, probe_assets=probe_assets
+            )
             results.append(result)
             errors.extend(result.errors)
             warnings.extend(result.warnings)
@@ -148,7 +155,11 @@ def classify_version(
 def _verify_entry(
     entry: ValidatedEntry,
     http: _CachingHttpClient,
-    resolutions: dict[tuple[str, str, str], ResolutionResult],
+    resolutions: dict[
+        tuple[str, str, str], tuple[ResolutionResult | None, Exception | None]
+    ],
+    *,
+    probe_assets: bool,
 ) -> LiveEntryResult:
     key = (
         entry.source,
@@ -156,14 +167,21 @@ def _verify_entry(
         json.dumps(entry.settings, sort_keys=True, separators=(",", ":")),
     )
     try:
-        resolution = resolutions.get(key)
-        if resolution is None:
-            resolver = resolve_github if entry.source == "GitHub" else resolve_html
-            resolution = resolver(entry.raw, http)
-            resolutions[key] = resolution
+        outcome = resolutions.get(key)
+        if outcome is None:
+            try:
+                resolver = resolve_github if entry.source == "GitHub" else resolve_html
+                outcome = (resolver(entry.raw, http), None)
+            except (ResolutionError, HttpError, OSError, ValueError) as error:
+                outcome = (None, error)
+            resolutions[key] = outcome
+        resolution, resolution_error = outcome
+        if resolution_error is not None:
+            raise resolution_error
+        assert resolution is not None
     except ResolutionError as error:
         finding = _finding(
-            entry, "resolution", error.code, _sanitize_message(str(error))
+            entry, "resolution", error.code, _resolution_failure_message(error)
         )
         return LiveEntryResult(
             entry.variant,
@@ -202,7 +220,7 @@ def _verify_entry(
 
     probes: list[ProbeEvidence] = []
     entry_errors: list[Finding] = []
-    if entry.settings.get("trackOnly") is not True:
+    if probe_assets and entry.settings.get("trackOnly") is not True:
         succeeded = False
         for candidate in resolution.candidates:
             try:
@@ -315,24 +333,53 @@ def _safe_redact_url(url: str) -> str:
 
 
 class _CachingHttpClient(HttpClient):
-    """Invocation-local exact metadata cache with uncached bounded probes."""
+    """Invocation-local exact cache for metadata and optional asset probes."""
 
     def __init__(self, delegate: HttpClient) -> None:
         self._delegate = delegate
-        self._metadata: dict[tuple[str, tuple[tuple[str, str], ...]], HttpResponse] = {}
+        self._metadata: dict[
+            tuple[str, tuple[tuple[str, str], ...]],
+            tuple[HttpResponse | None, Exception | None],
+        ] = {}
+        self._probes: dict[
+            tuple[str, tuple[tuple[str, str], ...]],
+            tuple[HttpResponse | None, Exception | None],
+        ] = {}
 
     def get_metadata(
         self, url: str, *, headers: Mapping[str, str] | None = None
     ) -> HttpResponse:
         key = (url, tuple(sorted((headers or {}).items())))
         if key not in self._metadata:
-            self._metadata[key] = self._delegate.get_metadata(url, headers=headers)
-        return self._metadata[key]
+            self._metadata[key] = self._call(
+                self._delegate.get_metadata, url, headers=headers
+            )
+        return self._unwrap(self._metadata[key])
 
     def probe(
         self, url: str, *, headers: Mapping[str, str] | None = None
     ) -> HttpResponse:
-        return self._delegate.probe(url, headers=headers)
+        key = (url, tuple(sorted((headers or {}).items())))
+        if key not in self._probes:
+            self._probes[key] = self._call(self._delegate.probe, url, headers=headers)
+        return self._unwrap(self._probes[key])
+
+    @staticmethod
+    def _call(
+        method: Any, url: str, *, headers: Mapping[str, str] | None
+    ) -> tuple[HttpResponse | None, Exception | None]:
+        try:
+            return method(url, headers=headers), None
+        except (HttpError, OSError, ValueError) as error:
+            return None, error
+
+    @staticmethod
+    def _unwrap(outcome: tuple[HttpResponse | None, Exception | None]) -> HttpResponse:
+        response, error = outcome
+        if error is not None:
+            raise error
+        assert response is not None
+        return response
 
 
 def _probe_failure_reason(error: Exception) -> str:
@@ -349,3 +396,13 @@ def _probe_failure_reason(error: Exception) -> str:
         detail = ""
     message = str(error) or type(error).__name__
     return _sanitize_message(f"{message}: {detail}" if detail else message)
+
+
+def _resolution_failure_message(error: ResolutionError) -> str:
+    message = str(error)
+    cause = error.__cause__
+    if cause is not None:
+        detail = str(cause)
+        if detail and detail not in message:
+            message = f"{message}: {detail}"
+    return _sanitize_message(message)

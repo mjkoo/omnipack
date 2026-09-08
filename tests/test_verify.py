@@ -70,7 +70,7 @@ def test_secret_and_url_values_are_redacted_from_upstream_failure(
 
     monkeypatch.setattr(
         "obtainium_pack.live.verify_live",
-        lambda *_: (_ for _ in ()).throw(
+        lambda *_, **__: (_ for _ in ()).throw(
             Failure(f"https://user:{token}@example.test/file?token={token} {token}")
         ),
     )
@@ -149,7 +149,7 @@ def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
     )
     monkeypatch.setattr(
         "obtainium_pack.live.verify_live",
-        lambda *_: LiveResult((entry,), (finding,), ()),
+        lambda *_, **__: LiveResult((entry,), (finding,), ()),
     )
     result = verify.run_verification(tmp_path, live=True)
     serialized = (tmp_path / verify.VERIFY_PATH).read_text()
@@ -157,3 +157,8 @@ def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
     assert result["entries"][0]["probes"][0]["name"] == "REDACTED"
     if "[malformed" in url:
         assert "<invalid-url>" in serialized
+
+
+def test_probe_assets_requires_live_mode(tmp_path: Path) -> None:
+    with pytest.raises(ValueError, match="require live"):
+        verify.run_verification(tmp_path, probe_assets=True)

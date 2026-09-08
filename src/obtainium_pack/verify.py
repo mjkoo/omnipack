@@ -11,12 +11,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from obtainium_pack.http import HttpClient, HttpConfig, redact_url
+from obtainium_pack.http import HttpConfig, redact_url
 from obtainium_pack.offline import Finding, OfflineInputs, validate_offline
 from obtainium_pack.settings_defaults import OBTAINIUM_VERSION
 
 SCHEMA_VERSION = 1
-VERIFIER_VERSION = "0.1.0"
+VERIFIER_VERSION = "0.2.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),
@@ -61,12 +61,17 @@ def capture_inputs(
     return snapshots, fingerprints
 
 
-def run_verification(root: Path, *, live: bool = False) -> dict[str, Any]:
+def run_verification(
+    root: Path, *, live: bool = False, probe_assets: bool = False
+) -> dict[str, Any]:
     """Verify one captured snapshot and atomically record its evidence."""
+    if probe_assets and not live:
+        raise ValueError("asset probes require live verification")
     started = _now()
     snapshots, fingerprints = capture_inputs(root)
     secrets = _secret_values(snapshots["http"])
-    report = _base_report("live" if live else "offline", started, fingerprints)
+    mode = "live-probe" if probe_assets else "live" if live else "offline"
+    report = _base_report(mode, started, fingerprints)
     _write_atomic(root / VERIFY_PATH, report, secrets)
     offline_result = validate_offline(
         OfflineInputs(
@@ -101,9 +106,15 @@ def run_verification(root: Path, *, live: bool = False) -> dict[str, Any]:
     if live and offline_result.ok:
         try:
             from obtainium_pack.live import verify_live
+            from obtainium_pack.live_http import LiveHttpClient
 
             result = verify_live(
-                offline_result.entries, HttpClient(_http_config(snapshots["http"]))
+                offline_result.entries,
+                LiveHttpClient(
+                    _http_config(snapshots["http"]),
+                    cache_dir=root / ".build/live-http-cache",
+                ),
+                probe_assets=probe_assets,
             )
             report["entries"] = [_plain(item) for item in result.entries]
             report["errors"].extend(

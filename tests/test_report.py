@@ -83,6 +83,22 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
     assert "Observed: 2026-09-01T00:00:00+00:00" in output
 
 
+def test_asset_checked_mode_is_distinct_from_metadata_only(tmp_path: Path) -> None:
+    copy_inputs(tmp_path)
+    report = run_verification(tmp_path)
+    report["mode"] = "live-probe"
+    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    assert "Mode: live-probe (asset probing requested)" in format_reports(tmp_path)
+
+
+def test_current_metadata_only_mode_says_assets_were_not_probed(tmp_path: Path) -> None:
+    copy_inputs(tmp_path)
+    report = run_verification(tmp_path)
+    report["mode"] = "live"
+    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    assert "Mode: live (metadata only; assets not probed)" in format_reports(tmp_path)
+
+
 @pytest.mark.parametrize(
     "mutation",
     [
