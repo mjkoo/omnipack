@@ -116,6 +116,7 @@ def resolve_html(app: Mapping[str, object], http: HttpClient) -> ResolutionResul
         "whole-page" if settings.get("versionExtractWholePage") is True else "url",
         candidates,
         {"kind": "page", "url": response.url, "selected_url": selected_url},
+        request_headers=tuple(headers.items()),
     )
 
 

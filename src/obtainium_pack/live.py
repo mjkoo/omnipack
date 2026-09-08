@@ -225,7 +225,9 @@ def _verify_entry(
         succeeded = False
         for candidate in resolution.candidates:
             try:
-                response = http.probe(candidate.url)
+                response = http.probe(
+                    candidate.url, headers=dict(resolution.request_headers)
+                )
             except (HttpError, OSError, ValueError) as error:
                 probes.append(
                     ProbeEvidence(

@@ -710,3 +710,39 @@ def test_seeded_package_id_cache_does_not_hide_dead_source(
     )
     assert Counter(request.full_url for request in transport.requests)[dead] == 1
     assert cache.path.read_bytes() == before
+
+
+def test_html_probes_preserve_headers_and_cache_each_header_configuration() -> None:
+    page = "https://example.test/releases/"
+    asset = page + "app-1.2.apk"
+    entries = []
+    for variant, agent in (("single", "Agent-One"), ("dual", "Agent-Two")):
+        entry = html_entry(page, variant)
+        entry.settings["requestHeader"] = [{"requestHeader": f"User-Agent: {agent}"}]
+        entry.raw["additionalSettings"] = json.dumps(entry.settings)
+        entries.append(entry)
+    requests = []
+
+    def transport(
+        request: Request, timeout: float, max_bytes: int | None
+    ) -> HttpResponse:
+        agent = request.get_header("User-agent")
+        requests.append((request.full_url, agent))
+        if agent not in {"Agent-One", "Agent-Two"}:
+            raise HttpError("configured User-Agent required")
+        body = b"apk" if request.full_url == asset else b'<a href="app-1.2.apk">APK</a>'
+        return response(request.full_url, body)
+
+    result = verify_live(
+        {"single": (entries[0], entries[0]), "dual": (entries[1],)},
+        HttpClient(HttpConfig({}), transport=transport),
+        probe_assets=True,
+    )
+    assert result.ok
+    assert len(result.entries) == 3
+    assert requests == [
+        (page, "Agent-One"),
+        (asset, "Agent-One"),
+        (page, "Agent-Two"),
+        (asset, "Agent-Two"),
+    ]

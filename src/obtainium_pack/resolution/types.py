@@ -33,3 +33,4 @@ class ResolutionResult:
     selected: dict[str, Any] | None = None
     inspected_count: int | None = None
     window_limit: int | None = None
+    request_headers: tuple[tuple[str, str], ...] = ()

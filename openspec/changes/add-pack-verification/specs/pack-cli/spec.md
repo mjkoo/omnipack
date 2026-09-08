@@ -35,6 +35,12 @@ diff. Building SHALL NOT replace `.build/verify.json` or claim live health.
 - **WHEN** source ingestion fails
 - **THEN** the build report identifies ingestion failure and verification as not run
 
+#### Scenario: Build fails after successful verification
+
+- **WHEN** offline verification passes and report writing or publication fails
+- **THEN** the failure report retains the successful offline verdict and identifies
+  the later failing stage
+
 ### Requirement: The verify command inspects existing output
 
 The system SHALL implement `pack verify` to check both current distribution

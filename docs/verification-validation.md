@@ -50,6 +50,11 @@ Verifier identity `0.2.1` additionally preserves bounded server cooldowns after
 retry exhaustion and rejects ambiguous leading closing brackets in regex
 character classes. Reports from `0.2.0` are stale under this identity.
 
+Verifier identity `0.2.2` preserves configured non-secret HTML headers during
+asset probes, with separate probe caching for different header values. Build
+failure reports also retain a successful offline verdict when a later stage
+fails. Earlier verifier identities are stale under this identity.
+
 The fixtures prove request reuse, zero routine asset requests, authenticated
 conditional revalidation, pacing through redirects and retries, host suppression,
 no repeated permanent failures, and bounded redirect/final response reads.

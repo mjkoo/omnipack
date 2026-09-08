@@ -322,6 +322,13 @@ SHALL exclude secret header values and redact URL credentials and query values.
 - **THEN** the destination receives no API credential
 - **AND** the report contains no token value
 
+#### Scenario: HTML downloads require configured headers
+
+- **WHEN** an HTML entry configures non-secret request headers and asset probing
+  is enabled
+- **THEN** both metadata requests and selected download probes use those headers
+- **AND** probes with different header values do not share cached responses
+
 ### Requirement: Version lint evaluates effective GitHub versions
 
 The system SHALL warn when a successfully resolved GitHub effective version does

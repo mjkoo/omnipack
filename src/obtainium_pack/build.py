@@ -56,6 +56,7 @@ def publish_build(
     ingestion: IngestionReport,
     *,
     on_stage: Callable[[str], None] | None = None,
+    on_verification: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
     """Render both variants, write their report, and publish them together."""
     if on_stage is not None:
@@ -90,6 +91,9 @@ def publish_build(
         {key: value for key, value in asdict(item).items() if value is not None}
         for item in result.findings
     ]
+    verdict = {"status": "failed" if findings else "success", "findings": findings}
+    if on_verification is not None:
+        on_verification(verdict)
     if findings:
         raise OfflineVerificationError(findings)
 
@@ -100,7 +104,7 @@ def publish_build(
         before,
         composition,
         ingestion,
-        offline_verification={"status": "success", "findings": []},
+        offline_verification=verdict,
     )
     if on_stage is not None:
         on_stage("publication")

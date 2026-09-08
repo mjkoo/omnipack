@@ -472,6 +472,10 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == stage
     assert report["error"] == f"injected {stage} failure"
+    assert report["offlineVerification"] == {
+        "status": "not-run" if stage == "rendering" else "success",
+        "findings": [],
+    }
     assert report["changes"] == {
         variant.value: {"added": [], "removed": ["before.id"] if existing else []}
         for variant in Variant

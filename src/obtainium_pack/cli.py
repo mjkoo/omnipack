@@ -29,10 +29,15 @@ def build(_args: argparse.Namespace) -> int:
     composition_report = CompositionReport()
     composition: CompositionResult | None = None
     stage = "ingestion"
+    offline_verification: dict[str, Any] = {"status": "not-run", "findings": []}
 
     def record_stage(value: str) -> None:
         nonlocal stage
         stage = value
+
+    def record_verification(value: dict[str, Any]) -> None:
+        nonlocal offline_verification
+        offline_verification = value
 
     try:
         ingested = _ingest_for_build(root, ingestion_report)
@@ -51,6 +56,7 @@ def build(_args: argparse.Namespace) -> int:
             _object(root / "config/settings.json", "settings"),
             ingestion_report,
             on_stage=record_stage,
+            on_verification=record_verification,
         )
     except Exception as error:  # noqa: BLE001 - CLI converts build failures to status
         try:
@@ -62,11 +68,7 @@ def build(_args: argparse.Namespace) -> int:
                 composition_report=composition_report,
                 stage=stage,
                 error=error,
-                offline_verification=(
-                    {"status": "failed", "findings": error.findings}
-                    if hasattr(error, "findings")
-                    else None
-                ),
+                offline_verification=offline_verification,
             )
         except Exception as report_error:  # noqa: BLE001 - preserve original diagnostic
             print(
