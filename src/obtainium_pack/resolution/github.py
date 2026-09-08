@@ -38,18 +38,10 @@ def resolve_github(app: Mapping[str, object], http: HttpClient) -> ResolutionRes
 
     selected = _select_release(releases, settings, latest_identity)
     if selected is None and settings.get("trackOnly") is True:
-        tags_url = f"{base}/tags?per_page={RELEASE_WINDOW}"
-        try:
-            tags = _get_json(http, tags_url)
-        except (HttpError, ValueError, TypeError, json.JSONDecodeError) as error:
-            raise ResolutionError(
-                "github-request-failed", "GitHub tag metadata request failed"
-            ) from error
-        if not isinstance(tags, list):
-            raise ResolutionError(
-                "github-invalid-response", "GitHub tags must be a list"
-            )
-        return _resolve_tag(tags[:RELEASE_WINDOW], settings, inspected_count)
+        tags, tags_latest_identity = _fetch_records(
+            http, base, "tags", latest=settings.get("verifyLatestTag") is True
+        )
+        return _resolve_tag(tags, settings, inspected_count, tags_latest_identity)
     if selected is None:
         raise ResolutionError(
             "github-no-release", "no release qualifies within the inspected window"
@@ -302,9 +294,12 @@ def _result(
 
 
 def _resolve_tag(
-    tags: list[object], settings: dict[str, Any], inspected_count: int
+    tags: list[object],
+    settings: dict[str, Any],
+    inspected_count: int,
+    latest_identity: str | None = None,
 ) -> ResolutionResult:
-    selected = _select_release(tags, settings)
+    selected = _select_release(tags, settings, latest_identity)
     if selected is None:
         raise ResolutionError(
             "github-no-release", "no release or tag supplies a version"

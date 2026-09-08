@@ -203,3 +203,118 @@ def test_cli_initial_and_final_report_write_failures_are_concise(
         assert stored == {"prior": "evidence"}
     else:
         assert stored["status"] == "running" and stored["complete"] is False
+
+
+@pytest.mark.parametrize(
+    ("enabled", "failure", "supplement"),
+    [
+        ((True, False), False, False),
+        ((False, True), False, False),
+        ((True, True), False, True),
+        ((True, True), True, False),
+    ],
+)
+def test_latest_metadata_reuse_and_independent_variant_evidence_round_trip(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    enabled: tuple[bool, bool],
+    failure: bool,
+    supplement: bool,
+) -> None:
+    from obtainium_pack.live_http import LiveHttpClient
+
+    inputs(tmp_path)
+    (tmp_path / "config/http.json").write_text(
+        json.dumps({"credentials": {"api.github.com": "PACK_TEST_GITHUB_TOKEN"}})
+    )
+    monkeypatch.setenv("PACK_TEST_GITHUB_TOKEN", "fixture-token")
+    for index, variant in enumerate(("single", "dual")):
+        path = tmp_path / "dist" / f"{variant}-screen.json"
+        pack = json.loads(path.read_text())
+        settings = {
+            **SETTINGS_DEFAULTS["GitHub"],
+            "verifyLatestTag": enabled[index],
+            "sortMethodChoice": "none",
+            "apkFilterRegEx": str(index),
+        }
+        pack["apps"][0]["additionalSettings"] = json.dumps(settings)
+        path.write_text(json.dumps(pack))
+    before = snapshot(tmp_path)
+    latest = {
+        "tag_name": "v1.0",
+        "assets": [
+            {
+                "name": f"app-{index}.apk",
+                "browser_download_url": f"https://downloads.example/{index}.apk",
+            }
+            for index in range(2)
+        ],
+    }
+    newest = {**latest, "tag_name": "v2.0"}
+    releases = (
+        [newest, latest]
+        if not supplement
+        else [{**newest, "tag_name": f"v2.{index}"} for index in range(100)]
+    )
+    original = json.dumps(releases)
+    requests: list[str] = []
+
+    def transport(
+        _client: HttpClient,
+        request: Request,
+        _timeout: float,
+        _max_bytes: int | None,
+        *,
+        prefix: bool = False,
+    ) -> HttpResponse:
+        requests.append(request.full_url)
+        assert request.get_header("Authorization") == "Bearer fixture-token"
+        if request.full_url.endswith("/releases/latest"):
+            headers = Message()
+            headers["ETag"] = '"latest-fixture"'
+            return HttpResponse(
+                request.full_url,
+                404 if failure else 200,
+                headers,
+                json.dumps(latest).encode(),
+            )
+        assert request.full_url.endswith("/releases?per_page=100")
+        return HttpResponse(
+            request.full_url, 200, Message(), json.dumps(releases).encode()
+        )
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+    monkeypatch.setattr(LiveHttpClient, "_gate", lambda _self, _url: None)
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["verify", "--live"]) == (1 if failure else 0)
+    report = json.loads((tmp_path / ".build/verify.json").read_text())
+    assert len(report["entries"]) == 2
+    assert (
+        requests.count("https://api.github.com/repos/example/app/releases/latest") == 1
+    )
+    if failure:
+        assert len(requests) == 1
+        for entry in report["entries"]:
+            assert entry["errors"][0]["code"] == "github-request-failed"
+            assert "releases/latest" in entry["errors"][0]["message"]
+    else:
+        assert len(requests) == 2
+        for index, entry in enumerate(report["entries"]):
+            resolution = entry["resolution"]
+            assert resolution["raw_version"] == ("v1.0" if enabled[index] else "v2.0")
+            assert resolution["inspected_count"] == (101 if supplement else 2)
+            assert resolution["window_limit"] == 100
+            assert resolution["candidates"][0]["name"] == f"app-{index}.apk"
+            assert entry["probes"] == []
+    assert json.dumps(releases) == original
+    assert snapshot(tmp_path) == before
+    assert not (tmp_path / ".build/live-http-cache").exists()
+    monkeypatch.setattr(
+        HttpClient,
+        "_urllib_transport",
+        lambda *_args, **_kwargs: pytest.fail("report request"),
+    )
+    assert cli.main(["report"]) == 0
+    assert "Evidence: current" in capsys.readouterr().out
+    assert snapshot(tmp_path) == before

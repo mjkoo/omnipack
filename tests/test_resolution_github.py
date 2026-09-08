@@ -27,6 +27,8 @@ class GitHubTransport:
         outcome = self.documents[request.full_url]
         if isinstance(outcome, Exception):
             raise outcome
+        if isinstance(outcome, HttpResponse):
+            return outcome
         return HttpResponse(
             request.full_url, 200, Message(), json.dumps(outcome).encode()
         )
@@ -77,12 +79,14 @@ def resolver(
     *,
     tags: object = (),
     latest: object = None,
+    tags_latest: object = None,
 ):
     transport = GitHubTransport(
         {
             "https://api.github.com/repos/example/emulator/releases/latest": latest,
             "https://api.github.com/repos/example/emulator/releases?per_page=100": releases,
             "https://api.github.com/repos/example/emulator/tags?per_page=100": tags,
+            "https://api.github.com/repos/example/emulator/tags/latest": tags_latest,
         }
     )
     result = resolve_github(
@@ -640,3 +644,123 @@ def test_promoted_latest_flows_through_version_processing(
     assert result.raw_version == "Release 2.4"
     assert result.effective_version == effective
     assert result.version_origin == origin
+
+
+@pytest.mark.parametrize("endpoint", ["releases", "tags"])
+@pytest.mark.parametrize(
+    ("outcome", "code"),
+    [
+        (HttpResponse("", 404, Message(), b"{}"), "github-request-failed"),
+        (HttpResponse("", 500, Message(), b"{}"), "github-request-failed"),
+        (OSError("offline"), "github-request-failed"),
+        (HttpResponse("", 200, Message(), b"{"), "github-request-failed"),
+        ([], "github-invalid-response"),
+        (None, "github-invalid-response"),
+        ({}, "github-invalid-response"),
+        ({"tag_name": "", "name": "valid"}, "github-invalid-response"),
+        ({"tag_name": 1, "name": "valid"}, "github-invalid-response"),
+        ({"name": False}, "github-invalid-response"),
+    ],
+)
+def test_latest_failure_names_endpoint_and_stops_before_list_or_fallback(
+    endpoint: str, outcome: object, code: str
+) -> None:
+    base = "https://api.github.com/repos/example/emulator"
+    transport = GitHubTransport(
+        {
+            f"{base}/releases/latest": release("draft", draft=True),
+            f"{base}/releases?per_page=100": [],
+            f"{base}/{endpoint}/latest": outcome,
+        }
+    )
+    with pytest.raises(ResolutionError) as raised:
+        resolve_github(
+            app({"verifyLatestTag": True, "trackOnly": True}),
+            HttpClient(HttpConfig({}), retries=0, transport=transport),
+        )
+    assert raised.value.code == code
+    assert f"{endpoint}/latest" in str(raised.value)
+    expected = [f"{base}/releases/latest"]
+    if endpoint == "tags":
+        expected += [f"{base}/releases?per_page=100", f"{base}/tags/latest"]
+    assert [request.full_url for request in transport.requests] == expected
+
+
+@pytest.mark.parametrize("sort", ["date", "none"])
+@pytest.mark.parametrize("present", [True, False])
+def test_track_only_tags_latest_promotes_or_supplements_and_retains_release_count(
+    sort: str, present: bool
+) -> None:
+    tags = [{"name": "v3", "commit": {"created": "2030-01-01T00:00:00Z"}}]
+    if present:
+        tags.append({"name": "v2", "body": "listed"})
+    result, transport = resolver(
+        [release("draft", draft=True)],
+        {"verifyLatestTag": True, "trackOnly": True, "sortMethodChoice": sort},
+        latest=release("draft", draft=True),
+        tags=tags,
+        tags_latest={"name": "v2"},
+    )
+    assert result.raw_version == "v2"
+    assert result.selected == {"kind": "tag", "tag": "v2"}
+    assert result.candidates == ()
+    assert result.inspected_count == 1
+    assert [
+        request.full_url.split("/emulator/")[1] for request in transport.requests
+    ] == [
+        "releases/latest",
+        "releases?per_page=100",
+        "tags/latest",
+        "tags?per_page=100",
+    ]
+
+
+@pytest.mark.parametrize("fallback", [True, False])
+def test_tags_latest_mismatch_uses_configured_fallback_boundary(fallback: bool) -> None:
+    settings: dict[str, object] = {
+        "verifyLatestTag": True,
+        "trackOnly": True,
+        "sortMethodChoice": "none",
+        "filterReleaseTitlesByRegEx": "wanted",
+        "fallbackToOlderReleases": fallback,
+    }
+    kwargs = {
+        "latest": release("draft", draft=True),
+        "tags": [{"name": "wanted"}, {"name": "wrong"}],
+        "tags_latest": {"name": "wrong"},
+    }
+    if fallback:
+        result, _ = resolver([], settings, **kwargs)
+        assert result.raw_version == "wanted"
+        assert result.inspected_count == 1
+    else:
+        with pytest.raises(ResolutionError) as raised:
+            resolver([], settings, **kwargs)
+        assert raised.value.code == "github-no-release"
+
+
+@pytest.mark.parametrize(
+    ("settings", "code"),
+    [
+        (
+            {"versionExtractionRegEx": r"(\d+)", "matchGroupToUse": "1"},
+            "regex-no-match",
+        ),
+        ({"releaseDateAsVersion": True}, "github-date-missing"),
+    ],
+)
+def test_latest_selected_version_failure_never_attempts_tags_fallback(
+    settings: dict[str, object], code: str
+) -> None:
+    base = "https://api.github.com/repos/example/emulator"
+    latest = {"tag_name": "rolling"}
+    transport = GitHubTransport(
+        {f"{base}/releases/latest": latest, f"{base}/releases?per_page=100": [latest]}
+    )
+    with pytest.raises(ResolutionError) as raised:
+        resolve_github(
+            app({"verifyLatestTag": True, "trackOnly": True, **settings}),
+            HttpClient(HttpConfig({}), retries=0, transport=transport),
+        )
+    assert raised.value.code == code
+    assert len(transport.requests) == 2

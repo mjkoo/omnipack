@@ -1,8 +1,8 @@
 ## 1. Latest metadata and release priority
 
-- [ ] 1.1 Add failing resolver fixtures for latest lookup, exact/name identity, list-record reuse, absent latest supplementation, both supported sort modes, and disabled/absent settings; verify the new cases fail for the current unsupported behavior.
-- [ ] 1.2 Implement latest acquisition, response validation and prioritization in the existing GitHub resolver, then classify `verifyLatestTag` as implemented; verify the new fixtures pass, including the 100-plus-one inspection count and no extra requests when disabled.
-- [ ] 1.3 Cover promoted-record draft/prerelease eligibility, title/notes/APK mismatches with fallback on and off, and title/regex/date version processing; verify existing selection tests and these regression cases pass.
+- [x] 1.1 Add failing resolver fixtures for latest lookup, exact/name identity, list-record reuse, absent latest supplementation, both supported sort modes, and disabled/absent settings; verify the new cases fail for the current unsupported behavior.
+- [x] 1.2 Implement latest acquisition, response validation and prioritization in the existing GitHub resolver, then classify `verifyLatestTag` as implemented; verify the new fixtures pass, including the 100-plus-one inspection count and no extra requests when disabled.
+- [x] 1.3 Cover promoted-record draft/prerelease eligibility, title/notes/APK mismatches with fallback on and off, and title/regex/date version processing; verify existing selection tests and these regression cases pass.
 
 ## 2. Failure, fallback and shared evidence
 
