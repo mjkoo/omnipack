@@ -250,12 +250,12 @@ def test_unsupported_setting_error_names_the_setting() -> None:
     http, transport = client({})
 
     result = verify_live(
-        {"single": (github_entry(settings={"verifyLatestTag": True}),)}, http
+        {"single": (github_entry(settings={"includeZips": True}),)}, http
     )
 
     assert not result.ok
     assert result.errors[0].code == "unsupported-setting"
-    assert "verifyLatestTag" in result.errors[0].message
+    assert "includeZips" in result.errors[0].message
     assert transport.requests == []
 
 

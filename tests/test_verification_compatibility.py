@@ -41,13 +41,12 @@ def test_every_setting_in_both_committed_packs_is_classified() -> None:
                 if item.classification is SupportClass.LIVE_ERROR
             )
 
-    assert live_errors == {"verifyLatestTag"}
+    assert live_errors == set()
 
 
 @pytest.mark.parametrize(
     ("source", "updates", "key"),
     [
-        ("GitHub", {"verifyLatestTag": True}, "verifyLatestTag"),
         ("GitHub", {"includeZips": True}, "includeZips"),
         ("GitHub", {"GHReqPrefix": "proxy.example"}, "GHReqPrefix"),
         ("HTML", {"allowInsecure": True}, "allowInsecure"),

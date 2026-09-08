@@ -61,11 +61,12 @@ knowing its semantics.
 | GitHub `releaseDateAsVersion` | Implemented | Requires a usable release date |
 | HTML `releaseDateAsVersion` | Inactive when false; live error when true | No usable release date; rejected before HTTP |
 | `trackOnly`, `versionExtractionRegEx`, `matchGroupToUse`, `versionDetection`, `apkFilterRegEx`, `invertAPKFilter` | Implemented | Applied during version and candidate selection |
-| GitHub release eligibility, title and notes filters, older-release fallback, `date` or `none` sorting, asset-date selection, and release-title versions | Implemented | Applied to the first 100 release records |
+| GitHub release eligibility, title and notes filters, older-release fallback, `date` or `none` sorting, asset-date selection, and release-title versions | Implemented | Applied to the first 100 list records and any supplemental latest record |
+| GitHub `verifyLatestTag` | Implemented | Fetch latest metadata and prioritize its exact identity after configured sorting |
 | HTML intermediate links, link and text filters, outside-anchor matching, sorting controls, whole-page extraction, and non-secret request headers | Implemented | Applied to each configured page in order |
 | App name, author, description, notification/background controls, Shizuku presentation, refresh behavior, and OS version-code preference | Harmless for source resolution | Retained but does not alter the device-independent check |
 | `autoApkFilterByArch` and `preferredApkIndex` | Device-specific | Validated but not used to claim device compatibility |
-| `includeZips`, ZIP filters, `verifyLatestTag`, GitHub credentials or request proxies, insecure TLS, and non-`date`/non-`none` GitHub sorting | Inactive unsupported or live error | Default false or empty values are accepted; active values fail by setting name |
+| `includeZips`, ZIP filters, GitHub credentials or request proxies, insecure TLS, and non-`date`/non-`none` GitHub sorting | Inactive unsupported or live error | Default false or empty values are accepted; active values fail by setting name |
 | HTML pseudo-versioning | Inactive unsupported or live error | Ignored when explicit extraction supplies the version; otherwise active pseudo-versioning fails |
 | Authorization or Cookie request headers and device-dependent filtering on nonempty intermediate steps | Live error | Rejected before a request is made |
 | Any unknown additional setting | Live error | Requires an intentional compatibility decision |
@@ -76,12 +77,32 @@ request selected downloads or claim they are reachable. The explicit asset
 diagnostic adds bounded HTTP reachability. Neither mode establishes APK identity,
 signature, installation success, architecture coverage, or behavior on a device.
 
-GitHub selection is limited to the first 100 releases, so failure does not rule
-out a usable release beyond that window. Drafts and excluded prereleases do not
-consume the first eligible release; title, notes, and APK mismatches do when
-older-release fallback is disabled. Track-only sources can use filtered tags
-fallback when no release qualifies. A metadata request failure never triggers
-that fallback.
+GitHub selection inspects at most the first 100 release-list records. With
+`verifyLatestTag` true, it first fetches `/releases/latest`, retaining the list
+record when its exact `tag_name` (or `name` when the tag is absent or null) matches.
+An absent identity supplements the bounded list. After `date` or `none` ordering,
+the matching record moves first while all other records keep their relative order.
+The latest response must be an object with a nonempty string identity; identities
+are not trimmed, case-folded, or reconciled as versions. False or absent latest
+checking makes no latest request.
+
+Drafts and excluded prereleases do not consume the first eligible release;
+title, notes, and APK mismatches do when older-release fallback is disabled.
+Latest prioritization preserves those filters and subsequent title, regex, and
+date version processing. The reported `window_limit` stays 100, while
+`inspected_count` includes a supplemental latest release and can reach 101.
+Failure does not rule out a usable release beyond this bounded selection.
+
+Track-only sources can use filtered tags fallback when no release qualifies.
+With latest checking enabled, this requests `/tags/latest` before
+`/tags?per_page=100` and applies the same identity, supplementation, ordering,
+and selection rules. The endpoint follows the pinned provider, even when it
+fails upstream. A latest HTTP failure, including 404, transport failure, invalid
+JSON, or invalid identity fails before the corresponding list request. Diagnostics
+identify `releases/latest`, `releases`, `tags/latest`, or `tags`. Acquisition
+failures never trigger tags fallback, and neither do version/date extraction
+failures after selecting a record. Tags fallback retains the release inspection
+count; that field is not a total request count or a tag count.
 
 HTML follows up to ten nonempty intermediate filters, selecting the last link
 after each configured filtering and sorting step. Excess depth fails. A selected
@@ -147,6 +168,16 @@ HTML trailing-slash differences remain distinct. Explicit probes reuse identical
 requests within the run and consume the already-selected URLs without another
 release lookup.
 
+Latest-enabled repositories add one distinct metadata lookup to the ordinary
+release-list path. Track-only tags fallback can add two more distinct lookups
+(latest then list). Without latest checking, the ordinary and fallback paths use
+one list lookup each. These counts exclude retries and redirects; identical
+responses and failures are reused across variants within the run. Routine
+verification makes no asset requests.
+
+Latest metadata is reused only within a run. Persistent conditional caching is
+restricted to eligible release and tag list URLs with `per_page=100`; latest
+endpoints are neither persisted nor conditionally revalidated across runs.
 A bounded GitHub metadata cache under `.build/live-http-cache/` stores response
 bodies and conditional validators, without credentials. A later run must obtain a
 fresh authenticated 304 before using a cached body. Errors never fall back to old
@@ -179,7 +210,8 @@ cases that need controlled alternatives. They are labeled as synthetic, cite the
 pinned behavioral source instead of a purported capture URL, and include the
 complete selection settings needed to reproduce each expectation. Cases make
 incorrect sorting, traversal, asset filtering, or regex group handling produce
-a different result. GitHub evidence covers prereleases, title and date versions,
+a different result. GitHub evidence covers latest identity promotion and supplementation, failure
+boundaries, shared variant metadata, prereleases, title and date versions,
 concatenated extraction groups, and track-only release and tags paths.
 
 Fixtures contain only the response fragments needed to reproduce selection.

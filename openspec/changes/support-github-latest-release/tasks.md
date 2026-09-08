@@ -6,9 +6,9 @@
 
 ## 2. Failure, fallback and shared evidence
 
-- [ ] 2.1 Add tests and endpoint-specific diagnostics for latest HTTP errors including 404, transport failure, invalid JSON, non-object bodies and invalid identities; verify failure prevents the corresponding list request and does not trigger fallback.
-- [ ] 2.2 Extend track-only fallback to apply latest acquisition and prioritization on the tags path; verify controlled success, tags/latest failure before the tag list, retained release inspection count, and no fallback after version/date extraction failure.
-- [ ] 2.3 Add live integration coverage for latest response/failure reuse, mixed-setting variant selection without cached-document mutation, report round-trip of 101 inspected releases, and zero routine asset requests; verify these cases through the existing live client and report reader.
+- [x] 2.1 Add tests and endpoint-specific diagnostics for latest HTTP errors including 404, transport failure, invalid JSON, non-object bodies and invalid identities; verify failure prevents the corresponding list request and does not trigger fallback.
+- [x] 2.2 Extend track-only fallback to apply latest acquisition and prioritization on the tags path; verify controlled success, tags/latest failure before the tag list, retained release inspection count, and no fallback after version/date extraction failure.
+- [x] 2.3 Add live integration coverage for latest response/failure reuse, mixed-setting variant selection without cached-document mutation, report round-trip of 101 inspected releases, and zero routine asset requests; verify these cases through the existing live client and report reader.
 
 ## 3. Compatibility evidence and validation
 

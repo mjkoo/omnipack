@@ -9,10 +9,12 @@ The observations below used verifier 0.1.0, when `--live` also probed assets; th
 are historical evidence, not a claim that the current implementation was run
 against all upstreams again.
 
-The committed pair has 194 entries. After excluding unsupported GitHub settings,
-92 distinct GitHub repository URLs remain. A cold metadata run therefore needs
-about one release-list request per supported repository, plus any tags fallback
-and HTML traversal requests. Different variant settings reuse that response.
+The historical committed pair had 194 entries. At that observation, excluding
+unsupported GitHub settings left 92 distinct supported GitHub repository URLs.
+That earlier budget was about one release-list request per supported repository,
+plus tags fallback and HTML traversal requests. Latest-enabled entries now also
+participate, with one latest request before each release list; see the dated
+validation below. Different variant settings reuse metadata responses.
 The first comprehensive observation made 173 probes for 96 distinct reported
 asset URLs; routine metadata verification eliminates all those probes. Explicit
 diagnostics deduplicate identical probe requests within their invocation.
@@ -38,7 +40,45 @@ repeating a full live pull solely to validate code changes. Metadata success doe
 not prove unchanged downloads remain reachable. Future publishing can use actual
 asset downloads as evidence when it already needs them.
 
-## Current implementation checks
+## Latest-release compatibility validation - 2026-09-08
+
+Verifier identity `0.3.0` supports the committed packs' active `verifyLatestTag`
+settings. Compatibility classification finds no currently active unsupported
+settings across either pack. Report schema remains `1`, and reports recorded
+with `0.2.2` or any other earlier verifier identity display as stale.
+
+Controlled resolver fixtures prove exact tag-or-name identity matching, retention
+of list metadata, supplementation outside the first 100 list records, promotion
+after both supported sort modes, and continued filtering and version processing.
+Latest lookup failures, including 404 and malformed responses, stop before the
+corresponding list request. Track-only fallback requests `tags/latest` before its
+tag list and retains the release inspection count. A selected record's version
+or date failure does not trigger that fallback.
+
+CLI fixtures exercise the real live client with controlled transports: latest
+responses and failures are shared across variants, differing settings retain
+independent selections, and reports with `inspected_count` 101 and `window_limit`
+100 round-trip through the report reader. No routine asset requests occur.
+Latest-enabled release resolution costs one latest and one list lookup per
+repository before reuse; tags fallback adds its latest and list lookups.
+Latest responses have invocation-local reuse only. Persistent conditional caching
+remains restricted to eligible release/tag lists with `per_page=100`.
+
+The focused resolver, compatibility, live client, CLI integration, and report
+checks passed all 234 tests. `just check-all` passed with 572 tests and 91%
+coverage, including lock, formatting, lint, types, dependency audit, Python
+builds, offline pack validation, workflow checks, Nix formatting, and native
+flake checks. Nix emitted its expected dirty-tree and omitted-incompatible-system
+notices; test output had no warnings. SHA-256 comparison before and after checks
+confirmed all 11 distribution and configuration files, including the package-id
+cache, were byte-for-byte unchanged.
+
+This is fixture validation, not a fresh live upstream health observation. It
+removes the known compatibility rejection recorded below without asserting that
+those sources now resolve or that their downloads remain reachable. Historical
+observations and their original publishing blockers remain preserved below.
+
+## Earlier implementation checks
 
 `just check-all` passed at implementation commit `866975a`: 503 tests, 91%
 coverage, offline validation of both committed packs, format/lint/type and lock
