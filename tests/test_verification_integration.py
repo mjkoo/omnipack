@@ -257,7 +257,6 @@ def test_latest_metadata_reuse_and_independent_variant_evidence_round_trip(
         if not supplement
         else [{**newest, "tag_name": f"v2.{index}"} for index in range(100)]
     )
-    original = json.dumps(releases)
     requests: list[str] = []
 
     def transport(
@@ -307,7 +306,6 @@ def test_latest_metadata_reuse_and_independent_variant_evidence_round_trip(
             assert resolution["window_limit"] == 100
             assert resolution["candidates"][0]["name"] == f"app-{index}.apk"
             assert entry["probes"] == []
-    assert json.dumps(releases) == original
     assert snapshot(tmp_path) == before
     assert not (tmp_path / ".build/live-http-cache").exists()
     monkeypatch.setattr(

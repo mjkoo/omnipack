@@ -64,14 +64,21 @@ repository before reuse; tags fallback adds its latest and list lookups.
 Latest responses have invocation-local reuse only. Persistent conditional caching
 remains restricted to eligible release/tag lists with `per_page=100`.
 
-The focused resolver, compatibility, live client, CLI integration, and report
-checks passed all 234 tests. `just check-all` passed with 572 tests and 91%
+The initial focused resolver, compatibility, live client, CLI integration, and
+report checks passed all 234 tests. `just check-all` passed with 572 tests and 91%
 coverage, including lock, formatting, lint, types, dependency audit, Python
 builds, offline pack validation, workflow checks, Nix formatting, and native
 flake checks. Nix emitted its expected dirty-tree and omitted-incompatible-system
 notices; test output had no warnings. SHA-256 comparison before and after checks
 confirmed all 11 distribution and configuration files, including the package-id
 cache, were byte-for-byte unchanged.
+
+After review, controlled fixtures distinguish date order from API order after a
+latest mismatch and compare the actual shared decoded metadata before and after
+resolution. Both targeted regression mutations failed as expected. Removing
+redundant cases and adding the focused shared-object check yielded 232 passing
+focused tests and 570 passing tests in `just check-all`, with 91% coverage. The
+full checks and all 11 protected input hash comparisons passed again.
 
 This is fixture validation, not a fresh live upstream health observation. It
 removes the known compatibility rejection recorded below without asserting that

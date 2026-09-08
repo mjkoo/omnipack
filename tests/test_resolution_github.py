@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from copy import deepcopy
 from email.message import Message
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -479,7 +480,6 @@ def test_latest_promotes_list_record_without_replacing_its_metadata(
     other = release("newer", date="2030-01-01T00:00:00Z")
     releases = [other]
     releases.insert(position, listed)
-    original = json.dumps(releases)
     result, transport = resolver(
         releases,
         {"verifyLatestTag": True, "sortMethodChoice": sort},
@@ -488,11 +488,39 @@ def test_latest_promotes_list_record_without_replacing_its_metadata(
     assert result.raw_version == "stable"
     assert [candidate.name for candidate in result.candidates] == ["listed.apk"]
     assert result.inspected_count == 2
-    assert json.dumps(releases) == original
     assert [request.full_url.rsplit("/", 2)[-2:] for request in transport.requests] == [
         ["releases", "latest"],
         ["emulator", "releases?per_page=100"],
     ]
+
+
+def test_latest_resolution_preserves_shared_decoded_metadata(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    base = "https://api.github.com/repos/example/emulator"
+    releases = [
+        release("newer", date="2030-01-01T00:00:00Z"),
+        release("stable", assets=[asset("listed.apk")]),
+    ]
+    documents: dict[str, object] = {f"{base}/releases?per_page=100": releases}
+    monkeypatch.setattr(HttpResponse, "json", lambda response: documents[response.url])
+    for tag in ("stable", "outside"):
+        latest = release(tag, assets=[asset("separate.apk")])
+        documents[f"{base}/releases/latest"] = latest
+        original = deepcopy(documents)
+        result, _ = resolver(
+            releases,
+            {"verifyLatestTag": True, "sortMethodChoice": "none"},
+            latest=latest,
+        )
+        assert result.raw_version == tag
+        assert result.candidates[0].name == (
+            "listed.apk" if tag == "stable" else "separate.apk"
+        )
+        assert documents == original
+        ordinary, _ = resolver(releases, {"sortMethodChoice": "none"})
+        assert ordinary.raw_version == "newer"
+        assert documents == original
 
 
 @pytest.mark.parametrize("sort", ["date", "none"])
@@ -571,27 +599,29 @@ def test_promoted_latest_still_obeys_release_eligibility(
     assert result.raw_version == expected
 
 
-@pytest.mark.parametrize("sort", ["date", "none"])
-@pytest.mark.parametrize("fallback", [True, False])
+@pytest.mark.parametrize(
+    ("sort", "fallback", "expected"),
+    [("date", True, "first"), ("none", True, "second"), ("none", False, None)],
+)
 @pytest.mark.parametrize(
     "filter_setting",
     ["filterReleaseTitlesByRegEx", "filterReleaseNotesByRegEx", "apkFilterRegEx"],
 )
 def test_promoted_latest_mismatch_obeys_fallback_and_remaining_order(
-    sort: str, fallback: bool, filter_setting: str
+    sort: str, fallback: bool, expected: str | None, filter_setting: str
 ) -> None:
     latest = release("latest", name="wrong", body="wrong")
     releases = [
         release(
-            "first",
-            date="2030-01-01T00:00:00Z",
+            "second",
+            date="2029-01-01T00:00:00Z",
             name="wanted",
             body="wanted",
             assets=[asset("wanted.apk")],
         ),
         release(
-            "second",
-            date="2029-01-01T00:00:00Z",
+            "first",
+            date="2030-01-01T00:00:00Z",
             name="wanted",
             body="wanted",
             assets=[asset("wanted.apk")],
@@ -606,7 +636,7 @@ def test_promoted_latest_mismatch_obeys_fallback_and_remaining_order(
     }
     if fallback:
         result, _ = resolver(releases, settings, latest=latest)
-        assert result.raw_version == "first"
+        assert result.raw_version == expected
     else:
         with pytest.raises(ResolutionError) as raised:
             resolver(releases, settings, latest=latest)
