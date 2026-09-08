@@ -72,10 +72,15 @@ def release(
 
 
 def resolver(
-    releases: object, settings: dict[str, object] | None = None, *, tags: object = ()
+    releases: object,
+    settings: dict[str, object] | None = None,
+    *,
+    tags: object = (),
+    latest: object = None,
 ):
     transport = GitHubTransport(
         {
+            "https://api.github.com/repos/example/emulator/releases/latest": latest,
             "https://api.github.com/repos/example/emulator/releases?per_page=100": releases,
             "https://api.github.com/repos/example/emulator/tags?per_page=100": tags,
         }
@@ -260,7 +265,6 @@ def test_transport_failure_does_not_trigger_tags_fallback() -> None:
 @pytest.mark.parametrize(
     "settings",
     [
-        {"verifyLatestTag": True},
         {"includeZips": True},
         {"sortMethodChoice": "smartname"},
         {"unknownFlag": False},
@@ -460,3 +464,179 @@ def test_tags_fallback_applies_date_tie_or_api_order(sort: str, expected: str) -
     )
     assert result.raw_version == expected
     assert result.selected == {"kind": "tag", "tag": expected}
+
+
+@pytest.mark.parametrize("sort", ["date", "none"])
+@pytest.mark.parametrize("position", [0, 1])
+def test_latest_promotes_list_record_without_replacing_its_metadata(
+    sort: str, position: int
+) -> None:
+    listed = release("stable", assets=[asset("listed.apk")])
+    other = release("newer", date="2030-01-01T00:00:00Z")
+    releases = [other]
+    releases.insert(position, listed)
+    original = json.dumps(releases)
+    result, transport = resolver(
+        releases,
+        {"verifyLatestTag": True, "sortMethodChoice": sort},
+        latest=release("stable", assets=[asset("separate.apk")]),
+    )
+    assert result.raw_version == "stable"
+    assert [candidate.name for candidate in result.candidates] == ["listed.apk"]
+    assert result.inspected_count == 2
+    assert json.dumps(releases) == original
+    assert [request.full_url.rsplit("/", 2)[-2:] for request in transport.requests] == [
+        ["releases", "latest"],
+        ["emulator", "releases?per_page=100"],
+    ]
+
+
+@pytest.mark.parametrize("sort", ["date", "none"])
+def test_absent_latest_supplements_only_the_bounded_list(sort: str) -> None:
+    releases = [release(f"v{i}") for i in range(100)]
+    releases.append(release("outside", assets=[asset("ignored.apk")]))
+    result, transport = resolver(
+        releases,
+        {"verifyLatestTag": True, "sortMethodChoice": sort},
+        latest=release("outside", assets=[asset("supplement.apk")]),
+    )
+    assert result.raw_version == "outside"
+    assert result.candidates[0].name == "supplement.apk"
+    assert result.inspected_count == 101
+    assert result.window_limit == 100
+    assert len(transport.requests) == 2
+
+
+@pytest.mark.parametrize(
+    ("latest_identity", "listed_identity", "count"),
+    [
+        ({"name": "v1"}, {"tag_name": "v1"}, 1),
+        ({"tag_name": None, "name": "v1"}, {"name": "v1"}, 1),
+        ({"tag_name": "v1", "name": "other"}, {"tag_name": "v1"}, 1),
+        ({"tag_name": "v1"}, {"tag_name": "V1"}, 2),
+        ({"tag_name": "v1"}, {"tag_name": " v1 "}, 2),
+        ({"tag_name": "v1"}, {"tag_name": "1"}, 2),
+    ],
+)
+def test_latest_identity_uses_exact_tag_or_fallback_name(
+    latest_identity: dict[str, object], listed_identity: dict[str, object], count: int
+) -> None:
+    result, _ = resolver(
+        [{**listed_identity, "assets": [asset("listed.apk")]}],
+        {"verifyLatestTag": True},
+        latest={**latest_identity, "assets": [asset("separate.apk")]},
+    )
+    assert result.raw_version == "v1"
+    assert result.inspected_count == count
+    assert result.candidates[0].name == ("listed.apk" if count == 1 else "separate.apk")
+
+
+@pytest.mark.parametrize("settings", [{}, {"verifyLatestTag": False}])
+def test_disabled_latest_keeps_existing_order_and_request_budget(
+    settings: dict[str, object],
+) -> None:
+    result, transport = resolver(
+        [release("stable"), release("newer", date="2030-01-01T00:00:00Z")], settings
+    )
+    assert result.raw_version == "newer"
+    assert len(transport.requests) == 1
+    assert transport.requests[0].full_url.endswith("releases?per_page=100")
+
+
+@pytest.mark.parametrize(
+    ("flags", "include", "expected"),
+    [
+        ({"draft": True}, True, "other"),
+        ({"prerelease": True}, False, "other"),
+        ({"prerelease": True}, True, "latest"),
+    ],
+)
+def test_promoted_latest_still_obeys_release_eligibility(
+    flags: dict[str, bool], include: bool, expected: str
+) -> None:
+    latest = {**release("latest"), **flags}
+    result, _ = resolver(
+        [release("other"), latest],
+        {
+            "verifyLatestTag": True,
+            "sortMethodChoice": "none",
+            "includePrereleases": include,
+        },
+        latest=latest,
+    )
+    assert result.raw_version == expected
+
+
+@pytest.mark.parametrize("sort", ["date", "none"])
+@pytest.mark.parametrize("fallback", [True, False])
+@pytest.mark.parametrize(
+    "filter_setting",
+    ["filterReleaseTitlesByRegEx", "filterReleaseNotesByRegEx", "apkFilterRegEx"],
+)
+def test_promoted_latest_mismatch_obeys_fallback_and_remaining_order(
+    sort: str, fallback: bool, filter_setting: str
+) -> None:
+    latest = release("latest", name="wrong", body="wrong")
+    releases = [
+        release(
+            "first",
+            date="2030-01-01T00:00:00Z",
+            name="wanted",
+            body="wanted",
+            assets=[asset("wanted.apk")],
+        ),
+        release(
+            "second",
+            date="2029-01-01T00:00:00Z",
+            name="wanted",
+            body="wanted",
+            assets=[asset("wanted.apk")],
+        ),
+        latest,
+    ]
+    settings: dict[str, object] = {
+        "verifyLatestTag": True,
+        "sortMethodChoice": sort,
+        "fallbackToOlderReleases": fallback,
+        filter_setting: "wanted",
+    }
+    if fallback:
+        result, _ = resolver(releases, settings, latest=latest)
+        assert result.raw_version == "first"
+    else:
+        with pytest.raises(ResolutionError) as raised:
+            resolver(releases, settings, latest=latest)
+        assert raised.value.code == "github-no-release"
+
+
+@pytest.mark.parametrize(
+    ("extra", "effective", "origin"),
+    [
+        ({}, "Release 2.4", "title"),
+        (
+            {"versionExtractionRegEx": r"(\d+\.\d+)", "matchGroupToUse": "1"},
+            "2.4",
+            "extracted",
+        ),
+        ({"releaseDateAsVersion": True}, "1767323045123456", "release-date"),
+        (
+            {"releaseDateAsVersion": True, "useLatestAssetDateAsReleaseDate": True},
+            "1767225600000000",
+            "asset-date",
+        ),
+    ],
+)
+def test_promoted_latest_flows_through_version_processing(
+    extra: dict[str, object], effective: str, origin: str
+) -> None:
+    latest = release(
+        "continuous", name="Release 2.4", date="2026-01-02T03:04:05.123456Z"
+    )
+    result, _ = resolver(
+        [release("newer", date="2030-01-01T00:00:00Z"), latest],
+        {"verifyLatestTag": True, "releaseTitleAsVersion": True, **extra},
+        latest=latest,
+    )
+    assert result.raw_version == "Release 2.4"
+    assert result.effective_version == effective
+    assert result.version_origin == origin

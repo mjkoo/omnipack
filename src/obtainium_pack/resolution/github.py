@@ -31,22 +31,12 @@ def resolve_github(app: Mapping[str, object], http: HttpClient) -> ResolutionRes
     _validate_support(settings)
     owner, repository = _repository(url)
     base = f"https://api.github.com/repos/{owner}/{repository}"
-    releases_url = f"{base}/releases?per_page={RELEASE_WINDOW}"
-
-    try:
-        document = _get_json(http, releases_url)
-    except (HttpError, ValueError, TypeError, json.JSONDecodeError) as error:
-        raise ResolutionError(
-            "github-request-failed", "GitHub release metadata request failed"
-        ) from error
-    if not isinstance(document, list):
-        raise ResolutionError(
-            "github-invalid-response", "GitHub releases must be a list"
-        )
-    releases = document[:RELEASE_WINDOW]
+    releases, latest_identity = _fetch_records(
+        http, base, "releases", latest=settings.get("verifyLatestTag") is True
+    )
     inspected_count = len(releases)
 
-    selected = _select_release(releases, settings)
+    selected = _select_release(releases, settings, latest_identity)
     if selected is None and settings.get("trackOnly") is True:
         tags_url = f"{base}/tags?per_page={RELEASE_WINDOW}"
         try:
@@ -120,22 +110,79 @@ def _get_json(http: HttpClient, url: str) -> object:
     return response.json()
 
 
+def _identity(record: Mapping[str, Any]) -> object:
+    tag = record.get("tag_name")
+    return record.get("name") if tag is None else tag
+
+
+def _fetch_records(
+    http: HttpClient, base: str, endpoint: str, *, latest: bool
+) -> tuple[list[object], str | None]:
+    latest_record = None
+    latest_identity = None
+    if latest:
+        latest_endpoint = f"{endpoint}/latest"
+        latest_record = _request_metadata(
+            http, f"{base}/{latest_endpoint}", latest_endpoint
+        )
+        if not isinstance(latest_record, dict):
+            raise ResolutionError(
+                "github-invalid-response", f"GitHub {latest_endpoint} must be an object"
+            )
+        identity = _identity(latest_record)
+        if not isinstance(identity, str) or not identity:
+            raise ResolutionError(
+                "github-invalid-response",
+                f"GitHub {latest_endpoint} must have a nonempty string identity",
+            )
+        latest_identity = identity
+    document = _request_metadata(
+        http, f"{base}/{endpoint}?per_page={RELEASE_WINDOW}", endpoint
+    )
+    if not isinstance(document, list):
+        raise ResolutionError(
+            "github-invalid-response", f"GitHub {endpoint} must be a list"
+        )
+    records = document[:RELEASE_WINDOW]
+    if latest_record is not None and not any(
+        isinstance(record, dict) and _identity(record) == latest_identity
+        for record in records
+    ):
+        records.insert(0, latest_record)
+    return records, latest_identity
+
+
+def _request_metadata(http: HttpClient, url: str, endpoint: str) -> object:
+    try:
+        return _get_json(http, url)
+    except (HttpError, ValueError, TypeError) as error:
+        raise ResolutionError(
+            "github-request-failed", f"GitHub {endpoint} metadata request failed"
+        ) from error
+
+
 def _ordered_releases(
-    releases: list[object], settings: dict[str, Any]
+    releases: list[object], settings: dict[str, Any], latest_identity: str | None = None
 ) -> list[dict[str, Any]]:
     typed = [release for release in releases if isinstance(release, dict)]
-    if settings.get("sortMethodChoice", "date") == "none":
-        return typed
-    use_asset_date = settings.get("useLatestAssetDateAsReleaseDate") is True
-    typed.sort(
-        key=lambda item: _release_date(item, use_asset_date, filtered=False) or _EPOCH
-    )
-    typed.reverse()
+    if settings.get("sortMethodChoice", "date") != "none":
+        use_asset_date = settings.get("useLatestAssetDateAsReleaseDate") is True
+        typed.sort(
+            key=lambda item: (
+                _release_date(item, use_asset_date, filtered=False) or _EPOCH
+            )
+        )
+        typed.reverse()
+    if latest_identity is not None:
+        for index, record in enumerate(typed):
+            if _identity(record) == latest_identity:
+                typed.insert(0, typed.pop(index))
+                break
     return typed
 
 
 def _select_release(
-    releases: list[object], settings: dict[str, Any]
+    releases: list[object], settings: dict[str, Any], latest_identity: str | None = None
 ) -> dict[str, Any] | None:
     fallback = settings.get("fallbackToOlderReleases") is True
     prereleases = settings.get("includePrereleases") is True
@@ -145,7 +192,7 @@ def _select_release(
     invert = settings.get("invertAPKFilter") is True
     track_only = settings.get("trackOnly") is True
 
-    for release in _ordered_releases(releases, settings):
+    for release in _ordered_releases(releases, settings, latest_identity):
         if release.get("draft") is True:
             continue
         if release.get("prerelease") is True and not prereleases:

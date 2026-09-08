@@ -52,6 +52,7 @@ _COMMON_UNSUPPORTED = {
 }
 _SOURCE_IMPLEMENTED = {
     "GitHub": {
+        "verifyLatestTag",
         "includePrereleases",
         "fallbackToOlderReleases",
         "filterReleaseTitlesByRegEx",
@@ -73,7 +74,7 @@ _SOURCE_IMPLEMENTED = {
     },
 }
 _SOURCE_UNSUPPORTED = {
-    "GitHub": {"verifyLatestTag": False, "github-creds": "", "GHReqPrefix": ""},
+    "GitHub": {"github-creds": "", "GHReqPrefix": ""},
     "HTML": {},
 }
 
