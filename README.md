@@ -7,6 +7,12 @@ survives every upstream refresh.
 
 Consumers fetch the rendered files directly from `dist/` on `main`.
 
+The **Nightly publishing** workflow refreshes main daily at 06:23 UTC and also
+supports manual dispatch on main. It runs offline checks, rebuilds, and requires
+fresh metadata-only verification before publishing changed packs and the
+package-id cache. See [publishing](docs/publishing.md) for permissions, failure
+recovery, diagnostics, and the post-landing acceptance procedure.
+
 ## Development
 
 Run `direnv allow` (or `nix develop`) to get every tool the `justfile`
@@ -43,6 +49,7 @@ A matching fingerprint does not establish current upstream health.
 
 See [verification](docs/verification.md) for supported settings, failure policy,
 and the limits of a successful check. Ordinary CI runs offline verification;
-live checks are opt-in. Nightly publishing is not implemented.
+nightly publication runs metadata-only live verification. Asset probes remain
+an explicit manual troubleshooting operation.
 
 See [live validation](docs/validation.md) for the observed import results.
