@@ -199,7 +199,7 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
             if value.get("effective_version") is not None:
                 location.append(f"version {value['effective_version']!r}")
         context = f" [{' / '.join(location)}]" if location else ""
-        lines.append(f"{label}{context}: {message}")
+        lines.append(f"{label}:{context} {message}")
     return lines
 
 
