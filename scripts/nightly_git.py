@@ -6,6 +6,7 @@ import base64
 import os
 import subprocess
 from collections.abc import Callable, Mapping
+from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -141,6 +142,8 @@ class AttemptRecord:
     build_report: bytes | None
     verify_report: bytes | None
     candidate_sha: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -177,7 +180,34 @@ class PublicationCoordinator:
             )
 
         for number in (1, 2):
-            with self.attempts.checkout(base_sha) as root:
+            started_at = self.now()
+            with ExitStack() as stack:
+                try:
+                    root = stack.enter_context(self.attempts.checkout(base_sha))
+                except CandidateError, OSError:
+                    records.append(
+                        AttemptRecord(
+                            number,
+                            base_sha,
+                            (
+                                StageOutcome(
+                                    "checkout", "failed", "attempt setup failed"
+                                ),
+                            ),
+                            None,
+                            None,
+                            started_at=started_at,
+                            finished_at=self.now(),
+                        )
+                    )
+                    return PublicationResult(
+                        "failed",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "checkout",
+                        "attempt setup failed",
+                    )
                 refreshed = self.refresh.run(root, base_sha)
                 record = AttemptRecord(
                     number,
@@ -185,6 +215,8 @@ class PublicationCoordinator:
                     refreshed.stages,
                     _read_optional(root / ".build/report.json"),
                     _read_optional(root / ".build/verify.json"),
+                    started_at=started_at,
+                    finished_at=self.now(),
                 )
                 records.append(record)
                 if refreshed.status == "failed" or refreshed.candidate is None:

@@ -3,7 +3,8 @@ from __future__ import annotations
 import base64
 import os
 import subprocess
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Iterator, Mapping
+from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
 
@@ -14,6 +15,7 @@ from scripts.nightly_git import (
 )
 from scripts.nightly_publish import (
     ALLOWED_PATHS,
+    CandidateError,
     CommandResult,
     LocalAttemptFactory,
     RefreshResult,
@@ -204,6 +206,47 @@ def test_main_advancement_discards_candidate_and_runs_fresh_attempt(
     assert result.attempts[0].build_report is not None
     assert result.attempts[0].verify_report is not None
     assert all(not root.exists() for root in refresh.roots)
+
+
+class FailingSecondAttempt(LocalAttemptFactory):
+    def __init__(self, source: Path) -> None:
+        super().__init__(source)
+        self.count = 0
+
+    @contextmanager
+    def checkout(self, base_sha: str) -> Iterator[Path]:
+        self.count += 1
+        if self.count == 2:
+            raise CandidateError("credential secret from clone")
+        with super().checkout(base_sha) as root:
+            yield root
+
+
+def test_retry_setup_failure_preserves_first_attempt_diagnostics(
+    tmp_path: Path,
+) -> None:
+    source, bare, _ = _remote(tmp_path)
+
+    def advance() -> None:
+        _advance(source, bare, "newer")
+
+    remote = AdvancingRemote(GitRemote(source), advance)
+    coordinator = PublicationCoordinator(
+        FailingSecondAttempt(source),
+        ChangingRefresh(),
+        remote,
+        now=lambda: datetime(2026, 9, 8, tzinfo=UTC),
+    )
+
+    result = coordinator.run("run", "token")
+
+    assert result.status == "failed"
+    assert result.stage == "checkout"
+    assert len(result.attempts) == 2
+    assert result.attempts[0].build_report is not None
+    assert result.attempts[1].build_report is None
+    assert result.attempts[1].stages[0].detail == "attempt setup failed"
+    assert result.attempts[1].started_at == datetime(2026, 9, 8, tzinfo=UTC)
 
 
 def test_noop_rechecks_advanced_main_with_a_fresh_attempt(tmp_path: Path) -> None:
