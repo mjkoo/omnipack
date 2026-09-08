@@ -123,7 +123,9 @@ whose Dart semantics cannot be reproduced. Do not equate Python regex compilatio
 with compatibility. Translate default ECMAScript whitespace, dot line terminators
 and strict end anchors with a small class-aware scanner. Retain ASCII digit,
 word and boundary semantics; reject pattern backreferences, numeric/octal escapes,
-unknown identity escapes and class-contained `\S`. The supported subset operates
+unknown identity escapes, class-contained `\S`, character-class escapes beside
+hyphens and repeated groups containing captures. These conservative guards avoid
+Python-specific ranges and retained captures. The supported subset operates
 on BMP text, without modeling UTF-16 surrogate-pair matching. HTML's active
 release-date override is rejected before fetching because no date is available.
 GitHub uses the tag or configured title, then extraction,

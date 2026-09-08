@@ -49,6 +49,7 @@ def _translate_pattern(pattern: str) -> str:
     """Translate the supported default ECMAScript character and anchor rules."""
     result: list[str] = []
     in_class = False
+    group_captures: list[int] = []
     index = 0
     while index < len(pattern):
         char = pattern[index]
@@ -63,6 +64,18 @@ def _translate_pattern(pattern: str) -> str:
                 raise ResolutionError(
                     "regex-unsupported",
                     "regex uses unsupported escape or pattern backreference",
+                )
+            if (
+                in_class
+                and escape in "dDwWsS"
+                and (
+                    pattern[index - 2 : index - 1] == "-"
+                    or pattern[index + 1 : index + 2] == "-"
+                )
+            ):
+                raise ResolutionError(
+                    "regex-unsupported",
+                    "character-class escapes beside hyphens are unsupported",
                 )
             if escape == "s":
                 result.append(
@@ -80,6 +93,23 @@ def _translate_pattern(pattern: str) -> str:
         elif char == "]" and in_class:
             in_class = False
             result.append(char)
+        elif char == "(" and not in_class:
+            capturing = pattern[index + 1 : index + 2] != "?"
+            if capturing:
+                group_captures = [count + 1 for count in group_captures]
+            group_captures.append(int(capturing))
+            result.append(char)
+        elif char == ")" and not in_class:
+            if (
+                group_captures
+                and group_captures.pop()
+                and _repeated(pattern[index + 1 :])
+            ):
+                raise ResolutionError(
+                    "regex-unsupported",
+                    "repeated groups containing captures are unsupported",
+                )
+            result.append(char)
         elif char == "." and not in_class:
             result.append(r"[^\n\r\u2028\u2029]")
         elif char == "$" and not in_class:
@@ -88,6 +118,16 @@ def _translate_pattern(pattern: str) -> str:
             result.append(char)
         index += 1
     return "".join(result)
+
+
+def _repeated(suffix: str) -> bool:
+    if suffix.startswith(("*", "+")):
+        return True
+    repeat = re.match(r"\{(\d+)(?:,(\d*))?\}", suffix)
+    if repeat is None:
+        return False
+    maximum = repeat[2] if repeat[2] is not None else repeat[1]
+    return maximum == "" or int(maximum) > 1
 
 
 def extract_version(raw: str, pattern: str, group_template: str | None) -> str:

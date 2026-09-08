@@ -196,7 +196,8 @@ HTML `releaseDateAsVersion: true` SHALL be an unsupported active setting rejecte
 before HTTP because this source supplies no usable release date; false SHALL be
 accepted. The supported regex subset SHALL translate ECMAScript whitespace, dot
 line terminators and strict end anchors, including class-contained whitespace.
-Pattern backreferences, numeric/octal escapes and class-contained `\S` SHALL be
+Pattern backreferences, numeric/octal escapes, class-contained `\S`, character-
+class escapes beside hyphens and repeated groups containing captures SHALL be
 explicitly unsupported rather than interpreted with Python semantics.
 
 #### Scenario: Configured regex does not match

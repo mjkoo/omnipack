@@ -99,7 +99,8 @@ and BOM), a dot that excludes LF, CR and Unicode line/paragraph separators, and
 an end anchor that requires the actual end of input. Class-contained `\s` is
 translated without adding a nested class; escaped dots and anchors stay literal.
 Pattern backreferences, numeric/octal escapes, unknown identity escapes, and
-class-contained `\S` are explicitly unsupported. This is a BMP-text subset, not
+class-contained `\S`, character-class escapes beside hyphens, and repeated
+groups containing captures are explicitly unsupported. This is a BMP-text subset, not
 a general ECMAScript regex engine; UTF-16 surrogate-pair matching is not modeled.
 A configured GitHub date override runs after extraction and requires a usable
 date, represented in epoch microseconds. HTML resolution supplies no release

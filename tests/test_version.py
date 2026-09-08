@@ -120,3 +120,25 @@ def test_unsupported_pattern_escapes_are_explicit(pattern) -> None:
     with pytest.raises(ResolutionError) as raised:
         extract_version("v1.2", pattern, "0")
     assert raised.value.code == "regex-unsupported"
+
+
+@pytest.mark.parametrize(
+    ("raw", "pattern", "group"),
+    [
+        ("v\uff10", r"v([\s-\uffff]+)", "1"),
+        ("v\x01", r"v([\x00-\s]+)", "1"),
+        ("ba", r"(a|(b))+", "2"),
+        ("ba", r"(?:a|(b)){2}", "1"),
+        ("a", r"(a|)+", "1"),
+    ],
+)
+def test_incompatible_class_ranges_and_repeated_captures_are_rejected(
+    raw: str, pattern: str, group: str
+) -> None:
+    with pytest.raises(ResolutionError) as raised:
+        extract_version(raw, pattern, group)
+    assert raised.value.code == "regex-unsupported"
+
+
+def test_repeated_noncapturing_groups_preserve_supported_version_capture() -> None:
+    assert extract_version("foobar12", r"(?:foo|bar)+(\d+)", "1") == "12"
