@@ -18,9 +18,9 @@
 
 ## 4. Workflow integration
 
-- [ ] 4.1 Add the daily 06:23 UTC and manual workflow with canonical-repository/main guards, shared publisher concurrency, 60-minute timeout, existing pinned tool conventions, and explicit token permissions. Verify workflow inspection and actionlint/zizmor cover trigger guards, no automatic asset probes, and no credential persistence.
-- [ ] 4.2 Wire helper execution and finalization so handled setup/check/build/verify/publication failures reach issue reporting and available diagnostics upload with 14-day retention. Verify controlled workflow-boundary tests cover setup failure, publication success followed by issue/upload failure, and distinct final outcomes; inspect cancellation limitations.
-- [ ] 4.3 Verify official GitHub documentation for token-authored push triggers and direct-push prerequisites, and ensure pre-publication checks do not depend on recursive CI. Confirm the helper is covered by repository lint/type/test commands and verify the focused orchestration suite passes.
+- [x] 4.1 Add the daily 06:23 UTC and manual workflow with canonical-repository/main guards, shared publisher concurrency, 60-minute timeout, existing pinned tool conventions, and explicit token permissions. Verify workflow inspection and actionlint/zizmor cover trigger guards, no automatic asset probes, and no credential persistence.
+- [x] 4.2 Wire helper execution and finalization so handled setup/check/build/verify/publication failures reach issue reporting and available diagnostics upload with 14-day retention. Verify controlled workflow-boundary tests cover setup failure, publication success followed by issue/upload failure, and distinct final outcomes; inspect cancellation limitations.
+- [x] 4.3 Verify official GitHub documentation for token-authored push triggers and direct-push prerequisites, and ensure pre-publication checks do not depend on recursive CI. Confirm the helper is covered by repository lint/type/test commands and verify the focused orchestration suite passes.
 
 ## 5. Documentation and complete validation
 
