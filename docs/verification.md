@@ -99,7 +99,8 @@ and BOM), a dot that excludes LF, CR and Unicode line/paragraph separators, and
 an end anchor that requires the actual end of input. Class-contained `\s` is
 translated without adding a nested class; escaped dots and anchors stay literal.
 Pattern backreferences, numeric/octal escapes, unknown identity escapes, and
-class-contained `\S`, character-class escapes beside hyphens, and repeated
+class-contained `\S`, character-class escapes beside hyphens, empty character
+classes (including negated ones), leading unescaped `]` in classes, and repeated
 groups containing captures are explicitly unsupported. This is a BMP-text subset, not
 a general ECMAScript regex engine; UTF-16 surrogate-pair matching is not modeled.
 A configured GitHub date override runs after extraction and requires a usable
@@ -125,7 +126,9 @@ Necessary live requests are sequential with at least two seconds between request
 starts to the same host, including retries and redirects. They use a 30-second
 timeout, at most two transient retries, at most ten redirects and a 10 MiB
 metadata limit. Server retry instructions take precedence over shorter local
-backoff, within a 60-second wait bound. A rate-limited host, or one requesting a
+backoff, within a 60-second wait bound. A delay on the final failed attempt still
+applies to the next request to that host; unrelated hosts need not wait.
+A rate-limited host, or one requesting a
 longer wait, receives no more requests during that invocation. Affected entries
 record errors while unrelated hosts can continue.
 

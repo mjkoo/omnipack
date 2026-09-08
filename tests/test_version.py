@@ -142,3 +142,16 @@ def test_incompatible_class_ranges_and_repeated_captures_are_rejected(
 
 def test_repeated_noncapturing_groups_preserve_supported_version_capture() -> None:
     assert extract_version("foobar12", r"(?:foo|bar)+(\d+)", "1") == "12"
+
+
+@pytest.mark.parametrize("pattern", [r"([]1])", r"([^]2])"])
+def test_leading_unescaped_closing_bracket_is_explicitly_unsupported(
+    pattern: str,
+) -> None:
+    with pytest.raises(ResolutionError) as raised:
+        extract_version("1", pattern, "1")
+    assert raised.value.code == "regex-unsupported"
+
+
+def test_escaped_closing_bracket_remains_supported_in_character_class() -> None:
+    assert extract_version("]1", r"([\]1]+)", "1") == "]1"

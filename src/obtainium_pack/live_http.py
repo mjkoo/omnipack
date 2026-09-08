@@ -61,6 +61,7 @@ class LiveHttpClient(HttpClient):
         self.clock = clock
         self.wall_clock = wall_clock
         self._last_request: dict[str, float] = {}
+        self._retry_after: dict[str, float] = {}
         self._suppressed_hosts: set[str] = set()
         super().__init__(
             config,
@@ -149,13 +150,13 @@ class LiveHttpClient(HttpClient):
                 host = self._host(response.url)
                 self._suppressed_hosts.add(host)
                 raise HttpError(f"host {host} is rate limited for this run")
+            if wait is not None:
+                self._retry_after[self._host(response.url)] = self.clock() + wait
             if attempt == 2:
                 raise HttpError(
                     f"request to {redact_url(response.url)} returned status "
                     f"{response.status} after {attempt + 1} attempts"
                 )
-            if wait is not None:
-                self.sleep(wait)
         raise AssertionError("live request loop did not return or raise")
 
     def _require_github_auth(self, url: str) -> None:
@@ -175,12 +176,13 @@ class LiveHttpClient(HttpClient):
             raise HttpError(f"requests to rate-limited host {host} are suppressed")
         now = self.clock()
         last = self._last_request.get(host)
+        next_request = self._retry_after.get(host, now)
         if last is not None:
-            delay = max(0.0, self.minimum_interval - (now - last))
-            if delay:
-                self.sleep(delay)
-            now = self.clock()
-        self._last_request[host] = now
+            next_request = max(next_request, last + self.minimum_interval)
+        delay = next_request - now
+        if delay > 0:
+            self.sleep(delay)
+        self._last_request[host] = self.clock()
 
     def _observe_response(self, response: HttpResponse) -> None:
         if response.status in _RATE_LIMIT_STATUSES or _is_rate_limited(response):

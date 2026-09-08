@@ -197,8 +197,16 @@ before HTTP because this source supplies no usable release date; false SHALL be
 accepted. The supported regex subset SHALL translate ECMAScript whitespace, dot
 line terminators and strict end anchors, including class-contained whitespace.
 Pattern backreferences, numeric/octal escapes, class-contained `\S`, character-
-class escapes beside hyphens and repeated groups containing captures SHALL be
+class escapes beside hyphens, empty character classes (including negated ones),
+leading unescaped `]` in classes and repeated groups containing captures SHALL be
 explicitly unsupported rather than interpreted with Python semantics.
+
+#### Scenario: Character class begins with an unescaped closing bracket
+
+- **WHEN** a version pattern contains `[]1]` or `[^]2]`
+- **THEN** extraction fails with an unsupported-regex error rather than matching
+  a leading literal closing bracket using Python semantics
+- **AND** an explicitly escaped closing bracket in a nonempty class remains supported
 
 #### Scenario: Configured regex does not match
 
@@ -261,7 +269,9 @@ the latest release. Separate per-variant evidence SHALL remain available.
 Live requests SHALL have a minimum two-second per-host interval, including
 retries and redirects. GitHub API requests SHALL require a nonempty credential
 from the configured exact-host environment mapping before any API request.
-Server-directed retry delays SHALL be honored within a bounded wait. A host
+Server-directed retry delays SHALL be honored within a bounded wait, including
+delays received on the final failed attempt. Such delays SHALL apply to the next
+request to that host without delaying unrelated hosts. A host
 that reports rate limiting or a server delay beyond that bound SHALL receive no
 more requests in that invocation; unrelated hosts SHALL continue. Suppressed
 entries SHALL record network errors, not successful skips.

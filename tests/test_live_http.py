@@ -284,6 +284,34 @@ def test_final_transient_excessive_wait_suppresses_host(tmp_path, monkeypatch) -
     assert clock.sleeps == [2.0, 2.0]
 
 
+@pytest.mark.parametrize("operation", ["get_metadata", "probe"])
+def test_final_retry_delay_applies_to_next_same_host_request(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, operation: str
+) -> None:
+    live, transport, clock = client(
+        tmp_path,
+        monkeypatch,
+        [
+            response(503),
+            response(503),
+            response(503, headers={"Retry-After": "30"}),
+            response(url="https://unrelated.example/page"),
+            response(url="https://api.github.com/repos/a/b/releases"),
+        ],
+    )
+    with pytest.raises(HttpError, match="after 3 attempts"):
+        getattr(live, operation)("https://api.github.com/repos/o/r/releases")
+
+    assert clock.now == 104.0
+    assert live.get_metadata("https://unrelated.example/page").status == 200
+    assert clock.now == 104.0
+    clock.now += 10.0
+    assert live.get_metadata("https://api.github.com/repos/a/b/releases").status == 200
+    assert clock.now == 134.0
+    assert clock.sleeps == [2.0, 2.0, 20.0]
+    assert len(transport.requests) == 5
+
+
 def test_permanent_failure_is_not_retried(tmp_path, monkeypatch) -> None:
     from urllib.error import HTTPError
 

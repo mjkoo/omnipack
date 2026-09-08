@@ -88,6 +88,11 @@ def _translate_pattern(pattern: str) -> str:
             else:
                 result.append("\\" + escape)
         elif char == "[" and not in_class:
+            if pattern[index + 1 :].startswith(("]", "^]")):
+                raise ResolutionError(
+                    "regex-unsupported",
+                    "empty character classes and leading unescaped ] are unsupported",
+                )
             in_class = True
             result.append(char)
         elif char == "]" and in_class:

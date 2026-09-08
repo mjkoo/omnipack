@@ -124,7 +124,8 @@ with compatibility. Translate default ECMAScript whitespace, dot line terminator
 and strict end anchors with a small class-aware scanner. Retain ASCII digit,
 word and boundary semantics; reject pattern backreferences, numeric/octal escapes,
 unknown identity escapes, class-contained `\S`, character-class escapes beside
-hyphens and repeated groups containing captures. These conservative guards avoid
+hyphens, empty character classes (including negated ones), leading unescaped `]`
+in classes and repeated groups containing captures. These conservative guards avoid
 Python-specific ranges and retained captures. The supported subset operates
 on BMP text, without modeling UTF-16 surrogate-pair matching. HTML's active
 release-date override is rejected before fetching because no date is available.
@@ -180,7 +181,8 @@ rebuild credentials for the destination host.
 Live requests use a minimum two-second interval per host, including retries and
 redirects. Require a configured, nonempty exact-host GitHub API credential before
 contacting that API; do not consume the unauthenticated quota for the pack.
-Honor server retry delays within a bounded wait, and suppress a rate-limited host
+Honor server retry delays within a bounded wait, retaining a per-host cooldown
+even after the final failed attempt without delaying unrelated hosts, and suppress a rate-limited host
 for the rest of the invocation instead of repeatedly requesting each entry.
 Unrelated hosts continue. Network errors remain errors, not stale passes.
 
