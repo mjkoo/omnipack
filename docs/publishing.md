@@ -20,7 +20,9 @@ uv run --no-sync pack verify --live
 ```
 
 The live gate requires complete, successful, fresh evidence matching the
-candidate inputs and verifier identity. Existing warnings and generated-source
+candidate inputs and verifier identity. Evidence validation runs in each
+selected revision's locked runtime, including its identity, input paths, and
+report schema. Existing warnings and generated-source
 soft failures retain their current policy. Metadata verification does not
 probe download assets. Building can still download APK data for package-id
 discovery. For explicit asset troubleshooting, use
@@ -38,7 +40,9 @@ and changed verified bytes reject the candidate. Any changed allowed bytes,
 including a cache-only change, produce one bot commit with subject
 `chore(dist): nightly rebuild YYYY-MM-DD`. The date is UTC; the body identifies
 the run URL and base SHA. Reports and transient caches stay out of commits.
-A byte-identical refresh is a successful no-op and creates no commit.
+A byte-identical refresh is a successful no-op and creates no commit, including
+file-mode-only changes. Byte changes preserve the base file modes. The full
+tracked-change allowlist is rechecked when staging finishes.
 
 Publication uses a normal fast-forward push to main. Before either pushing or
 recognizing a no-op, the publisher rechecks main. If main advanced, it discards
@@ -96,10 +100,15 @@ maintenance failure fails the workflow without undoing a confirmed push; a
 later successful run retries closure. A failed refresh does not publish its
 locally updated package-id cache.
 
+Disposable-checkout cleanup failures fail the workflow. Diagnostics retain the
+confirmed publication outcome, published SHA, and per-attempt reports separately
+from cleanup errors. Confirmed publication or a verified no-op still triggers
+issue recovery even when cleanup fails.
+
 ## Diagnostics
 
 The Actions summary distinguishes publication, no-op, failure, uncertainty,
-issue maintenance, and upload outcomes. It includes run, base, and published
+cleanup, issue maintenance, and upload outcomes. It includes run, base, and published
 identifiers where available. Early failures explicitly identify unavailable
 reports. Issue bodies are bounded to 4,000 characters and summaries to 16,000.
 

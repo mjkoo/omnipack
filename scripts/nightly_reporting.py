@@ -66,6 +66,7 @@ def write_diagnostics(
         "status": _field(outcome, "status", "failed"),
         "stage": _field(outcome, "stage", "unknown"),
         "detail": _field(outcome, "detail", ""),
+        "cleanup_errors": _field(outcome, "cleanup_errors", ()),
         "run_url": run_url,
         "base_sha": _field(outcome, "base_sha", None),
         "published_sha": _field(outcome, "published_sha", None),
@@ -131,13 +132,16 @@ def finalize_publication(
     artifacts = write_diagnostics(output_dir, outcome, run_url, secrets=secrets)
     publication_status = str(_field(outcome, "status", "failed"))
     issue_body = _issue_body(outcome, run_url, diagnostic_url, secrets)
+    cleanup_failed = bool(_field(outcome, "cleanup_errors", ()))
     if publication_status in ("published", "no-op"):
         issue = _safe_issue_call(issues.report_recovery, issue_body, secrets)
     else:
         issue = _safe_issue_call(issues.report_failure, issue_body, secrets)
     workflow_status = (
         "success"
-        if publication_status in ("published", "no-op") and issue.status != "failed"
+        if publication_status in ("published", "no-op")
+        and issue.status != "failed"
+        and not cleanup_failed
         else "failed"
     )
     summary_suffix = (
@@ -295,6 +299,8 @@ def _issue_body(
         f"- Published SHA: {_field(outcome, 'published_sha', None) or 'unavailable'}",
         f"- Diagnostics: {diagnostic_url or 'available in the workflow run'}",
     ]
+    for error in _field(outcome, "cleanup_errors", ()):
+        lines.append(f"- Cleanup failure: {error}")
     if stage_detail and stage_detail != detail:
         lines.extend(("", "### Stage detail", stage_detail))
     if detail:
@@ -316,6 +322,10 @@ def _summary(
         f"- Published SHA: {_field(outcome, 'published_sha', None) or 'unavailable'}",
         f"- Issue maintenance: {issue.status}",
     ]
+    cleanup_errors = _field(outcome, "cleanup_errors", ())
+    lines.append(f"- Cleanup: {'failed' if cleanup_errors else 'success'}")
+    for error in cleanup_errors:
+        lines.append(f"- Cleanup detail: {error}")
     if issue.detail:
         lines.append(f"- Issue detail: {issue.detail}")
     for attempt in attempts:

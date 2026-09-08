@@ -33,6 +33,13 @@ class ControlledProcess:
         callback = self.on_command.get(index)
         if callback is not None:
             callback()
+        if "--validate-evidence" in command:
+            from scripts.nightly_publish import _validate_live_evidence
+
+            try:
+                _validate_live_evidence(cwd, datetime.fromisoformat(command[-1]))
+            except CandidateError as error:
+                return CommandResult(1, "", str(error))
         return CommandResult(1 if index == self.fail_at else 0, "", "failed")
 
 
@@ -45,7 +52,7 @@ def _git(root: Path, *args: str) -> str:
 def _repo(tmp_path: Path) -> Path:
     root = tmp_path / "repo"
     root.mkdir()
-    _git(root, "init", "-q")
+    _git(root, "init", "-q", "--initial-branch=main")
     _git(root, "config", "user.name", "Test")
     _git(root, "config", "user.email", "test@example.invalid")
     for relative in ALLOWED_PATHS:
@@ -61,12 +68,12 @@ def _repo(tmp_path: Path) -> Path:
 def _evidence(
     root: Path, *, warnings: bool = False, observed: str | None = None
 ) -> None:
-    from obtainium_pack.verify import capture_inputs, verifier_identity
+    from obtainium_pack.verify import SCHEMA_VERSION, capture_inputs, verifier_identity
 
     _, inputs = capture_inputs(root)
     observed = observed or datetime.now(UTC).isoformat()
     report = {
-        "schemaVersion": 1,
+        "schemaVersion": SCHEMA_VERSION,
         "verifier": verifier_identity(),
         "mode": "live",
         "startedAt": observed,
@@ -117,7 +124,7 @@ def test_refresh_orders_checks_build_and_metadata_only_verification(
         "live-verify",
         "candidate",
     ]
-    assert process.commands[-2:] == [
+    assert process.commands[-3:-1] == [
         ("uv", "run", "--no-sync", "pack", "build"),
         ("uv", "run", "--no-sync", "pack", "verify", "--live"),
     ]
@@ -128,12 +135,18 @@ def test_every_attempt_reruns_every_refresh_command(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     process = ControlledProcess(root)
     process.on_command[9] = lambda: _evidence(root)
-    process.on_command[18] = lambda: _evidence(root)
+    process.on_command[19] = lambda: _evidence(root)
 
     assert RefreshOrchestrator(process).run(root, "first").status == "no-op"
     assert RefreshOrchestrator(process).run(root, "second").status == "no-op"
 
-    assert process.commands[:9] == process.commands[9:]
+    assert [
+        (command[:-1] if "--validate-evidence" in command else command)
+        for command in process.commands[:10]
+    ] == [
+        (command[:-1] if "--validate-evidence" in command else command)
+        for command in process.commands[10:]
+    ]
 
 
 @pytest.mark.parametrize("fail_at", range(1, 10))
@@ -344,3 +357,46 @@ def test_byte_identical_candidate_is_noop(tmp_path: Path) -> None:
 
     assert candidate.changed_paths == ()
     assert set(candidate.snapshots) == set(ALLOWED_PATHS)
+
+
+@pytest.mark.parametrize("byte_change", [False, True])
+def test_candidate_ignores_mode_changes_and_preserves_base_mode(
+    tmp_path: Path, byte_change: bool
+) -> None:
+    root = _repo(tmp_path)
+    _git(root, "config", "core.fileMode", "true")
+    path = root / ALLOWED_PATHS[0]
+    if byte_change:
+        path.write_text("changed bytes\n")
+    path.chmod(0o755)
+    _evidence(root)
+
+    candidate = validate_candidate(root)
+
+    assert candidate.changed_paths == ((ALLOWED_PATHS[0],) if byte_change else ())
+    assert _git(root, "ls-files", "--stage", ALLOWED_PATHS[0]).startswith("100644 ")
+    assert bool(_git(root, "diff", "--cached", "--name-only")) == byte_change
+
+
+@pytest.mark.parametrize("during_staging", [False, True])
+def test_candidate_rejects_unrelated_mutation_after_capture(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, during_staging: bool
+) -> None:
+    import scripts.nightly_publish as publishing
+
+    root = _repo(tmp_path)
+    _evidence(root)
+    candidate = PublicationCandidate.capture(root)
+    original = publishing._git
+
+    def mutate(root: Path, *args: str) -> None:
+        original(root, *args)
+        (root / "tracked.txt").write_text("unexpected\n")
+
+    if during_staging:
+        monkeypatch.setattr(publishing, "_git", mutate)
+    else:
+        (root / "tracked.txt").write_text("unexpected\n")
+
+    with pytest.raises(CandidateError, match="unexpected tracked"):
+        candidate.stage_and_validate()

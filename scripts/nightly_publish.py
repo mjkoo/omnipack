@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import shutil
 import subprocess
 import tempfile
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -85,22 +86,45 @@ class PublicationCandidate:
     changed_paths: tuple[str, ...]
 
     @classmethod
-    def capture(cls, root: Path) -> PublicationCandidate:
-        _validate_live_evidence(root)
+    def capture(
+        cls, root: Path, *, validate_evidence: Callable[[Path], None] | None = None
+    ) -> PublicationCandidate:
+        (validate_evidence or _validate_live_evidence)(root)
         snapshots = _snapshot_allowed(root)
         _reject_unexpected_tracked_changes(root)
-        changed = _git_paths(root, "diff", "--name-only", "-z", "HEAD", "--")
-        return cls(
-            root, snapshots, tuple(path for path in ALLOWED_PATHS if path in changed)
+        changed = tuple(
+            path
+            for path in ALLOWED_PATHS
+            if snapshots[path] != _git_bytes(root, "show", f"HEAD:{path}")
         )
+        return cls(root, snapshots, changed)
 
     def stage_and_validate(self) -> None:
         if _snapshot_allowed(self.root) != self.snapshots:
             raise CandidateError("candidate bytes changed after verification")
+        _reject_unexpected_tracked_changes(self.root)
         _git(self.root, "add", "--", *ALLOWED_PATHS)
+        for relative in ALLOWED_PATHS:
+            mode = _base_mode(self.root, relative)
+            _git(
+                self.root,
+                "update-index",
+                f"--chmod={'+x' if mode == b'100755' else '-x'}",
+                "--",
+                relative,
+            )
         self.validate_staged()
 
     def validate_staged(self) -> None:
+        _reject_unexpected_tracked_changes(self.root)
+        if _snapshot_allowed(self.root) != self.snapshots:
+            raise CandidateError("candidate bytes changed after verification")
+        for relative in ALLOWED_PATHS:
+            mode = _git_bytes(self.root, "ls-files", "--stage", "--", relative).split()[
+                0
+            ]
+            if mode != _base_mode(self.root, relative):
+                raise CandidateError(f"staged mode does not match base for {relative}")
         staged = _git_paths(
             self.root, "diff", "--cached", "--name-only", "-z", "HEAD", "--"
         )
@@ -168,8 +192,14 @@ class RefreshOrchestrator:
         try:
             if _snapshot_allowed(root) != before_verify:
                 raise CandidateError("publishable bytes changed during verification")
-            _validate_live_evidence(root, invoked_at)
-            candidate = PublicationCandidate.capture(root)
+            candidate = PublicationCandidate.capture(
+                root,
+                validate_evidence=lambda path: self._validate_attempt_evidence(
+                    path, invoked_at
+                ),
+            )
+            if candidate.snapshots != before_verify:
+                raise CandidateError("publishable bytes changed during verification")
             candidate.stage_and_validate()
         except CandidateError as error:
             outcomes.append(StageOutcome("candidate", "failed", str(error)))
@@ -177,6 +207,23 @@ class RefreshOrchestrator:
         outcomes.append(StageOutcome("candidate", "success"))
         status = "no-op" if not candidate.changed_paths else "publishable"
         return RefreshResult(status, base_sha, tuple(outcomes), candidate)
+
+    def _validate_attempt_evidence(self, root: Path, invoked_at: datetime) -> None:
+        check = Check(
+            "candidate",
+            (
+                "uv",
+                "run",
+                "--no-sync",
+                "python",
+                "-m",
+                "scripts.nightly_publish",
+                "--validate-evidence",
+                invoked_at.isoformat(),
+            ),
+        )
+        if failure := self._run(check, root):
+            raise CandidateError(failure.detail)
 
     def _run(self, check: Check, root: Path) -> StageOutcome | None:
         try:
@@ -194,6 +241,7 @@ class LocalAttemptFactory:
 
     def __init__(self, source: Path) -> None:
         self.source = source
+        self.cleanup_errors: list[str] = []
         try:
             self.remote_url = (
                 _git_bytes(source, "remote", "get-url", "origin").decode().strip()
@@ -217,7 +265,10 @@ class LocalAttemptFactory:
             _git(root, "checkout", "--quiet", "--detach", base_sha)
             yield root
         finally:
-            shutil.rmtree(root)
+            try:
+                shutil.rmtree(root)
+            except OSError as error:
+                self.cleanup_errors.append(f"attempt checkout cleanup failed: {error}")
 
 
 def validate_candidate(root: Path) -> PublicationCandidate:
@@ -258,6 +309,13 @@ def _validate_live_evidence(root: Path, invoked_at: datetime | None = None) -> N
         or completed < started
     ):
         raise CandidateError("live verification evidence is stale or incomplete")
+
+
+def _base_mode(root: Path, relative: str) -> bytes:
+    entry = _git_bytes(root, "ls-tree", "HEAD", "--", relative).split()
+    if not entry or entry[0] not in (b"100644", b"100755"):
+        raise CandidateError(f"base publishable path is not a regular file: {relative}")
+    return entry[0]
 
 
 def _snapshot_allowed(root: Path) -> dict[str, bytes]:
@@ -315,4 +373,12 @@ def _git(root: Path, *args: str) -> None:
 
 
 if __name__ == "__main__":
-    raise SystemExit("nightly workflow integration is not implemented yet")
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--validate-evidence", required=True, type=datetime.fromisoformat
+    )
+    arguments = parser.parse_args()
+    try:
+        _validate_live_evidence(Path.cwd(), arguments.validate_evidence)
+    except CandidateError as error:
+        raise SystemExit(str(error)) from error

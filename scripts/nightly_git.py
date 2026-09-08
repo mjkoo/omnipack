@@ -154,6 +154,7 @@ class PublicationResult:
     published_sha: str | None
     stage: str
     detail: str = ""
+    cleanup_errors: tuple[str, ...] = ()
 
 
 class PublicationCoordinator:
@@ -171,6 +172,13 @@ class PublicationCoordinator:
         self.now = now or (lambda: datetime.now(UTC))
 
     def run(self, run_url: str, token: str) -> PublicationResult:
+        cleanup_start = len(self.attempts.cleanup_errors)
+        result = self._run(run_url, token)
+        return replace(
+            result, cleanup_errors=tuple(self.attempts.cleanup_errors[cleanup_start:])
+        )
+
+    def _run(self, run_url: str, token: str) -> PublicationResult:
         records: list[AttemptRecord] = []
         try:
             base_sha = self.remote.fetch_main()

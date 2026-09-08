@@ -36,7 +36,8 @@ Each attempt SHALL check its selected revision using the repository's offline
 Python checks, then build both packs and run fresh metadata-only live
 verification on the resulting candidate. Publication SHALL require complete
 successful verification evidence matching the candidate's current inputs and
-verifier identity. Build failure, check failure, verification errors, absent
+verifier identity. Evidence validation SHALL use the selected attempt revision's
+runtime, including its verifier identity, input paths, and report schema. Build failure, check failure, verification errors, absent
 evidence, or incomplete evidence SHALL prevent publication of every candidate
 file, including the package-id cache. Existing non-blocking warnings and
 generated-source soft failures SHALL retain their existing policy.
@@ -69,7 +70,9 @@ candidate files, symlink replacements, unexpected tracked modifications, and
 changes to candidate bytes after verification. Both packs and the cache SHALL
 be published in one commit when any allowed bytes differ from the base.
 Unchanged files need not appear in the commit diff. Reports and transient
-caches SHALL NOT be committed. A byte-identical candidate SHALL create no commit.
+caches SHALL NOT be committed. A byte-identical candidate SHALL create no commit, even if file modes changed.
+Publication SHALL preserve base file modes. The publisher SHALL recheck the
+full tracked-change allowlist when staging finishes.
 
 Publication SHALL use a conventional commit identifying the UTC date, run, and
 base revision, and a normal fast-forward push to main. It SHALL NOT force-push
@@ -115,6 +118,13 @@ an uncertain outcome SHALL NOT be described as confirmed non-publication.
 
 - **WHEN** the first candidate verifies but main now points to a newer revision
 - **THEN** a fresh attempt checks, builds, and verifies that revision before publishing
+
+#### Scenario: Main advances with a changed verifier
+
+- **WHEN** the fresh attempt's revision changes verifier identity, input paths,
+  or report schema
+- **THEN** evidence is validated against those selected-revision contracts
+- **AND** evidence that does not match them is rejected
 
 #### Scenario: Main advances twice
 
@@ -181,6 +191,8 @@ identifiers where available. Missing early-stage reports SHALL be identified as
 unavailable. Diagnostics SHALL exclude credentials, raw HTTP caches, and APK
 downloads; source text SHALL be treated as data, not executable input.
 
+Cleanup errors SHALL be recorded separately, fail the workflow, and preserve
+confirmed publication status, its SHA, and available per-attempt reports.
 Issue maintenance or diagnostic upload errors SHALL remain visible as workflow
 failures without undoing confirmed publication. Hard cancellation or runner
 loss SHALL NOT be represented as a completed verification or guaranteed issue
@@ -192,6 +204,14 @@ direct-push prerequisites without automatically changing repository settings.
 - **WHEN** setup or building fails before verification starts
 - **THEN** the summary records the failure and missing verification evidence,
   and available diagnostics are retained
+
+#### Scenario: Checkout cleanup fails after publication
+
+- **WHEN** removing a disposable checkout fails after a confirmed push
+- **THEN** the workflow fails with cleanup failure and confirmed publication
+  separately visible in diagnostics
+- **AND** confirmed publication still authorizes issue recovery
+- **AND** the published SHA and captured attempt reports remain available
 
 #### Scenario: Diagnostic upload fails
 

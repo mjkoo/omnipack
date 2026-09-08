@@ -1,12 +1,18 @@
 from __future__ import annotations
 
 import base64
+import inspect
+import json
 import os
+import shutil
 import subprocess
-from collections.abc import Callable, Iterator, Mapping
+import sys
+from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+
+import pytest
 
 from scripts.nightly_git import (
     GitRemote,
@@ -18,6 +24,7 @@ from scripts.nightly_publish import (
     CandidateError,
     CommandResult,
     LocalAttemptFactory,
+    RefreshOrchestrator,
     RefreshResult,
     StageOutcome,
     validate_candidate,
@@ -371,3 +378,176 @@ def test_unreadable_remote_after_rejected_push_is_uncertain(tmp_path: Path) -> N
     assert result.published_sha is None
     assert result.attempts[-1].candidate_sha is not None
     assert "secret-token" not in result.detail
+
+
+def test_cleanup_failure_preserves_confirmed_publication_and_fails_workflow(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import scripts.nightly_publish as publishing
+    from scripts.nightly import run_publication, run_setup_failure
+    from tests.test_nightly_workflow import FakeApi, _environment, _response
+
+    source, bare, _ = _remote(tmp_path)
+    refresh = ChangingRefresh()
+    remove = publishing.shutil.rmtree
+
+    def fail_cleanup(path: Path) -> None:
+        remove(path)
+        raise OSError("cleanup denied")
+
+    monkeypatch.setattr(publishing.shutil, "rmtree", fail_cleanup)
+    environment = _environment(tmp_path)
+    api = FakeApi([_response(200, [])])
+    finalized = run_publication(
+        environment,
+        publisher=_coordinator(source, GitRemote(source), refresh),
+        api=api,
+    )
+    output = tmp_path / "nightly-diagnostics"
+
+    assert finalized is not None
+
+    assert finalized.workflow_status == "failed"
+    assert finalized.publication_status == "published"
+    document = json.loads((output / "orchestration-result.json").read_text())
+    assert document["published_sha"] == _git(bare, "rev-parse", "main")
+    assert document["workflow_status"] == "failed"
+    assert document["cleanup_errors"]
+    assert "Cleanup: failed" in finalized.summary
+    assert json.loads((output / "attempt-1-verify.json").read_text())["complete"]
+    assert json.loads((output / "attempt-1-build.json").read_text())["base"]
+    assert [request[0] for request in api.requests] == ["GET"]
+    assert finalized.issue_status == "unchanged"
+    fallback = run_setup_failure(
+        environment, "helper", "publisher execution failed", api=FakeApi([])
+    )
+    assert fallback is not None
+    assert fallback.publication_status == "published"
+    assert fallback.workflow_status == "failed"
+
+
+@pytest.mark.parametrize("defect", [None, "verifier", "inputs", "schema"])
+def test_retry_validates_evidence_with_selected_revision_runtime(
+    tmp_path: Path, defect: str | None
+) -> None:
+    source, bare, _ = _remote(tmp_path)
+    project = Path(__file__).resolve().parents[1]
+    for directory in ("src", "scripts"):
+        shutil.copytree(
+            project / directory,
+            source / directory,
+            ignore=shutil.ignore_patterns("__pycache__"),
+        )
+    _git(source, "add", "src", "scripts")
+    _git(source, "commit", "-qm", "add runtime")
+    _git(source, "push", "-q", str(bare), "HEAD:main")
+    base = _git(source, "rev-parse", "HEAD")
+    newer: list[str] = []
+
+    def advance() -> None:
+        verify = source / "src/obtainium_pack/verify.py"
+        verify.write_text(
+            verify.read_text()
+            .replace('VERIFIER_VERSION = "0.3.0"', 'VERIFIER_VERSION = "0.4.0"')
+            .replace("SCHEMA_VERSION = 1", "SCHEMA_VERSION = 2")
+            .replace('Path("config/settings.json")', 'Path("config/new-settings.json")')
+        )
+        (source / "config/new-settings.json").write_text("new verifier input\n")
+        report = source / "src/obtainium_pack/report.py"
+        report.write_text(report.read_text().replace("schema != 1:", "schema != 2:"))
+        _git(source, "add", "src", "config/new-settings.json")
+        _git(source, "commit", "-qm", "update verification contract")
+        _git(source, "push", "-q", str(bare), "HEAD:main")
+        newer.append(_git(source, "rev-parse", "HEAD"))
+
+    class SelectedRuntimeProcess:
+        def __init__(self) -> None:
+            self.commands: list[tuple[str, ...]] = []
+
+        def run(self, command: Sequence[str], cwd: Path) -> CommandResult:
+            self.commands.append(tuple(command))
+            if tuple(command[-2:]) == ("pack", "build"):
+                (cwd / ALLOWED_PATHS[0]).write_text("candidate\n")
+            if command[-1] == "--live":
+                code = (
+                    "import json\nfrom pathlib import Path\n"
+                    "from datetime import UTC, datetime\n"
+                    + inspect.getsource(_evidence)
+                    + "\n_evidence(Path.cwd())\n"
+                )
+                completed = self.selected(cwd, ("-c", code))
+                if newer and defect is not None:
+                    path = cwd / ".build/verify.json"
+                    report = json.loads(path.read_text())
+                    if defect == "verifier":
+                        report["verifier"]["version"] = "0.3.0"
+                    elif defect == "inputs":
+                        report["inputs"]["settings"] = {"state": "missing"}
+                    else:
+                        report["schemaVersion"] = 1
+                    path.write_text(json.dumps(report))
+                return completed
+            if "scripts.nightly_publish" in command:
+                return self.selected(cwd, tuple(command[4:]))
+            return CommandResult(0, "", "")
+
+        def selected(self, root: Path, args: tuple[str, ...]) -> CommandResult:
+            completed = subprocess.run(
+                [sys.executable, *args],
+                cwd=root,
+                env={**os.environ, "PYTHONPATH": str(root / "src")},
+                capture_output=True,
+                text=True,
+                check=False,
+            )
+            return CommandResult(
+                completed.returncode, completed.stdout, completed.stderr
+            )
+
+    process = SelectedRuntimeProcess()
+    coordinator = PublicationCoordinator(
+        LocalAttemptFactory(source),
+        RefreshOrchestrator(process),
+        AdvancingRemote(GitRemote(source), advance),
+    )
+    result = coordinator.run("run", "token")
+
+    assert result.status == ("published" if defect is None else "failed"), result
+    assert len(result.attempts) == 2
+    assert [attempt.base_sha for attempt in result.attempts] == [base, newer[0]]
+    reports = [
+        json.loads(attempt.verify_report or b"{}") for attempt in result.attempts
+    ]
+    assert reports[0]["verifier"]["version"] == "0.3.0"
+    if defect is None:
+        assert reports[1]["verifier"]["version"] == "0.4.0"
+        assert reports[1]["schemaVersion"] == 2
+        assert reports[1]["inputs"]["settings"]["state"] == "present"
+    else:
+        assert result.published_sha is None
+        assert _git(bare, "rev-parse", "main") == newer[0]
+
+
+@pytest.mark.parametrize("byte_change", [False, True])
+def test_publication_uses_byte_changes_without_mode_drift(
+    tmp_path: Path, byte_change: bool
+) -> None:
+    source, bare, base = _remote(tmp_path)
+
+    class ModeChangingRefresh(ChangingRefresh):
+        def run(self, root: Path, base_sha: str) -> RefreshResult:
+            _git(root, "config", "core.fileMode", "true")
+            (root / ALLOWED_PATHS[0]).chmod(0o755)
+            return super().run(root, base_sha)
+
+    result = _coordinator(
+        source,
+        GitRemote(source),
+        ModeChangingRefresh(change=ALLOWED_PATHS[0] if byte_change else None),
+    ).run("run", "token")
+
+    assert result.status == ("published" if byte_change else "no-op")
+    assert _git(bare, "ls-tree", "main", ALLOWED_PATHS[0]).startswith("100644 ")
+    assert _git(bare, "rev-list", "--count", f"{base}..main") == (
+        "1" if byte_change else "0"
+    )

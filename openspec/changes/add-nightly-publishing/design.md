@@ -54,12 +54,18 @@ verifier warning policies. No `--probe-assets` invocation is added; generated
 package-id discovery can still read APK data as part of building.
 
 Require complete successful live evidence for the candidate's current inputs
-and current verifier identity. Snapshot the publishable bytes after verification
+and current verifier identity. Run evidence validation in the selected attempt's
+locked Python environment, importing that revision's verifier identity, input
+paths, and report schema rather than the initial workflow checkout's runtime.
+Snapshot the publishable bytes after verification
 and check they remain unchanged before staging. Reject unexpected tracked
 changes, missing outputs, or symlink replacements. Stage only
 `dist/single-screen.json`, `dist/dual-screen.json`, and
 `config/package-ids.json`, then assert the staged path set and content match
-the verified candidate. Reports and transient metadata caches stay uncommitted.
+the verified candidate. Recheck the full tracked-change allowlist when staging
+finishes. Compare candidate bytes directly with base blobs and preserve base
+file modes in the index, so executable-bit changes cannot create a commit or
+drift into a byte-changing commit. Reports and transient metadata caches stay uncommitted.
 
 If any allowed file changed, create one conventional commit with subject
 `chore(dist): nightly rebuild YYYY-MM-DD` using the UTC publication date,
@@ -85,7 +91,11 @@ maintainer from updating main immediately after that observation.
 
 Disposable attempt directories allow discarding candidates without touching a
 developer checkout. Preserve reports outside those directories before retrying.
-Only the final successful attempt can authorize publication or issue recovery.
+Record disposable-checkout cleanup errors separately from the terminal
+publication result. Cleanup failure must retain confirmed publication SHAs and
+captured reports, and fail the workflow even if a push already succeeded.
+Confirmed publication or a verified no-op still authorizes issue recovery;
+cleanup failure remains independently visible in the result and summary.
 
 ### Authentication and repository settings
 
