@@ -228,6 +228,7 @@ def redact(value: object, secrets: Sequence[str] = ()) -> object:
 
 
 def _attempt_summary(attempt: object) -> dict[str, object]:
+    mode = _verification_mode(attempt)
     stages = []
     for stage in _field(attempt, "stages", ()):
         stages.append(
@@ -249,8 +250,17 @@ def _attempt_summary(attempt: object) -> dict[str, object]:
         "verify_report": "available"
         if _field(attempt, "verify_report", None) is not None
         else "unavailable",
+        "verify_mode": mode,
+        "live_verify_report": "available" if mode == "live" else "unavailable",
         "stages": stages,
     }
+
+
+def _verification_mode(attempt: object) -> str:
+    report = _report_document("verify", _field(attempt, "verify_report", None))
+    if isinstance(report, dict) and report.get("mode") in ("offline", "live"):
+        return str(report["mode"])
+    return "unknown"
 
 
 def _report_document(name: str, value: object) -> object:
@@ -334,9 +344,13 @@ def _summary(
         verify = (
             "available" if _field(attempt, "verify_report", None) else "unavailable"
         )
+        mode = _verification_mode(attempt)
+        label = f"{mode} verification" if mode != "unknown" else "verification"
         lines.append(
-            f"- Attempt {number}: build report {build}; verification report {verify}"
+            f"- Attempt {number}: build report {build}; {label} report {verify}"
         )
+        if mode != "live":
+            lines.append(f"- Attempt {number}: live verification report unavailable")
     if not attempts:
         lines.append(
             "- Attempts: unavailable; failure occurred before an attempt completed"
@@ -362,7 +376,9 @@ def _safe_issue_call(call: Any, body: str, secrets: Sequence[str]) -> IssueResul
 
 def _write_json(path: Path, value: object, secrets: Sequence[str]) -> Path:
     document = json.dumps(redact(value, secrets), indent=2, sort_keys=True) + "\n"
-    path.write_text(document, encoding="utf-8")
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    temporary.write_text(document, encoding="utf-8")
+    temporary.replace(path)
     return path
 
 

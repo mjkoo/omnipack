@@ -204,3 +204,24 @@ def test_setup_failure_entrypoint_needs_no_project_runtime(tmp_path: Path) -> No
     assert "setup-secret" not in result.summary + issues.failure_bodies[0]
     for module in ("scripts/nightly_issues.py", "scripts/nightly_reporting.py"):
         ast.parse(Path(module).read_text(), feature_version=(3, 10))
+
+
+def test_offline_report_is_retained_without_claiming_live_evidence(
+    tmp_path: Path,
+) -> None:
+    outcome = _publication()
+    offline = b'{"mode":"offline","status":"success","complete":true}'
+    outcome = replace(
+        outcome, attempts=(replace(outcome.attempts[0], verify_report=offline),)
+    )
+
+    result = finalize_publication(outcome, RecordingIssues(), tmp_path, "run")
+
+    document = json.loads((tmp_path / "orchestration-result.json").read_text())
+    assert document["attempts"][0]["verify_mode"] == "offline"
+    assert document["attempts"][0]["live_verify_report"] == "unavailable"
+    assert "offline verification report available" in result.summary
+    assert "live verification report unavailable" in result.summary
+    assert json.loads((tmp_path / "attempt-1-verify.json").read_text()) == json.loads(
+        offline
+    )

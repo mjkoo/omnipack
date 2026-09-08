@@ -353,3 +353,42 @@ def test_system_python_module_entrypoint_does_not_import_project_runtime(
 
     assert completed.returncode == 0, completed.stderr
     assert "ineligible" in completed.stdout.lower()
+
+
+def test_interrupted_finalization_write_preserves_publication_for_fallback(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    environment = _environment(tmp_path)
+    original = Path.write_text
+
+    def interrupted_write(path: Path, data: str, *args: Any, **kwargs: Any) -> int:
+        if '"diagnostic_upload_status": "pending"' in data:
+            original(path, data[:20], *args, **kwargs)
+            raise OSError("interrupted write")
+        return original(path, data, *args, **kwargs)
+
+    with monkeypatch.context() as patch:
+        patch.setattr(Path, "write_text", interrupted_write)
+        with pytest.raises(OSError, match="interrupted write"):
+            run_publication(
+                environment,
+                publisher=FakePublisher(_result("published")),
+                api=FakeApi([_response(200, [])]),
+            )
+
+    retried = run_setup_failure(
+        environment, "helper", "interrupted write", api=FakeApi([_response(200, [])])
+    )
+
+    assert retried is not None
+    assert retried.publication_status == "published"
+    diagnostics = tmp_path / "nightly-diagnostics"
+    persisted = json.loads((diagnostics / RESULT_NAME).read_text())
+    assert persisted["published_sha"] == "published-sha"
+    assert len(persisted["attempts"]) == 1
+    assert json.loads((diagnostics / "attempt-1-build.json").read_text()) == {
+        "build": "ok"
+    }
+    assert json.loads((diagnostics / "attempt-1-verify.json").read_text()) == {
+        "verify": "ok"
+    }

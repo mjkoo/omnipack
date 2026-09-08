@@ -154,3 +154,9 @@ decision, not an automatic rollback performed by the helper.
 
 See [publishing validation](publishing-validation.md) for implementation checks
 and the distinction between controlled tests and operational acceptance.
+
+Diagnostic JSON files are replaced atomically. If a later write fails, fallback
+finalization can reload the last complete result and preserve a confirmed
+publication and its SHA. A retained offline verification report is labeled
+offline; the summary and orchestration result identify live evidence as
+unavailable until a live report exists.

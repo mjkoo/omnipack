@@ -141,7 +141,10 @@ containing stage outcomes, base and published SHAs, timestamps, and run URL.
 Upload the explicit diagnostic allowlist with 14-day retention on handled
 success and failure, and render a concise Actions summary. Never upload the
 entire workspace, downloaded APKs, credential values, or raw HTTP caches.
-Missing reports after early failures are recorded as unavailable. Upload
+Missing reports after early failures are recorded as unavailable. Retained offline
+verification reports are labeled separately from live evidence. Replace JSON
+files atomically so a failed rewrite leaves the prior complete publication
+result available to fallback finalization. Upload
 failure is visible as a failed workflow step, without reversing publication;
 the summary and logs remain fallback evidence.
 

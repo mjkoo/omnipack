@@ -39,21 +39,6 @@ class ProcessBoundary(Protocol):
     def run(self, command: Sequence[str], cwd: Path) -> CommandResult: ...
 
 
-@dataclass(frozen=True)
-class ApiResponse:
-    status: int
-    headers: Mapping[str, str]
-    body: bytes
-
-
-class GitHubBoundary(Protocol):
-    """Injected HTTP boundary for later publication and issue operations."""
-
-    def request(
-        self, method: str, path: str, body: Mapping[str, object] | None = None
-    ) -> ApiResponse: ...
-
-
 class SubprocessBoundary:
     """Run a command without shell interpolation."""
 

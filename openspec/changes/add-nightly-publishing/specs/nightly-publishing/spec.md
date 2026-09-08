@@ -188,7 +188,10 @@ verification, and orchestration reports as artifacts for 14 days on handled
 success and failure. The summary SHALL distinguish publication, no-op, failure,
 uncertain publication, and issue-maintenance outcomes, with run/base/published
 identifiers where available. Missing early-stage reports SHALL be identified as
-unavailable. Diagnostics SHALL exclude credentials, raw HTTP caches, and APK
+unavailable. A retained offline verification report SHALL be labeled offline
+and SHALL NOT count as available live verification evidence. Diagnostic JSON
+updates SHALL replace files atomically so an interrupted rewrite preserves the
+last complete result for fallback finalization. Diagnostics SHALL exclude credentials, raw HTTP caches, and APK
 downloads; source text SHALL be treated as data, not executable input.
 
 Cleanup errors SHALL be recorded separately, fail the workflow, and preserve
@@ -201,7 +204,7 @@ direct-push prerequisites without automatically changing repository settings.
 
 #### Scenario: Early failure has no verification report
 
-- **WHEN** setup or building fails before verification starts
+- **WHEN** setup or building fails before live verification starts
 - **THEN** the summary records the failure and missing verification evidence,
   and available diagnostics are retained
 
