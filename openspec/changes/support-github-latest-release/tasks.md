@@ -12,6 +12,6 @@
 
 ## 3. Compatibility evidence and validation
 
-- [ ] 3.1 Update committed-pack compatibility expectations and set verifier identity to `0.3.0` while retaining schema `1`; verify no currently active pack settings remain unsupported and evidence recorded with `0.2.2` is displayed as stale.
-- [ ] 3.2 Update verification guidance for latest prioritization, HTTP and tags-fallback failures, request budget and inspection counts; preserve historical observations and add a dated explanation distinguishing fixture validation from live upstream health.
-- [ ] 3.3 Run focused resolver, compatibility, live integration and report tests, then `just check-all`; record results and verify distribution, configuration and package-id-cache bytes remain unchanged.
+- [x] 3.1 Update committed-pack compatibility expectations and set verifier identity to `0.3.0` while retaining schema `1`; verify no currently active pack settings remain unsupported and evidence recorded with `0.2.2` is displayed as stale.
+- [x] 3.2 Update verification guidance for latest prioritization, HTTP and tags-fallback failures, request budget and inspection counts; preserve historical observations and add a dated explanation distinguishing fixture validation from live upstream health.
+- [x] 3.3 Run focused resolver, compatibility, live integration and report tests, then `just check-all`; record results and verify distribution, configuration and package-id-cache bytes remain unchanged.
