@@ -8,15 +8,15 @@ successful live nightly refresh or a GitHub Actions dispatch.
 
 | Check | Result |
 | --- | --- |
-| Focused `tests/test_nightly_*.py` suite with scoped `init.defaultBranch=master` | 78 passed |
-| `just check-all` | Passed, including all 648 Python tests |
+| Focused `tests/test_nightly_*.py` suite with scoped `init.defaultBranch=master` | 80 passed |
+| `just check-all` | Passed, including all 650 Python tests |
 | `actionlint .github/workflows/nightly.yml` | Passed with actionlint 1.7.12 |
 | `zizmor --persona pedantic .github/workflows/nightly.yml` | No findings with zizmor 1.30.0 |
 | Runtime-independent entrypoint and reporting syntax | Python 3.10 grammar accepted |
 | Distribution and configuration integrity | All 11 file SHA-256 hashes unchanged; no Git diff |
 
-These are the final results after review fixes. The focused suite took 16.88
-seconds; the Python suite in `just check-all` took 20.44 seconds. The Git default
+These are the final results after review fixes. The focused suite took 16.26
+seconds; the Python suite in `just check-all` took 21.77 seconds. The Git default
 was set only for the focused test process using `GIT_CONFIG_COUNT=1`,
 `GIT_CONFIG_KEY_0=init.defaultBranch`, and `GIT_CONFIG_VALUE_0=master`; no user
 Git configuration changed.
@@ -53,6 +53,15 @@ input path, accepts matching evidence, and rejects each old-contract mismatch.
 The cleanup test exercises the workflow entrypoint and helper fallback after a
 real local push: workflow failure stays visible, confirmed SHA and both reports
 survive, and the existing issue-recovery policy creates no failure issue.
+
+Follow-up reporting regressions also reproduced an interrupted JSON rewrite
+losing the confirmed publication in helper fallback, and offline evidence
+being presented without identifying missing live evidence.
+`test_interrupted_finalization_write_preserves_publication_for_fallback` and
+`test_offline_report_is_retained_without_claiming_live_evidence` failed before
+the fixes and pass after them. The former retains the SHA and both attempt
+reports through fallback; the latter preserves offline diagnostic content
+while identifying live evidence as unavailable.
 
 Process/API responses are controlled, and real Git transport tests use only
 temporary local repositories. No test pushed to GitHub, created a real issue,

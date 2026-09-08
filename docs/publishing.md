@@ -120,6 +120,12 @@ final outcome is known, so consult the final Actions summary and step status
 for the upload outcome; the uploaded result initially records it as pending.
 Upload failure fails the workflow without rolling back publication.
 
+Diagnostic JSON files are replaced atomically. If a later write fails, fallback
+finalization can reload the last complete result and preserve a confirmed
+publication and its SHA. A retained offline verification report is labeled
+offline; the summary and orchestration result identify live evidence as
+unavailable until a live report exists.
+
 System Python can finalize handled uv/Python setup failures. Hard cancellation
 or runner loss may prevent finalization or issue delivery; Actions remains the
 fallback record. No successful verification or publication is inferred from
@@ -154,9 +160,3 @@ decision, not an automatic rollback performed by the helper.
 
 See [publishing validation](publishing-validation.md) for implementation checks
 and the distinction between controlled tests and operational acceptance.
-
-Diagnostic JSON files are replaced atomically. If a later write fails, fallback
-finalization can reload the last complete result and preserve a confirmed
-publication and its SHA. A retained offline verification report is labeled
-offline; the summary and orchestration result identify live evidence as
-unavailable until a live report exists.
