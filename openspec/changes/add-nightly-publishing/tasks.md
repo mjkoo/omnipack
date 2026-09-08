@@ -1,13 +1,13 @@
 ## 1. Refresh orchestration and candidate gates
 
-- [ ] 1.1 Add the repository automation helper with explicit stage outcomes and injectable process/API boundaries. Add failing controlled tests for check/build/live-verification order, early failure, warning-only success, and absent/stale/incomplete evidence using selected-revision identity, input paths, and schema; verify the implementation passes them without external writes.
+- [x] 1.1 Add the repository automation helper with explicit stage outcomes and injectable process/API boundaries. Add failing controlled tests for check/build/live-verification order, early failure, warning-only success, and absent/stale/incomplete evidence using selected-revision identity, input paths, and schema; verify the implementation passes them without external writes.
 - [x] 1.2 Implement disposable attempt setup, lockfile sync, existing offline Python checks, fresh build and metadata-only verification. Verify tests assert fresh commands per attempt, no probe flag, preserved soft-failure policy, and no publication after any failed gate.
-- [ ] 1.3 Implement verified-byte snapshots and the three-file publication allowlist. Verify missing files, symlink replacements, unexpected tracked changes, post-verification mutations, staged-content mismatches, cache-only changes, byte-identical and mode-only no-ops, preserved base modes, and unrelated tracked mutation during staging with temporary fixtures.
+- [x] 1.3 Implement verified-byte snapshots and the three-file publication allowlist. Verify missing files, symlink replacements, unexpected tracked changes, post-verification mutations, staged-content mismatches, cache-only changes, byte-identical and mode-only no-ops, preserved base modes, and unrelated tracked mutation during staging with temporary fixtures.
 
 ## 2. Git publication and concurrent updates
 
 - [x] 2.1 Implement bot commits containing UTC date, run URL and base SHA, plus normal fast-forward publication. Verify local disposable Git repository tests show one commit containing only changed allowed files, no empty commits, and no force-push behavior.
-- [ ] 2.2 Implement the two-attempt budget with fresh checkout, sync, checks, build and verification after main advancement. Verify concurrent-change tests reject stale candidates, retain earlier attempt diagnostics, check main for no-ops, fail on a second advancement, and accept valid evidence after verifier identity/input/schema changes while rejecting mismatches. Initialize temporary Git repositories explicitly on main and run focused tests under a scoped master default.
+- [x] 2.2 Implement the two-attempt budget with fresh checkout, sync, checks, build and verification after main advancement. Verify concurrent-change tests reject stale candidates, retain earlier attempt diagnostics, check main for no-ops, fail on a second advancement, and accept valid evidence after verifier identity/input/schema changes while rejecting mismatches. Initialize temporary Git repositories explicitly on main and run focused tests under a scoped master default.
 - [x] 2.3 Implement remote reconciliation after rejected or ambiguous pushes. Verify intended-commit ancestry recognizes successful publication, an unchanged rejected main fails, advancement consumes only the remaining retry, and unreadable remote state reports uncertainty without another blind push.
 
 ## 3. Failure issue and diagnostics
@@ -19,7 +19,7 @@
 ## 4. Workflow integration
 
 - [x] 4.1 Add the daily 06:23 UTC and manual workflow with canonical-repository/main guards, shared publisher concurrency, 60-minute timeout, existing pinned tool conventions, and explicit token permissions. Verify workflow inspection and actionlint/zizmor cover trigger guards, no automatic asset probes, and no credential persistence.
-- [ ] 4.2 Wire helper execution and finalization so handled setup/check/build/verify/publication failures reach issue reporting and available diagnostics upload with 14-day retention. Verify controlled workflow-boundary tests cover setup failure, publication success followed by issue/upload/checkout-cleanup failure with confirmed SHA and reports preserved, and distinct final outcomes; inspect cancellation limitations.
+- [x] 4.2 Wire helper execution and finalization so handled setup/check/build/verify/publication failures reach issue reporting and available diagnostics upload with 14-day retention. Verify controlled workflow-boundary tests cover setup failure, publication success followed by issue/upload/checkout-cleanup failure with confirmed SHA and reports preserved, and distinct final outcomes; inspect cancellation limitations.
 - [x] 4.3 Verify official GitHub documentation for token-authored push triggers and direct-push prerequisites, and ensure pre-publication checks do not depend on recursive CI. Confirm the helper is covered by repository lint/type/test commands and verify the focused orchestration suite passes.
 
 ## 5. Documentation and complete validation
