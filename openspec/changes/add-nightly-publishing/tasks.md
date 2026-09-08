@@ -1,8 +1,8 @@
 ## 1. Refresh orchestration and candidate gates
 
-- [ ] 1.1 Add the repository automation helper with explicit stage outcomes and injectable process/API boundaries. Add failing controlled tests for check/build/live-verification order, early failure, warning-only success, and absent/stale/incomplete evidence; verify the implementation passes them without external writes.
-- [ ] 1.2 Implement disposable attempt setup, lockfile sync, existing offline Python checks, fresh build and metadata-only verification. Verify tests assert fresh commands per attempt, no probe flag, preserved soft-failure policy, and no publication after any failed gate.
-- [ ] 1.3 Implement verified-byte snapshots and the three-file publication allowlist. Verify missing files, symlink replacements, unexpected tracked changes, post-verification mutations, staged-content mismatches, cache-only changes, and byte-identical no-ops with temporary fixtures.
+- [x] 1.1 Add the repository automation helper with explicit stage outcomes and injectable process/API boundaries. Add failing controlled tests for check/build/live-verification order, early failure, warning-only success, and absent/stale/incomplete evidence; verify the implementation passes them without external writes.
+- [x] 1.2 Implement disposable attempt setup, lockfile sync, existing offline Python checks, fresh build and metadata-only verification. Verify tests assert fresh commands per attempt, no probe flag, preserved soft-failure policy, and no publication after any failed gate.
+- [x] 1.3 Implement verified-byte snapshots and the three-file publication allowlist. Verify missing files, symlink replacements, unexpected tracked changes, post-verification mutations, staged-content mismatches, cache-only changes, and byte-identical no-ops with temporary fixtures.
 
 ## 2. Git publication and concurrent updates
 
