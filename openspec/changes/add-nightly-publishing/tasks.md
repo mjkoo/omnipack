@@ -6,9 +6,9 @@
 
 ## 2. Git publication and concurrent updates
 
-- [ ] 2.1 Implement bot commits containing UTC date, run URL and base SHA, plus normal fast-forward publication. Verify local disposable Git repository tests show one commit containing only changed allowed files, no empty commits, and no force-push behavior.
-- [ ] 2.2 Implement the two-attempt budget with fresh checkout, sync, checks, build and verification after main advancement. Verify concurrent-change tests reject stale candidates, retain earlier attempt diagnostics, check main for no-ops, and fail on a second advancement.
-- [ ] 2.3 Implement remote reconciliation after rejected or ambiguous pushes. Verify intended-commit ancestry recognizes successful publication, an unchanged rejected main fails, advancement consumes only the remaining retry, and unreadable remote state reports uncertainty without another blind push.
+- [x] 2.1 Implement bot commits containing UTC date, run URL and base SHA, plus normal fast-forward publication. Verify local disposable Git repository tests show one commit containing only changed allowed files, no empty commits, and no force-push behavior.
+- [x] 2.2 Implement the two-attempt budget with fresh checkout, sync, checks, build and verification after main advancement. Verify concurrent-change tests reject stale candidates, retain earlier attempt diagnostics, check main for no-ops, and fail on a second advancement.
+- [x] 2.3 Implement remote reconciliation after rejected or ambiguous pushes. Verify intended-commit ancestry recognizes successful publication, an unchanged rejected main fails, advancement consumes only the remaining retry, and unreadable remote state reports uncertainty without another blind push.
 
 ## 3. Failure issue and diagnostics
 
