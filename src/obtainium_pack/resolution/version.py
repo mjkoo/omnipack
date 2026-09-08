@@ -23,6 +23,9 @@ _UNSUPPORTED_PATTERN_PARTS = (
 _INLINE_FLAGS = re.compile(r"\(\?[aiLmsux-]+(?:\)|:)")
 _DART_NAMED_GROUP = re.compile(r"\(\?<[^=!]")
 _POSSESSIVE_QUANTIFIER = re.compile(r"(?:[*+?]|\{\d+(?:,\d*)?\})\+")
+_ECMASCRIPT_WHITESPACE = (
+    r"\t\n\v\f\r \u00a0\u1680\u2000-\u200a\u2028\u2029\u202f\u205f\u3000\ufeff"
+)
 _GROUP_REFERENCE = re.compile(r"\$\d+")
 
 
@@ -37,9 +40,54 @@ def compile_compatible_regex(pattern: str) -> re.Pattern[str]:
     ):
         raise ResolutionError("regex-unsupported", "regex uses unsupported syntax")
     try:
-        return re.compile(pattern, re.ASCII)
+        return re.compile(_translate_pattern(pattern), re.ASCII)
     except re.error as error:
         raise ResolutionError("regex-invalid", f"invalid regex: {error.msg}") from error
+
+
+def _translate_pattern(pattern: str) -> str:
+    """Translate the supported default ECMAScript character and anchor rules."""
+    result: list[str] = []
+    in_class = False
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "\\" and index + 1 < len(pattern):
+            index += 1
+            escape = pattern[index]
+            if (
+                escape.isdigit()
+                or escape not in r"dDwWsSbBfnrtvxu^$\.*+?()[]{}|/-"
+                or (in_class and escape == "S")
+            ):
+                raise ResolutionError(
+                    "regex-unsupported",
+                    "regex uses unsupported escape or pattern backreference",
+                )
+            if escape == "s":
+                result.append(
+                    _ECMASCRIPT_WHITESPACE
+                    if in_class
+                    else f"[{_ECMASCRIPT_WHITESPACE}]"
+                )
+            elif escape == "S":
+                result.append(f"[^{_ECMASCRIPT_WHITESPACE}]")
+            else:
+                result.append("\\" + escape)
+        elif char == "[" and not in_class:
+            in_class = True
+            result.append(char)
+        elif char == "]" and in_class:
+            in_class = False
+            result.append(char)
+        elif char == "." and not in_class:
+            result.append(r"[^\n\r\u2028\u2029]")
+        elif char == "$" and not in_class:
+            result.append(r"\Z")
+        else:
+            result.append(char)
+        index += 1
+    return "".join(result)
 
 
 def extract_version(raw: str, pattern: str, group_template: str | None) -> str:

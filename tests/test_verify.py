@@ -162,3 +162,28 @@ def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
 def test_probe_assets_requires_live_mode(tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="require live"):
         verify.run_verification(tmp_path, probe_assets=True)
+
+
+@pytest.mark.parametrize(
+    "credentials", [{"example.test": 1}, {"example.test": None}, [], None]
+)
+@pytest.mark.parametrize("live", [False, True])
+def test_malformed_http_config_replaces_evidence_without_network(
+    tmp_path, monkeypatch, capsys, credentials, live
+) -> None:
+    from obtainium_pack.cli import main
+
+    copy_inputs(tmp_path)
+    verify.run_verification(tmp_path)
+    (tmp_path / "config/http.json").write_text(json.dumps({"credentials": credentials}))
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("malformed HTTP configuration reached network")
+
+    monkeypatch.setattr("obtainium_pack.live.verify_live", forbidden)
+    monkeypatch.chdir(tmp_path)
+    assert main(["verify", *(["--live"] if live else [])]) == 1
+    stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())
+    assert stored["status"] == "failed" and stored["complete"] is True
+    assert any(item["code"] == "http-config-invalid" for item in stored["errors"])
+    assert "Traceback" not in capsys.readouterr().err

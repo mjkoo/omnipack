@@ -120,7 +120,13 @@ group, numeric and `$N` group references, concatenation and unmatched optional
 groups. Reject malformed patterns, invalid groups, no match and empty output.
 Support the compatible subset used by the pack and explicitly reject constructs
 whose Dart semantics cannot be reproduced. Do not equate Python regex compilation
-with compatibility. GitHub uses the tag or configured title, then extraction,
+with compatibility. Translate default ECMAScript whitespace, dot line terminators
+and strict end anchors with a small class-aware scanner. Retain ASCII digit,
+word and boundary semantics; reject pattern backreferences, numeric/octal escapes,
+unknown identity escapes and class-contained `\S`. The supported subset operates
+on BMP text, without modeling UTF-16 surrogate-pair matching. HTML's active
+release-date override is rejected before fetching because no date is available.
+GitHub uses the tag or configured title, then extraction,
 then an intentional release-date override in microseconds since the Unix epoch.
 Date selection follows the baseline, including asset-date selection. A requested
 date with no usable date is a verification error rather than a fallback to a tag.

@@ -87,3 +87,36 @@ def test_overlapping_group_references_expand_in_template_order(
 
 def test_later_group_reference_expands_text_inserted_by_earlier_group() -> None:
     assert extract_version("$2-b", r"(\$2)-(b)", "$1-$2") == "b-b"
+
+
+@pytest.mark.parametrize(
+    ("raw", "pattern", "expected"),
+    [
+        ("Version:\u00a01.2", r"Version:\s+(\d+\.\d+)", "1.2"),
+        ("Version:\ufeff1.2", r"Version:[\s]+(\d+\.\d+)", "1.2"),
+        ("v1.2\rv9.9", r"v(.*)", "9.9"),
+        ("v1.2\u2028v9.9", r"v(.*)", "9.9"),
+        ("v1.2\u2029v9.9", r"v(.*)", "9.9"),
+        ("v1.2", r"v([^\s]+)$", "1.2"),
+        ("v.", r"v([.])", "."),
+        ("v$", r"v([\$])", "$"),
+    ],
+)
+def test_ecmascript_character_and_line_semantics(raw, pattern, expected) -> None:
+    assert extract_version(raw, pattern, "1") == expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "pattern"),
+    [("v1.2\n", r"v(\d+\.\d+)$"), ("Version:\x851.2", r"Version:\s+(.*)")],
+)
+def test_ecmascript_end_anchor_and_whitespace_exclusions(raw, pattern) -> None:
+    with pytest.raises(ResolutionError, match="did not match"):
+        extract_version(raw, pattern, "1")
+
+
+@pytest.mark.parametrize("pattern", [r"(x)?v(\d+\.\d+)\1", r"[\1]", r"[\S]", r"\a"])
+def test_unsupported_pattern_escapes_are_explicit(pattern) -> None:
+    with pytest.raises(ResolutionError) as raised:
+        extract_version("v1.2", pattern, "0")
+    assert raised.value.code == "regex-unsupported"

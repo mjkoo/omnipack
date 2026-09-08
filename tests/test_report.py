@@ -234,3 +234,79 @@ def test_malformed_nested_live_entry_is_rejected(
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     with pytest.raises(ValueError):
         format_reports(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [
+        {"schemaVersion": []},
+        {"schemaVersion": {}},
+        {"schemaVersion": True},
+        {"schemaVersion": None},
+        {"status": []},
+        {"status": {}},
+        {"offlineVerification": []},
+        {"offlineVerification": None},
+        {"offlineVerification": {"status": [], "findings": []}},
+        {"offlineVerification": {"status": "success", "findings": {}}},
+        {"offlineVerification": {"status": "failed", "findings": [{}]}},
+        {"error": []},
+        {"stage": {}},
+    ],
+)
+def test_malformed_build_report_is_concise_cli_failure(
+    tmp_path, monkeypatch, capsys, mutation
+) -> None:
+    from obtainium_pack.cli import main
+
+    path = tmp_path / ".build/report.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps({"status": "success", **mutation}))
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 1
+    assert "Traceback" not in capsys.readouterr().err
+    assert json.loads(path.read_text()) == {"status": "success", **mutation}
+
+
+def test_findings_display_location_field_and_effective_version(
+    tmp_path, monkeypatch, capsys
+) -> None:
+    from obtainium_pack.cli import main
+
+    copy_inputs(tmp_path)
+    report = run_verification(tmp_path)
+    report["errors"] = [
+        {
+            "stage": "offline",
+            "code": "invalid",
+            "message": "bad field",
+            "variant": "dual",
+            "index": 4,
+            "field": "url",
+        }
+    ]
+    report["warnings"] = [
+        {
+            "stage": "version-lint",
+            "code": "github-version-format",
+            "message": "bad version",
+            "variant": "single",
+            "entry_id": "org.example",
+            "effective_version": "rolling",
+        }
+    ]
+    report["status"] = "failed"
+    path = tmp_path / ".build/verify.json"
+    path.write_text(json.dumps(report))
+    before = path.read_bytes()
+
+    def forbidden(*args, **kwargs):
+        pytest.fail("report attempted network")
+
+    monkeypatch.setattr("obtainium_pack.http.HttpClient.get", forbidden)
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    assert "dual" in output and "index 4" in output and "url" in output
+    assert "single" in output and "org.example" in output and "rolling" in output
+    assert path.read_bytes() == before

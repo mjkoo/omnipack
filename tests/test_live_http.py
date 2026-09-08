@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from email.message import Message
 from pathlib import Path
@@ -142,7 +143,7 @@ def test_network_failure_never_accepts_stale_cache(
         [OSError("offline"), OSError("offline"), OSError("offline")],
     )
 
-    with pytest.raises(HttpError, match="failed after 1 attempts"):
+    with pytest.raises(HttpError, match="failed after 3 attempts"):
         second.get_metadata(url)
 
 
@@ -152,7 +153,10 @@ def test_rate_limit_suppresses_host_without_retry(
     live, transport, clock = client(
         tmp_path,
         monkeypatch,
-        [response(429, headers={"Retry-After": "5"})],
+        [
+            response(429, headers={"Retry-After": "5"}),
+            response(url="https://unrelated.example/page"),
+        ],
     )
 
     with pytest.raises(HttpError, match="rate limited"):
@@ -160,7 +164,8 @@ def test_rate_limit_suppresses_host_without_retry(
     with pytest.raises(HttpError, match="suppressed"):
         live.get_metadata("https://api.github.com/repos/a/b/releases")
 
-    assert len(transport.requests) == 1
+    assert live.get_metadata("https://unrelated.example/page").status == 200
+    assert len(transport.requests) == 2
     assert clock.sleeps == []
 
 
@@ -228,11 +233,150 @@ def test_successful_exhausting_response_suppresses_next_host_request(
     assert len(transport.requests) == 1
 
 
+@pytest.mark.parametrize("corruption", ["malformed", "mismatched"])
 def test_corrupt_or_mismatched_cache_is_not_used(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, corruption: str
 ) -> None:
-    (tmp_path / "bad.json").write_text(json.dumps({"url": "https://evil.invalid"}))
-    live, _, _ = client(tmp_path, monkeypatch, [response(304, body=b"")])
+    url = "https://api.github.com/repos/o/r/releases?per_page=100"
+    first, _, _ = client(tmp_path, monkeypatch, [response(headers={"ETag": '"one"'})])
+    first.get_metadata(url)
+    paths = list(tmp_path.glob("*.json"))
+    assert len(paths) == 1
+    expected_key = hashlib.sha256(
+        json.dumps([url, []], separators=(",", ":")).encode()
+    ).hexdigest()
+    assert paths[0].name == f"{expected_key}.json"
+    document = json.loads(paths[0].read_text())
+    assert set(document) == {
+        "version",
+        "url",
+        "headers",
+        "etag",
+        "last_modified",
+        "body",
+    }
+    assert document["url"] == url
+    assert "secret" not in paths[0].read_text()
+    assert "GH_TOKEN" not in paths[0].read_text()
+    monkeypatch.setenv("GH_TOKEN", "replacement-token")
+    assert first._cache_path(url, None) == paths[0]
+    document["url"] = "https://evil.invalid"
+    paths[0].write_text(
+        "not json" if corruption == "malformed" else json.dumps(document)
+    )
+    live, transport, _ = client(tmp_path, monkeypatch, [response(body=b"fresh")])
+    assert live.get_metadata(url).body == b"fresh"
+    assert transport.requests[0].get_header("If-none-match") is None
+    assert transport.requests[0].get_header("If-modified-since") is None
 
-    with pytest.raises(HttpError, match="without a valid cached response"):
+
+def test_final_transient_excessive_wait_suppresses_host(tmp_path, monkeypatch) -> None:
+    live, transport, clock = client(
+        tmp_path,
+        monkeypatch,
+        [response(503), response(503), response(503, headers={"Retry-After": "120"})],
+    )
+    with pytest.raises(HttpError, match="rate limited"):
         live.get_metadata("https://api.github.com/repos/o/r/releases")
+    with pytest.raises(HttpError, match="suppressed"):
+        live.get_metadata("https://api.github.com/repos/a/b/releases")
+    assert len(transport.requests) == 3
+    assert clock.sleeps == [2.0, 2.0]
+
+
+def test_permanent_failure_is_not_retried(tmp_path, monkeypatch) -> None:
+    from urllib.error import HTTPError
+
+    url = "https://example.com/missing"
+    live, transport, _ = client(
+        tmp_path, monkeypatch, [HTTPError(url, 404, "missing", Message(), None)] * 3
+    )
+    with pytest.raises(HttpError, match="after 1 attempts"):
+        live.get_metadata(url)
+    assert len(transport.requests) == 1
+
+
+def test_transient_acquisition_retries_then_succeeds(tmp_path, monkeypatch) -> None:
+    live, transport, clock = client(
+        tmp_path, monkeypatch, [OSError("temporary"), response()]
+    )
+    assert live.get_metadata("https://api.github.com/repos/o/r/releases").status == 200
+    assert len(transport.requests) == 2
+    assert clock.sleeps == [2.0]
+
+
+def test_oversized_real_metadata_is_not_retried(tmp_path, monkeypatch) -> None:
+    from io import BytesIO
+    from urllib.request import HTTPSHandler
+    from urllib.response import addinfourl
+
+    from obtainium_pack.http import METADATA_MAX_BYTES
+
+    requests = []
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture"
+
+    def open_fixture(handler, request):
+        requests.append(request)
+        return FixtureResponse(
+            BytesIO(b"x" * (METADATA_MAX_BYTES + 1)), Message(), request.full_url, 200
+        )
+
+    monkeypatch.setattr(HTTPSHandler, "https_open", open_fixture)
+    live = LiveHttpClient(HttpConfig({}), cache_dir=tmp_path, minimum_interval=0)
+    with pytest.raises(HttpError, match="exceeds"):
+        live.get_metadata("https://example.com/oversized")
+    assert len(requests) == 1
+
+
+@pytest.mark.parametrize("operation", ["get_metadata", "probe"])
+@pytest.mark.parametrize("status", [301, 302, 303, 307, 308])
+def test_real_redirects_are_paced_and_bodies_closed_without_draining(
+    tmp_path, monkeypatch, operation, status
+) -> None:
+    from io import BytesIO
+    from urllib.request import HTTPSHandler
+    from urllib.response import addinfourl
+
+    from obtainium_pack.http import METADATA_MAX_BYTES, PROBE_BYTES
+
+    clock = Clock()
+    requests = []
+    streams = []
+
+    class Body(BytesIO):
+        def __init__(self, data):
+            super().__init__(data)
+            self.read_sizes = []
+
+        def read(self, size=-1):
+            self.read_sizes.append(size)
+            return super().read(size)
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture"
+
+    def open_fixture(handler, request):
+        requests.append((request, clock.now))
+        redirect = request.full_url.endswith("/start")
+        headers = Message()
+        if redirect:
+            headers["Location"] = "https://example.com/end"
+        body = Body(b"x" * 100_000 if redirect else b"payload")
+        streams.append(body)
+        return FixtureResponse(
+            body, headers, request.full_url, status if redirect else 200
+        )
+
+    monkeypatch.setattr(HTTPSHandler, "https_open", open_fixture)
+    live = LiveHttpClient(
+        HttpConfig({}), cache_dir=tmp_path, clock=clock.monotonic, sleep=clock.sleep
+    )
+    assert getattr(live, operation)("https://example.com/start").body == b"payload"
+    assert [time for _, time in requests] == [100.0, 102.0]
+    assert streams[0].read_sizes == []
+    assert streams[1].read_sizes == [
+        PROBE_BYTES if operation == "probe" else METADATA_MAX_BYTES + 1
+    ]
+    assert all(stream.closed for stream in streams)

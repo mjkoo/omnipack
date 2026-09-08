@@ -436,10 +436,8 @@ def _validate_additional(
     headers = settings.get("requestHeader")
     if isinstance(headers, list):
         for header_index, header in enumerate(headers):
-            if (
-                not isinstance(header, dict)
-                or set(header) != {"requestHeader"}
-                or not isinstance(header.get("requestHeader"), str)
+            if not isinstance(header, dict) or not isinstance(
+                header.get("requestHeader"), str
             ):
                 _add(
                     findings,

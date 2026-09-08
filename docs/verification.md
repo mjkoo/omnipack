@@ -58,14 +58,16 @@ knowing its semantics.
 
 | Settings | Classification | Live behavior |
 | --- | --- | --- |
-| `trackOnly`, `versionExtractionRegEx`, `matchGroupToUse`, `versionDetection`, `releaseDateAsVersion`, `apkFilterRegEx`, `invertAPKFilter` | Implemented | Applied during version and candidate selection |
+| GitHub `releaseDateAsVersion` | Implemented | Requires a usable release date |
+| HTML `releaseDateAsVersion` | Inactive when false; live error when true | No usable release date; rejected before HTTP |
+| `trackOnly`, `versionExtractionRegEx`, `matchGroupToUse`, `versionDetection`, `apkFilterRegEx`, `invertAPKFilter` | Implemented | Applied during version and candidate selection |
 | GitHub release eligibility, title and notes filters, older-release fallback, `date` or `none` sorting, asset-date selection, and release-title versions | Implemented | Applied to the first 100 release records |
 | HTML intermediate links, link and text filters, outside-anchor matching, sorting controls, whole-page extraction, and non-secret request headers | Implemented | Applied to each configured page in order |
 | App name, author, description, notification/background controls, Shizuku presentation, refresh behavior, and OS version-code preference | Harmless for source resolution | Retained but does not alter the device-independent check |
 | `autoApkFilterByArch` and `preferredApkIndex` | Device-specific | Validated but not used to claim device compatibility |
 | `includeZips`, ZIP filters, `verifyLatestTag`, GitHub credentials or request proxies, insecure TLS, and non-`date`/non-`none` GitHub sorting | Inactive unsupported or live error | Default false or empty values are accepted; active values fail by setting name |
 | HTML pseudo-versioning | Inactive unsupported or live error | Ignored when explicit extraction supplies the version; otherwise active pseudo-versioning fails |
-| Authorization or Cookie request headers and device-dependent intermediate filtering | Live error | Rejected before a request is made |
+| Authorization or Cookie request headers and device-dependent filtering on nonempty intermediate steps | Live error | Rejected before a request is made |
 | Any unknown additional setting | Live error | Requires an intentional compatibility decision |
 
 The ordinary live check establishes source metadata resolution and version
@@ -91,9 +93,17 @@ Version extraction uses the last regex match, default group 0, and the baseline'
 numeric or `$N` group substitution. Invalid patterns, invalid groups, no match,
 and empty output fail. Python-only constructs, inline flags, named groups,
 atomic/conditional groups, possessive quantifiers, and unsupported Unicode
-property syntax are rejected explicitly. A configured date override runs after
-extraction and requires a usable date, represented in epoch microseconds. HTML
-resolution supplies no release date, so enabling that override produces an error.
+property syntax are rejected explicitly. Supported character semantics use ASCII
+`\d`, `\w`, and word boundaries, ECMAScript whitespace for `\s` (including NBSP
+and BOM), a dot that excludes LF, CR and Unicode line/paragraph separators, and
+an end anchor that requires the actual end of input. Class-contained `\s` is
+translated without adding a nested class; escaped dots and anchors stay literal.
+Pattern backreferences, numeric/octal escapes, unknown identity escapes, and
+class-contained `\S` are explicitly unsupported. This is a BMP-text subset, not
+a general ECMAScript regex engine; UTF-16 surrogate-pair matching is not modeled.
+A configured GitHub date override runs after extraction and requires a usable
+date, represented in epoch microseconds. HTML resolution supplies no release
+date, so enabling that override is an unsupported-setting error before HTTP.
 
 In `--live --probe-assets` mode, each download probe sends a GET Range request and reads at most 1024 bytes,
 closing the response even if the server ignores Range. Nonempty 200 or 206

@@ -147,7 +147,8 @@ def classify_version(
         Finding(
             "version-lint",
             "github-version-format",
-            "effective GitHub version does not match the numeric version shape",
+            f"effective GitHub version {resolution.effective_version!r} "
+            "does not match the numeric version shape",
         ),
     )
 

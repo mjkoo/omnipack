@@ -11,6 +11,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
 from http.client import HTTPException, HTTPMessage
+from io import BytesIO
 from pathlib import Path
 from typing import IO, Any, Protocol
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
@@ -23,6 +24,16 @@ _FORBIDDEN_CALLER_HEADERS = frozenset({"authorization", "cookie"})
 
 class HttpError(RuntimeError):
     """A request failed or exceeded a configured response bound."""
+
+
+class TransientHttpError(HttpError):
+    """A transient acquisition failure eligible for a caller-owned retry policy."""
+
+    def __init__(self, url: str, attempts: int) -> None:
+        self.url = url
+        super().__init__(
+            f"request to {redact_url(url)} failed after {attempts} attempts"
+        )
 
 
 @dataclass(frozen=True, slots=True)
@@ -43,7 +54,14 @@ class HttpConfig:
         """Load and validate an HTTP configuration document."""
         with Path(path).open(encoding="utf-8") as stream:
             document = json.load(stream)
-        credentials = document.get("credentials")
+        return cls.from_document(document)
+
+    @classmethod
+    def from_document(cls, document: object) -> HttpConfig:
+        """Validate an already captured HTTP configuration document."""
+        credentials = (
+            document.get("credentials") if isinstance(document, dict) else None
+        )
         if not isinstance(credentials, dict) or not all(
             isinstance(host, str) and isinstance(variable, str)
             for host, variable in credentials.items()
@@ -79,6 +97,25 @@ class _CredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
 
     def __init__(self, client: HttpClient) -> None:
         self.client = client
+
+    def http_error_302(
+        self,
+        req: urllib.request.Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+    ) -> Any:
+        # urllib drains redirect bodies without a bound. Give its redirect policy
+        # an empty body after closing the real stream, preserving loop checks.
+        fp.close()
+        with BytesIO() as empty:
+            return super().http_error_302(req, empty, code, msg, headers)
+
+    http_error_301 = http_error_302
+    http_error_303 = http_error_302
+    http_error_307 = http_error_302
+    http_error_308 = http_error_302
 
     def redirect_request(
         self,
@@ -200,6 +237,8 @@ class HttpClient:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
                 if not _is_transient(error) or attempt + 1 == attempts:
+                    if _is_transient(error):
+                        raise TransientHttpError(url, attempt + 1) from error
                     raise HttpError(
                         f"request to {redact_url(url)} failed after "
                         f"{attempt + 1} attempts"

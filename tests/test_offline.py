@@ -399,3 +399,13 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
     result = validate_offline(snapshots)
     assert result.ok, result.findings
     assert (snapshots.single, snapshots.dual) == before
+
+
+def test_request_header_unknown_fields_are_preserved() -> None:
+    raw = app(source="HTML")
+    settings = json.loads(raw["additionalSettings"])
+    settings["requestHeader"] = [{"requestHeader": "X-Channel: stable", "future": True}]
+    raw["additionalSettings"] = json.dumps(settings)
+    result = validate_offline(inputs([raw]))
+    assert result.ok
+    assert result.entries["single"][0].settings["requestHeader"][0]["future"] is True

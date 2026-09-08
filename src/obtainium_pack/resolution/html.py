@@ -107,10 +107,6 @@ def resolve_html(app: Mapping[str, object], http: HttpClient) -> ResolutionResul
             "unsupported-setting", "HTML pseudo-versioning is unsupported"
         )
     effective = extract_version(version_input, pattern, settings.get("matchGroupToUse"))
-    if settings.get("releaseDateAsVersion") is True:
-        raise ResolutionError(
-            "version-date-missing", "HTML source provides no usable release date"
-        )
     candidates = (
         (Candidate(_filename(selected_url), selected_url),) if selected_url else ()
     )

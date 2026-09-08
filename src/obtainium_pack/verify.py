@@ -103,7 +103,15 @@ def run_verification(
                 "message": "http input is unavailable",
             }
         )
-    if live and offline_result.ok:
+    http_config = None
+    if snapshots["http"] is not None:
+        try:
+            http_config = _http_config(snapshots["http"])
+        except ValueError as error:
+            report["errors"].append(
+                {"stage": "input", "code": "http-config-invalid", "message": str(error)}
+            )
+    if live and not report["errors"] and http_config is not None:
         try:
             from obtainium_pack.live import verify_live
             from obtainium_pack.live_http import LiveHttpClient
@@ -111,7 +119,7 @@ def run_verification(
             result = verify_live(
                 offline_result.entries,
                 LiveHttpClient(
-                    _http_config(snapshots["http"]),
+                    http_config,
                     cache_dir=root / ".build/live-http-cache",
                 ),
                 probe_assets=probe_assets,
@@ -167,14 +175,7 @@ def _base_report(mode: str, started: str, inputs: dict[str, Any]) -> dict[str, A
 
 def _http_config(value: bytes | None) -> HttpConfig:
     document = json.loads(value) if value is not None else None
-    credentials = document.get("credentials") if isinstance(document, dict) else None
-    if not isinstance(credentials, dict) or not all(
-        isinstance(k, str) and isinstance(v, str) for k, v in credentials.items()
-    ):
-        raise ValueError(
-            "HTTP config credentials must map host strings to variable names"
-        )
-    return HttpConfig(credentials)
+    return HttpConfig.from_document(document)
 
 
 def _secret_values(value: bytes | None) -> tuple[str, ...]:
@@ -183,7 +184,7 @@ def _secret_values(value: bytes | None) -> tuple[str, ...]:
         return tuple(
             secret
             for variable in document.get("credentials", {}).values()
-            if (secret := os.environ.get(variable, ""))
+            if isinstance(variable, str) and (secret := os.environ.get(variable, ""))
         )
     except ValueError, AttributeError:
         return ()

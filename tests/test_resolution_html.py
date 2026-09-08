@@ -416,14 +416,62 @@ def test_all_seven_captured_html_fixtures_resolve_through_http() -> None:
         assert transport.requests
 
 
-def test_requested_date_version_fails_when_html_has_no_release_date() -> None:
-    with pytest.raises(ResolutionError, match="release date") as raised:
-        resolve(
-            '<a href="app-2.apk">Android</a>',
+@pytest.mark.parametrize("active", [False, True])
+def test_html_date_override_is_rejected_before_http_when_active(active: bool) -> None:
+    transport = PageTransport(
+        {
+            "https://example.com": (
+                "https://example.com",
+                '<a href="app-2.apk">Android</a>',
+            )
+        }
+    )
+    entry = {
+        "url": "https://example.com",
+        "additionalSettings": json.dumps(
             {
                 "versionExtractionRegEx": r"app-(\d+)",
-                "matchGroupToUse": "$1",
-                "releaseDateAsVersion": True,
-            },
-        )
-    assert raised.value.code == "version-date-missing"
+                "matchGroupToUse": "1",
+                "releaseDateAsVersion": active,
+            }
+        ),
+    }
+    http = HttpClient(HttpConfig({}), transport=transport)
+    if active:
+        with pytest.raises(ResolutionError, match="release date") as raised:
+            resolve_html(entry, http)
+        assert raised.value.code == "unsupported-setting"
+        assert transport.requests == []
+    else:
+        assert resolve_html(entry, http).effective_version == "2"
+        assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize("active", [False, True])
+def test_intermediate_arch_filter_only_rejects_active_steps(active: bool) -> None:
+    transport = PageTransport(
+        {"https://example.com": ("https://example.com", '<a href="v1.apk">one</a>')}
+    )
+    entry = {
+        "url": "https://example.com",
+        "additionalSettings": json.dumps(
+            {
+                "versionExtractionRegEx": r"v(\d+)",
+                "matchGroupToUse": "1",
+                "intermediateLink": [
+                    {
+                        "customLinkFilterRegex": "next" if active else "",
+                        "autoLinkFilterByArch": True,
+                    }
+                ],
+            }
+        ),
+    }
+    http = HttpClient(HttpConfig({}), transport=transport)
+    if active:
+        with pytest.raises(ResolutionError, match="intermediateLink"):
+            resolve_html(entry, http)
+        assert transport.requests == []
+    else:
+        assert resolve_html(entry, http).effective_version == "1"
+        assert len(transport.requests) == 1

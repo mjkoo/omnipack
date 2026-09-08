@@ -222,17 +222,26 @@ def test_track_only_entry_skips_download_probe() -> None:
     http, transport = client(
         {
             releases_url: [
-                response(releases_url, json.dumps([release("rolling")]).encode())
+                response(
+                    releases_url,
+                    json.dumps(
+                        [release("rolling", "https://downloads.example/app.apk")]
+                    ).encode(),
+                )
             ]
         }
     )
 
     result = verify_live(
-        {"single": (github_entry(settings={"trackOnly": True}),)}, http
+        {"single": (github_entry(settings={"trackOnly": True}),)},
+        http,
+        probe_assets=True,
     )
 
     assert result.ok
     assert result.entries[0].version_class is VersionClass.TRACK_ONLY
+    assert result.entries[0].resolution is not None
+    assert result.entries[0].resolution.candidates
     assert result.entries[0].probes == ()
     assert len(transport.requests) == 1
 
@@ -455,26 +464,51 @@ def test_different_settings_reuse_same_metadata_request_but_resolve_separately()
     None
 ):
     releases_url = "https://api.github.com/repos/example/app/releases?per_page=100"
-    apk = "https://downloads.example/app.apk"
-    metadata = json.dumps([release("v1.2", apk)]).encode()
-    http, transport = client(
-        {
-            releases_url: [response(releases_url, metadata)],
-            apk: [response(apk, b"one"), response(apk, b"two")],
-        }
-    )
+    first_apk = "https://downloads.example/stable.apk"
+    second_apk = "https://downloads.example/beta.apk"
+    metadata = json.dumps(
+        [release("v1.2", first_apk), release("v2.0", second_apk)]
+    ).encode()
+    http, transport = client({releases_url: [response(releases_url, metadata)]})
     entries = {
-        "single": (github_entry("single"),),
-        "dual": (github_entry("dual", settings={"versionDetection": False}),),
+        "single": (
+            github_entry(
+                "single",
+                settings={
+                    "filterReleaseTitlesByRegEx": "v1",
+                    "fallbackToOlderReleases": True,
+                },
+            ),
+        ),
+        "dual": (
+            github_entry(
+                "dual",
+                settings={
+                    "filterReleaseTitlesByRegEx": "v2",
+                    "fallbackToOlderReleases": True,
+                },
+            ),
+        ),
     }
-
-    result = verify_live(entries, http, probe_assets=True)
-
-    assert result.entries[0].version_class is VersionClass.NUMERIC
-    assert result.entries[1].version_class is VersionClass.DETECTION_DISABLED
-    assert (
-        Counter(request.full_url for request in transport.requests)[releases_url] == 1
-    )
+    result = verify_live(entries, http)
+    assert result.ok
+    assert [
+        entry.resolution.effective_version
+        for entry in result.entries
+        if entry.resolution is not None
+    ] == [
+        "v1.2",
+        "v2.0",
+    ]
+    assert [
+        entry.resolution.candidates[0].url
+        for entry in result.entries
+        if entry.resolution is not None
+    ] == [
+        first_apk,
+        second_apk,
+    ]
+    assert len(transport.requests) == 1
 
 
 def test_slash_distinct_html_urls_resolve_separate_versions_and_relative_bases() -> (
@@ -626,6 +660,7 @@ def test_nonnumeric_version_warning_only_live_result_succeeds() -> None:
     result = verify_live({"single": (github_entry(),)}, http)
     assert result.ok and not result.errors
     assert [warning.code for warning in result.warnings] == ["github-version-format"]
+    assert "rolling" in result.warnings[0].message
 
 
 def test_seeded_package_id_cache_does_not_hide_dead_source(

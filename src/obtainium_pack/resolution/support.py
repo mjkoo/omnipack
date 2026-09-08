@@ -133,13 +133,19 @@ def classify_settings(
             and source == "HTML"
             and isinstance(value, list)
             and any(
-                isinstance(item, dict) and item.get("autoLinkFilterByArch") is True
+                isinstance(item, dict)
+                and bool(item.get("customLinkFilterRegex"))
+                and item.get("autoLinkFilterByArch") is True
                 for item in value
             )
         ):
             result[key] = SettingSupport(
                 SupportClass.LIVE_ERROR,
                 "device-dependent intermediate filtering is unsupported",
+            )
+        elif key == "releaseDateAsVersion" and source == "HTML":
+            result[key] = _unsupported(
+                value, False, "HTML source provides no usable release date"
             )
         elif key in _COMMON_IMPLEMENTED or key in implemented:
             result[key] = SettingSupport(

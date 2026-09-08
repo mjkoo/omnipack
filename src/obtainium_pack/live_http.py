@@ -22,6 +22,7 @@ from obtainium_pack.http import (
     HttpConfig,
     HttpError,
     HttpResponse,
+    TransientHttpError,
     Transport,
     redact_url,
 )
@@ -137,18 +138,23 @@ class LiveHttpClient(HttpClient):
         for attempt in range(3):
             try:
                 response = request()
-            except HttpError:
+            except TransientHttpError as error:
                 if attempt == 2:
-                    raise
+                    raise TransientHttpError(error.url, attempt + 1) from error
                 continue
-            if response.status not in _TRANSIENT_STATUSES or attempt == 2:
+            if response.status not in _TRANSIENT_STATUSES:
                 return response
             wait = _server_wait(response, self.wall_clock())
+            if wait is not None and wait > self.max_server_wait:
+                host = self._host(response.url)
+                self._suppressed_hosts.add(host)
+                raise HttpError(f"host {host} is rate limited for this run")
+            if attempt == 2:
+                raise HttpError(
+                    f"request to {redact_url(response.url)} returned status "
+                    f"{response.status} after {attempt + 1} attempts"
+                )
             if wait is not None:
-                if wait > self.max_server_wait:
-                    host = self._host(response.url)
-                    self._suppressed_hosts.add(host)
-                    raise HttpError(f"host {host} is rate limited for this run")
                 self.sleep(wait)
         raise AssertionError("live request loop did not return or raise")
 

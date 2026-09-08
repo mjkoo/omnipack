@@ -92,10 +92,26 @@ def format_reports(root: Path) -> str:
     if build_path.exists():
         build = _read_document(build_path, "build")
         schema = build.get("schemaVersion")
-        if schema not in {None, BUILD_SCHEMA_VERSION}:
+        if "schemaVersion" in build and (
+            type(schema) is not int or schema != BUILD_SCHEMA_VERSION
+        ):
             raise ReportFormatError(f"unsupported build report schema {schema!r}")
-        if build.get("status") not in {"success", "failed"}:
+        if build.get("status") not in ("success", "failed"):
             raise ReportFormatError("malformed build report: status is required")
+        if any(
+            key in build and build[key] is not None and not isinstance(build[key], str)
+            for key in ("stage", "error")
+        ):
+            raise ReportFormatError("malformed build report diagnostics")
+        if "offlineVerification" in build:
+            offline = build["offlineVerification"]
+            if (
+                not isinstance(offline, dict)
+                or offline.get("status") not in ("not-run", "success", "failed")
+                or not isinstance(offline.get("findings"), list)
+                or not all(_valid_finding(item) for item in offline["findings"])
+            ):
+                raise ReportFormatError("malformed build offline verification")
         lines = ["Build report", f"Status: {build['status']}"]
         if build.get("stage"):
             lines.append(f"Stage: {build['stage']}")
@@ -171,7 +187,19 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
             )
         else:
             message = str(value)
-        lines.append(f"{label}: {message}")
+        location = []
+        if isinstance(value, dict):
+            for key in ("variant", "entry_id", "id"):
+                if value.get(key) is not None:
+                    location.append(str(value[key]))
+            if value.get("index") is not None:
+                location.append(f"index {value['index']}")
+            if value.get("field") is not None:
+                location.append(str(value["field"]))
+            if value.get("effective_version") is not None:
+                location.append(f"version {value['effective_version']!r}")
+        context = f" [{' / '.join(location)}]" if location else ""
+        lines.append(f"{label}{context}: {message}")
     return lines
 
 
@@ -256,7 +284,7 @@ def _valid_finding(value: object) -> bool:
         and all(isinstance(value.get(key), str) for key in ("stage", "code", "message"))
         and all(
             value.get(key) is None or isinstance(value[key], str)
-            for key in ("variant", "entry_id")
+            for key in ("variant", "entry_id", "field")
         )
         and (value.get("index") is None or type(value["index"]) is int)
     )

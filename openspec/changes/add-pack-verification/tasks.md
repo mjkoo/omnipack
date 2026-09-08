@@ -12,7 +12,7 @@
 
 ## 2. Offline artifact validation
 
-- [x] 2.1 Implement validation of both serialized documents, required app fields,
+- [ ] 2.1 Implement validation of both serialized documents, required app fields,
   finite JSON values, source types, unique ids and string-encoded settings. Test
   missing files, malformed roots/entries, object-valued additional settings,
   duplicate ids, missing defaults, wrong known types, unknown retained fields,
@@ -42,7 +42,7 @@
 
 ## 4. Version extraction and GitHub resolution
 
-- [x] 4.1 Implement compatible version extraction and unsupported-pattern
+- [ ] 4.1 Implement compatible version extraction and unsupported-pattern
   diagnostics. Test last-match selection, default group, numeric and `$N` group
   templates, concatenation, optional and escaped groups, invalid groups, no match,
   empty output and incompatible regex constructs. Include the actual PPSSPP and
@@ -66,7 +66,7 @@
   relative URLs, JSON/raw-text extraction, decoding and configured headers. Test
   redirected relative bases, text-vs-URL filters, escaped JSON URLs, alphanumeric
   order, last-segment order and independent skip/reverse behavior.
-- [x] 5.2 Implement intermediate traversal and final candidate selection. Test
+- [ ] 5.2 Implement intermediate traversal and final candidate selection. Test
   the Play! and RetroArch step chains, last-link selection at each stage, empty
   intermediate matches, installable empty final matches, excessive depth and
   ignored empty step filters under the pinned baseline. Assert no alternate older link rescues a failed probe.
@@ -103,7 +103,7 @@
 
 ## 7. Evidence and command integration
 
-- [x] 7.1 Implement versioned verification evidence, exact-byte input fingerprints,
+- [ ] 7.1 Implement versioned verification evidence, exact-byte input fingerprints,
   running/incomplete records, atomic completion and redaction. Test missing inputs,
   interrupted attempts, successful and failed completions, report write errors,
   changed inputs during a run, and absence of secret values in serialized reports.

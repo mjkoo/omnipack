@@ -192,6 +192,12 @@ optional-group behavior. Malformed or unsupported regex constructs, invalid
 groups, no match and empty results SHALL be errors. A requested date override
 SHALL require a usable date and emit microseconds since the Unix epoch. The
 report SHALL identify the raw value, effective value and version origin.
+HTML `releaseDateAsVersion: true` SHALL be an unsupported active setting rejected
+before HTTP because this source supplies no usable release date; false SHALL be
+accepted. The supported regex subset SHALL translate ECMAScript whitespace, dot
+line terminators and strict end anchors, including class-contained whitespace.
+Pattern backreferences, numeric/octal escapes and class-contained `\S` SHALL be
+explicitly unsupported rather than interpreted with Python semantics.
 
 #### Scenario: Configured regex does not match
 
