@@ -1,0 +1,338 @@
+"""Git publication, concurrency handling, and remote reconciliation."""
+
+from __future__ import annotations
+
+import base64
+import os
+import subprocess
+from collections.abc import Callable, Mapping
+from dataclasses import dataclass, replace
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Protocol
+
+from scripts.nightly_publish import (
+    CandidateError,
+    CommandResult,
+    LocalAttemptFactory,
+    PublicationCandidate,
+    RefreshResult,
+    StageOutcome,
+    _git,
+    _git_bytes,
+    _git_paths,
+)
+
+
+class RefreshBoundary(Protocol):
+    def run(self, root: Path, base_sha: str) -> RefreshResult: ...
+
+
+class RemoteBoundary(Protocol):
+    def fetch_main(self) -> str: ...
+
+    def push(self, root: Path, token: str) -> CommandResult: ...
+
+    def main_contains(self, root: Path, sha: str) -> bool: ...
+
+
+class GitProcessBoundary(Protocol):
+    def run(
+        self,
+        command: tuple[str, ...],
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+    ) -> CommandResult: ...
+
+
+class GitSubprocessBoundary:
+    def run(
+        self,
+        command: tuple[str, ...],
+        cwd: Path,
+        env: Mapping[str, str] | None = None,
+    ) -> CommandResult:
+        process_env = os.environ.copy()
+        process_env.update(env or {})
+        completed = subprocess.run(
+            command,
+            cwd=cwd,
+            env=process_env,
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        return CommandResult(completed.returncode, completed.stdout, completed.stderr)
+
+
+class GitRemote:
+    """Read and fast-forward the configured origin without persisting credentials."""
+
+    def __init__(
+        self, source: Path, *, runner: GitProcessBoundary | None = None
+    ) -> None:
+        self.source = source
+        self.runner = runner or GitSubprocessBoundary()
+
+    def fetch_main(self) -> str:
+        result = self.runner.run(
+            (
+                "git",
+                "fetch",
+                "--quiet",
+                "origin",
+                "refs/heads/main:refs/remotes/origin/main",
+            ),
+            self.source,
+        )
+        if result.returncode != 0:
+            raise OSError("unable to fetch remote main")
+        resolved = self.runner.run(
+            ("git", "rev-parse", "refs/remotes/origin/main"), self.source
+        )
+        if resolved.returncode != 0:
+            raise OSError("unable to resolve remote main")
+        return resolved.stdout.strip()
+
+    def push(self, root: Path, token: str) -> CommandResult:
+        authorization = base64.b64encode(f"x-access-token:{token}".encode()).decode()
+        env = {
+            "GIT_CONFIG_COUNT": "1",
+            "GIT_CONFIG_KEY_0": "http.https://github.com/.extraheader",
+            "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {authorization}",
+        }
+        return self.runner.run(
+            ("git", "push", "origin", "HEAD:refs/heads/main"), root, env
+        )
+
+    def main_contains(self, root: Path, sha: str) -> bool:
+        fetched = self.runner.run(
+            (
+                "git",
+                "fetch",
+                "--quiet",
+                "origin",
+                "refs/heads/main:refs/remotes/origin/main",
+            ),
+            root,
+        )
+        if fetched.returncode != 0:
+            raise OSError("unable to fetch remote main")
+        result = self.runner.run(
+            (
+                "git",
+                "merge-base",
+                "--is-ancestor",
+                sha,
+                "refs/remotes/origin/main",
+            ),
+            root,
+        )
+        if result.returncode not in (0, 1):
+            raise OSError("unable to inspect remote main ancestry")
+        return result.returncode == 0
+
+
+@dataclass(frozen=True)
+class AttemptRecord:
+    number: int
+    base_sha: str
+    stages: tuple[StageOutcome, ...]
+    build_report: bytes | None
+    verify_report: bytes | None
+    candidate_sha: str | None = None
+
+
+@dataclass(frozen=True)
+class PublicationResult:
+    status: str
+    attempts: tuple[AttemptRecord, ...]
+    base_sha: str | None
+    published_sha: str | None
+    stage: str
+    detail: str = ""
+
+
+class PublicationCoordinator:
+    def __init__(
+        self,
+        attempts: LocalAttemptFactory,
+        refresh: RefreshBoundary,
+        remote: RemoteBoundary,
+        *,
+        now: Callable[[], datetime] | None = None,
+    ) -> None:
+        self.attempts = attempts
+        self.refresh = refresh
+        self.remote = remote
+        self.now = now or (lambda: datetime.now(UTC))
+
+    def run(self, run_url: str, token: str) -> PublicationResult:
+        records: list[AttemptRecord] = []
+        try:
+            base_sha = self.remote.fetch_main()
+        except OSError:
+            return PublicationResult(
+                "failed", (), None, None, "fetch", "remote main unavailable"
+            )
+
+        for number in (1, 2):
+            with self.attempts.checkout(base_sha) as root:
+                refreshed = self.refresh.run(root, base_sha)
+                record = AttemptRecord(
+                    number,
+                    base_sha,
+                    refreshed.stages,
+                    _read_optional(root / ".build/report.json"),
+                    _read_optional(root / ".build/verify.json"),
+                )
+                records.append(record)
+                if refreshed.status == "failed" or refreshed.candidate is None:
+                    stage = (
+                        refreshed.stages[-1].stage if refreshed.stages else "refresh"
+                    )
+                    return PublicationResult(
+                        "failed",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        stage,
+                        "refresh failed",
+                    )
+
+                try:
+                    current = self.remote.fetch_main()
+                except OSError:
+                    return PublicationResult(
+                        "failed",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "fetch",
+                        "remote main unavailable",
+                    )
+                if current != base_sha:
+                    if number == 2:
+                        return PublicationResult(
+                            "failed",
+                            tuple(records),
+                            base_sha,
+                            None,
+                            "concurrency",
+                            "remote main advanced twice",
+                        )
+                    base_sha = current
+                    continue
+
+                if refreshed.status == "no-op":
+                    return PublicationResult(
+                        "no-op", tuple(records), base_sha, None, "complete"
+                    )
+
+                try:
+                    commit_sha = _create_candidate_commit(
+                        refreshed.candidate, self.now(), run_url, base_sha
+                    )
+                except CandidateError:
+                    return PublicationResult(
+                        "failed",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "commit",
+                        "candidate commit failed",
+                    )
+                records[-1] = replace(records[-1], candidate_sha=commit_sha)
+                try:
+                    pushed = self.remote.push(root, token)
+                except OSError:
+                    pushed = CommandResult(1, "", "push outcome unavailable")
+                if pushed.returncode == 0:
+                    return PublicationResult(
+                        "published",
+                        tuple(records),
+                        base_sha,
+                        commit_sha,
+                        "complete",
+                    )
+                try:
+                    if self.remote.main_contains(root, commit_sha):
+                        return PublicationResult(
+                            "published",
+                            tuple(records),
+                            base_sha,
+                            commit_sha,
+                            "complete",
+                        )
+                    current = self.remote.fetch_main()
+                except OSError:
+                    return PublicationResult(
+                        "uncertain",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "push",
+                        "remote publication outcome is unreadable",
+                    )
+                if current != base_sha and number == 1:
+                    base_sha = current
+                    continue
+                return PublicationResult(
+                    "failed",
+                    tuple(records),
+                    base_sha,
+                    None,
+                    "push",
+                    "push rejected and intended commit is absent from remote main",
+                )
+        raise AssertionError("attempt loop must return")
+
+
+def _create_candidate_commit(
+    candidate: PublicationCandidate, observed: datetime, run_url: str, base_sha: str
+) -> str:
+    candidate.stage_and_validate()
+    date = observed.astimezone(UTC).date().isoformat()
+    subject = f"chore(dist): nightly rebuild {date}"
+    body = f"Workflow run: {run_url}\n\nBase SHA: {base_sha}"
+    _git(
+        candidate.root,
+        "-c",
+        "user.name=github-actions[bot]",
+        "-c",
+        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--quiet",
+        "-m",
+        subject,
+        "-m",
+        body,
+    )
+    sha = _git_bytes(candidate.root, "rev-parse", "HEAD").decode().strip()
+    paths = _git_paths(
+        candidate.root,
+        "diff-tree",
+        "--no-commit-id",
+        "--name-only",
+        "-r",
+        "-z",
+        sha,
+    )
+    if paths != set(candidate.changed_paths):
+        raise CandidateError("commit path set does not match verified candidate")
+    for relative in paths:
+        if (
+            _git_bytes(candidate.root, "show", f"{sha}:{relative}")
+            != candidate.snapshots[relative]
+        ):
+            raise CandidateError(f"commit content does not match {relative}")
+    return sha
+
+
+def _read_optional(path: Path) -> bytes | None:
+    try:
+        return path.read_bytes()
+    except OSError:
+        return None

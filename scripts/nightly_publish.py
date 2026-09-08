@@ -194,6 +194,12 @@ class LocalAttemptFactory:
 
     def __init__(self, source: Path) -> None:
         self.source = source
+        try:
+            self.remote_url = (
+                _git_bytes(source, "remote", "get-url", "origin").decode().strip()
+            )
+        except CandidateError:
+            self.remote_url = str(source)
 
     @contextmanager
     def checkout(self, base_sha: str) -> Iterator[Path]:
@@ -207,6 +213,7 @@ class LocalAttemptFactory:
                 str(self.source),
                 str(root),
             )
+            _git(root, "remote", "set-url", "origin", self.remote_url)
             _git(root, "checkout", "--quiet", "--detach", base_sha)
             yield root
         finally:
