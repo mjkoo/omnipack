@@ -12,9 +12,9 @@
 
 ## 3. Failure issue and diagnostics
 
-- [ ] 3.1 Implement paginated discovery of bot-authored marked issues, canonical selection, create/update/reopen behavior and duplicate closure. Verify controlled API tests cover closed issues, pagination, PR exclusion, unrelated same-title issues, and rediscovery after ambiguous creation.
-- [ ] 3.2 Implement recovery after publication and verified no-op, with no issue creation on success. Verify issue API failures fail the workflow result without undoing confirmed publication, and a later successful run retries closure.
-- [ ] 3.3 Implement bounded issue bodies, run summaries and per-attempt diagnostic output. Verify early failures identify missing reports, upstream text is passed as data, credential values are redacted, and artifact selection excludes APKs, raw caches and unrelated files.
+- [x] 3.1 Implement paginated discovery of bot-authored marked issues, canonical selection, create/update/reopen behavior and duplicate closure. Verify controlled API tests cover closed issues, pagination, PR exclusion, unrelated same-title issues, and rediscovery after ambiguous creation.
+- [x] 3.2 Implement recovery after publication and verified no-op, with no issue creation on success. Verify issue API failures fail the workflow result without undoing confirmed publication, and a later successful run retries closure.
+- [x] 3.3 Implement bounded issue bodies, run summaries and per-attempt diagnostic output. Verify early failures identify missing reports, upstream text is passed as data, credential values are redacted, and artifact selection excludes APKs, raw caches and unrelated files.
 
 ## 4. Workflow integration
 
