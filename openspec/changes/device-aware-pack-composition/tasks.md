@@ -23,10 +23,10 @@
 
 ## 5. Verify and explain the new composition
 
-- [ ] 5.1 Include composition bytes in build and standalone offline input snapshots and enforce rendered family, projected pin/eligibility, denial and overlay constraints; verify build/verify agreement without source fetches or output repair.
-- [ ] 5.2 Include composition policy in fingerprints and update verifier identity and freshness handling; verify policy-only changes, mid-run mutations and older evidence cannot produce a current success while supported historical reports remain readable.
-- [ ] 5.3 Extend JSON and human-readable reports with family selections, origins, preference/pin/source reasons, alternatives and identity transitions; verify diagnostics survive partial failure and existing changes-null and uncommitted-report behavior remain intact. Regress a disappeared old candidate with its stale active rule removed, preserved history and no prior report in a fresh scheduled checkout; require a retained-family package transition. Test unknown previous history, conservatively unknown additions, known removals, normalized URL matching and first-build additions without inventing family changes.
-- [ ] 5.4 Exercise the build-to-nightly boundary with simulated selected-build failures; verify no project fallback or publication occurs, while existing same-project release fallback and the publication allowlist remain unchanged.
+- [x] 5.1 Include composition bytes in build and standalone offline input snapshots and enforce rendered family, projected pin/eligibility, denial and overlay constraints; verify build/verify agreement without source fetches or output repair.
+- [x] 5.2 Include composition policy in fingerprints and update verifier identity and freshness handling; verify policy-only changes, mid-run mutations and older evidence cannot produce a current success while supported historical reports remain readable.
+- [x] 5.3 Extend JSON and human-readable reports with family selections, origins, preference/pin/source reasons, alternatives and identity transitions; verify diagnostics survive partial failure and existing changes-null and uncommitted-report behavior remain intact. Regress a disappeared old candidate with its stale active rule removed, preserved history and no prior report in a fresh scheduled checkout; require a retained-family package transition. Test unknown previous history, conservatively unknown additions, known removals, normalized URL matching and first-build additions without inventing family changes.
+- [x] 5.4 Exercise the build-to-nightly boundary with simulated selected-build failures; verify no project fallback or publication occurs, while existing same-project release fallback and the publication allowlist remain unchanged.
 
 ## 6. Migrate maintained configuration and validate outputs
 
