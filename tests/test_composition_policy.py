@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 
 import pytest
@@ -7,9 +8,13 @@ import pytest
 from omnipack.composition_policy import (
     CompositionPolicyError,
     apply_composition_policy,
+    load_composition_policy,
     parse_composition_policy,
 )
+from omnipack.merge import _import_data
 from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.overlay import ComposedApp
+from omnipack.render import render
 
 
 def candidate(**changes: object) -> App:
@@ -94,6 +99,32 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
         {"family", "eligible", "eligibility", "dualPreferred", "origin", "originalId"}
     )
 
+    rendered = json.loads(
+        render(
+            [
+                ComposedApp(
+                    Variant.DUAL,
+                    result.provenance,
+                    _import_data(result),
+                )
+            ],
+            {},
+        )
+    )["apps"][0]
+    assert rendered["id"] == "org.example.new"
+    assert set(rendered).isdisjoint(
+        {
+            "family",
+            "eligible",
+            "eligibility",
+            "dualPreferred",
+            "dual_preferred",
+            "origin",
+            "originalId",
+            "original_id",
+        }
+    )
+
 
 def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
     parsed = parse_composition_policy(policy())
@@ -119,6 +150,7 @@ def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
         (policy(candidates=[rule(family="package:forbidden")]), "family"),
         (policy(candidates=[rule(family="app:bad family")]), "family"),
         (policy(candidates=[rule(eligible=[])]), "eligible"),
+        (policy(candidates=[rule(eligible=["tablet"])]), "unknown target"),
         (
             policy(candidates=[rule(eligible=["single"], dualPreferred=True)]),
             "dualPreferred",
@@ -160,6 +192,19 @@ def test_duplicate_selectors_and_conflicting_pins_fail() -> None:
         parse_composition_policy(
             policy(candidates=[rule(family="app:example")], pins=[pin, pin])
         )
+
+
+def test_unknown_pin_target_and_malformed_json_fail() -> None:
+    invalid_pin = {
+        "family": "package:org.example.old",
+        "variant": "tablet",
+        "match": rule()["match"],
+        "rationale": "Prefer this build.",
+    }
+    with pytest.raises(CompositionPolicyError, match="unknown target.*tablet"):
+        parse_composition_policy(policy(pins=[invalid_pin]))
+    with pytest.raises(CompositionPolicyError, match="invalid JSON"):
+        load_composition_policy(b'{"schemaVersion": 1,')
 
 
 def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
@@ -344,3 +389,88 @@ def test_history_is_normalized_independent_and_conflict_checked() -> None:
                 ],
             )
         )
+
+
+@pytest.mark.parametrize(
+    "record, message",
+    [
+        (
+            {
+                "id": "x",
+                "url": "https://github.com/a/b",
+                "family": "package:x",
+                "rationale": "Old output.",
+                "extra": True,
+            },
+            "unknown field",
+        ),
+        (
+            {
+                "id": "x",
+                "url": "not a project",
+                "family": "package:x",
+                "rationale": "Old output.",
+            },
+            "project URL",
+        ),
+        (
+            {
+                "id": "x",
+                "url": "https://github.com/a/b",
+                "family": "unknown:x",
+                "rationale": "Old output.",
+            },
+            "family",
+        ),
+        (
+            {
+                "id": "x",
+                "url": "https://github.com/a/b",
+                "family": "package:x",
+                "rationale": "",
+            },
+            "rationale",
+        ),
+    ],
+)
+def test_history_rejects_malformed_records(
+    record: dict[str, object], message: str
+) -> None:
+    with pytest.raises(CompositionPolicyError, match=message):
+        parse_composition_policy(policy(history=[record]))
+
+
+def test_history_cannot_change_current_projection_or_candidate_family() -> None:
+    active = [rule(packageId="org.example.new", family="app:example")]
+    without_history = parse_composition_policy(policy(candidates=active))
+    with_history = parse_composition_policy(
+        policy(
+            candidates=active,
+            history=[
+                {
+                    "id": "org.retired",
+                    "url": "https://github.com/example/retired",
+                    "family": "app:retired",
+                    "rationale": "Previously published identity.",
+                }
+            ],
+        )
+    )
+
+    assert with_history.projections == without_history.projections
+    assert (
+        with_history.rendered_family(
+            "org.retired", "https://github.com/example/retired"
+        )
+        == "package:org.retired"
+    )
+    assert (
+        with_history.historical_family(
+            "org.retired", "https://github.com/example/retired"
+        )
+        == "app:retired"
+    )
+    assert (
+        apply_composition_policy(with_history, [candidate()]).candidates
+        == apply_composition_policy(without_history, [candidate()]).candidates
+    )

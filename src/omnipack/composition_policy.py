@@ -389,6 +389,8 @@ def _family(value: object, *, explicit_only: bool) -> str:
 
 def _url(value: object, label: str) -> str:
     url = _text(value, label)
+    if any(character.isspace() for character in url):
+        raise CompositionPolicyError(f"{label} is not a project URL: {url!r}")
     try:
         return normalize_project_url(url)
     except ValueError as error:
