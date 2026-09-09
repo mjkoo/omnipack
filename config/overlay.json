@@ -1,59 +1,112 @@
-{
-  "com.aure.banjorecomp": {
-    "additionalSettings": {
-      "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
-      "matchGroupToUse": "0"
+[
+  {
+    "id": "com.aure.banjorecomp",
+    "url": "https://github.com/AurelioB/BanjoRecomp-Android",
+    "patch": {
+      "additionalSettings": {
+        "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+        "matchGroupToUse": "0"
+      }
     }
   },
-  "com.sergiomanzur.sotnrecomp": {
-    "additionalSettings": {
-      "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
-      "matchGroupToUse": "0"
+  {
+    "id": "com.sergiomanzur.sotnrecomp",
+    "url": "https://github.com/sergiomanzur/SymphonyRecomp",
+    "patch": {
+      "additionalSettings": {
+        "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+        "matchGroupToUse": "0"
+      }
     }
   },
-  "com.simon358.ctrnative": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "com.ctrnative",
+    "url": "https://github.com/Simon358/ctr-native-android",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   },
-  "com.waterdish.shipwright": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "com.waterdish.shipwright",
+    "url": "https://github.com/Waterdish/Shipwright-Android",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   },
-  "com.winlator.cmod": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "com.winlator.cmod",
+    "url": "https://github.com/coffincolors/winlator",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   },
-  "com.winlator.ludashi": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "com.winlator.ludashi",
+    "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   },
-  "info.cemu.cemu": {
-    "additionalSettings": {
-      "releaseTitleAsVersion": false
+  {
+    "id": "info.cemu.cemu",
+    "url": "https://github.com/SSimco/Cemu",
+    "patch": {
+      "additionalSettings": {
+        "releaseTitleAsVersion": false
+      }
     }
   },
-  "org.citron.citron_emu": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "info.cemu.cemu",
+    "url": "https://github.com/sapphirerhodonite/cemu",
+    "patch": {
+      "additionalSettings": {
+        "releaseTitleAsVersion": false
+      }
     }
   },
-  "org.vita3k.emulator": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "org.citron.citron_emu",
+    "url": "https://github.com/citron-neo/emulator",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   },
-  "xendroid.compose": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "org.vita3k.emulator",
+    "url": "https://github.com/Vita3K/Vita3K-builds",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   },
-  "xyz.blacksheep.mjolnir": {
-    "additionalSettings": {
-      "versionDetection": false
+  {
+    "id": "xendroid.compose",
+    "url": "https://github.com/rfandango/XenDroid",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "xyz.blacksheep.mjolnir",
+    "url": "https://github.com/blacksheepmvp/mjolnir",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
     }
   }
-}
+]

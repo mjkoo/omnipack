@@ -6,15 +6,13 @@ from pathlib import Path
 
 import pytest
 
-from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.live import VersionClass, classify_version
-from omnipack.merge import compose
-from omnipack.model import Variant
+from omnipack.model import Provenance, Variant
+from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.resolution.github import resolve_github
 from omnipack.resolution.types import ResolutionError
-from omnipack.sources.common import normalize_record
 from omnipack.sources.extras import fetch
 from tests.test_resolution_github import GitHubTransport
 
@@ -31,9 +29,6 @@ SOURCE_IDS = {
     "xyz.blacksheep.mjolnir",
 }
 NUMERIC_IDS = {"com.aure.banjorecomp", "com.sergiomanzur.sotnrecomp"}
-EMPTY_POLICY = parse_composition_policy(
-    {"schemaVersion": 1, "candidates": [], "pins": []}
-)
 
 
 def read(path):
@@ -42,20 +37,39 @@ def read(path):
 
 def curated():
     baseline = read(FIXTURES / "baseline-apps.json")
-    candidates = [
-        normalize_record(a, source="rjny", variant=Variant(v))
-        for v, apps in baseline.items()
-        for a in apps
-    ]
-    candidates.extend(fetch(read(ROOT / "config/extras.json")))
-    result = compose(
-        candidates,
-        [],
-        read(ROOT / "config/overlay.json"),
-        {},
-        policy=EMPTY_POLICY,
-    )
-    return {v.value: json.loads(render(result.apps[v], {}))["apps"] for v in Variant}
+    selected = {variant: [] for variant in Variant}
+    for variant in Variant:
+        for record in baseline[variant.value]:
+            data = deepcopy(record)
+            data["additionalSettings"] = json.loads(data["additionalSettings"])
+            if data["id"] == "com.simon358.ctrnative":
+                data["id"] = "com.ctrnative"
+            selected[variant].append(
+                ComposedApp(
+                    variant,
+                    Provenance("fixture", data["url"]),
+                    data,
+                )
+            )
+    for app in fetch(read(ROOT / "config/extras.json")):
+        data = deepcopy(app.raw)
+        data.update(
+            id=app.id,
+            url=app.url,
+            name=app.name,
+            overrideSource=app.source_type.value,
+            categories=list(app.categories),
+            additionalSettings=deepcopy(app.additional_settings),
+        )
+        for variant in app.eligibility:
+            selected[variant].append(
+                ComposedApp(variant, app.provenance, deepcopy(data))
+            )
+    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "common overlay")
+    return {
+        variant.value: json.loads(render(apply_overlay(apps, overlay), {}))["apps"]
+        for variant, apps in selected.items()
+    }
 
 
 def resolve(app, releases=None):
@@ -85,9 +99,15 @@ def test_policies_preserve_existing_entries_and_asset_selection():
     warnings_before = 0
     for variant, originals in baseline.items():
         actual = {a["id"]: a for a in apps[variant]}
-        assert set(actual) == {a["id"] for a in originals} | {"com.game.cinderbox"}
+        expected_ids = {a["id"] for a in originals} | {"com.game.cinderbox"}
+        expected_ids.discard("com.simon358.ctrnative")
+        expected_ids.add("com.ctrnative")
+        assert set(actual) == expected_ids
         for old in originals:
-            new = actual[old["id"]]
+            effective_id = (
+                "com.ctrnative" if old["id"] == "com.simon358.ctrnative" else old["id"]
+            )
+            new = actual[effective_id]
             old_settings = json.loads(old["additionalSettings"])
             expected = deepcopy(old_settings)
             if old["id"] in SOURCE_IDS:
@@ -99,9 +119,13 @@ def test_policies_preserve_existing_entries_and_asset_selection():
             elif old["id"] == "info.cemu.cemu":
                 expected["releaseTitleAsVersion"] = False
             assert json.loads(new["additionalSettings"]) == expected
-            assert {k: v for k, v in new.items() if k != "additionalSettings"} == {
+            expected_record = {
                 k: v for k, v in old.items() if k != "additionalSettings"
             }
+            expected_record["id"] = effective_id
+            assert {
+                k: v for k, v in new.items() if k != "additionalSettings"
+            } == expected_record
             before, after = resolve(old), resolve(new)
             assert before.candidates == after.candidates
             # Count the historical dotted-only format baseline, including RPCSX.

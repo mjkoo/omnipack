@@ -17,16 +17,22 @@ def test_selected_candidates_have_manifest_evidence_and_known_identity_mismatche
         for app in apps:
             original = originals.get(app["url"].lower())
             if original is not None:
-                assert app["id"] == original["id"]
+                expected_id = (
+                    "com.ctrnative"
+                    if original["id"] == "com.simon358.ctrnative"
+                    else original["id"]
+                )
+                assert app["id"] == expected_id
             for candidate in resolve(app).candidates:
                 manifest = by_url[candidate.url]
                 selected_urls.add(candidate.url)
-                assert manifest["id"] == app["id"]
+                assert manifest["id"] == (
+                    original["id"] if original is not None else app["id"]
+                )
                 if manifest["package"] != app["id"]:
                     mismatches.add((app["id"], manifest["package"]))
     assert mismatches == {
         ("com.sergiomanzur.sotnrecomp", "com.blacklabelhq.sotn"),
-        ("com.simon358.ctrnative", "com.ctrnative"),
         ("com.waterdish.shipwright", "com.dishii.soh"),
         ("com.winlator.ludashi", "com.winlator.vanilla"),
     }

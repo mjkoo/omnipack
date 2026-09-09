@@ -553,10 +553,10 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
         single=(ROOT / "dist/single-screen.json").read_bytes(),
         dual=(ROOT / "dist/dual-screen.json").read_bytes(),
         deny=(ROOT / "config/deny.json").read_bytes(),
-        common_overlay=b"[]",
-        dual_overlay=b"[]",
+        common_overlay=(ROOT / "config/overlay.json").read_bytes(),
+        dual_overlay=(ROOT / "config/overlay.dual.json").read_bytes(),
         settings=(ROOT / "config/settings.json").read_bytes(),
-        composition=b'{"schemaVersion":1,"candidates":[],"pins":[]}',
+        composition=(ROOT / "config/composition.json").read_bytes(),
     )
     before = snapshots.single, snapshots.dual
     result = validate_offline(snapshots)

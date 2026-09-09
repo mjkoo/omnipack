@@ -6,7 +6,11 @@ from pathlib import Path
 
 import pytest
 
+from omnipack.composition_policy import parse_composition_policy
+from omnipack.overlay import parse_overlay
+
 FIXTURES = Path(__file__).parent / "fixtures/composition-baseline"
+ROOT = Path(__file__).parents[1]
 
 
 @pytest.mark.parametrize(
@@ -110,3 +114,32 @@ def test_ctr_origin_matches_captured_standard_asset_record() -> None:
     document = json.loads((FIXTURES / "replacement-candidates.json").read_text())
     record = document["identityConflictCandidates"][0]
     assert (candidate["id"], candidate["url"]) == (record["id"], record["url"])
+
+
+def test_maintained_policy_and_overlays_cover_the_migrated_selection() -> None:
+    document = json.loads((ROOT / "config/composition.json").read_text())
+    policy = parse_composition_policy(document)
+    assert len(policy.candidate_rules) == 8
+    assert len(policy.history) == 113
+    assert not policy.pins
+
+    rules = {(rule.match.id, rule.match.url): rule for rule in policy.candidate_rules}
+    standard_ctr = rules[
+        ("com.simon358.ctrnative", "github.com/simon358/ctr-native-android")
+    ]
+    dual_ctr = rules[("com.ctrnative", "github.com/igawa6/ctr-native-android")]
+    assert standard_ctr.family == dual_ctr.family == "app:ctr"
+    assert standard_ctr.package_id == "com.ctrnative"
+
+    common = parse_overlay(
+        json.loads((ROOT / "config/overlay.json").read_text()), "common overlay"
+    )
+    dual = parse_overlay(
+        json.loads((ROOT / "config/overlay.dual.json").read_text()), "dual overlay"
+    )
+    assert len(common) == 12
+    assert not dual
+    assert {item.url for item in common if item.package_id == "info.cemu.cemu"} == {
+        "github.com/ssimco/cemu",
+        "github.com/sapphirerhodonite/cemu",
+    }

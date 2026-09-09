@@ -19,7 +19,7 @@ under [`tests/fixtures/composition-baseline`](../tests/fixtures/composition-base
 | OpenMW | `com.xyzz.openmw`, `https://github.com/xyzz/openmw-android` | `com.joshdaniels.openmwds`, `https://github.com/Josh-Daniels/OpenMW-DS` | Explicit `app:openmw` family. | The catalog supplies standard and dual builds of this app with different package identities; retain the standard for single and prefer the dual asset for dual. |
 | Super Metroid | `com.raekwon1603.supermetroid`, `https://github.com/Raekwon1603/super_metroid-android` | `com.raekwon1603.supermetroidds`, `https://github.com/Raekwon1603/super_metroid-android` | Explicit `app:super-metroid` family. | The catalog supplies standard and dual builds of this app with different package identities; retain the standard for single and prefer the dual asset for dual. |
 | Dusklight | `com.twilitrealm.dusklight`, `https://github.com/TwilitRealm/dusklight` | `com.igawa6.dusklight`, `https://github.com/igawa6/dusklight` | Explicit `app:dusklight` family. | The catalog supplies standard and dual builds of this app with different package identities; retain the standard for single and prefer the dual asset for dual. |
-| Crash Team Racing | BBoi standard asset, [`Simon358/ctr-native-android`](https://github.com/Simon358/ctr-native-android), configured as `com.simon358.ctrnative` | [`igawa6/ctr-native-android`](https://github.com/igawa6/ctr-native-android), rendered as `com.ctrnative`, plus the Simon candidate | Unresolved. Repository names and a shared manifest package do not establish whether these forks are one logical app family. | Do not group or exclude either candidate without a maintainer decision. Correcting the Simon identity creates an output package collision in dual, so the initial policy must also make an explicit selection or exclusion decision. |
+| Crash Team Racing | BBoi standard asset, [`Simon358/ctr-native-android`](https://github.com/Simon358/ctr-native-android), corrected from `com.simon358.ctrnative` to `com.ctrnative` | [`igawa6/ctr-native-android`](https://github.com/igawa6/ctr-native-android), rendered as `com.ctrnative` | Explicit `app:ctr` family. | The configured dual catalog identifies igawa6 as CTR-DS with dual-screen support. Keep Simon for single and prefer igawa6 for dual. |
 
 The three different-package pairs are preserved as complete original records in
 [`replacement-candidates.json`](../tests/fixtures/composition-baseline/replacement-candidates.json),
@@ -44,7 +44,7 @@ change does not turn them into identity migrations.
 | Repository | Original configured id | Effective manifest id | Evidence | Migration status |
 | --- | --- | --- | --- | --- |
 | `sergiomanzur/SymphonyRecomp` | `com.sergiomanzur.sotnrecomp` | `com.blacklabelhq.sotn` | Primary `android-v0.10.1b` APK | Outstanding observation. Preserve the configured identity; no selected-family decision currently requires a correction. |
-| `Simon358/ctr-native-android` | `com.simon358.ctrnative` | `com.ctrnative` | Primary `Android-Build4` APK | A correction is necessary if this candidate participates in the CTR selection decision. The resulting collision with the igawa6 dual entry requires the unresolved family/selection decision above. |
+| `Simon358/ctr-native-android` | `com.simon358.ctrnative` | `com.ctrnative` | Primary `Android-Build4` APK | Applied. Simon is the standard candidate in `app:ctr`; its rendered identity now matches the manifest. |
 | `Waterdish/Shipwright-Android` | `com.waterdish.shipwright` | `com.dishii.soh` | Primary `v9.0.2P2` APK | Outstanding observation. Preserve the configured identity; no selected-family decision currently requires a correction. |
 | `StevenMXZ/Winlator-Ludashi` | `com.winlator.ludashi` | `com.winlator.vanilla` | Primary `v3.1.h` `bionic-vanilla.apk` | Outstanding observation. Preserve the configured identity, selected release, APK filter, and source-version policy. Identity and flavor migration are deferred. |
 
@@ -58,9 +58,6 @@ separate flavor, identity, and device-migration decision.
 
 ## Open acceptance issues
 
-- Decide whether the Simon and igawa6 CTR repositories are one family or
-  independent families, then encode the corresponding pin or exclusion needed
-  to avoid the evidenced `com.ctrnative` collision.
 - Validate import, re-import, installation, signatures, and app-data migration
   on an Android device. Manifest inspection alone cannot settle those points.
 - Revisit the three non-CTR identity mismatches only if a future selected-family

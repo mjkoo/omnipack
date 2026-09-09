@@ -685,8 +685,9 @@ def test_seeded_package_id_cache_does_not_hide_dead_source(
     config.mkdir()
     for name, value in [
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("settings.json", {}),
         ("http.json", {"credentials": {}}),
     ]:
