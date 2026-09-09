@@ -99,10 +99,13 @@ def publish_build(
         on_verification(verdict)
     if findings:
         raise OfflineVerificationError(findings)
-    if (
-        composition_bytes is not None
-        and (root / "config/composition.json").read_bytes() != composition_bytes
-    ):
+
+    def require_current_policy() -> None:
+        if (
+            composition_bytes is None
+            or (root / "config/composition.json").read_bytes() == composition_bytes
+        ):
+            return
         changed = [
             {
                 "stage": "input",
@@ -113,6 +116,8 @@ def publish_build(
         if on_verification is not None:
             on_verification({"status": "failed", "findings": changed})
         raise OfflineVerificationError(changed)
+
+    require_current_policy()
 
     if on_stage is not None:
         on_stage("report writing")
@@ -130,6 +135,7 @@ def publish_build(
     )
     if on_stage is not None:
         on_stage("publication")
+    require_current_policy()
     _replace_pair(root / "dist", rendered)
 
 

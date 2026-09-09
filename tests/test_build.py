@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from omnipack import build as build_module
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import (
@@ -119,13 +121,16 @@ def test_first_build_reports_every_app_added(tmp_path: Path) -> None:
     assert report["changes"]["dual"]["added"] == ["one", "two"]
 
 
-def test_policy_byte_change_during_build_prevents_publication(tmp_path: Path) -> None:
+@pytest.mark.parametrize("mutation_stage", ["offline verification", "publication"])
+def test_policy_byte_change_during_build_prevents_publication(
+    tmp_path: Path, mutation_stage: str
+) -> None:
     write_config(tmp_path)
     policy = tmp_path / "config/composition.json"
     consumed = policy.read_bytes()
 
     def mutate(stage: str) -> None:
-        if stage == "offline verification":
+        if stage == mutation_stage:
             policy.write_bytes(consumed + b"\n")
 
     try:
