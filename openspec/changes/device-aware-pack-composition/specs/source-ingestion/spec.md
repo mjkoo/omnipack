@@ -65,9 +65,9 @@ supply that variant.
 Generated builds SHALL be dual-preferred within their family unless explicit
 policy overrides that preference. Merely listing a covered project in codm SHALL
 NOT promote a higher-source ordinary build to dual-preferred. Generated rules
-SHALL be applied after package resolution; all policy selectors SHALL then be
-validated against the complete candidate set. A missing rule or pinned candidate
-SHALL fail explicitly rather than be treated as an ordinary unresolved skip.
+SHALL be applied after package resolution; all active candidate selectors SHALL then be
+validated against the complete candidate set. Historical mappings SHALL be exempt from candidate-presence checks.
+A missing rule or pinned candidate SHALL fail explicitly rather than be treated as an ordinary unresolved skip.
 
 A README link supplies no display name and no grouping of its own, so a
 generated entry SHALL carry as its name the repository name of its project URL,

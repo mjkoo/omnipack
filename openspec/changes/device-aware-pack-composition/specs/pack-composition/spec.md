@@ -50,6 +50,31 @@ be serialized into Obtainium app records.
   different families or eligibility
 - **THEN** configuration fails instead of making offline interpretation ambiguous
 
+### Requirement: Historical family mappings survive candidate retirement
+
+The composition policy SHALL accept an optional `history` array, defaulting to
+empty, of records containing nonempty effective `id`, project `url`, `family`
+and `rationale`. Family values SHALL use the `package:` or `app:` namespace.
+Keys SHALL use effective id and normalized project URL. Unknown fields, duplicate
+normalized keys and family disagreement with an active rule projection for the
+same key SHALL fail configuration validation with the conflicting key identified.
+Historical mappings SHALL be maintainer-authored committed input and SHALL remain
+usable after their candidates and obsolete active rules disappear. They SHALL NOT
+require current candidate presence or satisfy active candidate selectors. They
+SHALL be used only for previous-output family classification, never for current
+selection, corrections, eligibility, pins or current rendered-family coverage.
+Nightly SHALL NOT update history or expand its publication allowlist.
+
+#### Scenario: Retired candidate retains its family authority
+
+- **WHEN** an old selected candidate disappears from successful ingestion and its obsolete active rule is removed while its historical mapping remains
+- **THEN** history does not fail candidate-presence validation and remains available to classify the previous output
+
+#### Scenario: Historical mappings conflict
+
+- **WHEN** history duplicates a normalized rendered key or disagrees with an active rule projection for that key
+- **THEN** configuration fails with the key identified rather than silently choosing a family
+
 ### Requirement: Explicit selections identify an eligible candidate
 
 Policy SHALL permit one candidate pin per family and variant. A pin SHALL name
@@ -178,7 +203,9 @@ effective package id, source and origin, and selection reason: pin, dual prefere
 ordinary fallback or source precedence. It SHALL list displaced alternatives,
 their identities and eligibility, why they lost, and fields differing from the
 winner. Exclusions and identity corrections SHALL also be reported. Reports SHALL
-distinguish project/package replacements from app-family additions and removals.
+distinguish project/package replacements from app-family additions and removals
+using historical mappings for previous outputs, and mark missing-history
+classifications unknown rather than infer family changes.
 
 #### Scenario: Lower-source dual build wins
 

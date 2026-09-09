@@ -20,7 +20,9 @@ while preserving curation across upstream refreshes.
   and migrate overlays to package-id-and-project selectors. Patches cannot
   redirect a selected build or change its identity.
 - Explain winners, fallbacks, alternatives, exclusions and identity changes in
-  reports; validate local family constraints and fingerprint the new policy.
+  reports; retain maintainer-authored historical family mappings for previous-output
+  comparisons even after old candidates disappear, report missing history as unknown,
+  validate local family constraints and fingerprint the new policy.
 - Keep publication fail-closed for selected-build verification failures, without
   automatically switching forks. Document device migration limits.
 

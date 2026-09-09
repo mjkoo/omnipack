@@ -7,7 +7,7 @@
 
 - [ ] 2.1 Extend normalized candidates with eligibility, dual preference, origin and original/effective identity; verify identical duplicates collapse while ambiguous original identities fail and internal metadata does not reach rendered apps.
 - [ ] 2.2 Add strict versioned composition-policy parsing, candidate selectors, corrections, family namespaces and pins; verify malformed rules, duplicate selectors, unknown fields/targets, invalid eligibility and pin conflicts fail through focused tests.
-- [ ] 2.3 Implement shared rendered-family projections and original-selector matching without recursive rewrites; verify different-package family mapping, ambiguous projection rejection and offline interpretation without a build report.
+- [ ] 2.3 Implement shared rendered-family projections and original-selector matching without recursive rewrites; verify different-package family mapping, ambiguous projection rejection and offline interpretation without a build report. Add separate historical effective-id-and-normalized-URL family mappings, rejecting malformed records, duplicate normalized keys and conflicts with active projections; verify history neither requires candidate presence nor affects current selection or offline coverage.
 
 ## 3. Preserve device intent through ingestion
 
@@ -25,12 +25,12 @@
 
 - [ ] 5.1 Include composition bytes in build and standalone offline input snapshots and enforce rendered family, projected pin/eligibility, denial and overlay constraints; verify build/verify agreement without source fetches or output repair.
 - [ ] 5.2 Include composition policy in fingerprints and update verifier identity and freshness handling; verify policy-only changes, mid-run mutations and older evidence cannot produce a current success while supported historical reports remain readable.
-- [ ] 5.3 Extend JSON and human-readable reports with family selections, origins, preference/pin/source reasons, alternatives and identity transitions; verify diagnostics survive partial failure and existing changes-null and uncommitted-report behavior remain intact.
+- [ ] 5.3 Extend JSON and human-readable reports with family selections, origins, preference/pin/source reasons, alternatives and identity transitions; verify diagnostics survive partial failure and existing changes-null and uncommitted-report behavior remain intact. Regress a disappeared old candidate with its stale active rule removed, preserved history and no prior report in a fresh scheduled checkout; require a retained-family package transition. Test unknown previous history, conservatively unknown additions, known removals, normalized URL matching and first-build additions without inventing family changes.
 - [ ] 5.4 Exercise the build-to-nightly boundary with simulated selected-build failures; verify no project fallback or publication occurs, while existing same-project release fallback and the publication allowlist remain unchanged.
 
 ## 6. Migrate maintained configuration and validate outputs
 
-- [ ] 6.1 Add the initial committed composition policy using the evidenced family decisions and migrate every overlay to explicit repository selectors; verify fixtures preserve existing intended version settings, Cinderbox inclusion and Ludashi's current filter/source-version policy.
+- [ ] 6.1 Add the initial committed composition policy using the evidenced family decisions, seed historical mappings for baseline rendered identities including default package families, retain history when retiring active candidate rules, and migrate every overlay to explicit repository selectors; verify fixtures preserve existing intended version settings, Cinderbox inclusion and Ludashi's current filter/source-version policy.
 - [ ] 6.2 Rebuild both packs and inspect the complete selection diff; deliver an explanation for every policy-driven package/project transition, family addition/removal and explicit exclusion, separating unrelated upstream drift.
 - [ ] 6.3 Run focused regression suites followed by just check-all, pack verify and authenticated pack verify --live; record exact outcomes and output fingerprints, with no unresolved selection or serialized coverage errors.
 - [ ] 6.4 Document any device migration steps and validate import/re-import and installation on an available Android device; record actual observations or explicitly outstanding device acceptance without substituting metadata success.

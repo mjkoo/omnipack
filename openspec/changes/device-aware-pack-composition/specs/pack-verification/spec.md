@@ -5,7 +5,9 @@
 The system SHALL validate the composition policy, denylist and build-bound
 overlays without fetching source catalogs. It SHALL interpret rendered families
 using effective id and normalized project URL projections from the policy,
-falling back to package families where no rule applies. Ambiguous projections,
+falling back to package families where no active rule applies. Historical mappings
+SHALL be validated as configuration but SHALL NOT participate in current output
+family projection, eligibility, pins or coverage. Ambiguous projections,
 invalid configuration and forbidden overlay fields SHALL fail.
 
 It SHALL reject duplicate selected families within a variant, a denied package

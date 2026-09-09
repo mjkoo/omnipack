@@ -35,7 +35,7 @@ matching; different records sharing that identity are an error. Origin prevents
 two BBoi records with the same URL/id from becoming ambiguous selectors.
 
 Add versioned `config/composition.json` with `schemaVersion: 1`, `candidates`
-and `pins` arrays. Candidate rules use a `match` object containing `source`,
+and `pins` arrays, plus an optional `history` array defaulting to empty. Candidate rules use a `match` object containing `source`,
 `origin`, `id` and `url`; optional values are `family`, `packageId`, `eligible`
 and `dualPreferred`. Pins contain `family`, `variant` and the same candidate
 selector. Rules and pins require a nonempty rationale. Reject unknown fields,
@@ -61,6 +61,17 @@ A selected entry with no projection uses the default package family. Pins projec
 corrected id and URL for output validation. Full candidate presence, provenance,
 ranking and stale-rule validation remain build checks, because offline output
 does not contain losing upstream candidates.
+
+Retain previous-output family authority separately in `history` records containing
+nonempty effective `id`, project `url`, `family` and `rationale`. Normalize URLs
+with the same rendered-key helper; accept the `package:` and `app:` family
+namespaces. Reject unknown fields, duplicate normalized keys and disagreement
+with an active rule projection for the same key. History never supplies
+eligibility, corrections, pins, current family assignments or candidate presence.
+It is exempt from stale-candidate checks and is used only to classify previous
+output entries. Removing an obsolete active rule does not remove its historical
+mapping. Maintainers record mappings for published identities, including default
+package families, in the committed policy; nightly never edits this input.
 
 Keeping package id as the only app identity would prevent cross-package
 replacements. Heuristic family detection would silently merge unrelated forks.
@@ -156,6 +167,20 @@ identity and version new report additions appropriately. Reports preserve older
 supported formats and add per-target selections, family, original/effective id,
 origin, preference tier, pin/source decision, fallbacks and rejected alternatives.
 Preserve partial diagnostics on failure and existing `changes: null` semantics.
+Compare previous import entries using only the committed historical mappings,
+not current candidate rules or a prior build report. Current families come from
+composition. A mapped previous family still selected in the same target is
+retained, with changed package/project identity reported as a transition. A mapped
+previous family absent now is removed. An unmapped previous entry has unknown
+family history, never an inferred package family or family removal. When a target
+has any unmapped previous entries, new families without a known previous match
+have unknown addition status, since one of those entries might represent them;
+report their keys and this reason instead of a definite addition or replacement.
+Known matches and raw app/package diffs remain available. If the previous target
+file is absent, all its current families are additions. This works in a fresh
+scheduled checkout containing the previous import files and committed policy but
+no `.build/report.json`. Missing history is a reporting limitation, not a selection
+failure; malformed or conflicting history is a configuration failure.
 No private policy fields reach the exported app records. Do not expand nightly's
 write allowlist: composition policy is maintainer-authored input, not nightly output.
 
@@ -180,6 +205,8 @@ write allowlist: composition policy is maintainer-authored input, not nightly ou
 1. Capture fixture candidates and the current two outputs. Enumerate actual
    competing standard/dual builds; record explicit family associations and any
    necessary identity evidence, especially for the competing CTR repositories.
+   Seed historical mappings for baseline rendered identities, and retain them
+   when removing active rules for candidates that no longer exist.
 2. Implement policy, retained candidates and selection with regression coverage.
    Migrate extras metadata and all existing overlays without changing their
    intended settings. Introduce only family/candidate rules justified by the

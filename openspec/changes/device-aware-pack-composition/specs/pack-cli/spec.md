@@ -20,6 +20,20 @@ preference tier, fallback and selection reason. It SHALL distinguish family
 coverage from package coverage, and family additions/removals from project or
 package replacements. Conflicts and stale policy selectors SHALL be actionable.
 
+Previous-output family classification SHALL use only committed historical
+effective-id-and-normalized-URL mappings, without requiring a prior build report
+or retaining obsolete active candidate rules. Current family membership SHALL
+come from composition. A known previous family present in the current target
+SHALL be retained, with package/project changes reported as transitions; a known
+previous family absent now SHALL be removed. An unmapped previous entry SHALL
+have unknown family history and SHALL NOT be assigned an inferred package family
+or reported as a family removal. If any previous entries in a target are unmapped,
+current families without a known previous match SHALL have unknown addition
+status rather than definite additions or replacements. The report SHALL identify
+unmapped keys and the missing-history reason while preserving known matches and
+raw app/package diffs. Missing previous output SHALL mean all current families
+are additions. Missing history SHALL NOT fail otherwise valid composition.
+
 The report SHALL be written on a successful build and on a failed one alike,
 and a failed build's report SHALL record the stage that was running and the
 error that stopped it. If composition has not completed, the report SHALL set
@@ -95,6 +109,18 @@ unchanged rebuild look like a change.
 
 - **WHEN** the selected build moves to another package in the same declared family
 - **THEN** the report records the package transition and retained family separately
+
+#### Scenario: Old candidate disappears in a fresh scheduled checkout
+
+- **WHEN** previous import files contain an old package, its candidate has disappeared, its obsolete active rule has been removed, a historical mapping retains its family, and no prior build report exists
+- **AND** composition selects a different package in that family for the same target
+- **THEN** the report records a retained family and the old-to-new package transition without requiring the retired candidate or a prior report
+
+#### Scenario: Previous entry has no historical mapping
+
+- **WHEN** a previous entry has no historical mapping and a current family has no known previous match
+- **THEN** the report identifies that entry as unknown family history and the current family as unknown addition status, without asserting a family removal, addition or replacement for them
+- **AND** raw app/package changes remain available and missing history alone does not fail the build
 
 #### Scenario: Family conflict stops composition
 
