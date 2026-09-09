@@ -11,8 +11,8 @@
 
 ## 3. Preserve device intent through ingestion
 
-- [ ] 3.1 Map RJNY flags to eligibility and preference and retain both BBoi asset origins; verify standard fallback remains available and dual preference survives cross-source ingestion.
-- [ ] 3.2 Add extras dual preference and apply higher-source policy before codm coverage checks, then generated rules after resolution; verify URL normalization, no promotion by duplicate codm links, generated dual candidates for single-only coverage, cached-id behavior and missing required selector failures.
+- [x] 3.1 Map RJNY flags to eligibility and preference and retain both BBoi asset origins; verify standard fallback remains available and dual preference survives cross-source ingestion.
+- [x] 3.2 Add extras dual preference and apply higher-source policy before codm coverage checks, then generated rules after resolution; verify URL normalization, no promotion by duplicate codm links, generated dual candidates for single-only coverage, cached-id behavior and missing required selector failures.
 
 ## 4. Select families and apply build-bound patches
 
