@@ -242,3 +242,123 @@ def test_unknown_history_makes_unmatched_additions_unknown(tmp_path: Path) -> No
     assert changes["unmappedPrevious"] == [
         {"id": "mystery", "url": "https://example.test/old"}
     ]
+
+
+def test_fresh_checkout_retired_candidate_history_survives_rule_removal(
+    tmp_path: Path,
+) -> None:
+    from omnipack.merge import CompositionError, compose
+    from omnipack.model import App, SourceType
+
+    write_config(tmp_path)
+    old = {"id": "old.pkg", "url": "https://example.test/old/"}
+    removed = {"id": "retired.pkg", "url": "https://example.test/retired"}
+    write_previous(tmp_path, {"apps": [old, removed]}, {"apps": [old, removed]})
+    assert not (tmp_path / ".build/report.json").exists()
+    current_url = "https://example.test/new"
+    candidate = App(
+        "new.pkg",
+        current_url,
+        "Replacement",
+        SourceType.HTML,
+        (),
+        Variant.SINGLE,
+        Provenance("extras", current_url),
+        eligibility=frozenset(Variant),
+    )
+    rules = [
+        {
+            "match": {
+                "source": "extras",
+                "origin": "extras",
+                "id": package_id,
+                "url": url,
+            },
+            "family": "app:shared",
+            "rationale": "curated replacement",
+        }
+        for package_id, url in (
+            ("old.pkg", "https://example.test/old"),
+            ("new.pkg", current_url),
+        )
+    ]
+    policy_data = {
+        "schemaVersion": 1,
+        "candidates": rules,
+        "pins": [],
+        "history": [
+            {
+                "id": "old.pkg",
+                "url": "https://example.test/old",
+                "family": "app:shared",
+                "rationale": "published",
+            },
+            {**removed, "family": "package:retired.pkg", "rationale": "published"},
+        ],
+    }
+    with pytest.raises(CompositionError, match="old.pkg"):
+        compose([candidate], [], [], [], policy=parse_composition_policy(policy_data))
+    rules.pop(0)
+    policy_bytes = json.dumps(policy_data).encode()
+    (tmp_path / "config/composition.json").write_bytes(policy_bytes)
+    current = compose(
+        [candidate], [], [], [], policy=parse_composition_policy(policy_data)
+    )
+    build_module.publish_build(
+        tmp_path, current, {}, IngestionReport(), composition_bytes=policy_bytes
+    )
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    for variant in Variant:
+        changes = report["familyChanges"][variant.value]
+        assert changes["retained"] == [
+            {
+                "family": "app:shared",
+                "previous": [old],
+                "current": {"id": "new.pkg", "url": current_url},
+            }
+        ]
+        assert changes["removed"] == ["package:retired.pkg"]
+        assert (
+            changes["added"]
+            == changes["unknownAdditions"]
+            == changes["unmappedPrevious"]
+            == []
+        )
+        assert changes["unknownReason"] is None
+        assert report["changes"][variant.value] == {
+            "added": ["new.pkg"],
+            "removed": ["old.pkg", "retired.pkg"],
+        }
+
+
+def test_first_composed_build_reports_definite_family_additions(tmp_path: Path) -> None:
+    from omnipack.merge import compose
+    from omnipack.model import App, SourceType
+
+    write_config(tmp_path)
+    url = "https://example.test/first"
+    candidate = App(
+        "first.pkg",
+        url,
+        "First",
+        SourceType.HTML,
+        (),
+        Variant.SINGLE,
+        Provenance("extras", url),
+        eligibility=frozenset(Variant),
+    )
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": [], "pins": []}
+    )
+    current = compose([candidate], [], [], [], policy=policy)
+    build_module.publish_build(tmp_path, current, {}, IngestionReport())
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    for variant in Variant:
+        assert report["familyChanges"][variant.value] == {
+            "retained": [],
+            "removed": [],
+            "added": ["package:first.pkg"],
+            "unknownAdditions": [],
+            "unmappedPrevious": [],
+            "unknownReason": None,
+        }

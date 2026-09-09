@@ -498,11 +498,22 @@ def test_family_projection_pin_eligibility_and_history_are_distinct() -> None:
     dual = app("dual.pkg")
     dual["url"] = "https://example.com/dual/"
     assert validate_offline(inputs([single], [dual], composition=policy)).ok
+    missing = validate_offline(inputs([], [], composition=policy))
+    assert "pin_mismatch" in codes(missing)
+    denied = validate_offline(
+        inputs(
+            [],
+            [],
+            composition=policy,
+            deny=[{"family": "app:shared", "reason": "retired"}],
+        )
+    )
+    assert "pin_mismatch" in codes(denied)
     wrong = deepcopy(dual)
     wrong["url"] = "https://example.com/other"
     result = validate_offline(inputs([single], [wrong], composition=policy))
     assert "dual_coverage_gap" in codes(result)
-    assert "pin_mismatch" not in codes(result)
+    assert "pin_mismatch" in codes(result)
 
 
 def test_family_denial_exempts_coverage_but_cannot_remain_selected() -> None:

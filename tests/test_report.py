@@ -317,3 +317,62 @@ def test_findings_display_location_field_and_effective_version(
     assert "dual" in output and "index 4" in output and "url" in output
     assert "single" in output and "org.example" in output and "rolling" in output
     assert path.read_bytes() == before
+
+
+def test_human_report_explains_corrected_winner_and_rejected_alternative(
+    tmp_path: Path,
+) -> None:
+    from omnipack.merge import CompositionReport, FamilySelection, SelectionAlternative
+    from omnipack.model import Variant
+    from omnipack.report import write_report
+    from omnipack.sources import IngestionReport
+
+    selection = FamilySelection(
+        "app:shared",
+        Variant.DUAL,
+        "manifest.wrong",
+        "correct.pkg",
+        "https://example.test/winner",
+        "extras",
+        "extras",
+        (Variant.SINGLE, Variant.DUAL),
+        False,
+        "ordinary-fallback",
+        (
+            SelectionAlternative(
+                "old.manifest",
+                "preferred.pkg",
+                "https://example.test/preferred",
+                "bboi",
+                "bboi-dual-asset",
+                (Variant.DUAL,),
+                True,
+                ("url", "additionalSettings"),
+                "excluded",
+                "incompatible release",
+            ),
+        ),
+    )
+    write_report(
+        tmp_path,
+        {},
+        None,
+        IngestionReport(),
+        composition_report=CompositionReport(selections=[selection]),
+        stage="composition",
+        error=ValueError("later family failed"),
+    )
+    output = format_reports(tmp_path)
+    assert "Status: failed" in output
+    assert "original id: manifest.wrong; effective id: correct.pkg" in output
+    assert "https://example.test/winner" in output
+    assert "eligible: single, dual; preference: ordinary" in output
+    assert "ordinary-fallback" in output
+    assert (
+        "Alternative: original id: old.manifest; effective id: preferred.pkg" in output
+    )
+    assert "https://example.test/preferred" in output
+    assert "bboi/bboi-dual-asset" in output
+    assert "eligible: dual; preference: dual-preferred" in output
+    assert "lost: excluded; exclusion: incompatible release" in output
+    assert "differing fields: url, additionalSettings" in output

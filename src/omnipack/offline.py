@@ -665,17 +665,17 @@ def _validate_composition(
                         package_id,
                     )
                 )
-            pinned = policy.projected_pins.get((family, target))
-            if pinned is not None and pinned != key:
-                findings.append(
-                    Finding(
-                        "composition",
-                        "pin_mismatch",
-                        f"family {family!r} does not match its {variant} pin",
-                        variant,
-                        package_id,
-                    )
+    for (family, target), pinned in policy.projected_pins.items():
+        if pinned not in keys[target.value]:
+            findings.append(
+                Finding(
+                    "composition",
+                    "pin_mismatch",
+                    f"family {family!r} requires pinned output {pinned!r} in {target.value}",
+                    target.value,
+                    pinned[0],
                 )
+            )
 
     for exclusion in exclusions:
         applicable = (

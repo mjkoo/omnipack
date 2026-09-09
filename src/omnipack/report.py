@@ -157,8 +157,26 @@ def format_reports(root: Path) -> str:
             ):
                 raise ReportFormatError("malformed build family selection")
             lines.append(
-                f"Selection: {item['variant']} {item['family']} -> {item['effective_id']} ({item['source']}/{item['origin']}; {item['reason']})"
+                f"Selection: {item['variant']} {item['family']} -> "
+                f"{_format_candidate(item)}; reason: {item['reason']}"
             )
+            for alternative in item["alternatives"]:
+                if (
+                    not isinstance(alternative, dict)
+                    or not isinstance(alternative.get("loss_reason"), str)
+                    or not _string_list(alternative.get("differing_fields"))
+                    or (
+                        alternative.get("excluded_reason") is not None
+                        and not isinstance(alternative["excluded_reason"], str)
+                    )
+                ):
+                    raise ReportFormatError("malformed build selection alternative")
+                lines.append(
+                    f"  Alternative: {_format_candidate(alternative)}; "
+                    f"lost: {alternative['loss_reason']}; "
+                    f"exclusion: {alternative.get('excluded_reason') or 'none'}; "
+                    f"differing fields: {', '.join(alternative['differing_fields']) or 'none'}"
+                )
         if isinstance(family_changes, dict):
             for variant, value in family_changes.items():
                 if not isinstance(value, dict):
@@ -204,6 +222,28 @@ def format_reports(root: Path) -> str:
     else:
         sections.append("Verification report\nNo standalone verification recorded")
     return "\n\n".join(sections) + "\n"
+
+
+def _string_list(value: object) -> bool:
+    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+
+
+def _format_candidate(item: dict[str, Any]) -> str:
+    if (
+        not all(
+            isinstance(item.get(key), str)
+            for key in ("original_id", "effective_id", "url", "source", "origin")
+        )
+        or not _string_list(item.get("eligibility"))
+        or type(item.get("dual_preferred")) is not bool
+    ):
+        raise ReportFormatError("malformed build selection candidate")
+    preference = "dual-preferred" if item["dual_preferred"] else "ordinary"
+    return (
+        f"original id: {item['original_id']}; effective id: {item['effective_id']}; "
+        f"URL: {item['url']}; source: {item['source']}/{item['origin']}; "
+        f"eligible: {', '.join(item['eligibility'])}; preference: {preference}"
+    )
 
 
 def _format_verification_mode(value: dict[str, Any]) -> str:
