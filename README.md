@@ -53,3 +53,7 @@ nightly publication runs metadata-only live verification. Asset probes remain
 an explicit manual troubleshooting operation.
 
 See [live validation](docs/validation.md) for the observed import results.
+
+See [maintained app curation](docs/curation.md) for version policies and known
+identity findings, and [curation validation](docs/curation-validation.md) for
+fixture, metadata and device acceptance results.

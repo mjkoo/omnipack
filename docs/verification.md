@@ -217,3 +217,11 @@ concatenated extraction groups, and track-only release and tags paths.
 Fixtures contain only the response fragments needed to reproduce selection.
 They are deterministic compatibility evidence, not cached claims that the live
 source remains reachable.
+
+## Curated version formats
+
+Verifier identity 0.3.1 accepts bare unsigned integers with optional v/V prefixes,
+while retaining the dotted-version suffix grammar and full-string matching.
+Reports from 0.3.0 are stale; schema 1 and Obtainium 1.6.14 remain unchanged.
+Dates, hashes and labels still warn under standard detection. See
+[curation](curation.md) for policies, APK observations and identity limitations.

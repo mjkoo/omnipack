@@ -13,8 +13,9 @@ the manifests: respectively `com.blacklabelhq.sotn`, `com.ctrnative`,
 Ludashi's unchanged APK filter selects `bionic-vanilla.apk` from `v3.1.h`;
 the newer `v4.0` release uses different names and is skipped.
 
-XenDroid advanced from `XenDroid-0b11201` to `XenDroid-c4f6863` during
-observation. Both manifests preserve the expected package and corresponding
+XenDroid listed `XenDroid-c4f6863` before `XenDroid-0b11201` during
+observation, but its earlier published timestamp means the configured date
+sort still selects `XenDroid-0b11201`. Both manifests preserve the expected package and corresponding
 hash versionName. This supports the unchanged source-tracking policy.
 
 The Cinderbox regression deliberately moves an observed dependency prerelease

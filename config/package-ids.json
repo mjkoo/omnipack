@@ -9,11 +9,19 @@
   },
   "github.com/chimeragaming/fanmakepokemonmaps_android": {
     "packageId": "com.chimeragaming.pokemonzmap",
-    "releaseId": 379898446
+    "releaseId": 384990510
+  },
+  "github.com/chimeragaming/pixelnavigator": {
+    "packageId": "com.chimeragaming.pixelnavigator",
+    "releaseId": 380209033
   },
   "github.com/cylonid/nativealphaforandroid": {
     "packageId": "com.cylonid.nativealpha",
     "releaseId": 219359266
+  },
+  "github.com/darkaxt/dualscreendex": {
+    "packageId": "com.darkaxt.dualdex",
+    "releaseId": 380385145
   },
   "github.com/enrique-paulino/dualscreendex": {
     "packageId": "com.enrpau.dualscreendex",
@@ -42,6 +50,10 @@
   "github.com/rosbean/balatro-dualscreen": {
     "packageId": "com.balatro.dualscreen",
     "releaseId": 363616301
+  },
+  "github.com/rsigristc/dw3-ds-android": {
+    "packageId": "com.digitaladventure.dw2003",
+    "releaseId": 383325582
   },
   "github.com/sofianeelhor/pkforge": {
     "packageId": "org.pkforge.app",

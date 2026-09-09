@@ -11,9 +11,10 @@ configuration and device testing.
 
 - **Numeric tag matching versionName** (`1.2.3`, `v1.2.3`): no override
   needed.
-- **Numeric tag, different shape from versionName** (e.g. `v1.2.3-r5` vs.
-  APK versionName `1.2.3`): `versionExtractionRegEx` with `matchGroupToUse`
-  to cut the tag down to the versionName's shape.
+- **Descriptive tag with a numeric app version**: use `versionExtractionRegEx`
+  with `matchGroupToUse` only when removed labels do not distinguish builds.
+  Preserve suffix-only builds through explicit source-version tracking
+  (`versionDetection: false`) when APK versions cannot represent them.
 - **Version only in the release title**: `releaseTitleAsVersion: true`,
   usually paired with an extraction regex.
 - **Rolling tag** (`continuous`, `nightly`, `latest`): `releaseDateAsVersion:
@@ -28,10 +29,11 @@ configuration and device testing.
 ## Lint
 
 `pack verify --live` lints the effective GitHub version after successful
-extraction. Its anchored heuristic accepts an optional `v` or `V`, at least
-two dot-separated numeric components, and optional `-` prerelease and `+`
-build suffixes made of ASCII letters, digits, dots, or hyphens. Examples include
-`1.2`, `v1.2.3-beta1`, and `1.2.3+build.4`.
+extraction. Its anchored heuristic accepts an optional `v` or `V`, either a bare unsigned integer or at least
+two dot-separated numeric components. Only the dotted form permits `-` prerelease
+and `+` build suffixes made of ASCII letters, digits, dots, or hyphens. Examples include
+`4093`, `v20250425`, `1.2`, `v1.2.3-beta1`, and `1.2.3+build.4`.
+Integer suffixes and dates such as `2026-04-27` do not pass.
 
 Track-only entries, disabled version detection, and intentional date versions
 have distinct classifications without numeric-shape warnings. A title or regex
@@ -42,3 +44,6 @@ perform structural validation and do not run this live lint.
 Review findings with `uv run pack report`. Treat the warning list as evidence
 for deliberate configuration changes, not automatic overlay repairs. See
 [verification](verification.md) for the compatibility boundary and report freshness.
+
+See [maintained curation](curation.md) for per-app evidence and source-tracking
+re-import and unchanged-tag asset-replacement limitations.

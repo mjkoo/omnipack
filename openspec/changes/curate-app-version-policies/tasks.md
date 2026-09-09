@@ -1,14 +1,14 @@
 ## 1. Evidence and regression fixtures
 
-- [ ] 1.1 Revalidate selected release metadata and APK manifest identity/version facts for the curated entries, and prepare trimmed release fixtures with primary URLs and observation dates. Verify the documented mappings against the retrieved manifests, record all four existing identity mismatches and Ludashi's older-release fallback, and revise any contradicted policy before changing configuration.
-- [ ] 1.2 Add failing fixture-driven curation tests that load the maintained extras/overlays through composition, rendering and existing resolution. Verify they cover Cinderbox in both variants with a newer dependency prerelease excluded, numeric extraction and no-match failures, independent Cemu tags, preserved complete source versions for all eight policies, and unchanged existing ids, URLs, membership and APK selection.
-- [ ] 1.3 Add failing lint fixtures for bare integers and prefixed integers, preserving negative cases for dates, hashes, labels, empty strings and trailing junk. Verify existing dotted-version/suffix behavior and disabled-detection, track-only and date classifications remain covered.
+- [x] 1.1 Revalidate selected release metadata and APK manifest identity/version facts for the curated entries, and prepare trimmed release fixtures with primary URLs and observation dates. Verify the documented mappings against the retrieved manifests, record all four existing identity mismatches and Ludashi's older-release fallback, and revise any contradicted policy before changing configuration.
+- [x] 1.2 Add failing fixture-driven curation tests that load the maintained extras/overlays through composition, rendering and existing resolution. Verify they cover Cinderbox in both variants with a newer dependency prerelease excluded, numeric extraction and no-match failures, independent Cemu tags, preserved complete source versions for all eight policies, and unchanged existing ids, URLs, membership and APK selection.
+- [x] 1.3 Add failing lint fixtures for bare integers and prefixed integers, preserving negative cases for dates, hashes, labels, empty strings and trailing junk. Verify existing dotted-version/suffix behavior and disabled-detection, track-only and date classifications remain covered.
 
 ## 2. Curated configuration and lint correction
 
-- [ ] 2.1 Add the complete Cinderbox extra and common-overlay policies defined by the curation spec. Verify the curation fixtures pass, Symphony's observed tags extract to distinct numeric versions, Shipwright's base/P1/P2 releases remain distinct, and no APK-filter, notification, track-only, package-id or source-URL changes are introduced.
-- [ ] 2.2 Extend numeric-shape lint with the bare-integer alternative while preserving the dotted branch and full-string matching. Verify positive integer cases pass and `2026-04-27` remains a warning when standard detection is enabled; run the focused lint and live-classification tests.
-- [ ] 2.3 Bump verifier identity to `0.3.1` without changing schema or compatibility baseline. Verify evidence recorded with identity `0.3.0` is displayed as stale and current-identity evidence round-trips correctly.
+- [x] 2.1 Add the complete Cinderbox extra and common-overlay policies defined by the curation spec. Verify the curation fixtures pass, Symphony's observed tags extract to distinct numeric versions, Shipwright's base/P1/P2 releases remain distinct, and no APK-filter, notification, track-only, package-id or source-URL changes are introduced.
+- [x] 2.2 Extend numeric-shape lint with the bare-integer alternative while preserving the dotted branch and full-string matching. Verify positive integer cases pass and `2026-04-27` remains a warning when standard detection is enabled; run the focused lint and live-classification tests.
+- [x] 2.3 Bump verifier identity to `0.3.1` without changing schema or compatibility baseline. Verify evidence recorded with identity `0.3.0` is displayed as stale and current-identity evidence round-trips correctly.
 
 ## 3. Documentation and pack validation
 
