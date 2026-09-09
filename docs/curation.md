@@ -55,13 +55,19 @@ source versions and manifest values are also retained in the
 
 ## Unresolved identity and selection findings
 
-Symphony (`com.sergiomanzur.sotnrecomp`), CTR (`com.simon358.ctrnative`),
-Shipwright (`com.waterdish.shipwright`) and Ludashi (`com.winlator.ludashi`)
-have the four mismatches shown above. Their configured identities are preserved.
-Fixing them requires separate migration and collision analysis: `com.ctrnative`
-already exists in the dual pack from another project. Clean version lint cannot
-repair these mismatches, and these apps cannot establish successful device
-acceptance for this work.
+CTR is the one implemented correction from this evidence. The Simon standard
+candidate retains original id `com.simon358.ctrnative` in provenance but renders
+the manifest-backed effective id `com.ctrnative`; explicit family policy groups
+it with the existing igawa6 dual candidate. This can leave the old Obtainium
+entry or installed package beside the replacement, so device migration remains
+manual and unverified. See [composition validation](composition-validation.md)
+for the exact output transition and outstanding device checks.
+
+Symphony (`com.sergiomanzur.sotnrecomp`), Shipwright
+(`com.waterdish.shipwright`) and Ludashi (`com.winlator.ludashi`) retain their
+configured identities. Correcting them requires separate migration and collision
+analysis. Clean version lint cannot repair these mismatches, and metadata checks
+cannot establish successful device acceptance.
 
 [Ludashi releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
 include v4.0, but the existing APK filter still selects bionic-vanilla.apk from

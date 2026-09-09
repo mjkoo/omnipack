@@ -148,7 +148,10 @@ drop any entry marked as excluded from export, SHALL omit an entry from the
 single-screen variant when it is marked as not included in the standard pack,
 and SHALL omit an entry from the dual-screen variant when it is marked as not
 included in the dual-screen pack. An entry carrying no such flag SHALL be a
-candidate for both variants.
+candidate for both variants. Entries eligible for single SHALL be ordinary
+candidates; entries eligible only for dual SHALL be dual-preferred. Explicit
+composition policy SHALL be able to override eligibility and preference after
+source normalization, but SHALL NOT revive an entry excluded from export.
 
 #### Scenario: Entry excluded from export
 
@@ -201,17 +204,22 @@ and SHALL NOT require that a package id map to the same entry across variants.
 
 ### Requirement: BBoi34 entries map to variants by source file
 
-The system SHALL treat entries from the BBoi34 single-screen asset as
-candidates for both variants, and entries from its dual-screen asset as
-candidates for the dual-screen variant only. Where an id appears in both
-assets, the dual-screen asset's entry SHALL be the dual-screen candidate.
+The system SHALL retain each standard-asset record as an ordinary candidate
+eligible for both targets, and each dual-asset record as a dual-preferred
+candidate eligible only for dual. It SHALL preserve asset origin and retain both
+records when a package id appears in both assets. Selection SHALL occur during
+composition, where device preference precedes source ranking. Explicit policy
+SHALL be able to override normalized eligibility and preference.
 
 #### Scenario: Id present in both BBoi34 assets
 
-- **WHEN** an id appears in both the single-screen and dual-screen assets with
-  different content
-- **THEN** the single-screen variant uses the single-screen asset's entry and
-  the dual-screen variant uses the dual-screen asset's entry
+- **WHEN** both assets contain different builds of an id and no override changes their suitability
+- **THEN** ingestion retains both and composition selects the standard build for single and the dual build for dual, absent a higher-ranked eligible choice
+
+#### Scenario: Standard alternative remains available
+
+- **WHEN** explicit policy makes the dual candidate ineligible for dual
+- **THEN** the retained standard candidate remains available for dual selection
 
 ### Requirement: codm2000 entries are generated from GitHub project links
 
@@ -219,13 +227,21 @@ The codm2000 catalog is a README of links rather than a machine-readable
 catalog. The system SHALL extract its project links, SHALL keep only those
 that address a GitHub repository, and SHALL skip the rest. Generated entries
 SHALL be candidates for the dual-screen variant only, so the test for a project
-another source already covers is scoped to that variant: a link SHALL NOT
+another source already covers is scoped to that variant after explicit
+eligibility rules have been applied to higher-source candidates: a link SHALL NOT
 produce a generated entry when a higher-precedence source already contributes
 that project as a candidate for the dual-screen variant, compared in the
-pipeline's normalized URL form, and SHALL produce one otherwise. A project that
+pipeline's normalized URL form before exclusions and selection, and SHALL produce one otherwise. A project that
 a higher-precedence source contributes to the single-screen variant alone
 therefore still generates its dual-screen candidate, since nothing else would
 supply that variant.
+
+Generated builds SHALL be dual-preferred within their family unless explicit
+policy overrides that preference. Merely listing a covered project in codm SHALL
+NOT promote a higher-source ordinary build to dual-preferred. Generated rules
+SHALL be applied after package resolution; all active candidate selectors SHALL then be
+validated against the complete candidate set. Historical mappings SHALL be exempt from candidate-presence checks.
+A missing rule or pinned candidate SHALL fail explicitly rather than be treated as an ordinary unresolved skip.
 
 A README link supplies no display name and no grouping of its own, so a
 generated entry SHALL carry as its name the repository name of its project URL,
@@ -259,6 +275,16 @@ contributes nothing to the rendered settings block's category union.
   contributes as a candidate for the single-screen variant only
 - **THEN** a generated entry is produced for that row as a candidate for the
   dual-screen variant
+
+#### Scenario: Policy removes higher-source dual eligibility
+
+- **WHEN** a higher-source project would normally cover dual but policy restricts it to single
+- **THEN** its codm link can generate a dual candidate
+
+#### Scenario: Covered ordinary build is also listed by codm
+
+- **WHEN** a higher-source ordinary candidate already covers that project's dual target
+- **THEN** codm generates no duplicate and does not change that candidate's preference
 
 ### Requirement: A generated entry carries a real package id
 
@@ -431,7 +457,11 @@ rendering orders entries by name and the import format displays it. An extras
 entry SHALL be a candidate for both variants, unless it
 carries a variants field naming the variants it applies to, in which case it
 SHALL be a candidate for exactly the named variants. The system SHALL fail the
-build when that field names anything other than the known variants.
+build when that field names anything other than the known variants, or names
+an empty list. An optional boolean `dualPreferred` SHALL default to false and
+SHALL be valid only with dual eligibility. Explicit composition policy SHALL be
+able to override normalized eligibility and preference. Composition-only fields
+SHALL NOT reach Obtainium app records.
 
 #### Scenario: Extras entry lacks a package id
 
@@ -456,6 +486,11 @@ build when that field names anything other than the known variants.
   have
 - **THEN** the build fails with an error naming that entry and the rejected
   value
+
+#### Scenario: Ordinary extra competes with a dual fork
+
+- **WHEN** an extra omits dualPreferred and a dual-preferred lower-source candidate shares its family
+- **THEN** the extra is ordinary and does not win dual selection solely through source precedence
 
 ### Requirement: Every entry carries a supported source type
 

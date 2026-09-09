@@ -49,24 +49,52 @@ pack settings SHALL agree with the rendered settings block.
 
 ### Requirement: Offline verification checks local composition constraints
 
-The system SHALL validate denylist and overlay configuration using the existing
-composition rules, including overlay object shape and forbidden id/source edits.
-It SHALL reject an overlay target absent from its applicable rendered variants,
-a denied id remaining in an applicable variant, or a single-screen id absent
-from dual-screen without a dual-screen-scoped denylist exemption. A common
-overlay target present in either variant SHALL be valid. Stale denylist entries
-SHALL remain non-fatal. Checks SHALL NOT require fresh upstream catalogs or
-claim that target existence proves that an overlay's values were applied.
+The system SHALL validate the composition policy, denylist and build-bound
+overlays without fetching source catalogs. It SHALL interpret rendered families
+using effective id and normalized project URL projections from the policy,
+falling back to package families where no active rule applies. Historical mappings
+SHALL be validated as configuration but SHALL NOT participate in current output
+family projection, eligibility, pins or coverage. Ambiguous projections,
+invalid configuration and forbidden overlay fields SHALL fail.
+
+It SHALL reject duplicate selected families within a variant, a denied package
+or family remaining in scope, violations of projected eligibility or candidate
+pins, stale id-and-URL overlay targets, and single families absent from dual
+without the explicit composition exemptions. A common patch matching either
+variant SHALL be valid; stale exclusions SHALL remain nonfatal. A different
+package in the same declared family SHALL satisfy coverage. Unique output package
+ids SHALL still be required independently.
+
+These checks SHALL NOT claim to verify source provenance, optimal winner ranking,
+rule presence in unfetched catalogs or actual patch values. Those candidate-level
+checks remain build responsibilities. Offline verification SHALL not rewrite
+outputs or require previous build reports to interpret family coverage.
 
 #### Scenario: Dual-only overlay has no target
 
-- **WHEN** the named id exists only in the single-screen file
-- **THEN** verification reports the stale dual overlay as an error
+- **WHEN** the named id-and-URL pair exists only in single
+- **THEN** verification reports a stale dual overlay
 
 #### Scenario: An explicit exclusion permits different coverage
 
-- **WHEN** a single-screen id is absent from dual-screen and is denied for dual
-- **THEN** that absence passes the coverage check even if no dual entry was removed
+- **WHEN** a single family's dual output is absent and its family or single winner's package is denied for dual
+- **THEN** coverage passes even if the denial removed no candidate
+
+#### Scenario: Different-package family replacement is present
+
+- **WHEN** policy maps single and dual output entries with different ids to one family
+- **THEN** offline coverage passes without requiring the single package in dual
+
+#### Scenario: Pinned output is another repository
+
+- **WHEN** the rendered family winner differs from the pin's effective id-and-URL projection
+- **THEN** offline verification fails with the family and target identified
+
+#### Scenario: Absent losing candidate cannot be assessed offline
+
+- **WHEN** a policy selector refers to a candidate not represented in the outputs
+- **THEN** offline verification does not claim whether that source candidate exists
+- **AND** build must still enforce selector presence against fetched candidates
 
 ### Requirement: Live checks honor a declared compatibility boundary
 
@@ -464,7 +492,7 @@ baseline, mode (`offline`, `live`, or `live-probe`), observation times, completi
 and status, input fingerprints,
 errors, warnings, and per-variant entry results with resolution and probe evidence.
 Fingerprints SHALL cover exact bytes of both output files, the denylist, both
-overlays, pack settings and HTTP configuration, identifying missing/unreadable
+overlays, composition policy, pack settings and HTTP configuration, identifying missing/unreadable
 inputs explicitly and excluding token values. Input changes during a run SHALL
 prevent a successful result for the current files.
 
@@ -503,3 +531,13 @@ errors, regardless of any cached package id or prior verification report.
 
 - **WHEN** two entries fail at different live stages after offline validation passes
 - **THEN** the completed report contains both failures and the run fails
+
+#### Scenario: Policy changes during verification
+
+- **WHEN** the composition policy bytes change during a run
+- **THEN** the result cannot be successful for the current input snapshot
+
+#### Scenario: Old evidence lacks composition policy
+
+- **WHEN** recorded evidence predates the policy fingerprint or current verifier identity
+- **THEN** it is stale rather than proof that current family constraints passed

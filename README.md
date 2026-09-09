@@ -1,9 +1,9 @@
 # omnipack
 
 Curated Obtainium import files, `single-screen.json` and
-`dual-screen.json`, built as the union of several upstream app packs plus a
-handful of hand-added apps, with a committed overlay of per-app fixes that
-survives every upstream refresh.
+`dual-screen.json`, built by selecting one device-suitable build per logical
+app family from several upstream packs and a handful of hand-added apps. A
+committed composition policy and per-app overlays survive upstream refreshes.
 
 Consumers fetch the rendered files directly from `dist/` on `main`.
 
@@ -28,9 +28,10 @@ offline. An optional `GITHUB_TOKEN` authenticates
 requests to `api.github.com` through `config/http.json`.
 
 The JSON diagnostics are in `.build/report.json`, including generated and
-unresolved projects, precedence decisions, exclusions, and changes from the
-previous output. A failed build returns a nonzero status and preserves the
-previous output pair; successfully resolved ids remain cached for later runs.
+unresolved projects, family selections and alternatives, selection reasons,
+identity transitions, exclusions, and changes from the previous output. A
+failed build returns a nonzero status and preserves the previous output pair;
+successfully resolved ids remain cached for later runs.
 
 ## Verify and inspect
 
@@ -51,6 +52,9 @@ See [verification](docs/verification.md) for supported settings, failure policy,
 and the limits of a successful check. Ordinary CI runs offline verification;
 nightly publication runs metadata-only live verification. Asset probes remain
 an explicit manual troubleshooting operation.
+
+See [pack composition](docs/composition.md) for family selection, policy,
+exclusion, overlay, migration, and rollback behavior.
 
 See [live validation](docs/validation.md) for the observed import results.
 

@@ -70,15 +70,35 @@ build failing later keeps the resolution work it already paid for.
 
 The scheduled rebuild needs to explain a change or a failure without rerunning
 the build. The system SHALL write a build report recording the apps added and
-removed since the previous output, the ids where a candidate was displaced by
-precedence, the denylist removals, the denylist entries that matched no
-composed entry and are therefore stale exclusions, the source rows that
+removed since the previous output, the families and package ids where candidates were displaced by
+pins, device preference or source precedence, the candidate exclusions, and the
+denylist entries that matched no candidate in scope and are therefore stale exclusions, the source rows that
 were skipped or left unresolved, and every project that produced a generated
 entry together with its resolved or reused package id. The report SHALL also
 record each failed resolution attempt that retained a cached id. Listing a resolved
 generated project is what lets a maintainer write a denylist entry for it,
 since a project link names no package id of its own and a project that resolved
 and was already in the previous output appears in none of the other lists.
+
+The report SHALL additionally record each family's per-target winner and
+alternatives, source/origin, original and effective identity, eligibility,
+preference tier, fallback and selection reason. It SHALL distinguish family
+coverage from package coverage, and family additions/removals from project or
+package replacements. Conflicts and stale policy selectors SHALL be actionable.
+
+Previous-output family classification SHALL use only committed historical
+effective-id-and-normalized-URL mappings, without requiring a prior build report
+or retaining obsolete active candidate rules. Current family membership SHALL
+come from composition. A known previous family present in the current target
+SHALL be retained, with package/project changes reported as transitions; a known
+previous family absent now SHALL be removed. An unmapped previous entry SHALL
+have unknown family history and SHALL NOT be assigned an inferred package family
+or reported as a family removal. If any previous entries in a target are unmapped,
+current families without a known previous match SHALL have unknown addition
+status rather than definite additions or replacements. The report SHALL identify
+unmapped keys and the missing-history reason while preserving known matches and
+raw app/package diffs. Missing previous output SHALL mean all current families
+are additions. Missing history SHALL NOT fail otherwise valid composition.
 
 The report SHALL be written on a successful build and on a failed one alike,
 and a failed build's report SHALL record the stage that was running and the
@@ -150,6 +170,28 @@ unchanged rebuild look like a change.
 - **WHEN** a build completes
 - **THEN** the report is a JSON document at `.build/report.json` and no report
   file is written into the distribution directory
+
+#### Scenario: Family stays while the package changes
+
+- **WHEN** the selected build moves to another package in the same declared family
+- **THEN** the report records the package transition and retained family separately
+
+#### Scenario: Old candidate disappears in a fresh scheduled checkout
+
+- **WHEN** previous import files contain an old package, its candidate has disappeared, its obsolete active rule has been removed, a historical mapping retains its family, and no prior build report exists
+- **AND** composition selects a different package in that family for the same target
+- **THEN** the report records a retained family and the old-to-new package transition without requiring the retired candidate or a prior report
+
+#### Scenario: Previous entry has no historical mapping
+
+- **WHEN** a previous entry has no historical mapping and a current family has no known previous match
+- **THEN** the report identifies that entry as unknown family history and the current family as unknown addition status, without asserting a family removal, addition or replacement for them
+- **AND** raw app/package changes remain available and missing history alone does not fail the build
+
+#### Scenario: Family conflict stops composition
+
+- **WHEN** selection fails on tied candidates or a package collision
+- **THEN** the report identifies the family, target and conflicting selectors and preserves prior diagnostics
 
 ### Requirement: The build persists newly resolved package ids
 
@@ -239,7 +281,10 @@ One missing report SHALL be acceptable if the other can be displayed. When both
 are missing, or an existing report is unreadable, malformed or has an unsupported
 schema, the command SHALL exit nonzero with a useful diagnostic. Successfully
 displaying a recorded failed operation SHALL exit zero. The existing build-report
-format without a schema field SHALL remain readable.
+format without a schema field SHALL remain readable. New build reports SHALL
+also display family selections, fallback reasons, identity transitions and
+candidate conflicts. The composition policy SHALL participate in freshness
+checks; evidence predating that input or the new verifier identity SHALL be stale.
 
 #### Scenario: Configuration changed after successful live verification
 
@@ -256,3 +301,8 @@ format without a schema field SHALL remain readable.
 - **WHEN** a valid build report exists and no verification report exists
 - **THEN** the report command displays the build and says standalone verification
   has not been recorded, without treating it as a successful verification
+
+#### Scenario: Only composition policy changed
+
+- **WHEN** config/composition.json changes while both pack files remain identical
+- **THEN** recorded verification is displayed as stale

@@ -30,7 +30,8 @@ Standalone verification writes `.build/verify.json` on success or failure. An
 initial incomplete record replaces previous evidence before live work starts.
 The report records mode, observation times, verifier identity, baseline, findings,
 and SHA-256 fingerprints of the exact distribution files, denylist, both overlays,
-pack settings, and HTTP configuration. Environment credential values are excluded.
+composition policy, pack settings, and HTTP configuration. Environment credential
+values are excluded.
 If inputs change during a run, the run fails instead of claiming to verify the
 new files. Missing and unreadable inputs are reported explicitly.
 
@@ -38,8 +39,11 @@ Verification does not rebuild or update distribution files, overlays, package-id
 caches, or `.build/report.json`. Build diagnostics remain separate and include
 the offline gate's verdict. A rejected build preserves both previous output files.
 
-`pack report` labels verification stale when local fingerprints or verifier
-identity differ. It also shows incomplete attempts, mode, and observation time.
+`pack report` labels verification stale when any local input fingerprint or the
+verifier identity differs, including a composition-only change with unchanged
+distribution files. Evidence is current only when every recorded input byte
+snapshot and the verifier identity match. It also shows incomplete attempts,
+mode, and observation time.
 Current local fingerprints do not mean an upstream source is still healthy.
 One available report is enough; missing both, corrupt reports, and unsupported
 schemas fail display. Displaying a recorded failed operation is itself successful.
@@ -48,6 +52,14 @@ Verification exits zero only for a complete run without errors. Warnings alone
 are successful. Offline errors prevent all live requests; after offline success,
 independent live failures are collected across both variants. Report write errors
 also fail the command and produce a stderr diagnostic.
+
+Offline composition validation interprets rendered families, projected pins and
+explicit eligibility, exclusions, package uniqueness, family coverage, and
+id-and-URL overlay targets from local bytes. Rendered output does not contain the
+losing source candidates, so offline verification cannot reconstruct provenance,
+candidate presence, preference or source ranking. It also cannot prove that the
+configured patch values produced the rendered values. Those checks belong to a
+build against acquired candidates; offline success does not repair output.
 
 ## Compatibility boundary
 
