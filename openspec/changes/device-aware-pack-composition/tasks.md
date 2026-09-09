@@ -5,9 +5,9 @@
 
 ## 2. Implement the candidate model and composition policy
 
-- [ ] 2.1 Extend normalized candidates with eligibility, dual preference, origin and original/effective identity; verify identical duplicates collapse while ambiguous original identities fail and internal metadata does not reach rendered apps.
-- [ ] 2.2 Add strict versioned composition-policy parsing, candidate selectors, corrections, family namespaces and pins; verify malformed rules, duplicate selectors, unknown fields/targets, invalid eligibility and pin conflicts fail through focused tests.
-- [ ] 2.3 Implement shared rendered-family projections and original-selector matching without recursive rewrites; verify different-package family mapping, ambiguous projection rejection and offline interpretation without a build report. Add separate historical effective-id-and-normalized-URL family mappings, rejecting malformed records, duplicate normalized keys and conflicts with active projections; verify history neither requires candidate presence nor affects current selection or offline coverage.
+- [x] 2.1 Extend normalized candidates with eligibility, dual preference, origin and original/effective identity; verify identical duplicates collapse while ambiguous original identities fail and internal metadata does not reach rendered apps.
+- [x] 2.2 Add strict versioned composition-policy parsing, candidate selectors, corrections, family namespaces and pins; verify malformed rules, duplicate selectors, unknown fields/targets, invalid eligibility and pin conflicts fail through focused tests.
+- [x] 2.3 Implement shared rendered-family projections and original-selector matching without recursive rewrites; verify different-package family mapping, ambiguous projection rejection and offline interpretation without a build report. Add separate historical effective-id-and-normalized-URL family mappings, rejecting malformed records, duplicate normalized keys and conflicts with active projections; verify history neither requires candidate presence nor affects current selection or offline coverage.
 
 ## 3. Preserve device intent through ingestion
 
