@@ -8,15 +8,15 @@ successful live nightly refresh or a GitHub Actions dispatch.
 
 | Check | Result |
 | --- | --- |
-| Focused `tests/test_nightly_*.py` suite with scoped `init.defaultBranch=master` | 80 passed |
-| `just check-all` | Passed, including all 650 Python tests |
+| Focused `tests/test_nightly_*.py` suite with scoped `init.defaultBranch=master` | 81 passed |
+| `just check-all` | Passed, including all 651 Python tests |
 | `actionlint .github/workflows/nightly.yml` | Passed with actionlint 1.7.12 |
 | `zizmor --persona pedantic .github/workflows/nightly.yml` | No findings with zizmor 1.30.0 |
 | Runtime-independent entrypoint and reporting syntax | Python 3.10 grammar accepted |
 | Distribution and configuration integrity | All 11 file SHA-256 hashes unchanged; no Git diff |
 
-These are the final results after review fixes. The focused suite took 16.26
-seconds; the Python suite in `just check-all` took 21.77 seconds. The Git default
+These are the final results after review fixes. The focused suite took 16.03
+seconds; the Python suite in `just check-all` took 20.08 seconds. The Git default
 was set only for the focused test process using `GIT_CONFIG_COUNT=1`,
 `GIT_CONFIG_KEY_0=init.defaultBranch`, and `GIT_CONFIG_VALUE_0=master`; no user
 Git configuration changed.
@@ -62,6 +62,13 @@ being presented without identifying missing live evidence.
 the fixes and pass after them. The former retains the SHA and both attempt
 reports through fallback; the latter preserves offline diagnostic content
 while identifying live evidence as unavailable.
+
+Fallback regression coverage additionally checks that a helper failure remains
+a workflow failure through successful artifact upload, without losing the
+confirmed publication. `test_fallback_preserves_missing_report_markers` checks
+that reloaded missing-report placeholders remain unavailable in both the
+orchestration result and summary. Both assertions failed before their fixes
+and pass afterward.
 
 Process/API responses are controlled, and real Git transport tests use only
 temporary local repositories. No test pushed to GitHub, created a real issue,
