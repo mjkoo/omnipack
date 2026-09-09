@@ -48,3 +48,18 @@ class App:
     provenance: Provenance
     additional_settings: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
+    eligibility: frozenset[Variant] = field(default_factory=frozenset)
+    dual_preferred: bool = False
+    origin: str | None = None
+    original_id: str | None = None
+    family: str | None = None
+
+    def __post_init__(self) -> None:
+        # Adapters migrate to source-derived, multi-target eligibility separately.
+        # These defaults keep the existing per-variant normalized record contract.
+        if not self.eligibility:
+            object.__setattr__(self, "eligibility", frozenset({self.variant}))
+        if self.origin is None:
+            object.__setattr__(self, "origin", self.provenance.source)
+        if self.original_id is None:
+            object.__setattr__(self, "original_id", self.id)
