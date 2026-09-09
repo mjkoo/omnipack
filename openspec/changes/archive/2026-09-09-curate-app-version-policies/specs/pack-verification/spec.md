@@ -37,4 +37,3 @@ Warnings SHALL NOT cause a nonzero verification result.
 - **WHEN** effective versions are `Android-Build4`, `2026-04-27`, or
   `XenDroid-0b11201` with standard version detection enabled and no date override
 - **THEN** the report still includes a version-format warning
-
