@@ -1,1 +1,59 @@
-{}
+{
+  "com.aure.banjorecomp": {
+    "additionalSettings": {
+      "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+      "matchGroupToUse": "0"
+    }
+  },
+  "com.sergiomanzur.sotnrecomp": {
+    "additionalSettings": {
+      "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+      "matchGroupToUse": "0"
+    }
+  },
+  "com.simon358.ctrnative": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "com.waterdish.shipwright": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "com.winlator.cmod": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "com.winlator.ludashi": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "info.cemu.cemu": {
+    "additionalSettings": {
+      "releaseTitleAsVersion": false
+    }
+  },
+  "org.citron.citron_emu": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "org.vita3k.emulator": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "xendroid.compose": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  "xyz.blacksheep.mjolnir": {
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  }
+}

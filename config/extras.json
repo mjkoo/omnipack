@@ -1,1 +1,21 @@
-[]
+[
+  {
+    "id": "com.game.cinderbox",
+    "url": "https://github.com/Ekyso/Cinderbox",
+    "name": "Cinderbox",
+    "author": "Ekyso",
+    "categories": [
+      "PC Ports"
+    ],
+    "variants": [
+      "single",
+      "dual"
+    ],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "versionDetection": true,
+      "releaseTitleAsVersion": false,
+      "trackOnly": false
+    }
+  }
+]

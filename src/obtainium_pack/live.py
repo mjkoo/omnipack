@@ -95,7 +95,7 @@ class LiveResult:
 
 
 _NUMERIC_VERSION = re.compile(
-    r"[vV]?\d+(?:\.\d+)+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?\Z"
+    r"[vV]?(?:\d+|\d+(?:\.\d+)+(?:-[A-Za-z0-9.-]+)?(?:\+[A-Za-z0-9.-]+)?)\Z"
 )
 _URL_IN_MESSAGE = re.compile(r"https?://[^\s\"'<>]+")
 
