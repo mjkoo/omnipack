@@ -203,3 +203,20 @@ def test_malformed_http_config_replaces_evidence_without_network(
     assert stored["status"] == "failed" and stored["complete"] is True
     assert any(item["code"] == "http-config-invalid" for item in stored["errors"])
     assert "Traceback" not in capsys.readouterr().err
+
+
+@pytest.mark.parametrize("entry", [[], None])
+def test_nonobject_exclusion_completes_failed_evidence(
+    tmp_path: Path, entry: object
+) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / "config/deny.json").write_text(json.dumps([entry]))
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "failed"
+    assert result["complete"] is True
+    assert any(
+        error["code"] == "invalid_composition_config"
+        and "denylist[0] must be an object" in error["message"]
+        for error in result["errors"]
+    )
+    assert json.loads((tmp_path / verify.VERIFY_PATH).read_text()) == result

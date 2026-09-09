@@ -431,15 +431,46 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
 ) -> None:
     config = tmp_path / "config"
     config.mkdir()
+    policy_document = {
+        "schemaVersion": 1,
+        "candidates": [],
+        "pins": [],
+        "history": [
+            {
+                "id": "before.id",
+                "url": "https://example.test/old",
+                "family": "package:current.id",
+                "rationale": "Previous published identity",
+            }
+        ],
+    }
+    consumed_policy = parse_composition_policy(policy_document)
+    candidate = App(
+        "current.id",
+        "https://example.test/current",
+        "Current",
+        SourceType.HTML,
+        (),
+        Variant.SINGLE,
+        Provenance("extras", "fixture"),
+        eligibility=frozenset(Variant),
+    )
     for name, value in (
-        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
+        ("composition.json", policy_document),
         ("deny.json", []),
         ("overlay.json", []),
         ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
-    before = b'{"apps":[{"id":"before.id"}]}\n'
+    before = json.dumps(
+        {
+            "apps": [
+                {"id": "before.id", "url": "https://example.test/old"},
+                {"id": "unknown.id", "url": "https://example.test/unknown"},
+            ]
+        }
+    ).encode()
     paths = [
         tmp_path / "dist" / name for name in ("single-screen.json", "dual-screen.json")
     ]
@@ -451,7 +482,10 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         cli,
         "_ingest_for_build",
         lambda root, report: IngestionResult(
-            [], report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
+            [candidate],
+            report,
+            consumed_policy,
+            (root / "config/composition.json").read_bytes(),
         ),
     )
     if stage == "rendering":
@@ -494,6 +528,38 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         else:
             assert not path.exists()
     report = json.loads((tmp_path / ".build/report.json").read_text())
+    for variant in Variant:
+        changes = report["familyChanges"][variant.value]
+        assert changes["retained"] == (
+            [
+                {
+                    "family": "package:current.id",
+                    "previous": [
+                        {"id": "before.id", "url": "https://example.test/old"}
+                    ],
+                    "current": {
+                        "id": "current.id",
+                        "url": "https://example.test/current",
+                    },
+                }
+            ]
+            if existing
+            else []
+        )
+        assert changes["unmappedPrevious"] == (
+            [
+                {
+                    "id": "unknown.id",
+                    "url": "https://example.test/unknown",
+                }
+            ]
+            if existing
+            else []
+        )
+        assert changes["unknownReason"] == (
+            "previous entries lack historical family mappings" if existing else None
+        )
+        assert changes["added"] == ([] if existing else ["package:current.id"])
     assert report["stage"] == stage
     assert report["error"] == f"injected {stage} failure"
     assert report["offlineVerification"] == {
@@ -501,7 +567,10 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         "findings": [],
     }
     assert report["changes"] == {
-        variant.value: {"added": [], "removed": ["before.id"] if existing else []}
+        variant.value: {
+            "added": ["current.id"],
+            "removed": ["before.id", "unknown.id"] if existing else [],
+        }
         for variant in Variant
     }
 
@@ -639,6 +708,7 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     )
     assert verify_path.read_bytes() == b'{"keep":true}\n'
     report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["familyChanges"] is not None
     assert report["stage"] == "offline verification"
     assert report["offlineVerification"]["status"] == "failed"
     assert report["changes"] == {
@@ -679,3 +749,61 @@ def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
     assert report["stage"] == "offline verification"
     assert report["offlineVerification"]["findings"][0]["code"] == "input_changed"
     assert not (tmp_path / "dist").exists()
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_winning_tie_reports_original_selectors(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    reverse: bool,
+) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    for name in ("deny.json", "overlay.json", "overlay.dual.json"):
+        (config / name).write_text("[]")
+    candidates = [
+        App(
+            "same.package",
+            "https://example.test/project",
+            "Candidate",
+            SourceType.HTML,
+            (),
+            Variant.SINGLE,
+            Provenance("bboi", "fixture"),
+            eligibility=frozenset(Variant),
+            origin=origin,
+            original_id=original,
+        )
+        for origin, original in (
+            ("bboi-standard-asset", "original.standard"),
+            ("bboi-dual-asset", "original.dual"),
+        )
+    ]
+    monkeypatch.setattr(
+        cli,
+        "_ingest_for_build",
+        lambda root, report: IngestionResult(
+            list(reversed(candidates)) if reverse else candidates,
+            report,
+            EMPTY_POLICY,
+            b'{"schemaVersion":1,"candidates":[],"pins":[]}',
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    expected = (
+        "family 'package:same.package' target 'single' has ambiguous winning candidates: "
+        "source='bboi', origin='bboi-dual-asset', original_id='original.dual', "
+        "url='example.test/project'; "
+        "source='bboi', origin='bboi-standard-asset', original_id='original.standard', "
+        "url='example.test/project'"
+    )
+    assert report["stage"] == "composition"
+    assert report["changes"] is None
+    assert report["familyChanges"] is None
+    assert report["error"] == expected
+    assert expected in capsys.readouterr().err
+    assert main(["report"]) == 0
+    assert expected in capsys.readouterr().out

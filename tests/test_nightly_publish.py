@@ -129,6 +129,7 @@ def test_refresh_orders_checks_build_and_metadata_only_verification(
         ("uv", "run", "--no-sync", "pack", "verify", "--live"),
     ]
     assert all("--probe-assets" not in command for command in process.commands)
+    assert "config/composition.json" not in ALLOWED_PATHS
 
 
 def test_every_attempt_reruns_every_refresh_command(tmp_path: Path) -> None:
@@ -159,23 +160,6 @@ def test_failed_gate_stops_without_candidate(tmp_path: Path, fail_at: int) -> No
     assert result.status == "failed"
     assert len(process.commands) == fail_at
     assert result.candidate is None
-
-
-def test_selected_build_metadata_failure_cannot_fall_back_or_publish(
-    tmp_path: Path,
-) -> None:
-    root = _repo(tmp_path)
-    process = ControlledProcess(root, fail_at=9)
-
-    result = RefreshOrchestrator(process).run(root, "selected-sha")
-
-    assert result.status == "failed"
-    assert result.candidate is None
-    assert process.commands[-2:] == [
-        ("uv", "run", "--no-sync", "pack", "build"),
-        ("uv", "run", "--no-sync", "pack", "verify", "--live"),
-    ]
-    assert "config/composition.json" not in ALLOWED_PATHS
 
 
 def test_command_launch_error_is_an_explicit_stage_failure(tmp_path: Path) -> None:

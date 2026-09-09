@@ -144,9 +144,11 @@ def compose(
     return CompositionResult(selected, report)
 
 
-def parse_exclusions(entries: list[dict[str, str]]) -> tuple[_Exclusion, ...]:
+def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
     result: list[_Exclusion] = []
     for index, entry in enumerate(entries):
+        if not isinstance(entry, dict):
+            raise CompositionError(f"denylist[{index}] must be an object")
         unknown = set(entry) - {"id", "family", "variant", "reason"}
         if unknown:
             raise CompositionError(
@@ -263,8 +265,14 @@ def _select(
                     item for item in tier if _PRECEDENCE[item.provenance.source] == rank
                 ]
                 if len({_identity(item) for item in winners}) != 1:
+                    selectors = "; ".join(
+                        f"source={source!r}, origin={origin!r}, original_id={original_id!r}, url={url!r}"
+                        for source, origin, original_id, url in sorted(
+                            {_identity(item) for item in winners}
+                        )
+                    )
                     raise CompositionError(
-                        f"family {family!r} target {variant.value!r} has ambiguous winning candidates"
+                        f"family {family!r} target {variant.value!r} has ambiguous winning candidates: {selectors}"
                     )
                 winner = winners[0]
             else:
