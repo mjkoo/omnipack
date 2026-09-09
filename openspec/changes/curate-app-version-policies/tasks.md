@@ -1,0 +1,18 @@
+## 1. Evidence and regression fixtures
+
+- [ ] 1.1 Revalidate selected release metadata and APK manifest identity/version facts for the curated entries, and prepare trimmed release fixtures with primary URLs and observation dates. Verify the documented mappings against the retrieved manifests, record all four existing identity mismatches and Ludashi's older-release fallback, and revise any contradicted policy before changing configuration.
+- [ ] 1.2 Add failing fixture-driven curation tests that load the maintained extras/overlays through composition, rendering and existing resolution. Verify they cover Cinderbox in both variants with a newer dependency prerelease excluded, numeric extraction and no-match failures, independent Cemu tags, preserved complete source versions for all eight policies, and unchanged existing ids, URLs, membership and APK selection.
+- [ ] 1.3 Add failing lint fixtures for bare integers and prefixed integers, preserving negative cases for dates, hashes, labels, empty strings and trailing junk. Verify existing dotted-version/suffix behavior and disabled-detection, track-only and date classifications remain covered.
+
+## 2. Curated configuration and lint correction
+
+- [ ] 2.1 Add the complete Cinderbox extra and common-overlay policies defined by the curation spec. Verify the curation fixtures pass, Symphony's observed tags extract to distinct numeric versions, Shipwright's base/P1/P2 releases remain distinct, and no APK-filter, notification, track-only, package-id or source-URL changes are introduced.
+- [ ] 2.2 Extend numeric-shape lint with the bare-integer alternative while preserving the dotted branch and full-string matching. Verify positive integer cases pass and `2026-04-27` remains a warning when standard detection is enabled; run the focused lint and live-classification tests.
+- [ ] 2.3 Bump verifier identity to `0.3.1` without changing schema or compatibility baseline. Verify evidence recorded with identity `0.3.0` is displayed as stale and current-identity evidence round-trips correctly.
+
+## 3. Documentation and pack validation
+
+- [ ] 3.1 Add `docs/curation.md` and update version-detection/verification guidance and README navigation. Verify the text includes each policy and its primary evidence, integer lint scope, preserved update checking, suffix-collision assumptions, source-tracking re-import/asset-replacement limitations, and the unresolved identity/selection findings without relying on scratch files.
+- [ ] 3.2 Rebuild both packs and review generated changes, then run offline and metadata-only live verification. Verify the fixture baseline adds Cinderbox exactly once per variant and resolves all 23 recorded format warnings under the proposed policies; separately account for fresh upstream changes and findings without weakening the verifier or expanding curation scope silently.
+- [ ] 3.3 Run focused curation/lint/report tests and `just check-all`, and record command outcomes, generated-file hashes and live observation times in durable validation documentation. Verify no publication, workflow dispatch, or GitHub issue operation is performed as part of validation.
+- [ ] 3.4 Exercise import/re-import and source-version update behavior on an available test device, including one numeric entry and one correctly identified source-tracked entry. Verify behavior against the documented limits and record results; when no device is available, explicitly record device acceptance as outstanding and keep it separate from completed fixture and metadata validation. Do not use the known mismatched identities as proof of successful device behavior.
