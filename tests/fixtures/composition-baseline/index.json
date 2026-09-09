@@ -1,0 +1,95 @@
+{
+  "sourceCommit": "9a33d26fd0b5eb22ad0f2a0ba52ee59ac9eac565",
+  "outputs": [
+    {
+      "file": "single-screen.json",
+      "variant": "single",
+      "appCount": 88,
+      "sha256": "fe4fcc44de39718ae2de87e874afd7393a6719467ebdecbfd981541b71154e08",
+      "settings": {
+        "categories": "{\"Decomps/Recomps\":4283791690,\"Emulator\":4291485231,\"Frontend\":4289677500,\"PC Emulation\":4289289052,\"PC Ports\":4285001836,\"Streaming\":4289286597,\"Track Only\":4294948222,\"Utilities\":4278846300}"
+      }
+    },
+    {
+      "file": "dual-screen.json",
+      "variant": "dual",
+      "appCount": 111,
+      "sha256": "8d81c9ddbf7ac1d0ac7016662abcfec40da6d892e8dec49db46e44e71ddfe7f7",
+      "settings": {
+        "categories": "{\"Decomps/Recomps\":4283791690,\"Dual Screen\":4281943874,\"Emulator\":4291485231,\"Frontend\":4289677500,\"PC Emulation\":4289289052,\"PC Ports\":4285001836,\"Streaming\":4289286597,\"Track Only\":4294948222,\"Utilities\":4278846300}"
+      }
+    }
+  ],
+  "representativeCandidates": [
+    {
+      "source": "rjny",
+      "origin": "rjny-catalog",
+      "id": "info.cemu.cemu",
+      "url": "https://github.com/SSimco/Cemu",
+      "eligible": ["single"],
+      "selectedIn": ["single"]
+    },
+    {
+      "source": "rjny",
+      "origin": "rjny-catalog",
+      "id": "info.cemu.cemu",
+      "url": "https://github.com/sapphirerhodonite/cemu",
+      "eligible": ["dual"],
+      "selectedIn": ["dual"]
+    },
+    {
+      "source": "rjny",
+      "origin": "rjny-catalog",
+      "id": "com.simon358.ctrnative",
+      "url": "https://github.com/Simon358/ctr-native-android",
+      "eligible": ["single", "dual"],
+      "selectedIn": ["single", "dual"]
+    },
+    {
+      "source": "bboi",
+      "origin": "bboi-standard-asset",
+      "id": "com.samyost1.zelda3android",
+      "url": "https://github.com/samyost1/zelda3-android",
+      "eligible": ["single", "dual"],
+      "selectedIn": ["single"]
+    },
+    {
+      "source": "bboi",
+      "origin": "bboi-dual-asset",
+      "id": "com.samyost1.zelda3android",
+      "url": "https://github.com/samyost1/zelda3-android",
+      "eligible": ["dual"],
+      "selectedIn": ["dual"]
+    },
+    {
+      "source": "extras",
+      "origin": "extras",
+      "id": "com.game.cinderbox",
+      "url": "https://github.com/Ekyso/Cinderbox",
+      "eligible": ["single", "dual"],
+      "selectedIn": ["single", "dual"]
+    },
+    {
+      "source": "generated",
+      "origin": "codm-generated",
+      "id": "com.ctrnative",
+      "url": "https://github.com/igawa6/ctr-native-android",
+      "eligible": ["dual"],
+      "selectedIn": ["dual"]
+    },
+    {
+      "source": "rjny",
+      "origin": "rjny-catalog",
+      "id": "com.winlator.ludashi",
+      "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
+      "eligible": ["single", "dual"],
+      "selectedIn": ["single", "dual"],
+      "selectedRelease": "v3.1.h",
+      "selectedAsset": "bionic-vanilla.apk",
+      "settings": {
+        "apkFilterRegEx": "bionic-vanilla",
+        "versionDetection": false
+      }
+    }
+  ]
+}
