@@ -16,10 +16,10 @@
 
 ## 4. Select families and apply build-bound patches
 
-- [ ] 4.1 Extend exclusions to exactly one package or family selector and apply them to candidates before selection; verify target scoping, different-package alternatives, stale exclusions and pin-versus-denial errors.
-- [ ] 4.2 Implement pin-first and suitability-first selection with existing source precedence inside each tier; verify standard-only, dual-only, standard-plus-dual, ordinary extras versus dual forks, same-rank ambiguity and input-order invariance.
-- [ ] 4.3 Enforce unique output packages and single-to-dual family coverage with exact denial exemptions; verify cross-package replacements pass, distinct-family package collisions fail and upstream ineligibility does not silently waive coverage.
-- [ ] 4.4 Migrate overlay parsing to id-and-URL selectors with common-then-dual application; verify fork isolation, stale losing targets, duplicate selectors, forbidden identity/URL fields, null semantics and actionable legacy-schema rejection.
+- [x] 4.1 Extend exclusions to exactly one package or family selector and apply them to candidates before selection; verify target scoping, different-package alternatives, stale exclusions and pin-versus-denial errors.
+- [x] 4.2 Implement pin-first and suitability-first selection with existing source precedence inside each tier; verify standard-only, dual-only, standard-plus-dual, ordinary extras versus dual forks, same-rank ambiguity and input-order invariance.
+- [x] 4.3 Enforce unique output packages and single-to-dual family coverage with exact denial exemptions; verify cross-package replacements pass, distinct-family package collisions fail and upstream ineligibility does not silently waive coverage.
+- [x] 4.4 Migrate overlay parsing to id-and-URL selectors with common-then-dual application; verify fork isolation, stale losing targets, duplicate selectors, forbidden identity/URL fields, null semantics and actionable legacy-schema rejection.
 
 ## 5. Verify and explain the new composition
 
