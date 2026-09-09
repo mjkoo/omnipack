@@ -1,7 +1,7 @@
 ## 1. Capture candidates and establish the migration baseline
 
-- [ ] 1.1 Capture the current two outputs and representative source candidates as committed test fixtures; verify the baseline records selected ids, URLs, settings and source origins without requiring live access in tests.
-- [ ] 1.2 Inventory competing standard/dual builds and known identity conflicts, especially CTR; deliver a durable table of explicit family decisions, required manifest-backed corrections and unresolved issues, preserving unrelated forks and Ludashi's current release selection.
+- [x] 1.1 Capture the current two outputs and representative source candidates as committed test fixtures; verify the baseline records selected ids, URLs, settings and source origins without requiring live access in tests.
+- [x] 1.2 Inventory competing standard/dual builds and known identity conflicts, especially CTR; deliver a durable table of explicit family decisions, required manifest-backed corrections and unresolved issues, preserving unrelated forks and Ludashi's current release selection.
 
 ## 2. Implement the candidate model and composition policy
 
