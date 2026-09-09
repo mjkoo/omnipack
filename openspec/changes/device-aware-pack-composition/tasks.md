@@ -37,6 +37,6 @@
 
 ## 7. Complete review and durable documentation
 
-- [ ] 7.1 Update README and durable composition/curation/verification docs with the selection order, configuration schemas, report interpretation, rollback and deferred Ludashi migration; verify the examples match parser tests and all references work from a fresh clone.
+- [x] 7.1 Update README and durable composition/curation/verification docs with the selection order, configuration schemas, report interpretation, rollback and deferred Ludashi migration; verify the examples match parser tests and all references work from a fresh clone.
 - [ ] 7.2 Complete the implementation review and task-evidence audit required by the project workflow; verify each checkbox is supported by passing checks or an explicitly recorded acceptance limitation and resolve implementation findings before completion.
-- [ ] 7.3 Verify implementation against the change and sync approved spec deltas with behavior before archive; verify OpenSpec validation passes and the branch contains code, configuration, generated outputs, durable docs and corresponding spec changes together.
+- [x] 7.3 Verify implementation against the change and sync approved spec deltas with behavior before archive; verify OpenSpec validation passes and the branch contains code, configuration, generated outputs, durable docs and corresponding spec changes together.
