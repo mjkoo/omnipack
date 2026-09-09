@@ -10,11 +10,16 @@ import pytest
 
 from omnipack import cli
 from omnipack.cli import main
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import CompositionReport, CompositionResult
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport, IngestionResult, SourceError
+
+EMPTY_POLICY = parse_composition_policy(
+    {"schemaVersion": 1, "candidates": [], "pins": []}
+)
 
 
 def fixture_apk(package_id: str) -> bytes:
@@ -86,8 +91,8 @@ def test_live_verification_stops_before_network_when_offline_fails(
     config.mkdir()
     for name, value in (
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
         ("settings.json", {}),
         ("http.json", {"credentials": {}}),
     ):
@@ -110,8 +115,8 @@ def test_build_writes_both_variants_and_report(
     (tmp_path / "config/settings.json").write_text("{}", encoding="utf-8")
     for name, value in (
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
     ):
         (tmp_path / "config" / name).write_text(json.dumps(value), encoding="utf-8")
     app = ComposedApp(
@@ -135,7 +140,9 @@ def test_build_writes_both_variants_and_report(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report=None: IngestionResult([], report or IngestionReport()),
+        lambda root, report=None: IngestionResult(
+            [], report or IngestionReport(), EMPTY_POLICY
+        ),
     )
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.chdir(tmp_path)
@@ -190,8 +197,8 @@ def test_cached_resolution_survives_a_later_render_failure(
     config.mkdir()
     for name, value in (
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
@@ -210,7 +217,7 @@ def test_cached_resolution_survives_a_later_render_failure(
             '{"github.com/new/project":{"packageId":"app.new","releaseId":1}}\n',
             encoding="utf-8",
         )
-        return IngestionResult([], report or IngestionReport())
+        return IngestionResult([], report or IngestionReport(), EMPTY_POLICY)
 
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
@@ -250,8 +257,8 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
             "github.com/fixture/retained": {"packageId": "app.retained", "releaseId": 1}
         },
         "deny.json": [],
-        "overlay.json": {},
-        "overlay.dual.json": {},
+        "overlay.json": [],
+        "overlay.dual.json": [],
         "settings.json": {},
     }
     for name, value in files.items():
@@ -415,8 +422,8 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     config.mkdir()
     for name, value in (
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
@@ -429,7 +436,9 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         for path in paths:
             path.write_bytes(before)
     monkeypatch.setattr(
-        cli, "_ingest_for_build", lambda root, report: IngestionResult([], report)
+        cli,
+        "_ingest_for_build",
+        lambda root, report: IngestionResult([], report, EMPTY_POLICY),
     )
     if stage == "rendering":
         from omnipack import build as build_module
@@ -496,8 +505,17 @@ def test_composition_failure_preserves_collected_diagnostics(
                 {"id": "stale.app", "reason": "obsolete"},
             ],
         ),
-        ("overlay.json", {"missing.app": {"name": "Missing"}}),
-        ("overlay.dual.json", {}),
+        (
+            "overlay.json",
+            [
+                {
+                    "id": "missing.app",
+                    "url": "https://example.com/missing",
+                    "patch": {"name": "Missing"},
+                }
+            ],
+        ),
+        ("overlay.dual.json", []),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     apps = [
@@ -507,10 +525,10 @@ def test_composition_failure_preserves_collected_diagnostics(
             source,
             SourceType.HTML,
             (),
-            variant,
+            Variant.SINGLE,
             Provenance(source, "https://example.test/catalog"),
+            eligibility=frozenset(Variant),
         )
-        for variant in Variant
         for package_id, source in (
             ("collision.app", "rjny"),
             ("collision.app", "extras"),
@@ -518,7 +536,9 @@ def test_composition_failure_preserves_collected_diagnostics(
         )
     ]
     monkeypatch.setattr(
-        cli, "_ingest_for_build", lambda root, report: IngestionResult(apps, report)
+        cli,
+        "_ingest_for_build",
+        lambda root, report: IngestionResult(apps, report, EMPTY_POLICY),
     )
     monkeypatch.chdir(tmp_path)
 
@@ -537,11 +557,16 @@ def test_composition_failure_preserves_collected_diagnostics(
         for variant in Variant
     ]
     assert report["denylistRemovals"] == [
-        {"id": "removed.app", "variant": variant.value, "reason": "excluded"}
+        {
+            "id": "removed.app",
+            "variant": variant.value,
+            "reason": "excluded",
+            "family": "package:removed.app",
+        }
         for variant in Variant
     ]
     assert report["staleExclusions"] == [
-        {"id": "stale.app", "variant": None, "reason": "obsolete"}
+        {"id": "stale.app", "variant": None, "reason": "obsolete", "family": None}
     ]
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
@@ -554,8 +579,8 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     config.mkdir()
     for name, value in (
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
@@ -571,7 +596,9 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
         {variant: [] for variant in Variant}, CompositionReport()
     )
     monkeypatch.setattr(
-        cli, "_ingest_for_build", lambda root, report: IngestionResult([], report)
+        cli,
+        "_ingest_for_build",
+        lambda root, report: IngestionResult([], report, EMPTY_POLICY),
     )
     monkeypatch.setattr(cli, "compose", lambda *_args, **_kwargs: composed)
     calls = 0

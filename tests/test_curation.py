@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.live import VersionClass, classify_version
 from omnipack.merge import compose
@@ -30,6 +31,9 @@ SOURCE_IDS = {
     "xyz.blacksheep.mjolnir",
 }
 NUMERIC_IDS = {"com.aure.banjorecomp", "com.sergiomanzur.sotnrecomp"}
+EMPTY_POLICY = parse_composition_policy(
+    {"schemaVersion": 1, "candidates": [], "pins": []}
+)
 
 
 def read(path):
@@ -44,7 +48,13 @@ def curated():
         for a in apps
     ]
     candidates.extend(fetch(read(ROOT / "config/extras.json")))
-    result = compose(candidates, [], read(ROOT / "config/overlay.json"), {})
+    result = compose(
+        candidates,
+        [],
+        read(ROOT / "config/overlay.json"),
+        {},
+        policy=EMPTY_POLICY,
+    )
     return {v.value: json.loads(render(result.apps[v], {}))["apps"] for v in Variant}
 
 

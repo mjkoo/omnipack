@@ -4,294 +4,383 @@ from dataclasses import replace
 
 import pytest
 
-from omnipack.merge import CompositionError, CompositionResult, compose
+from omnipack.composition_policy import (
+    CandidateRule,
+    CandidateSelector,
+    CompositionPolicy,
+    Pin,
+    Projection,
+    rendered_key,
+)
+from omnipack.merge import (
+    CompositionError,
+    CompositionReport,
+    CompositionResult,
+)
+from omnipack.merge import (
+    compose as compose_apps,
+)
 from omnipack.model import App, Provenance, SourceType, Variant
-from omnipack.overlay import ComposedApp
 
 
 def app(
     package_id: str,
-    source: str,
-    variant: Variant,
+    source: str = "rjny",
     *,
+    family: str | None = None,
+    eligibility: frozenset[Variant] = frozenset(Variant),
+    dual_preferred: bool = False,
+    url: str | None = None,
     name: str | None = None,
-    settings: dict[str, object] | None = None,
-    raw: dict[str, object] | None = None,
+    original_id: str | None = None,
 ) -> App:
-    url = f"https://example.com/{source}/{package_id}"
-    return App(
-        id=package_id,
-        url=url,
-        name=name or f"{source} {package_id}",
-        source_type=SourceType.HTML,
-        categories=(source,),
-        variant=variant,
-        provenance=Provenance(source, url),
-        additional_settings=settings or {},
-        raw=raw or {},
-    )
-
-
-def by_variant(result: CompositionResult, variant: Variant) -> dict[str, ComposedApp]:
-    return {entry.id: entry for entry in result.apps[variant]}
-
-
-def test_composes_variants_independently_and_keeps_precedence_winner_whole() -> None:
-    single_bboi = app("shared", "bboi", Variant.SINGLE)
-    single_rjny = app("shared", "rjny", Variant.SINGLE)
-    dual_bboi = replace(single_bboi, variant=Variant.DUAL, name="dual winner")
-
-    result = compose([single_bboi, single_rjny, dual_bboi], [], {}, {})
-
-    assert by_variant(result, Variant.SINGLE)["shared"].data["name"] == single_rjny.name
-    assert by_variant(result, Variant.DUAL)["shared"].data["name"] == dual_bboi.name
-
-
-def test_extras_has_highest_precedence() -> None:
-    upstream = app("shared", "rjny", Variant.SINGLE)
-    extra = app("shared", "extras", Variant.SINGLE)
-    result = compose(
-        [upstream, extra, replace(extra, variant=Variant.DUAL)], [], {}, {}
-    )
-    assert by_variant(result, Variant.SINGLE)["shared"].provenance == extra.provenance
-
-
-def test_identical_same_source_duplicates_collapse() -> None:
-    candidate = app("same", "codm2000", Variant.DUAL)
-    result = compose([candidate, candidate], [], {}, {})
-    assert len(result.apps[Variant.DUAL]) == 1
-    assert result.apps[Variant.DUAL][0].id == candidate.id
-
-
-def test_differing_same_source_duplicates_fail_even_when_source_would_lose() -> None:
-    winner = app("same", "extras", Variant.SINGLE)
-    duplicate = app("same", "bboi", Variant.SINGLE)
-    differing = replace(duplicate, name="different")
-
-    with pytest.raises(
-        CompositionError, match=r"bboi.*single.*same|same.*single.*bboi"
-    ):
-        compose([winner, duplicate, differing], [], {}, {})
-
-
-def test_displacement_reports_sources_and_differing_import_fields() -> None:
-    winner = app("shared", "rjny", Variant.SINGLE, settings={"trackOnly": True})
-    loser = app("shared", "bboi", Variant.SINGLE, settings={"trackOnly": False})
-
-    report = compose(
-        [loser, winner, replace(winner, variant=Variant.DUAL)], [], {}, {}
-    ).report
-
-    assert len(report.displacements) == 1
-    displacement = report.displacements[0]
-    assert displacement.package_id == "shared"
-    assert displacement.variant is Variant.SINGLE
-    assert displacement.winner_source == "rjny"
-    assert displacement.loser_source == "bboi"
-    assert "additionalSettings" in displacement.differing_fields
-
-
-def test_displacement_reports_a_field_present_as_null_on_only_one_candidate() -> None:
-    winner = app("shared", "rjny", Variant.SINGLE, raw={"nullable": None})
-    loser = app("shared", "bboi", Variant.SINGLE)
-    dual = replace(winner, variant=Variant.DUAL)
-
-    report = compose([loser, winner, dual], [], {}, {}).report
-
-    assert "nullable" in report.displacements[0].differing_fields
-
-
-def test_unscoped_denial_removes_both_variants_and_reports_reasons() -> None:
-    candidates = [
-        app("gone", "rjny", Variant.SINGLE),
-        app("gone", "rjny", Variant.DUAL),
-    ]
-    result = compose(candidates, [{"id": "gone", "reason": "broken"}], {}, {})
-    assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
-    assert {(item.variant, item.reason) for item in result.report.removals} == {
-        (Variant.SINGLE, "broken"),
-        (Variant.DUAL, "broken"),
+    url = url or f"https://example.com/{source}/{package_id}"
+    origins = {
+        "rjny": "rjny-catalog",
+        "bboi": "bboi-standard-asset",
+        "extras": "extras",
+        "codm2000": "codm-generated",
     }
-    assert result.report.stale_exclusions == []
-
-
-def test_variant_denial_removes_only_named_variant() -> None:
-    candidates = [
-        app("kept", "rjny", Variant.SINGLE),
-        app("kept", "rjny", Variant.DUAL),
-    ]
-    result = compose(
-        candidates,
-        [{"id": "kept", "variant": "dual", "reason": "dual bug"}],
-        {},
-        {},
+    return App(
+        package_id,
+        url,
+        name or f"{source} {package_id}",
+        SourceType.HTML,
+        (),
+        Variant.SINGLE,
+        Provenance(source, url),
+        eligibility=eligibility,
+        dual_preferred=dual_preferred,
+        origin=origins[source],
+        original_id=original_id or package_id,
+        family=family or f"package:{package_id}",
     )
-    assert set(by_variant(result, Variant.SINGLE)) == {"kept"}
-    assert result.apps[Variant.DUAL] == []
+
+
+def overlays(*records: tuple[str, str, dict[str, object]]) -> list[dict[str, object]]:
+    return [
+        {"id": package_id, "url": url, "patch": patch}
+        for package_id, url, patch in records
+    ]
+
+
+def pin_policy(
+    candidate: App,
+    family: str,
+    variant: Variant,
+    *alternatives: App,
+) -> CompositionPolicy:
+    def selector(item: App) -> CandidateSelector:
+        return CandidateSelector(
+            item.provenance.source,
+            item.origin or item.provenance.source,
+            item.original_id or item.id,
+            rendered_key(item.id, item.url)[1],
+        )
+
+    pinned_selector = selector(candidate)
+    candidates = (candidate, *alternatives)
+    projections = {
+        rendered_key(item.id, item.url): Projection(family, None) for item in candidates
+    }
+    rules = tuple(
+        CandidateRule(selector(item), "test", family=family) for item in candidates
+    )
+    key = rendered_key(candidate.id, candidate.url)
+    return CompositionPolicy(
+        rules,
+        (Pin(family, variant, pinned_selector, "test"),),
+        {},
+        projections,
+        {(family, variant): key},
+    )
+
+
+def ids(result: CompositionResult, variant: Variant) -> set[str]:
+    return {item.id for item in result.apps[variant]}
+
+
+def compose(
+    candidates: list[App],
+    denylist: list[dict[str, str]],
+    common_overlay: object,
+    dual_overlay: object,
+    *,
+    policy: CompositionPolicy | None = None,
+    report: CompositionReport | None = None,
+) -> CompositionResult:
+    if policy is None:
+        rules: list[CandidateRule] = []
+        projections: dict[tuple[str, str], Projection] = {}
+        for candidate in candidates:
+            family = candidate.family or f"package:{candidate.id}"
+            if family.startswith("app:"):
+                selector = CandidateSelector(
+                    candidate.provenance.source,
+                    candidate.origin or candidate.provenance.source,
+                    candidate.original_id or candidate.id,
+                    rendered_key(candidate.id, candidate.url)[1],
+                )
+                rules.append(CandidateRule(selector, "test", family=family))
+                projections[rendered_key(candidate.id, candidate.url)] = Projection(
+                    family, None
+                )
+        policy = CompositionPolicy(tuple(rules), (), {}, projections, {})
+    return compose_apps(
+        candidates,
+        denylist,
+        common_overlay,
+        dual_overlay,
+        policy=policy,
+        report=report,
+    )
+
+
+def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
+    ordinary = app("ordinary", "extras", family="app:shared")
+    preferred = app(
+        "dual",
+        "bboi",
+        family="app:shared",
+        eligibility=frozenset({Variant.DUAL}),
+        dual_preferred=True,
+    )
+    result = compose([ordinary, preferred], [], [], [])
+    assert ids(result, Variant.SINGLE) == {"ordinary"}
+    assert ids(result, Variant.DUAL) == {"dual"}
+    assert [item.reason for item in result.report.selections] == [
+        "source",
+        "dual-preferred",
+    ]
+
+
+def test_pin_wins_and_denied_or_ineligible_pin_fails() -> None:
+    high = app("high", "extras", family="app:shared")
+    pinned = app("pinned", "bboi", family="app:shared")
+    policy = pin_policy(pinned, "app:shared", Variant.DUAL, high)
+    assert ids(compose([high, pinned], [], [], [], policy=policy), Variant.DUAL) == {
+        "pinned"
+    }
+    with pytest.raises(CompositionError, match=r"pin.*denied"):
+        compose(
+            [high, pinned],
+            [{"id": "pinned", "variant": "dual", "reason": "bad"}],
+            [],
+            [],
+            policy=policy,
+        )
+    with pytest.raises(CompositionError, match=r"pin.*eligibility"):
+        compose(
+            [high, replace(pinned, eligibility=frozenset({Variant.SINGLE}))],
+            [],
+            [],
+            [],
+            policy=policy,
+        )
+
+
+def test_pin_uses_original_provenance_when_rendered_identity_is_shared() -> None:
+    high = app(
+        "shared", "extras", family="app:shared", url="https://example.com/project"
+    )
+    pinned = app(
+        "shared", "bboi", family="app:shared", url="https://example.com/project"
+    )
+    policy = pin_policy(pinned, "app:shared", Variant.DUAL, high)
+    result = compose([high, pinned], [], [], [], policy=policy)
+    assert result.apps[Variant.DUAL][0].provenance.source == "bboi"
+
+
+def test_family_denial_cannot_hide_missing_pin() -> None:
+    missing = app("missing", family="app:gone")
+    policy = pin_policy(missing, "app:gone", Variant.DUAL)
+    with pytest.raises(CompositionError, match=r"selector.*missing"):
+        compose([], [{"family": "app:gone", "reason": "gone"}], [], [], policy=policy)
+
+
+def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal() -> (
+    None
+):
+    denied = app("same", "extras", family="app:shared")
+    alternative = app("other", "rjny", family="app:shared")
+    result = compose(
+        [denied, alternative],
+        [
+            {"id": "same", "reason": "broken"},
+            {"family": "app:old", "variant": "dual", "reason": "obsolete"},
+        ],
+        [],
+        [],
+    )
+    assert ids(result, Variant.SINGLE) == {"other"}
+    assert ids(result, Variant.DUAL) == {"other"}
+    assert result.report.stale_exclusions[0].family == "app:old"
+    assert result.report.selections[0].alternatives[0].excluded_reason == "broken"
 
 
 @pytest.mark.parametrize(
-    ("candidates", "denial"),
+    "entry",
     [
-        ([], {"id": "missing", "reason": "obsolete"}),
-        (
-            [app("single-only", "rjny", Variant.SINGLE)],
-            {"id": "single-only", "variant": "dual", "reason": "omit dual"},
-        ),
+        {"reason": "x"},
+        {"id": "x", "family": "app:x", "reason": "x"},
+        {"id": None, "family": "app:x", "reason": "x"},
     ],
 )
-def test_stale_denials_are_reported_against_their_applicable_variants(
-    candidates: list[App], denial: dict[str, str]
-) -> None:
-    result = compose(candidates, [denial], {}, {})
-    assert result.report.removals == []
-    assert len(result.report.stale_exclusions) == 1
-    assert result.report.stale_exclusions[0].package_id == denial["id"]
+def test_exclusion_requires_exactly_one_selector(entry: dict[str, str]) -> None:
+    with pytest.raises(CompositionError, match="exactly one"):
+        compose([], [entry], [], [])
 
 
-def test_unknown_denylist_variant_fails_with_entry_and_value() -> None:
-    denial = {"id": "bad", "variant": "foldable", "reason": "no"}
-    with pytest.raises(CompositionError, match=r"bad.*foldable|foldable.*bad"):
-        compose([], [denial], {}, {})
-
-
-def test_overlay_target_validation_happens_after_denial() -> None:
-    candidate = app("removed", "rjny", Variant.DUAL)
-    with pytest.raises(CompositionError, match="removed"):
-        compose(
-            [candidate],
-            [{"id": "removed", "reason": "broken"}],
-            {"removed": {"name": "patched"}},
-            {},
-        )
-
-
-def test_common_overlay_requires_a_target_in_at_least_one_variant() -> None:
-    with pytest.raises(CompositionError, match="missing"):
-        compose([], [], {"missing": {"name": "patched"}}, {})
-
-
-def test_dual_overlay_requires_a_dual_target() -> None:
-    candidate = app("single", "rjny", Variant.SINGLE)
-    with pytest.raises(CompositionError, match="single"):
-        compose([candidate], [], {}, {"single": {"name": "patched"}})
-
-
-def test_common_overlay_may_patch_an_id_present_in_one_variant() -> None:
-    candidate = app("dual-only", "codm2000", Variant.DUAL)
-    result = compose([candidate], [], {"dual-only": {"name": "patched"}}, {})
-    assert by_variant(result, Variant.DUAL)["dual-only"].data["name"] == "patched"
-
-
-def test_common_and_dual_overlays_layer_without_mutating_inputs_or_sibling() -> None:
-    settings: dict[str, object] = {"nested": {"common": False, "dual": False}}
-    single = app("both", "rjny", Variant.SINGLE, settings=settings)
-    dual = replace(single, variant=Variant.DUAL)
-
-    result = compose(
-        [single, dual],
-        [],
-        {"both": {"additionalSettings": {"nested": {"common": True}}}},
-        {"both": {"additionalSettings": {"nested": {"dual": True}}}},
-    )
-
-    single_result = by_variant(result, Variant.SINGLE)["both"]
-    dual_result = by_variant(result, Variant.DUAL)["both"]
-    assert single_result.data["additionalSettings"] == {
-        "nested": {"common": True, "dual": False}
+def test_winning_rank_tie_fails_but_losing_tier_tie_does_not() -> None:
+    tied = [app("one", "rjny", family="app:x"), app("two", "rjny", family="app:x")]
+    with pytest.raises(CompositionError, match="ambiguous"):
+        compose(tied, [], [], [])
+    winner = app("winner", "extras", family="app:x")
+    assert ids(compose([*reversed(tied), winner], [], [], []), Variant.SINGLE) == {
+        "winner"
     }
-    assert dual_result.data["additionalSettings"] == {
-        "nested": {"common": True, "dual": True}
-    }
-    assert single.additional_settings == settings
-    assert dual.additional_settings == settings
-    assert (
-        single_result.data["additionalSettings"]
-        is not dual_result.data["additionalSettings"]
-    )
 
 
-def test_overlay_null_deletes_nested_and_raw_keys() -> None:
-    candidate = app(
-        "patched",
-        "rjny",
-        Variant.DUAL,
-        settings={"keep": 1, "delete": 2},
-        raw={"keepRaw": 1, "deleteRaw": 2},
-    )
-    result = compose(
-        [candidate],
-        [],
-        {
-            "patched": {
-                "additionalSettings": {"delete": None},
-                "deleteRaw": None,
-            }
-        },
-        {},
-    )
-    patched = by_variant(result, Variant.DUAL)["patched"]
-    assert patched.data["additionalSettings"] == {"keep": 1}
-    assert patched.data["keepRaw"] == 1
-    assert "deleteRaw" not in patched.data
-
-
-def test_overlay_may_delete_a_required_candidate_field() -> None:
-    candidate = app("patched", "rjny", Variant.DUAL)
-    result = compose([candidate], [], {"patched": {"name": None}}, {})
-    assert "name" not in by_variant(result, Variant.DUAL)["patched"].data
-
-
-@pytest.mark.parametrize("field", ["id", "overrideSource"])
-@pytest.mark.parametrize("value", ["replacement", None])
-def test_overlay_rejects_identity_fields_even_when_null(
-    field: str, value: object
-) -> None:
-    candidate = app("guarded", "rjny", Variant.DUAL)
-    with pytest.raises(CompositionError, match="guarded"):
-        compose([candidate], [], {"guarded": {field: value}}, {})
-
-
-@pytest.mark.parametrize("overlay_scope", ["common", "dual"])
-def test_overlay_cannot_move_a_surviving_app_to_a_denied_id(
-    overlay_scope: str,
-) -> None:
+def test_input_order_does_not_change_selection_or_report_order() -> None:
     candidates = [
-        app(package_id, "rjny", variant)
-        for package_id in ("survivor", "denied")
-        for variant in Variant
+        app("low", "bboi", family="app:x"),
+        app("high", "rjny", family="app:x"),
     ]
-    denylist = [{"id": "denied", "reason": "broken"}]
-    overlay: dict[str, object] = {"survivor": {"id": "denied"}}
+    left = compose(candidates, [], [], [])
+    right = compose(list(reversed(candidates)), [], [], [])
+    assert left.apps == right.apps
+    assert left.report == right.report
 
-    with pytest.raises(
-        CompositionError, match=r"overlay for 'survivor'.*protected field id"
-    ):
+
+def test_compose_rejects_differing_records_with_one_original_identity() -> None:
+    first = app("same")
+    with pytest.raises(CompositionError, match="ambiguous original candidate identity"):
+        compose([first, replace(first, name="different")], [], [], [])
+
+
+def test_cross_package_family_coverage_passes_and_package_collision_fails() -> None:
+    single = app("single", family="app:x", eligibility=frozenset({Variant.SINGLE}))
+    dual = app(
+        "dual",
+        "bboi",
+        family="app:x",
+        eligibility=frozenset({Variant.DUAL}),
+        dual_preferred=True,
+    )
+    assert ids(compose([single, dual], [], [], []), Variant.DUAL) == {"dual"}
+    collision = app("single", "bboi", family="app:y")
+    with pytest.raises(CompositionError, match="distinct families"):
         compose(
-            candidates,
-            denylist,
-            overlay if overlay_scope == "common" else {},
-            overlay if overlay_scope == "dual" else {},
+            [single, collision],
+            [{"family": "app:x", "variant": "dual", "reason": "no dual"}],
+            [],
+            [],
         )
 
-    assert [candidate.id for candidate in candidates] == [
-        "survivor",
-        "survivor",
-        "denied",
-        "denied",
-    ]
-    result = compose(candidates, denylist, {}, {})
-    for variant in Variant:
-        assert set(by_variant(result, variant)) == {"survivor"}
+
+def test_ineligibility_does_not_waive_coverage_but_exact_dual_denial_does() -> None:
+    single = app("single", eligibility=frozenset({Variant.SINGLE}))
+    with pytest.raises(CompositionError, match="missing app family"):
+        compose([single], [], [], [])
+    result = compose(
+        [single], [{"id": "single", "variant": "dual", "reason": "unsupported"}], [], []
+    )
+    assert ids(result, Variant.SINGLE) == {"single"}
 
 
-@pytest.mark.parametrize("patch", [None, "replacement", ["replacement"]])
-def test_overlay_patch_must_be_an_object(patch: object) -> None:
-    candidate = app("guarded", "rjny", Variant.DUAL)
-    with pytest.raises(CompositionError, match="guarded"):
-        compose([candidate], [], {"guarded": patch}, {})  # type: ignore[arg-type]
+def test_overlays_bind_to_id_and_normalized_url_and_layer_common_then_dual() -> None:
+    first = app("same", family="app:first", url="https://github.com/Owner/One/")
+    second = app("other", family="app:second", url="https://github.com/Owner/Two")
+    common = overlays(
+        (
+            "same",
+            "https://github.com/owner/one",
+            {"name": "common", "additionalSettings": {"remove": None, "keep": 1}},
+        )
+    )
+    dual = overlays(("same", "https://github.com/OWNER/ONE", {"name": "dual"}))
+    result = compose([first, second], [], common, dual)
+    single = next(item for item in result.apps[Variant.SINGLE] if item.id == "same")
+    dual_app = next(item for item in result.apps[Variant.DUAL] if item.id == "same")
+    assert single.data["name"] == "common"
+    assert dual_app.data["name"] == "dual"
+    assert dual_app.family == "app:first"
 
 
-def test_missing_dual_coverage_fails() -> None:
-    with pytest.raises(CompositionError, match="single-only"):
-        compose([app("single-only", "rjny", Variant.SINGLE)], [], {}, {})
+def test_stale_losing_overlay_fails_after_selection_diagnostics_survive() -> None:
+    winner = app("winner", "extras", family="app:x")
+    loser = app("loser", "rjny", family="app:x")
+    report = CompositionReport()
+    with pytest.raises(CompositionError, match="no selected target"):
+        compose(
+            [winner, loser],
+            [],
+            overlays((loser.id, loser.url, {"name": "stale"})),
+            [],
+            report=report,
+        )
+    assert report.selections
+    assert report.displacements
+
+
+@pytest.mark.parametrize("document", [{}, {"x": {"name": "old"}}])
+def test_legacy_overlay_objects_fail_actionably(document: object) -> None:
+    with pytest.raises(CompositionError, match=r"array.*legacy"):
+        compose([], [], document, [])
+
+
+def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
+    candidate = app("x")
+    record = {"id": candidate.id, "url": candidate.url, "patch": {}}
+    with pytest.raises(CompositionError, match="duplicate selector"):
+        compose([candidate], [], [record, record], [])
+    with pytest.raises(CompositionError, match=r"patch must be an object"):
+        compose([candidate], [], [{**record, "patch": None}], [])
+
+
+@pytest.mark.parametrize(
+    "field",
+    ["id", "url", "overrideSource", "family", "origin", "eligibility", "dualPreferred"],
+)
+def test_overlay_rejects_identity_and_composition_fields_even_when_null(
+    field: str,
+) -> None:
+    candidate = app("x")
+    with pytest.raises(CompositionError, match=r"protected field"):
+        compose(
+            [candidate], [], overlays((candidate.id, candidate.url, {field: None})), []
+        )
+
+
+def test_selection_report_preserves_corrected_identity_origin_and_differences() -> None:
+    winner = app("effective", "extras", family="app:x", original_id="original")
+    loser = app("other", "rjny", family="app:x", name="different")
+    report = compose([winner, loser], [], [], []).report
+    selection = report.selections[0]
+    assert (selection.original_id, selection.effective_id, selection.origin) == (
+        "original",
+        "effective",
+        "extras",
+    )
+    assert selection.alternatives[0].effective_id == "other"
+    assert {"id", "name", "url"}.issubset(selection.alternatives[0].differing_fields)
+    assert selection.reason == "source"
+    assert selection.alternatives[0].loss_reason == "lower-source-precedence"
+
+
+def test_selection_report_includes_target_ineligible_alternatives() -> None:
+    winner = app("winner", family="app:x")
+    ineligible = app(
+        "single",
+        "bboi",
+        family="app:x",
+        eligibility=frozenset({Variant.SINGLE}),
+    )
+    selection = next(
+        item
+        for item in compose([winner, ineligible], [], [], []).report.selections
+        if item.variant is Variant.DUAL
+    )
+    assert selection.reason == "ordinary-fallback"
+    assert selection.alternatives[0].effective_id == "single"
+    assert selection.alternatives[0].loss_reason == "ineligible"

@@ -43,11 +43,14 @@ def build(_args: argparse.Namespace) -> int:
     try:
         ingested = _ingest_for_build(root, ingestion_report)
         stage = "composition"
+        if ingested.policy is None:
+            raise ValueError("ingestion result is missing composition policy")
         composition = compose(
             ingested.apps,
             _object_list(root / "config/deny.json", "denylist"),
-            _object(root / "config/overlay.json", "overlay"),
-            _object(root / "config/overlay.dual.json", "dual overlay"),
+            load_json(root / "config/overlay.json", "overlay"),
+            load_json(root / "config/overlay.dual.json", "dual overlay"),
+            policy=ingested.policy,
             report=composition_report,
         )
         stage = "rendering"
