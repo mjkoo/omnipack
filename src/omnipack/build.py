@@ -27,25 +27,25 @@ class OfflineVerificationError(ValueError):
         self.findings = findings
 
 
-def previous_ids(root: Path) -> dict[Variant, set[str]]:
-    """Read package ids from the output pair before publication begins."""
-    result: dict[Variant, set[str]] = {}
+def previous_ids(root: Path) -> dict[Variant, list[dict[str, str]]]:
+    """Read rendered identities from the output pair before publication begins."""
+    result: dict[Variant, list[dict[str, str]]] = {}
     for variant, name in OUTPUTS.items():
         path = root / "dist" / name
         if not path.exists():
-            result[variant] = set()
+            result[variant] = []
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
         except OSError, json.JSONDecodeError:
-            result[variant] = set()
+            result[variant] = []
             continue
         apps = document.get("apps", []) if isinstance(document, dict) else []
-        result[variant] = {
-            item["id"]
+        result[variant] = [
+            {"id": item["id"], "url": item.get("url", "")}
             for item in apps
             if isinstance(item, dict) and isinstance(item.get("id"), str)
-        }
+        ]
     return result
 
 
@@ -54,6 +54,7 @@ def publish_build(
     composition: CompositionResult,
     settings: dict[str, Any],
     ingestion: IngestionReport,
+    composition_bytes: bytes | None = None,
     *,
     on_stage: Callable[[str], None] | None = None,
     on_verification: Callable[[dict[str, Any]], None] | None = None,
@@ -75,6 +76,7 @@ def publish_build(
         "config/deny.json",
         "config/overlay.json",
         "config/overlay.dual.json",
+        "config/composition.json",
     )
     snapshots = [(root / path).read_bytes() for path in config_paths]
     result = validate_offline(
@@ -85,6 +87,7 @@ def publish_build(
             snapshots[1],
             snapshots[2],
             (root / "config/settings.json").read_bytes(),
+            composition_bytes if composition_bytes is not None else snapshots[3],
         )
     )
     findings = [
@@ -96,15 +99,34 @@ def publish_build(
         on_verification(verdict)
     if findings:
         raise OfflineVerificationError(findings)
+    if (
+        composition_bytes is not None
+        and (root / "config/composition.json").read_bytes() != composition_bytes
+    ):
+        changed = [
+            {
+                "stage": "input",
+                "code": "input_changed",
+                "message": "composition policy changed during the build",
+            }
+        ]
+        if on_verification is not None:
+            on_verification({"status": "failed", "findings": changed})
+        raise OfflineVerificationError(changed)
 
     if on_stage is not None:
         on_stage("report writing")
+    from omnipack.composition_policy import load_composition_policy
+
     write_report(
         root,
         before,
         composition,
         ingestion,
         offline_verification=verdict,
+        policy=load_composition_policy(
+            composition_bytes if composition_bytes is not None else snapshots[3]
+        ),
     )
     if on_stage is not None:
         on_stage("publication")

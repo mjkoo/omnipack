@@ -448,7 +448,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
         verify = source / "src/omnipack/verify.py"
         verify.write_text(
             verify.read_text()
-            .replace('VERIFIER_VERSION = "0.3.1"', 'VERIFIER_VERSION = "0.4.0"')
+            .replace('VERIFIER_VERSION = "0.4.0"', 'VERIFIER_VERSION = "0.5.0"')
             .replace("SCHEMA_VERSION = 1", "SCHEMA_VERSION = 2")
             .replace('Path("config/settings.json")', 'Path("config/new-settings.json")')
         )
@@ -480,7 +480,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
                     path = cwd / ".build/verify.json"
                     report = json.loads(path.read_text())
                     if defect == "verifier":
-                        report["verifier"]["version"] = "0.3.1"
+                        report["verifier"]["version"] = "0.4.0"
                     elif defect == "inputs":
                         report["inputs"]["settings"] = {"state": "missing"}
                     else:
@@ -518,9 +518,9 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
     reports = [
         json.loads(attempt.verify_report or b"{}") for attempt in result.attempts
     ]
-    assert reports[0]["verifier"]["version"] == "0.3.1"
+    assert reports[0]["verifier"]["version"] == "0.4.0"
     if defect is None:
-        assert reports[1]["verifier"]["version"] == "0.4.0"
+        assert reports[1]["verifier"]["version"] == "0.5.0"
         assert reports[1]["schemaVersion"] == 2
         assert reports[1]["inputs"]["settings"]["state"] == "present"
     else:

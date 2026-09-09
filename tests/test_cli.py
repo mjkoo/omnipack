@@ -90,6 +90,7 @@ def test_live_verification_stops_before_network_when_offline_fails(
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
         ("overlay.dual.json", []),
@@ -114,6 +115,7 @@ def test_build_writes_both_variants_and_report(
     (tmp_path / "config").mkdir()
     (tmp_path / "config/settings.json").write_text("{}", encoding="utf-8")
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
         ("overlay.dual.json", []),
@@ -141,7 +143,10 @@ def test_build_writes_both_variants_and_report(
         cli,
         "_ingest_for_build",
         lambda root, report=None: IngestionResult(
-            [], report or IngestionReport(), EMPTY_POLICY
+            [],
+            report or IngestionReport(),
+            EMPTY_POLICY,
+            (root / "config/composition.json").read_bytes(),
         ),
     )
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
@@ -196,6 +201,7 @@ def test_cached_resolution_survives_a_later_render_failure(
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
         ("overlay.dual.json", []),
@@ -217,7 +223,12 @@ def test_cached_resolution_survives_a_later_render_failure(
             '{"github.com/new/project":{"packageId":"app.new","releaseId":1}}\n',
             encoding="utf-8",
         )
-        return IngestionResult([], report or IngestionReport(), EMPTY_POLICY)
+        return IngestionResult(
+            [],
+            report or IngestionReport(),
+            EMPTY_POLICY,
+            (_root / "config/composition.json").read_bytes(),
+        )
 
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
@@ -421,6 +432,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
         ("overlay.dual.json", []),
@@ -438,7 +450,9 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult([], report, EMPTY_POLICY),
+        lambda root, report: IngestionResult(
+            [], report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
+        ),
     )
     if stage == "rendering":
         from omnipack import build as build_module
@@ -498,6 +512,7 @@ def test_composition_failure_preserves_collected_diagnostics(
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         (
             "deny.json",
             [
@@ -538,7 +553,9 @@ def test_composition_failure_preserves_collected_diagnostics(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(apps, report, EMPTY_POLICY),
+        lambda root, report: IngestionResult(
+            apps, report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
+        ),
     )
     monkeypatch.chdir(tmp_path)
 
@@ -578,6 +595,7 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
         ("overlay.dual.json", []),
@@ -598,7 +616,9 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult([], report, EMPTY_POLICY),
+        lambda root, report: IngestionResult(
+            [], report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
+        ),
     )
     monkeypatch.setattr(cli, "compose", lambda *_args, **_kwargs: composed)
     calls = 0
@@ -624,3 +644,38 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     assert report["changes"] == {
         variant.value: {"added": [], "removed": []} for variant in Variant
     }
+
+
+def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    config = tmp_path / "config"
+    config.mkdir()
+    original = b'{"schemaVersion":1,"candidates":[],"pins":[]}'
+    (config / "composition.json").write_bytes(original)
+    for name, value in (
+        ("deny.json", []),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
+        ("settings.json", {}),
+    ):
+        (config / name).write_text(json.dumps(value))
+
+    def ingested(root: Path, report: IngestionReport) -> IngestionResult:
+        (root / "config/composition.json").write_bytes(original + b"\n")
+        return IngestionResult([], report, EMPTY_POLICY, original)
+
+    monkeypatch.setattr(cli, "_ingest_for_build", ingested)
+    monkeypatch.setattr(
+        cli,
+        "compose",
+        lambda *_args, **_kwargs: CompositionResult(
+            {variant: [] for variant in Variant}, CompositionReport()
+        ),
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "offline verification"
+    assert report["offlineVerification"]["findings"][0]["code"] == "input_changed"
+    assert not (tmp_path / "dist").exists()

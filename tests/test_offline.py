@@ -38,6 +38,7 @@ def inputs(
     common: object = None,
     dual_overlay: object = None,
     settings: object = None,
+    composition: object = None,
 ) -> OfflineInputs:
     single_apps = [app()] if single_apps is None else single_apps
     dual_apps = deepcopy(single_apps) if dual_apps is None else dual_apps
@@ -70,9 +71,14 @@ def inputs(
         single=encoded({"settings": rendered(single_apps), "apps": single_apps}),
         dual=encoded({"settings": rendered(dual_apps), "apps": dual_apps}),
         deny=encoded([] if deny is None else deny),
-        common_overlay=encoded({} if common is None else common),
-        dual_overlay=encoded({} if dual_overlay is None else dual_overlay),
+        common_overlay=encoded([] if common is None else common),
+        dual_overlay=encoded([] if dual_overlay is None else dual_overlay),
         settings=encoded(configured),
+        composition=encoded(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+            if composition is None
+            else composition
+        ),
     )
 
 
@@ -96,7 +102,16 @@ def test_valid_entries_retain_raw_objects_and_decoded_settings() -> None:
 
 
 @pytest.mark.parametrize(
-    "field", ["single", "dual", "deny", "common_overlay", "dual_overlay", "settings"]
+    "field",
+    [
+        "single",
+        "dual",
+        "deny",
+        "common_overlay",
+        "dual_overlay",
+        "settings",
+        "composition",
+    ],
 )
 def test_missing_snapshots_are_reported(field: str) -> None:
     snapshots = inputs()
@@ -212,15 +227,17 @@ def test_raw_ids_and_categories_survive_other_entry_errors(field: str) -> None:
         inputs(
             [malformed, deepcopy(malformed)],
             [deepcopy(malformed)],
-            common={"present": {}},
-            dual_overlay={"present": {}},
+            common=[{"id": "present", "url": "https://example.com/app", "patch": {}}],
+            dual_overlay=[
+                {"id": "present", "url": "https://example.com/app", "patch": {}}
+            ],
             deny=[{"id": "present", "reason": "excluded"}],
         )
     )
     assert {
         ("single", "duplicate_id"),
-        ("single", "denied_id_present"),
-        ("dual", "denied_id_present"),
+        ("single", "denied_output_present"),
+        ("dual", "denied_output_present"),
     } <= {(finding.variant, finding.code) for finding in result.findings}
     assert not {
         "stale_common_overlay",
@@ -337,11 +354,47 @@ def test_non_category_pack_settings_match_configured_keys_and_values(
 @pytest.mark.parametrize(
     ("kwargs", "code"),
     [
-        ({"common": {"org.example.app": None}}, "invalid_overlay_patch"),
-        ({"common": {"org.example.app": {"id": "changed"}}}, "forbidden_overlay_field"),
-        ({"common": {"missing": {"name": "x"}}}, "stale_common_overlay"),
-        ({"dual_overlay": {"missing": {"name": "x"}}}, "stale_dual_overlay"),
-        ({"deny": [{"id": "org.example.app", "reason": "x"}]}, "denied_id_present"),
+        (
+            {"common": [{"id": "x", "url": "https://example.com/app", "patch": None}]},
+            "invalid_composition_config",
+        ),
+        (
+            {
+                "common": [
+                    {
+                        "id": "x",
+                        "url": "https://example.com/app",
+                        "patch": {"id": "changed"},
+                    }
+                ]
+            },
+            "invalid_composition_config",
+        ),
+        (
+            {
+                "common": [
+                    {
+                        "id": "missing",
+                        "url": "https://example.com/missing",
+                        "patch": {"name": "x"},
+                    }
+                ]
+            },
+            "stale_common_overlay",
+        ),
+        (
+            {
+                "dual_overlay": [
+                    {
+                        "id": "missing",
+                        "url": "https://example.com/missing",
+                        "patch": {"name": "x"},
+                    }
+                ]
+            },
+            "stale_dual_overlay",
+        ),
+        ({"deny": [{"id": "org.example.app", "reason": "x"}]}, "denied_output_present"),
     ],
 )
 def test_local_composition_constraints(kwargs: dict[str, Any], code: str) -> None:
@@ -350,7 +403,17 @@ def test_local_composition_constraints(kwargs: dict[str, Any], code: str) -> Non
 
 def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
     assert validate_offline(
-        inputs([], [app()], common={"org.example.app": {"name": "x"}})
+        inputs(
+            [],
+            [app()],
+            common=[
+                {
+                    "id": "org.example.app",
+                    "url": "https://example.com/app",
+                    "patch": {"name": "x"},
+                }
+            ],
+        )
     ).ok
 
 
@@ -361,7 +424,7 @@ def test_malformed_deny_variant_is_reported(variant: object) -> None:
             deny=[{"id": "org.example.app", "reason": "excluded", "variant": variant}]
         )
     )
-    assert "invalid_denylist_variant" in codes(result)
+    assert "invalid_composition_config" in codes(result)
 
 
 def test_stale_denial_is_allowed_and_dual_denial_exempts_coverage() -> None:
@@ -381,6 +444,94 @@ def test_unexempted_dual_coverage_gap_fails() -> None:
     assert "dual_coverage_gap" in codes(result)
 
 
+def test_family_projection_pin_eligibility_and_history_are_distinct() -> None:
+    policy = {
+        "schemaVersion": 1,
+        "candidates": [
+            {
+                "match": {
+                    "source": "extras",
+                    "origin": "extras",
+                    "id": "old",
+                    "url": "https://example.com/app",
+                },
+                "family": "app:shared",
+                "packageId": "single.pkg",
+                "eligible": ["single"],
+                "rationale": "fixture",
+            },
+            {
+                "match": {
+                    "source": "extras",
+                    "origin": "extras",
+                    "id": "dual.pkg",
+                    "url": "https://example.com/dual",
+                },
+                "family": "app:shared",
+                "eligible": ["dual"],
+                "rationale": "fixture",
+            },
+        ],
+        "pins": [
+            {
+                "family": "app:shared",
+                "variant": "dual",
+                "match": {
+                    "source": "extras",
+                    "origin": "extras",
+                    "id": "dual.pkg",
+                    "url": "https://example.com/dual",
+                },
+                "rationale": "fixture",
+            }
+        ],
+        "history": [
+            {
+                "id": "retired",
+                "url": "https://example.com/retired",
+                "family": "app:shared",
+                "rationale": "published",
+            }
+        ],
+    }
+    single = app("single.pkg")
+    dual = app("dual.pkg")
+    dual["url"] = "https://example.com/dual/"
+    assert validate_offline(inputs([single], [dual], composition=policy)).ok
+    wrong = deepcopy(dual)
+    wrong["url"] = "https://example.com/other"
+    result = validate_offline(inputs([single], [wrong], composition=policy))
+    assert "dual_coverage_gap" in codes(result)
+    assert "pin_mismatch" not in codes(result)
+
+
+def test_family_denial_exempts_coverage_but_cannot_remain_selected() -> None:
+    policy = {
+        "schemaVersion": 1,
+        "candidates": [
+            {
+                "match": {
+                    "source": "extras",
+                    "origin": "extras",
+                    "id": "one",
+                    "url": "https://example.com/app",
+                },
+                "family": "app:one",
+                "rationale": "fixture",
+            }
+        ],
+        "pins": [],
+    }
+    denial = [{"family": "app:one", "variant": "dual", "reason": "unsupported"}]
+    assert validate_offline(
+        inputs([app("one")], [], deny=denial, composition=policy)
+    ).ok
+    result = validate_offline(
+        inputs([app("one")], [app("one")], deny=denial, composition=policy)
+    )
+    assert "denied_output_present" in codes(result)
+
+
 def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None:
     import urllib.request
 
@@ -391,9 +542,10 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
         single=(ROOT / "dist/single-screen.json").read_bytes(),
         dual=(ROOT / "dist/dual-screen.json").read_bytes(),
         deny=(ROOT / "config/deny.json").read_bytes(),
-        common_overlay=(ROOT / "config/overlay.json").read_bytes(),
-        dual_overlay=(ROOT / "config/overlay.dual.json").read_bytes(),
+        common_overlay=b"[]",
+        dual_overlay=b"[]",
         settings=(ROOT / "config/settings.json").read_bytes(),
+        composition=b'{"schemaVersion":1,"candidates":[],"pins":[]}',
     )
     before = snapshots.single, snapshots.dual
     result = validate_offline(snapshots)

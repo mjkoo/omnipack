@@ -22,6 +22,7 @@ class OfflineInputs:
     common_overlay: bytes | None
     dual_overlay: bytes | None
     settings: bytes | None
+    composition: bytes | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -83,6 +84,7 @@ def validate_offline(inputs: OfflineInputs) -> OfflineResult:
     common = _decode_snapshot(inputs.common_overlay, "common_overlay", findings)
     dual_overlay = _decode_snapshot(inputs.dual_overlay, "dual_overlay", findings)
     configured = _decode_snapshot(inputs.settings, "settings", findings)
+    composition = _decode_snapshot(inputs.composition, "composition", findings)
 
     entries: dict[str, tuple[ValidatedEntry, ...]] = {}
     id_sets: dict[str, set[str]] = {}
@@ -91,7 +93,7 @@ def validate_offline(inputs: OfflineInputs) -> OfflineResult:
         entries[variant] = tuple(validated)
         id_sets[variant] = ids
 
-    _validate_composition(deny, common, dual_overlay, id_sets, findings)
+    _validate_composition(deny, common, dual_overlay, composition, documents, findings)
     return OfflineResult(inputs, tuple(findings), entries)
 
 
@@ -588,130 +590,150 @@ def _validate_composition(
     deny: object,
     common: object,
     dual_overlay: object,
-    ids: dict[str, set[str]],
+    composition: object,
+    documents: dict[str, object],
     findings: list[Finding],
 ) -> None:
-    common = _validate_overlay("common", common, findings)
-    dual_overlay = _validate_overlay("dual", dual_overlay, findings)
-    all_ids = ids.get("single", set()) | ids.get("dual", set())
-    if common is not None:
-        for entry_id in set(common) - all_ids:
+    if composition is _INVALID:
+        return
+    from omnipack.composition_policy import (
+        CompositionPolicyError,
+        parse_composition_policy,
+    )
+    from omnipack.merge import CompositionError, parse_exclusions
+    from omnipack.model import Variant
+    from omnipack.overlay import OverlayError, parse_overlay
+    from omnipack.urls import normalize_project_url
+
+    try:
+        policy = parse_composition_policy(composition)
+        if not isinstance(deny, list):
+            raise CompositionError("denylist must be a list")
+        exclusions = parse_exclusions(deny)
+        common_patches = parse_overlay(common, "common overlay")
+        dual_patches = parse_overlay(dual_overlay, "dual-screen overlay")
+    except (CompositionPolicyError, CompositionError, OverlayError, TypeError) as error:
+        findings.append(Finding("config", "invalid_composition_config", str(error)))
+        return
+
+    families: dict[str, set[str]] = {"single": set(), "dual": set()}
+    keys: dict[str, set[tuple[str, str]]] = {"single": set(), "dual": set()}
+    family_ids: dict[str, dict[str, str]] = {"single": {}, "dual": {}}
+    for variant, document in documents.items():
+        raw_apps = document.get("apps", []) if isinstance(document, dict) else []
+        for raw in raw_apps if isinstance(raw_apps, list) else []:
+            if not isinstance(raw, dict):
+                continue
+            package_id, url = raw.get("id"), raw.get("url")
+            if (
+                not isinstance(package_id, str)
+                or not package_id
+                or not isinstance(url, str)
+            ):
+                continue
+            try:
+                key = (package_id, normalize_project_url(url))
+            except ValueError:
+                continue
+            family = policy.rendered_family(*key)
+            if family in families[variant]:
+                findings.append(
+                    Finding(
+                        "composition",
+                        "duplicate_family",
+                        f"family {family!r} is selected more than once",
+                        variant,
+                        package_id,
+                    )
+                )
+            families[variant].add(family)
+            keys[variant].add(key)
+            family_ids[variant][family] = package_id
+            projection = policy.projections.get(key)
+            target = Variant(variant)
+            if (
+                projection
+                and projection.eligibility is not None
+                and target not in projection.eligibility
+            ):
+                findings.append(
+                    Finding(
+                        "composition",
+                        "ineligible_output",
+                        f"family {family!r} is ineligible for {variant}",
+                        variant,
+                        package_id,
+                    )
+                )
+            pinned = policy.projected_pins.get((family, target))
+            if pinned is not None and pinned != key:
+                findings.append(
+                    Finding(
+                        "composition",
+                        "pin_mismatch",
+                        f"family {family!r} does not match its {variant} pin",
+                        variant,
+                        package_id,
+                    )
+                )
+
+    for exclusion in exclusions:
+        applicable = (
+            tuple(Variant) if exclusion.variant is None else (exclusion.variant,)
+        )
+        for target in applicable:
+            for family, package_id in family_ids[target.value].items():
+                if package_id == exclusion.package_id or family == exclusion.family:
+                    findings.append(
+                        Finding(
+                            "composition",
+                            "denied_output_present",
+                            f"denied selection {package_id!r} in family {family!r} remains present",
+                            target.value,
+                            package_id,
+                        )
+                    )
+
+    all_keys = keys["single"] | keys["dual"]
+    for patch in common_patches:
+        if patch.key not in all_keys:
             findings.append(
                 Finding(
                     "composition",
                     "stale_common_overlay",
-                    f"common overlay has no target for {entry_id!r}",
-                    entry_id=entry_id,
+                    f"common overlay has no target for {patch.key!r}",
+                    entry_id=patch.package_id,
                 )
             )
-    if dual_overlay is not None:
-        for entry_id in set(dual_overlay) - ids.get("dual", set()):
+    for patch in dual_patches:
+        if patch.key not in keys["dual"]:
             findings.append(
                 Finding(
                     "composition",
                     "stale_dual_overlay",
-                    f"dual overlay has no target for {entry_id!r}",
+                    f"dual overlay has no target for {patch.key!r}",
                     "dual",
-                    entry_id,
+                    patch.package_id,
                 )
             )
-    exemptions: set[str] = set()
-    if deny is not _INVALID and not isinstance(deny, list):
-        findings.append(
-            Finding("config", "invalid_denylist", "denylist must be a list")
-        )
-    elif isinstance(deny, list):
-        for index, item in enumerate(deny):
-            if (
-                not isinstance(item, dict)
-                or not isinstance(item.get("id"), str)
-                or not item.get("id")
-                or not isinstance(item.get("reason"), str)
-            ):
-                findings.append(
-                    Finding(
-                        "config",
-                        "invalid_denylist_entry",
-                        f"denylist entry {index} is invalid",
-                        index=index,
-                    )
-                )
-                continue
-            entry_id = item["id"]
-            variant = item.get("variant")
-            if variant is not None and (
-                not isinstance(variant, str) or variant not in {"single", "dual"}
-            ):
-                findings.append(
-                    Finding(
-                        "config",
-                        "invalid_denylist_variant",
-                        f"denylist entry {entry_id!r} has invalid variant {variant!r}",
-                        entry_id=entry_id,
-                        index=index,
-                        field="variant",
-                    )
-                )
-                continue
-            applicable = ("single", "dual") if variant is None else (variant,)
-            if "dual" in applicable:
-                exemptions.add(entry_id)
-            for applicable_variant in applicable:
-                if entry_id in ids.get(applicable_variant, set()):
-                    findings.append(
-                        Finding(
-                            "composition",
-                            "denied_id_present",
-                            f"denied id {entry_id!r} remains present",
-                            applicable_variant,
-                            entry_id,
-                            index,
-                        )
-                    )
-    for entry_id in ids.get("single", set()) - ids.get("dual", set()) - exemptions:
-        findings.append(
-            Finding(
-                "composition",
-                "dual_coverage_gap",
-                f"dual variant is missing {entry_id!r}",
-                "dual",
-                entry_id,
-            )
-        )
 
-
-def _validate_overlay(
-    scope: str, value: object, findings: list[Finding]
-) -> dict[str, object] | None:
-    if value is _INVALID:
-        return None
-    if not isinstance(value, dict):
-        findings.append(
-            Finding("config", "invalid_overlay", f"{scope} overlay must be an object")
+    for family in families["single"] - families["dual"]:
+        package_id = family_ids["single"][family]
+        exempt = any(
+            (rule.variant is None or rule.variant is Variant.DUAL)
+            and (rule.family == family or rule.package_id == package_id)
+            for rule in exclusions
         )
-        return None
-    for entry_id, patch in value.items():
-        if not isinstance(patch, dict):
+        if not exempt:
             findings.append(
                 Finding(
-                    "config",
-                    "invalid_overlay_patch",
-                    f"overlay for {entry_id!r} must be an object",
-                    entry_id=entry_id,
+                    "composition",
+                    "dual_coverage_gap",
+                    f"dual variant is missing family {family!r}",
+                    "dual",
+                    package_id,
                 )
             )
-            continue
-        for field in {"id", "overrideSource"}.intersection(patch):
-            findings.append(
-                Finding(
-                    "config",
-                    "forbidden_overlay_field",
-                    f"overlay for {entry_id!r} contains protected field {field}",
-                    entry_id=entry_id,
-                    field=field,
-                )
-            )
-    return value
 
 
 def _add(

@@ -14,7 +14,12 @@ def copy_inputs(root: Path) -> None:
     for relative in INPUT_PATHS.values():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(relative, target)
+        if relative.name in {"overlay.json", "overlay.dual.json"}:
+            target.write_text("[]")
+        elif relative.exists():
+            shutil.copyfile(relative, target)
+        elif relative.name == "composition.json":
+            target.write_text('{"schemaVersion":1,"candidates":[],"pins":[]}')
 
 
 def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
@@ -140,7 +145,7 @@ def test_malformed_verification_records_are_rejected(
 def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
-    assert report["verifier"]["version"] == "0.3.1"
+    assert report["verifier"]["version"] == "0.4.0"
     assert report["schemaVersion"] == 1
     report["verifier"]["version"] = "0.3.0"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))

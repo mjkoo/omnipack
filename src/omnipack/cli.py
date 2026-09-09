@@ -45,6 +45,9 @@ def build(_args: argparse.Namespace) -> int:
         stage = "composition"
         if ingested.policy is None:
             raise ValueError("ingestion result is missing composition policy")
+        composition_bytes = ingested.policy_bytes
+        if composition_bytes is None:
+            raise ValueError("ingestion result is missing composition policy snapshot")
         composition = compose(
             ingested.apps,
             _object_list(root / "config/deny.json", "denylist"),
@@ -59,6 +62,7 @@ def build(_args: argparse.Namespace) -> int:
             composition,
             _object(root / "config/settings.json", "settings"),
             ingestion_report,
+            composition_bytes,
             on_stage=record_stage,
             on_verification=record_verification,
         )
@@ -96,8 +100,10 @@ def _ingest_for_build(
     extras_config = load_json(root / "config/extras.json", "extras")
     http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
     resolver = PackageIdResolver(http, PackageIdCache(root / "config/package-ids.json"))
-    policy = load_composition_policy((root / "config/composition.json").read_bytes())
-    return ingest_all(http, source_config, extras_config, resolver, policy, report)
+    policy_bytes = (root / "config/composition.json").read_bytes()
+    policy = load_composition_policy(policy_bytes)
+    result = ingest_all(http, source_config, extras_config, resolver, policy, report)
+    return IngestionResult(result.apps, result.report, result.policy, policy_bytes)
 
 
 def _object(path: Path, source: str) -> dict[str, Any]:

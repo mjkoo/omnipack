@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 
 from omnipack import build as build_module
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import (
     CompositionReport,
     CompositionResult,
@@ -54,9 +55,10 @@ def write_previous(root: Path, single: object | None, dual: object | None) -> No
 def write_config(root: Path) -> None:
     (root / "config").mkdir(exist_ok=True)
     for name, value in (
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (root / "config" / name).write_text(json.dumps(value), encoding="utf-8")
@@ -115,3 +117,123 @@ def test_first_build_reports_every_app_added(tmp_path: Path) -> None:
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["changes"]["single"]["added"] == ["one", "two"]
     assert report["changes"]["dual"]["added"] == ["one", "two"]
+
+
+def test_policy_byte_change_during_build_prevents_publication(tmp_path: Path) -> None:
+    write_config(tmp_path)
+    policy = tmp_path / "config/composition.json"
+    consumed = policy.read_bytes()
+
+    def mutate(stage: str) -> None:
+        if stage == "offline verification":
+            policy.write_bytes(consumed + b"\n")
+
+    try:
+        build_module.publish_build(
+            tmp_path,
+            composition("one"),
+            {},
+            IngestionReport(),
+            composition_bytes=consumed,
+            on_stage=mutate,
+        )
+    except build_module.OfflineVerificationError as error:
+        assert error.findings[0]["code"] == "input_changed"
+    else:
+        raise AssertionError("policy mutation was accepted")
+    assert not (tmp_path / "dist/single-screen.json").exists()
+
+
+def test_family_history_preserves_multiple_old_keys_and_reports_transition(
+    tmp_path: Path,
+) -> None:
+    from omnipack.report import write_report
+
+    current = composition("new.pkg")
+    for variant in Variant:
+        current.apps[variant][0] = ComposedApp(
+            variant,
+            current.apps[variant][0].provenance,
+            current.apps[variant][0].data,
+            "package:new.pkg",
+        )
+    for variant in Variant:
+        current.apps[variant][0] = ComposedApp(
+            variant,
+            current.apps[variant][0].provenance,
+            {**current.apps[variant][0].data, "url": "https://example.test/new"},
+            "app:shared",
+            "new.pkg",
+            "extras",
+        )
+    previous = {
+        variant: [
+            {"id": "old.standard", "url": "https://example.test/standard"},
+            {"id": "old.dual", "url": "https://example.test/dual"},
+        ]
+        for variant in Variant
+    }
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [],
+            "pins": [],
+            "history": [
+                {
+                    "id": "old.standard",
+                    "url": "https://example.test/standard",
+                    "family": "app:shared",
+                    "rationale": "published",
+                },
+                {
+                    "id": "old.dual",
+                    "url": "https://example.test/dual",
+                    "family": "app:shared",
+                    "rationale": "published",
+                },
+            ],
+        }
+    )
+    write_report(tmp_path, previous, current, IngestionReport(), policy=policy)
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    retained = report["familyChanges"]["single"]["retained"]
+    assert retained == [
+        {
+            "family": "app:shared",
+            "previous": [
+                {"id": "old.standard", "url": "https://example.test/standard"},
+                {"id": "old.dual", "url": "https://example.test/dual"},
+            ],
+            "current": {"id": "new.pkg", "url": "https://example.test/new"},
+        }
+    ]
+    assert report["familyChanges"]["single"]["removed"] == []
+
+
+def test_unknown_history_makes_unmatched_additions_unknown(tmp_path: Path) -> None:
+    from omnipack.report import write_report
+
+    current = composition("new.pkg")
+    for variant in Variant:
+        current.apps[variant][0] = ComposedApp(
+            variant,
+            current.apps[variant][0].provenance,
+            current.apps[variant][0].data,
+            "package:new.pkg",
+        )
+    previous = {
+        variant: [{"id": "mystery", "url": "https://example.test/old"}]
+        for variant in Variant
+    }
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": [], "pins": []}
+    )
+    write_report(tmp_path, previous, current, IngestionReport(), policy=policy)
+    changes = json.loads((tmp_path / ".build/report.json").read_text())[
+        "familyChanges"
+    ]["single"]
+    assert changes["added"] == []
+    assert changes["unknownAdditions"] == ["package:new.pkg"]
+    assert changes["unmappedPrevious"] == [
+        {"id": "mystery", "url": "https://example.test/old"}
+    ]

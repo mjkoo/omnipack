@@ -121,7 +121,7 @@ def compose(
     report: CompositionReport | None = None,
 ) -> CompositionResult:
     report = report or CompositionReport()
-    exclusions = _parse_exclusions(denylist)
+    exclusions = parse_exclusions(denylist)
     try:
         candidates = list(
             apply_composition_policy(policy, candidates, validate_pins=False).candidates
@@ -144,7 +144,7 @@ def compose(
     return CompositionResult(selected, report)
 
 
-def _parse_exclusions(entries: list[dict[str, str]]) -> tuple[_Exclusion, ...]:
+def parse_exclusions(entries: list[dict[str, str]]) -> tuple[_Exclusion, ...]:
     result: list[_Exclusion] = []
     for index, entry in enumerate(entries):
         unknown = set(entry) - {"id", "family", "variant", "reason"}

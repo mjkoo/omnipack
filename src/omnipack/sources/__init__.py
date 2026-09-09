@@ -49,6 +49,7 @@ class IngestionResult:
     apps: list[App]
     report: IngestionReport
     policy: CompositionPolicy | None = None
+    policy_bytes: bytes | None = None
 
 
 def ingest_all(

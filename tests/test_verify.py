@@ -14,10 +14,15 @@ def copy_inputs(root: Path) -> None:
     for relative in verify.INPUT_PATHS.values():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copyfile(relative, target)
+        if relative.name in {"overlay.json", "overlay.dual.json"}:
+            target.write_text("[]")
+        elif relative.exists():
+            shutil.copyfile(relative, target)
+        elif relative.name == "composition.json":
+            target.write_text('{"schemaVersion":1,"candidates":[],"pins":[]}')
 
 
-def test_offline_evidence_fingerprints_exact_seven_inputs(tmp_path: Path) -> None:
+def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     result = verify.run_verification(tmp_path)
     assert result["status"] == "success"
@@ -100,6 +105,17 @@ def test_changed_input_prevents_success(
     result = verify.run_verification(tmp_path)
     assert any(item["code"] == "input_changed" for item in result["errors"])
     assert result["status"] == "failed"
+
+
+def test_composition_only_change_makes_recorded_evidence_stale(tmp_path: Path) -> None:
+    from omnipack.report import format_reports
+
+    copy_inputs(tmp_path)
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "success"
+    path = tmp_path / "config/composition.json"
+    path.write_bytes(path.read_bytes() + b"\n")
+    assert "Evidence: stale" in format_reports(tmp_path)
 
 
 def test_initial_report_write_error_is_wrapped(tmp_path: Path) -> None:

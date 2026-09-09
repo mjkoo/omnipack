@@ -16,7 +16,7 @@ from omnipack.offline import Finding, OfflineInputs, validate_offline
 from omnipack.settings_defaults import OBTAINIUM_VERSION
 
 SCHEMA_VERSION = 1
-VERIFIER_VERSION = "0.3.1"
+VERIFIER_VERSION = "0.4.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),
@@ -25,6 +25,7 @@ INPUT_PATHS = {
     "common_overlay": Path("config/overlay.json"),
     "dual_overlay": Path("config/overlay.dual.json"),
     "settings": Path("config/settings.json"),
+    "composition": Path("config/composition.json"),
     "http": Path("config/http.json"),
 }
 _URL = re.compile(r"https?://[^\s\"'<>]+")
@@ -81,6 +82,7 @@ def run_verification(
             snapshots["common_overlay"],
             snapshots["dual_overlay"],
             snapshots["settings"],
+            snapshots["composition"],
         )
     )
     report["errors"] = [_finding(item) for item in offline_result.findings]

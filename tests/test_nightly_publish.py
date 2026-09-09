@@ -161,6 +161,23 @@ def test_failed_gate_stops_without_candidate(tmp_path: Path, fail_at: int) -> No
     assert result.candidate is None
 
 
+def test_selected_build_metadata_failure_cannot_fall_back_or_publish(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    process = ControlledProcess(root, fail_at=9)
+
+    result = RefreshOrchestrator(process).run(root, "selected-sha")
+
+    assert result.status == "failed"
+    assert result.candidate is None
+    assert process.commands[-2:] == [
+        ("uv", "run", "--no-sync", "pack", "build"),
+        ("uv", "run", "--no-sync", "pack", "verify", "--live"),
+    ]
+    assert "config/composition.json" not in ALLOWED_PATHS
+
+
 def test_command_launch_error_is_an_explicit_stage_failure(tmp_path: Path) -> None:
     root = _repo(tmp_path)
 

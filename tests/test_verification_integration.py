@@ -16,8 +16,9 @@ def inputs(root: Path) -> dict[Path, bytes]:
     (root / "config").mkdir()
     for name, value in [
         ("deny.json", []),
-        ("overlay.json", {}),
-        ("overlay.dual.json", {}),
+        ("overlay.json", []),
+        ("overlay.dual.json", []),
+        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("settings.json", {}),
         ("http.json", {"credentials": {}}),
         (
