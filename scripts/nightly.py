@@ -23,7 +23,7 @@ from scripts.nightly_reporting import (
     record_upload_status,
 )
 
-CANONICAL_REPOSITORY = "mjkoo/obtainium-emulation-pack"
+CANONICAL_REPOSITORY = "mjkoo/omnipack"
 MAIN_REF = "refs/heads/main"
 DIAGNOSTIC_DIRECTORY = "nightly-diagnostics"
 COMPLETION_MARKER = ".finalized"
@@ -95,7 +95,7 @@ class UrllibGitHubApi:
         data = json.dumps(body).encode() if body is not None else None
         headers = {
             "Accept": "application/vnd.github+json",
-            "User-Agent": "obtainium-pack-nightly-publisher",
+            "User-Agent": "omnipack-nightly-publisher",
             "X-GitHub-Api-Version": "2022-11-28",
         }
         if self.token:

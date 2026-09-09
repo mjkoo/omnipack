@@ -1,4 +1,4 @@
-# obtainium-pack
+# omnipack
 
 Curated Obtainium import files, `single-screen.json` and
 `dual-screen.json`, built as the union of several upstream app packs plus a

@@ -8,8 +8,8 @@ from typing import Any
 
 import pytest
 
-from obtainium_pack.offline import OfflineInputs, validate_offline
-from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.offline import OfflineInputs, validate_offline
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 ROOT = Path(__file__).parents[1]
 

@@ -3,17 +3,17 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from obtainium_pack import build as build_module
-from obtainium_pack.merge import (
+from omnipack import build as build_module
+from omnipack.merge import (
     CompositionReport,
     CompositionResult,
     Displacement,
     Removal,
     StaleExclusion,
 )
-from obtainium_pack.model import Provenance, Variant
-from obtainium_pack.overlay import ComposedApp
-from obtainium_pack.sources import IngestionReport
+from omnipack.model import Provenance, Variant
+from omnipack.overlay import ComposedApp
+from omnipack.sources import IngestionReport
 
 
 def app(package_id: str, variant: Variant) -> ComposedApp:

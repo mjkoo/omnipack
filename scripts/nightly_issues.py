@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Protocol
 
+# Keep the ownership token stable so existing bot issues remain discoverable.
 MARKER = "<!-- obtainium-pack:nightly-publishing -->"
 TITLE = "Nightly build failing"
 BOT_LOGIN = "github-actions[bot]"

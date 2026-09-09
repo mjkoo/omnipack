@@ -7,9 +7,9 @@ from urllib.request import Request
 
 import pytest
 
-from obtainium_pack import cli
-from obtainium_pack.http import HttpClient, HttpResponse
-from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack import cli
+from omnipack.http import HttpClient, HttpResponse
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 
 def inputs(root: Path) -> dict[Path, bytes]:
@@ -222,7 +222,7 @@ def test_latest_metadata_reuse_and_independent_variant_evidence_round_trip(
     failure: bool,
     supplement: bool,
 ) -> None:
-    from obtainium_pack.live_http import LiveHttpClient
+    from omnipack.live_http import LiveHttpClient
 
     inputs(tmp_path)
     (tmp_path / "config/http.json").write_text(

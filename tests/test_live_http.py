@@ -8,8 +8,8 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from obtainium_pack.http import HttpConfig, HttpError, HttpResponse
-from obtainium_pack.live_http import LiveHttpClient
+from omnipack.http import HttpConfig, HttpError, HttpResponse
+from omnipack.live_http import LiveHttpClient
 
 if TYPE_CHECKING:
     from urllib.request import Request
@@ -338,7 +338,7 @@ def test_oversized_real_metadata_is_not_retried(tmp_path, monkeypatch) -> None:
     from urllib.request import HTTPSHandler
     from urllib.response import addinfourl
 
-    from obtainium_pack.http import METADATA_MAX_BYTES
+    from omnipack.http import METADATA_MAX_BYTES
 
     requests = []
 
@@ -367,7 +367,7 @@ def test_real_redirects_are_paced_and_bodies_closed_without_draining(
     from urllib.request import HTTPSHandler
     from urllib.response import addinfourl
 
-    from obtainium_pack.http import METADATA_MAX_BYTES, PROBE_BYTES
+    from omnipack.http import METADATA_MAX_BYTES, PROBE_BYTES
 
     clock = Clock()
     requests = []

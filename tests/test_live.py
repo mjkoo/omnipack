@@ -10,17 +10,17 @@ from urllib.request import Request
 
 import pytest
 
-from obtainium_pack.http import (
+from omnipack.http import (
     PROBE_BYTES,
     HttpClient,
     HttpConfig,
     HttpError,
     HttpResponse,
 )
-from obtainium_pack.live import VersionClass, classify_version, verify_live
-from obtainium_pack.offline import ValidatedEntry
-from obtainium_pack.resolution.types import ResolutionResult
-from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.live import VersionClass, classify_version, verify_live
+from omnipack.offline import ValidatedEntry
+from omnipack.resolution.types import ResolutionResult
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 
 class RoutingTransport:
@@ -678,8 +678,8 @@ def test_nonnumeric_version_warning_only_live_result_succeeds() -> None:
 def test_seeded_package_id_cache_does_not_hide_dead_source(
     tmp_path, monkeypatch
 ) -> None:
-    from obtainium_pack.package_id import CacheEntry, PackageIdCache
-    from obtainium_pack.verify import run_verification
+    from omnipack.package_id import CacheEntry, PackageIdCache
+    from omnipack.verify import run_verification
 
     config = tmp_path / "config"
     config.mkdir()
@@ -710,9 +710,7 @@ def test_seeded_package_id_cache_does_not_hide_dead_source(
             dead: [urllib.error.URLError("dead"), urllib.error.URLError("dead")],
         }
     )
-    monkeypatch.setattr(
-        "obtainium_pack.live_http.LiveHttpClient", lambda *_, **__: http
-    )
+    monkeypatch.setattr("omnipack.live_http.LiveHttpClient", lambda *_, **__: http)
     result = run_verification(tmp_path, live=True, probe_assets=True)
     assert result["status"] == "failed"
     assert len(result["entries"]) == 2

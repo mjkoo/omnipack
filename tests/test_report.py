@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from obtainium_pack.report import format_reports
-from obtainium_pack.verify import INPUT_PATHS, run_verification, verifier_identity
+from omnipack.report import format_reports
+from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
 
 
 def copy_inputs(root: Path) -> None:
@@ -259,7 +259,7 @@ def test_malformed_nested_live_entry_is_rejected(
 def test_malformed_build_report_is_concise_cli_failure(
     tmp_path, monkeypatch, capsys, mutation
 ) -> None:
-    from obtainium_pack.cli import main
+    from omnipack.cli import main
 
     path = tmp_path / ".build/report.json"
     path.parent.mkdir()
@@ -273,7 +273,7 @@ def test_malformed_build_report_is_concise_cli_failure(
 def test_findings_display_location_field_and_effective_version(
     tmp_path, monkeypatch, capsys
 ) -> None:
-    from obtainium_pack.cli import main
+    from omnipack.cli import main
 
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
@@ -305,7 +305,7 @@ def test_findings_display_location_field_and_effective_version(
     def forbidden(*args, **kwargs):
         pytest.fail("report attempted network")
 
-    monkeypatch.setattr("obtainium_pack.http.HttpClient.get", forbidden)
+    monkeypatch.setattr("omnipack.http.HttpClient.get", forbidden)
     monkeypatch.chdir(tmp_path)
     assert main(["report"]) == 0
     output = capsys.readouterr().out

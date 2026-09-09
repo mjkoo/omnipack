@@ -9,15 +9,15 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any
 
-from obtainium_pack.merge import (
+from omnipack.merge import (
     CompositionReport,
     CompositionResult,
     Displacement,
     Removal,
     StaleExclusion,
 )
-from obtainium_pack.model import Variant
-from obtainium_pack.sources import IngestionReport
+from omnipack.model import Variant
+from omnipack.sources import IngestionReport
 
 BUILD_SCHEMA_VERSION = 1
 
@@ -128,7 +128,7 @@ def format_reports(root: Path) -> str:
     if verify_path.exists():
         verify = _read_document(verify_path, "verification")
         _validate_verification_report(verify)
-        from obtainium_pack.verify import capture_inputs, verifier_identity
+        from omnipack.verify import capture_inputs, verifier_identity
 
         _, current = capture_inputs(root)
         freshness = (
@@ -154,7 +154,7 @@ def format_reports(root: Path) -> str:
 
 
 def _format_verification_mode(value: dict[str, Any]) -> str:
-    from obtainium_pack.verify import verifier_identity
+    from omnipack.verify import verifier_identity
 
     mode = value["mode"]
     if mode == "live-probe":
@@ -293,7 +293,7 @@ def _valid_finding(value: object) -> bool:
 def _valid_entry(value: object) -> bool:
     if not isinstance(value, dict):
         return False
-    from obtainium_pack.live import VersionClass
+    from omnipack.live import VersionClass
 
     if (
         not all(

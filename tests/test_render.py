@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from obtainium_pack.model import Provenance, Variant
-from obtainium_pack.overlay import ComposedApp
-from obtainium_pack.render import (
+from omnipack.model import Provenance, Variant
+from omnipack.overlay import ComposedApp
+from omnipack.render import (
     RenderError,
     hydrate_settings,
     render,
 )
-from obtainium_pack.settings_defaults import OBTAINIUM_VERSION, SETTINGS_DEFAULTS
+from omnipack.settings_defaults import OBTAINIUM_VERSION, SETTINGS_DEFAULTS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 

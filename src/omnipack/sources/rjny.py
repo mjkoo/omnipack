@@ -10,8 +10,8 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from obtainium_pack.model import App, Variant
-from obtainium_pack.sources.common import HttpGetter, SourceError, normalize_record
+from omnipack.model import App, Variant
+from omnipack.sources.common import HttpGetter, SourceError, normalize_record
 
 
 def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:

@@ -8,19 +8,19 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from obtainium_pack.build import previous_ids, publish_build
-from obtainium_pack.http import HttpClient, HttpConfig
-from obtainium_pack.merge import CompositionReport, CompositionResult, compose
-from obtainium_pack.package_id import PackageIdCache, PackageIdResolver
-from obtainium_pack.report import format_reports, write_report
-from obtainium_pack.sources import (
+from omnipack.build import previous_ids, publish_build
+from omnipack.http import HttpClient, HttpConfig
+from omnipack.merge import CompositionReport, CompositionResult, compose
+from omnipack.package_id import PackageIdCache, PackageIdResolver
+from omnipack.report import format_reports, write_report
+from omnipack.sources import (
     IngestionReport,
     IngestionResult,
     SourceError,
     ingest_all,
     load_json,
 )
-from obtainium_pack.verify import VerificationReportError, run_verification
+from omnipack.verify import VerificationReportError, run_verification
 
 
 def build(_args: argparse.Namespace) -> int:
@@ -86,7 +86,7 @@ def _ingest_for_build(
 ) -> IngestionResult:
     source_config = load_json(root / "config/sources.json", "sources")
     if not isinstance(source_config, dict):
-        from obtainium_pack.sources import SourceError
+        from omnipack.sources import SourceError
 
         raise SourceError("sources", "configuration must be an object")
     extras_config = load_json(root / "config/extras.json", "extras")

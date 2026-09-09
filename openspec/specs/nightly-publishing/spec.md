@@ -149,7 +149,8 @@ Handled setup, check, build, verification, and publication failures SHALL open,
 reopen, or update one automation-owned issue titled `Nightly build failing`.
 Ownership SHALL require the exact marker
 `<!-- obtainium-pack:nightly-publishing -->` and GitHub Actions bot authorship.
-Title matches alone SHALL NOT authorize modification. Discovery SHALL include
+The legacy marker SHALL remain stable across the omnipack rename so existing
+issues remain discoverable. Title matches alone SHALL NOT authorize modification. Discovery SHALL include
 all pages of open and closed issues and exclude pull requests. The
 lowest-numbered owned issue SHALL be canonical; other open owned duplicates
 SHALL be closed. Ambiguous creation SHALL trigger rediscovery before another

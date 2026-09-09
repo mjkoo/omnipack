@@ -7,7 +7,7 @@ from pathlib import Path
 
 import pytest
 
-from obtainium_pack import verify
+from omnipack import verify
 
 
 def copy_inputs(root: Path) -> None:
@@ -69,7 +69,7 @@ def test_secret_and_url_values_are_redacted_from_upstream_failure(
         code = "upstream"
 
     monkeypatch.setattr(
-        "obtainium_pack.live.verify_live",
+        "omnipack.live.verify_live",
         lambda *_, **__: (_ for _ in ()).throw(
             Failure(f"https://user:{token}@example.test/file?token={token} {token}")
         ),
@@ -120,8 +120,8 @@ def test_initial_report_write_error_is_wrapped(tmp_path: Path) -> None:
 def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, url: str
 ) -> None:
-    from obtainium_pack.live import LiveEntryResult, LiveResult, ProbeEvidence
-    from obtainium_pack.offline import Finding
+    from omnipack.live import LiveEntryResult, LiveResult, ProbeEvidence
+    from omnipack.offline import Finding
 
     copy_inputs(tmp_path)
     monkeypatch.setenv("PACK_TEST_TOKEN", "nested-token")
@@ -148,7 +148,7 @@ def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
         (),
     )
     monkeypatch.setattr(
-        "obtainium_pack.live.verify_live",
+        "omnipack.live.verify_live",
         lambda *_, **__: LiveResult((entry,), (finding,), ()),
     )
     result = verify.run_verification(tmp_path, live=True)
@@ -171,7 +171,7 @@ def test_probe_assets_requires_live_mode(tmp_path: Path) -> None:
 def test_malformed_http_config_replaces_evidence_without_network(
     tmp_path, monkeypatch, capsys, credentials, live
 ) -> None:
-    from obtainium_pack.cli import main
+    from omnipack.cli import main
 
     copy_inputs(tmp_path)
     verify.run_verification(tmp_path)
@@ -180,7 +180,7 @@ def test_malformed_http_config_replaces_evidence_without_network(
     def forbidden(*args, **kwargs):
         pytest.fail("malformed HTTP configuration reached network")
 
-    monkeypatch.setattr("obtainium_pack.live.verify_live", forbidden)
+    monkeypatch.setattr("omnipack.live.verify_live", forbidden)
     monkeypatch.chdir(tmp_path)
     assert main(["verify", *(["--live"] if live else [])]) == 1
     stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())

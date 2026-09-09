@@ -20,9 +20,9 @@ from pathlib import Path
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
-from obtainium_pack.http import HttpClient, HttpError
-from obtainium_pack.model import App, Provenance, SourceType, Variant
-from obtainium_pack.urls import normalize_project_url
+from omnipack.http import HttpClient, HttpError
+from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.urls import normalize_project_url
 
 MAX_APK_FULL_DOWNLOAD = 40 * 1024 * 1024
 ZIP_TAIL_SIZE = 128 * 1024

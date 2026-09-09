@@ -8,7 +8,7 @@ from datetime import UTC, datetime
 from typing import Any
 from urllib.parse import urlsplit
 
-from obtainium_pack.http import HttpClient, HttpError
+from omnipack.http import HttpClient, HttpError
 
 from .support import SupportClass, classify_settings
 from .types import Candidate, ResolutionError, ResolutionResult

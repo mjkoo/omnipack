@@ -8,13 +8,13 @@ from urllib.request import Request
 
 import pytest
 
-from obtainium_pack import cli
-from obtainium_pack.cli import main
-from obtainium_pack.http import HttpClient, HttpResponse
-from obtainium_pack.merge import CompositionReport, CompositionResult
-from obtainium_pack.model import App, Provenance, SourceType, Variant
-from obtainium_pack.overlay import ComposedApp
-from obtainium_pack.sources import IngestionReport, IngestionResult, SourceError
+from omnipack import cli
+from omnipack.cli import main
+from omnipack.http import HttpClient, HttpResponse
+from omnipack.merge import CompositionReport, CompositionResult
+from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.overlay import ComposedApp
+from omnipack.sources import IngestionReport, IngestionResult, SourceError
 
 
 def fixture_apk(package_id: str) -> bytes:
@@ -96,7 +96,7 @@ def test_live_verification_stops_before_network_when_offline_fails(
     (tmp_path / "dist/single-screen.json").write_text("not json")
     (tmp_path / "dist/dual-screen.json").write_text("not json")
     monkeypatch.setattr(
-        "obtainium_pack.live.verify_live",
+        "omnipack.live.verify_live",
         lambda *_: pytest.fail("live verification must not run"),
     )
     monkeypatch.chdir(tmp_path)
@@ -215,7 +215,7 @@ def test_cached_resolution_survives_a_later_render_failure(
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.setattr(
-        "obtainium_pack.build.render",
+        "omnipack.build.render",
         lambda *_args: (_ for _ in ()).throw(ValueError("render failed")),
     )
     monkeypatch.chdir(tmp_path)
@@ -321,7 +321,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         return HttpResponse(request.full_url, 200, Message(), body)
 
     if invalid_gate:
-        from obtainium_pack import build as build_module
+        from omnipack import build as build_module
 
         real_render = build_module.render
 
@@ -431,7 +431,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         cli, "_ingest_for_build", lambda root, report: IngestionResult([], report)
     )
     if stage == "rendering":
-        from obtainium_pack import build as build_module
+        from omnipack import build as build_module
 
         real_render = build_module.render
         renders = 0
@@ -582,7 +582,7 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
             '{"settings":{"categories":"{}"},"apps":[]}\n' if calls == 1 else "not json"
         )
 
-    monkeypatch.setattr("obtainium_pack.build.render", render)
+    monkeypatch.setattr("omnipack.build.render", render)
     monkeypatch.chdir(tmp_path)
     assert main(["build"]) == 1
     assert all(

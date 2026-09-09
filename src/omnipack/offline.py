@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 
 @dataclass(frozen=True, slots=True)

@@ -1,5 +1,5 @@
 {
-  description = "obtainium-pack";
+  description = "omnipack";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -64,14 +64,14 @@
           inherit (pkgs.callPackages pyproject-nix.build.util { }) mkApplication;
           # Only bin/ and data files ship; the interpreter and venv scaffolding do not.
           app = mkApplication {
-            venv = pythonSet.mkVirtualEnv "obtainium-pack-env" workspace.deps.default;
-            package = pythonSet."obtainium-pack";
+            venv = pythonSet.mkVirtualEnv "omnipack-env" workspace.deps.default;
+            package = pythonSet."omnipack";
           };
         in
         {
           default = app;
           docker = pkgs.dockerTools.streamLayeredImage {
-            name = "obtainium-pack";
+            name = "omnipack";
             tag = "latest";
             contents = [ app ];
             config.Cmd = [ "${app}/bin/pack" ];

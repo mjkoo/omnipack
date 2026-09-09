@@ -15,7 +15,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import parse_qsl, urlsplit
 
-from obtainium_pack.http import (
+from omnipack.http import (
     METADATA_MAX_BYTES,
     PROBE_BYTES,
     HttpClient,

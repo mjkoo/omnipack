@@ -10,7 +10,7 @@ from urllib.response import addinfourl
 
 import pytest
 
-from obtainium_pack.http import (
+from omnipack.http import (
     METADATA_MAX_BYTES,
     PROBE_BYTES,
     HttpClient,

@@ -8,8 +8,8 @@ from collections.abc import Mapping
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
-from obtainium_pack.http import HttpResponse
-from obtainium_pack.model import App, Provenance, SourceType, Variant
+from omnipack.http import HttpResponse
+from omnipack.model import App, Provenance, SourceType, Variant
 
 
 class HttpGetter(Protocol):

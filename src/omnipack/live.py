@@ -10,11 +10,11 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Any
 
-from obtainium_pack.http import HttpClient, HttpError, HttpResponse, redact_url
-from obtainium_pack.offline import Finding, ValidatedEntry
-from obtainium_pack.resolution.github import resolve_github
-from obtainium_pack.resolution.html import resolve_html
-from obtainium_pack.resolution.types import ResolutionError, ResolutionResult
+from omnipack.http import HttpClient, HttpError, HttpResponse, redact_url
+from omnipack.offline import Finding, ValidatedEntry
+from omnipack.resolution.github import resolve_github
+from omnipack.resolution.html import resolve_html
+from omnipack.resolution.types import ResolutionError, ResolutionResult
 
 
 class VersionClass(str, Enum):

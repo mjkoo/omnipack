@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from obtainium_pack.model import Provenance, Variant
+from omnipack.model import Provenance, Variant
 
 
 class OverlayError(ValueError):

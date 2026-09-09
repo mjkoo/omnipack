@@ -6,15 +6,15 @@ from pathlib import Path
 
 import pytest
 
-from obtainium_pack.http import HttpClient, HttpConfig
-from obtainium_pack.live import VersionClass, classify_version
-from obtainium_pack.merge import compose
-from obtainium_pack.model import Variant
-from obtainium_pack.render import render
-from obtainium_pack.resolution.github import resolve_github
-from obtainium_pack.resolution.types import ResolutionError
-from obtainium_pack.sources.common import normalize_record
-from obtainium_pack.sources.extras import fetch
+from omnipack.http import HttpClient, HttpConfig
+from omnipack.live import VersionClass, classify_version
+from omnipack.merge import compose
+from omnipack.model import Variant
+from omnipack.render import render
+from omnipack.resolution.github import resolve_github
+from omnipack.resolution.types import ResolutionError
+from omnipack.sources.common import normalize_record
+from omnipack.sources.extras import fetch
 from tests.test_resolution_github import GitHubTransport
 
 ROOT = Path(__file__).parents[1]

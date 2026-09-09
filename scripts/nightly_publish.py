@@ -14,8 +14,8 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
-from obtainium_pack.report import ReportFormatError, _validate_verification_report
-from obtainium_pack.verify import VERIFY_PATH, capture_inputs, verifier_identity
+from omnipack.report import ReportFormatError, _validate_verification_report
+from omnipack.verify import VERIFY_PATH, capture_inputs, verifier_identity
 
 ALLOWED_PATHS = (
     "dist/single-screen.json",

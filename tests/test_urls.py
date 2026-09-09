@@ -1,6 +1,6 @@
 import pytest
 
-from obtainium_pack.urls import normalize_project_url, project_urls_equal
+from omnipack.urls import normalize_project_url, project_urls_equal
 
 
 @pytest.mark.parametrize(

@@ -1,4 +1,4 @@
-from obtainium_pack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, SourceType, Variant
 
 
 def test_candidates_for_the_same_id_stay_distinct_by_variant() -> None:

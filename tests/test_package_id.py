@@ -15,8 +15,8 @@ from urllib.response import addinfourl
 
 import pytest
 
-from obtainium_pack.http import HttpClient, HttpConfig, HttpError, HttpResponse
-from obtainium_pack.package_id import (
+from omnipack.http import HttpClient, HttpConfig, HttpError, HttpResponse
+from omnipack.package_id import (
     MAX_APK_FULL_DOWNLOAD,
     CacheEntry,
     PackageIdCache,
@@ -652,7 +652,7 @@ def test_http_body_failure_is_reported_and_retried_without_losing_cache(
 def test_real_http_full_download_bound_retains_cache_or_omits_entry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, cached: bool
 ) -> None:
-    monkeypatch.setattr("obtainium_pack.package_id.MAX_APK_FULL_DOWNLOAD", 1024)
+    monkeypatch.setattr("omnipack.package_id.MAX_APK_FULL_DOWNLOAD", 1024)
     path = tmp_path / "ids.json"
     if cached:
         seed(path)

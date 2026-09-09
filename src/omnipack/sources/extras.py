@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Sequence
 from dataclasses import replace
 
-from obtainium_pack.model import App, Variant
-from obtainium_pack.sources.common import SourceError, normalize_record
+from omnipack.model import App, Variant
+from omnipack.sources.common import SourceError, normalize_record
 
 
 def fetch(entries: Sequence[object]) -> list[App]:

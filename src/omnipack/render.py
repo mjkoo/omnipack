@@ -7,8 +7,8 @@ import json
 from copy import deepcopy
 from typing import Any
 
-from obtainium_pack.overlay import ComposedApp
-from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.overlay import ComposedApp
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 
 class RenderError(ValueError):

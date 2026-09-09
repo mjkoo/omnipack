@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import pytest
 
-from obtainium_pack.resolution.types import ResolutionError
-from obtainium_pack.resolution.version import extract_version
+from omnipack.resolution.types import ResolutionError
+from omnipack.resolution.version import extract_version
 
 
 def test_extracts_last_match_and_defaults_to_group_zero() -> None:

@@ -2,7 +2,7 @@
 
 Each GitHub link not already present by URL in a higher-precedence source
 has its package id resolved from its latest release APK (see
-`obtainium_pack.package_id`) and cached in `config/package-ids.json` so
+`omnipack.package_id`) and cached in `config/package-ids.json` so
 nightly runs stay cheap. Non-GitHub rows have no APK feed and are skipped.
 Generated entries map to the dual variant only.
 """
@@ -14,11 +14,11 @@ from collections.abc import Mapping, Sequence
 from itertools import pairwise
 from urllib.parse import urlsplit
 
-from obtainium_pack.model import App, SourceType, Variant
-from obtainium_pack.package_id import ProjectResolver, generated_project_entry
-from obtainium_pack.sources import IngestionReport
-from obtainium_pack.sources.common import HttpGetter, SourceError, derived_source_type
-from obtainium_pack.urls import normalize_project_url
+from omnipack.model import App, SourceType, Variant
+from omnipack.package_id import ProjectResolver, generated_project_entry
+from omnipack.sources import IngestionReport
+from omnipack.sources.common import HttpGetter, SourceError, derived_source_type
+from omnipack.urls import normalize_project_url
 
 LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)")
 

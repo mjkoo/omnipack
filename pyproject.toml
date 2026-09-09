@@ -1,5 +1,5 @@
 [project]
-name = "obtainium-pack"
+name = "omnipack"
 version = "0.1.0"
 description = "Curated Obtainium import pack: nightly-rebuilt union of upstream app catalogs with an overlay of fixes"
 readme = "README.md"
@@ -18,11 +18,11 @@ authors = [
 ]
 
 [project.urls]
-Repository = "https://github.com/mjkoo/obtainium-emulation-pack"
-Issues = "https://github.com/mjkoo/obtainium-emulation-pack/issues"
+Repository = "https://github.com/mjkoo/omnipack"
+Issues = "https://github.com/mjkoo/omnipack/issues"
 
 [project.scripts]
-pack = "obtainium_pack.cli:main"
+pack = "omnipack.cli:main"
 
 [dependency-groups]
 dev = [{ include-group = "lint" }, { include-group = "test" }]
@@ -66,7 +66,7 @@ strict = true
 filterwarnings = ["error"]
 
 [tool.coverage.run]
-source_pkgs = ["obtainium_pack"]
+source_pkgs = ["omnipack"]
 branch = true
 
 [tool.coverage.report]

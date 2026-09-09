@@ -140,7 +140,7 @@ class HttpClient:
         config: HttpConfig,
         *,
         timeout: float = 30.0,
-        user_agent: str = "obtainium-emulation-pack/0.1",
+        user_agent: str = "omnipack/0.1",
         retries: int = 2,
         backoff: float = 0.5,
         sleep: Callable[[float], None] = time.sleep,

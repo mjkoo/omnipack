@@ -68,7 +68,7 @@ def _repo(tmp_path: Path) -> Path:
 def _evidence(
     root: Path, *, warnings: bool = False, observed: str | None = None
 ) -> None:
-    from obtainium_pack.verify import SCHEMA_VERSION, capture_inputs, verifier_identity
+    from omnipack.verify import SCHEMA_VERSION, capture_inputs, verifier_identity
 
     _, inputs = capture_inputs(root)
     observed = observed or datetime.now(UTC).isoformat()

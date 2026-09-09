@@ -54,7 +54,7 @@ def _response(status: int, value: object) -> ApiResponse:
 
 def _environment(tmp_path: Path) -> dict[str, str]:
     return {
-        "GITHUB_REPOSITORY": "mjkoo/obtainium-emulation-pack",
+        "GITHUB_REPOSITORY": "mjkoo/omnipack",
         "GITHUB_REF": "refs/heads/main",
         "GITHUB_SERVER_URL": "https://github.example",
         "GITHUB_API_URL": "https://api.github.example",
@@ -92,9 +92,9 @@ def test_workflow_has_guarded_serialized_publisher_and_pinned_actions() -> None:
 
     assert 'cron: "23 6 * * *"' in workflow
     assert "workflow_dispatch:" in workflow
-    assert "github.repository == 'mjkoo/obtainium-emulation-pack'" in workflow
+    assert "github.repository == 'mjkoo/omnipack'" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
-    assert "group: obtainium-pack-nightly-publisher" in workflow
+    assert "group: omnipack-nightly-publisher" in workflow
     assert "cancel-in-progress: false" in workflow
     assert "timeout-minutes: 60" in workflow
     assert "contents: write" in workflow
@@ -331,7 +331,7 @@ def test_system_python_module_entrypoint_does_not_import_project_runtime(
         "import builtins\n"
         "original = builtins.__import__\n"
         "def blocked(name, *args, **kwargs):\n"
-        "    if name.startswith('obtainium_pack') or name in "
+        "    if name.startswith('omnipack') or name in "
         "('scripts.nightly_git', 'scripts.nightly_publish'):\n"
         "        raise RuntimeError('project runtime import blocked')\n"
         "    return original(name, *args, **kwargs)\n"

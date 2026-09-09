@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from obtainium_pack.resolution.support import SupportClass, classify_settings
-from obtainium_pack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.resolution.support import SupportClass, classify_settings
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 FIXTURES = Path(__file__).parent / "fixtures" / "verification"
 

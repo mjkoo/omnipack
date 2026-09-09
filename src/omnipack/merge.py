@@ -6,8 +6,8 @@ from copy import deepcopy
 from dataclasses import dataclass, field
 from typing import Any
 
-from obtainium_pack.model import App, Variant
-from obtainium_pack.overlay import ComposedApp, OverlayError, apply_overlay
+from omnipack.model import App, Variant
+from omnipack.overlay import ComposedApp, OverlayError, apply_overlay
 
 _PRECEDENCE = {"codm2000": 0, "bboi": 1, "rjny": 2, "extras": 3}
 

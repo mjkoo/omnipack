@@ -11,9 +11,9 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from obtainium_pack.http import HttpConfig, redact_url
-from obtainium_pack.offline import Finding, OfflineInputs, validate_offline
-from obtainium_pack.settings_defaults import OBTAINIUM_VERSION
+from omnipack.http import HttpConfig, redact_url
+from omnipack.offline import Finding, OfflineInputs, validate_offline
+from omnipack.settings_defaults import OBTAINIUM_VERSION
 
 SCHEMA_VERSION = 1
 VERIFIER_VERSION = "0.3.1"
@@ -113,8 +113,8 @@ def run_verification(
             )
     if live and not report["errors"] and http_config is not None:
         try:
-            from obtainium_pack.live import verify_live
-            from obtainium_pack.live_http import LiveHttpClient
+            from omnipack.live import verify_live
+            from omnipack.live_http import LiveHttpClient
 
             result = verify_live(
                 offline_result.entries,

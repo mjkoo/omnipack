@@ -8,8 +8,8 @@ from dataclasses import dataclass, field
 from os import PathLike
 from typing import Any
 
-from obtainium_pack.model import App
-from obtainium_pack.package_id import ProjectResolver, ResolutionStatus
+from omnipack.model import App
+from omnipack.package_id import ProjectResolver, ResolutionStatus
 
 from .common import HttpGetter, SourceError
 

@@ -2,7 +2,7 @@
 
 The **Nightly publishing** workflow runs daily at **06:23 UTC** and offers
 manual dispatch without inputs. Both paths run only in
-`mjkoo/obtainium-emulation-pack` on `main`. Dispatches from another ref and
+`mjkoo/omnipack` on `main`. Dispatches from another ref and
 fork copies skip the write-capable job. One shared publisher concurrency group
 serializes runs without canceling an executing publisher. Each job has a
 60-minute timeout. Scheduling is best effort: exact start time and execution
@@ -88,7 +88,8 @@ Handled setup, check, build, verification, and publication failures maintain
 one issue titled **Nightly build failing**. Ownership requires both
 `github-actions[bot]` authorship and the exact body marker
 `<!-- obtainium-pack:nightly-publishing -->`. A matching title alone is not
-ownership. Discovery includes all pages of open and closed issues and excludes
+ownership. This legacy marker stays stable across the omnipack rename so
+existing issues remain discoverable. Discovery includes all pages of open and closed issues and excludes
 pull requests. The lowest-numbered owned issue is reused and reopened on
 recurrence; other open owned duplicates are closed. Repeated failures replace
 the body rather than adding comments. Ambiguous creation triggers rediscovery

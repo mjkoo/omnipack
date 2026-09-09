@@ -445,7 +445,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
     newer: list[str] = []
 
     def advance() -> None:
-        verify = source / "src/obtainium_pack/verify.py"
+        verify = source / "src/omnipack/verify.py"
         verify.write_text(
             verify.read_text()
             .replace('VERIFIER_VERSION = "0.3.1"', 'VERIFIER_VERSION = "0.4.0"')
@@ -453,7 +453,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
             .replace('Path("config/settings.json")', 'Path("config/new-settings.json")')
         )
         (source / "config/new-settings.json").write_text("new verifier input\n")
-        report = source / "src/obtainium_pack/report.py"
+        report = source / "src/omnipack/report.py"
         report.write_text(report.read_text().replace("schema != 1:", "schema != 2:"))
         _git(source, "add", "src", "config/new-settings.json")
         _git(source, "commit", "-qm", "update verification contract")

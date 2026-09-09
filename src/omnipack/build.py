@@ -8,10 +8,10 @@ from dataclasses import asdict
 from pathlib import Path
 from typing import Any
 
-from obtainium_pack.merge import CompositionResult
-from obtainium_pack.model import Variant
-from obtainium_pack.render import render
-from obtainium_pack.sources import IngestionReport
+from omnipack.merge import CompositionResult
+from omnipack.model import Variant
+from omnipack.render import render
+from omnipack.sources import IngestionReport
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -66,8 +66,8 @@ def publish_build(
         variant: render(composition.apps[variant], settings).encode()
         for variant in Variant
     }
-    from obtainium_pack.offline import OfflineInputs, validate_offline
-    from obtainium_pack.report import write_report
+    from omnipack.offline import OfflineInputs, validate_offline
+    from omnipack.report import write_report
 
     if on_stage is not None:
         on_stage("offline verification")

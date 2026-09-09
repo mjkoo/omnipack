@@ -8,13 +8,13 @@ on:
 permissions: {}
 
 concurrency:
-  group: obtainium-pack-nightly-publisher
+  group: omnipack-nightly-publisher
   cancel-in-progress: false
 
 jobs:
   publish:
     name: Publish verified packs
-    if: github.repository == 'mjkoo/obtainium-emulation-pack' && github.ref == 'refs/heads/main'
+    if: github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
     permissions:
       contents: write # Required for the verified fast-forward push to main.
       issues: write # Required to maintain the automation-owned failure issue.

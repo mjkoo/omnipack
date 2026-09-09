@@ -4,9 +4,9 @@ from dataclasses import replace
 
 import pytest
 
-from obtainium_pack.merge import CompositionError, CompositionResult, compose
-from obtainium_pack.model import App, Provenance, SourceType, Variant
-from obtainium_pack.overlay import ComposedApp
+from omnipack.merge import CompositionError, CompositionResult, compose
+from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.overlay import ComposedApp
 
 
 def app(

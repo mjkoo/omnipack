@@ -8,9 +8,9 @@ from typing import TYPE_CHECKING
 
 import pytest
 
-from obtainium_pack.http import HttpClient, HttpConfig, HttpResponse
-from obtainium_pack.resolution.html import resolve_html
-from obtainium_pack.resolution.types import ResolutionError
+from omnipack.http import HttpClient, HttpConfig, HttpResponse
+from omnipack.resolution.html import resolve_html
+from omnipack.resolution.types import ResolutionError
 
 if TYPE_CHECKING:
     from urllib.request import Request

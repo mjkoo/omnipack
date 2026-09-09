@@ -10,11 +10,11 @@ from urllib.request import Request
 
 import pytest
 
-from obtainium_pack import cli
-from obtainium_pack.http import HttpClient, HttpError, HttpResponse
-from obtainium_pack.model import App, Provenance, SourceType, Variant
-from obtainium_pack.package_id import ResolutionResult, ResolutionStatus
-from obtainium_pack.sources import (
+from omnipack import cli
+from omnipack.http import HttpClient, HttpError, HttpResponse
+from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.package_id import ResolutionResult, ResolutionStatus
+from omnipack.sources import (
     IngestionReport,
     SourceError,
     bboi,
@@ -425,7 +425,7 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
 def test_codm_malformed_catalog_aborts_before_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
 ) -> None:
-    from obtainium_pack.sources import IngestionResult
+    from omnipack.sources import IngestionResult
 
     dist = tmp_path / "dist"
     dist.mkdir()
