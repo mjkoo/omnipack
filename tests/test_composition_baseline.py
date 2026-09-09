@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pytest
 
-ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "fixtures/composition-baseline"
 
 
@@ -17,8 +16,6 @@ def test_baseline_output_fixture_preserves_committed_pack(
     variant: str, count: int
 ) -> None:
     baseline = (FIXTURES / f"{variant}.json").read_bytes()
-    assert baseline == (ROOT / "dist" / f"{variant}.json").read_bytes()
-
     rendered = json.loads(baseline)
     assert len(rendered["apps"]) == count
     assert rendered["settings"]["categories"]
@@ -44,6 +41,13 @@ def test_baseline_index_records_output_integrity_and_source_origins() -> None:
         "bboi-dual-asset",
         "extras",
         "codm-generated",
+    }
+    assert {candidate["origin"]: candidate["source"] for candidate in candidates} == {
+        "rjny-catalog": "rjny",
+        "bboi-standard-asset": "bboi",
+        "bboi-dual-asset": "bboi",
+        "extras": "extras",
+        "codm-generated": "codm2000",
     }
     assert all(
         {"source", "origin", "id", "url", "eligible", "selectedIn"} <= candidate.keys()

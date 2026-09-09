@@ -70,7 +70,7 @@
       "selectedIn": ["single", "dual"]
     },
     {
-      "source": "generated",
+      "source": "codm2000",
       "origin": "codm-generated",
       "id": "com.ctrnative",
       "url": "https://github.com/igawa6/ctr-native-android",
