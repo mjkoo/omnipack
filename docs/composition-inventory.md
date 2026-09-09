@@ -16,7 +16,15 @@ under [`tests/fixtures/composition-baseline`](../tests/fixtures/composition-base
 | Harvest Moon 64 Recomp | BBoi standard asset, `com.igawa6.harvestmoon64` | BBoi dual asset, `com.igawa6.harvestmoon64` | One default package family. | Retain both source records. Select the standard record for single and the dual-preferred record for dual. |
 | Zelda: A Link to the Past | BBoi standard asset, `com.samyost1.zelda3android` | BBoi dual asset, `com.samyost1.zelda3android` | One default package family. | Retain both records even though their original id and URL are equal. Origin distinguishes the assets; the dual record remains dual-preferred. |
 | Zelda: The Minish Cap | BBoi standard asset, `com.samyost1.tmcandroid` | BBoi dual asset, `com.samyost1.tmcandroid` | One default package family. | Retain both source records. Select the standard record for single and the dual-preferred record for dual. |
+| OpenMW | `com.xyzz.openmw`, `https://github.com/xyzz/openmw-android` | `com.joshdaniels.openmwds`, `https://github.com/Josh-Daniels/OpenMW-DS` | Explicit `app:openmw` family. | The catalog supplies standard and dual builds of this app with different package identities; retain the standard for single and prefer the dual asset for dual. |
+| Super Metroid | `com.raekwon1603.supermetroid`, `https://github.com/Raekwon1603/super_metroid-android` | `com.raekwon1603.supermetroidds`, `https://github.com/Raekwon1603/super_metroid-android` | Explicit `app:super-metroid` family. | The catalog supplies standard and dual builds of this app with different package identities; retain the standard for single and prefer the dual asset for dual. |
+| Dusklight | `com.twilitrealm.dusklight`, `https://github.com/TwilitRealm/dusklight` | `com.igawa6.dusklight`, `https://github.com/igawa6/dusklight` | Explicit `app:dusklight` family. | The catalog supplies standard and dual builds of this app with different package identities; retain the standard for single and prefer the dual asset for dual. |
 | Crash Team Racing | [`Simon358/ctr-native-android`](https://github.com/Simon358/ctr-native-android), configured as `com.simon358.ctrnative` | [`igawa6/ctr-native-android`](https://github.com/igawa6/ctr-native-android), rendered as `com.ctrnative`, plus the Simon candidate | Unresolved. Repository names and a shared manifest package do not establish whether these forks are one logical app family. | Do not group or exclude either candidate without a maintainer decision. Correcting the Simon identity creates an output package collision in dual, so the initial policy must also make an explicit selection or exclusion decision. |
+
+The three different-package pairs are preserved as complete original records in
+[`replacement-candidates.json`](../tests/fixtures/composition-baseline/replacement-candidates.json),
+including release provenance and source settings. These are explicit maintained
+family associations, not a runtime inference from repository names.
 
 The Winlator repositories remain separate families: `brunodev85/winlator`,
 `coffincolors/winlator`, and `StevenMXZ/Winlator-Ludashi` are unrelated

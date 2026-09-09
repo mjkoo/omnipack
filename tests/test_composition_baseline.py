@@ -76,3 +76,21 @@ def test_baseline_index_records_output_integrity_and_source_origins() -> None:
     assert ludashi["selectedAsset"] == "bionic-vanilla.apk"
     assert ludashi["settings"]["apkFilterRegEx"] == "bionic-vanilla"
     assert ludashi["settings"]["versionDetection"] is False
+
+
+def test_different_package_build_pairs_preserve_original_source_records() -> None:
+    document = json.loads((FIXTURES / "replacement-candidates.json").read_text())
+    assert document["source"] == "bboi"
+    assert document["releaseUrl"].startswith("https://codeberg.org/")
+    assert {pair["family"] for pair in document["pairs"]} == {
+        "app:openmw",
+        "app:super-metroid",
+        "app:dusklight",
+    }
+    for pair in document["pairs"]:
+        standard, dual = pair["standard"], pair["dual"]
+        assert standard["id"] != dual["id"]
+        for candidate in (standard, dual):
+            assert candidate["url"].startswith("https://github.com/")
+            assert isinstance(json.loads(candidate["additionalSettings"]), dict)
+            assert candidate["name"]

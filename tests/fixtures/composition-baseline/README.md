@@ -8,3 +8,7 @@ settings, entry counts, and representative candidates from every source origin.
 These fixtures let composition and reporting tests compare migration behavior
 without fetching an upstream catalog. They are a historical baseline and must
 not be refreshed merely because a later build changes its selection.
+
+`replacement-candidates.json` preserves the six full records for OpenMW, Super
+Metroid and Dusklight standard/dual pairs, captured from the recorded BBoi release
+on 2026-09-09. The asset origin fields identify the source of each record.
