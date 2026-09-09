@@ -127,6 +127,7 @@ def finalize_publication(
     *,
     secrets: Sequence[str] = (),
     diagnostic_url: str | None = None,
+    prior_failure: bool = False,
 ) -> FinalizationResult:
     """Persist diagnostics and reconcile issues while preserving publication truth."""
     artifacts = write_diagnostics(output_dir, outcome, run_url, secrets=secrets)
@@ -142,6 +143,7 @@ def finalize_publication(
         if publication_status in ("published", "no-op")
         and issue.status != "failed"
         and not cleanup_failed
+        and not prior_failure
         else "failed"
     )
     summary_suffix = (

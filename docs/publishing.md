@@ -122,7 +122,8 @@ Upload failure fails the workflow without rolling back publication.
 
 Diagnostic JSON files are replaced atomically. If a later write fails, fallback
 finalization can reload the last complete result and preserve a confirmed
-publication and its SHA. A retained offline verification report is labeled
+publication and its SHA. Fallback keeps the triggering helper failure visible in
+the workflow status and preserves unavailable-report markers. A retained offline verification report is labeled
 offline; the summary and orchestration result identify live evidence as
 unavailable until a live report exists.
 

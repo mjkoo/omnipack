@@ -186,6 +186,7 @@ def run_setup_failure(
             run_url,
             secrets=(token,),
             diagnostic_url=run_url,
+            prior_failure=True,
         )
     _finish(environ, output_dir, finalization)
     return finalization
@@ -302,6 +303,9 @@ def _load_outcome(
             number = int(value["number"])
             attempt = dict(value)
             for report in ("build", "verify"):
+                if value.get(f"{report}_report") == "unavailable":
+                    attempt[f"{report}_report"] = None
+                    continue
                 report_path = output_dir / f"attempt-{number}-{report}.json"
                 try:
                     attempt[f"{report}_report"] = report_path.read_bytes()

@@ -191,7 +191,9 @@ identifiers where available. Missing early-stage reports SHALL be identified as
 unavailable. A retained offline verification report SHALL be labeled offline
 and SHALL NOT count as available live verification evidence. Diagnostic JSON
 updates SHALL replace files atomically so an interrupted rewrite preserves the
-last complete result for fallback finalization. Diagnostics SHALL exclude credentials, raw HTTP caches, and APK
+last complete result for fallback finalization. Fallback SHALL preserve missing-report
+markers and SHALL keep a triggering helper failure visible as workflow failure,
+even when publication is confirmed and issue recovery succeeds. Diagnostics SHALL exclude credentials, raw HTTP caches, and APK
 downloads; source text SHALL be treated as data, not executable input.
 
 Cleanup errors SHALL be recorded separately, fail the workflow, and preserve

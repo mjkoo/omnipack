@@ -4,7 +4,7 @@ import json
 import os
 import subprocess
 from collections.abc import Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Self
@@ -21,7 +21,7 @@ from scripts.nightly import (
 )
 from scripts.nightly_git import AttemptRecord, PublicationResult
 from scripts.nightly_publish import StageOutcome
-from scripts.nightly_reporting import RESULT_NAME
+from scripts.nightly_reporting import RESULT_NAME, write_diagnostics
 
 WORKFLOW = Path(".github/workflows/nightly.yml")
 
@@ -386,9 +386,40 @@ def test_interrupted_finalization_write_preserves_publication_for_fallback(
     persisted = json.loads((diagnostics / RESULT_NAME).read_text())
     assert persisted["published_sha"] == "published-sha"
     assert len(persisted["attempts"]) == 1
+    assert retried.workflow_status == "failed"
+    assert persisted["workflow_status"] == "failed"
+    assert record_upload(environment, "success") == "failed"
+    assert "Final workflow status: failed" in (tmp_path / "summary.md").read_text()
     assert json.loads((diagnostics / "attempt-1-build.json").read_text()) == {
         "build": "ok"
     }
     assert json.loads((diagnostics / "attempt-1-verify.json").read_text()) == {
         "verify": "ok"
     }
+
+
+def test_fallback_preserves_missing_report_markers(tmp_path: Path) -> None:
+    environment = _environment(tmp_path)
+    outcome = _result("failed")
+    outcome = replace(
+        outcome,
+        attempts=(replace(outcome.attempts[0], build_report=None, verify_report=None),),
+    )
+    diagnostics = tmp_path / "nightly-diagnostics"
+    write_diagnostics(diagnostics, outcome, "run")
+
+    result = run_setup_failure(
+        environment,
+        "helper",
+        "publisher execution failed",
+        api=FakeApi([_response(500, {})]),
+    )
+
+    assert result is not None
+    persisted = json.loads((diagnostics / RESULT_NAME).read_text())
+    assert persisted["attempts"][0]["build_report"] == "unavailable"
+    assert persisted["attempts"][0]["verify_report"] == "unavailable"
+    assert "build report unavailable; verification report unavailable" in result.summary
+    for name in ("build", "verify"):
+        report = json.loads((diagnostics / f"attempt-1-{name}.json").read_text())
+        assert report["available"] is False
