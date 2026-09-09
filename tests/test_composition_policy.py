@@ -262,6 +262,30 @@ def test_staged_application_defers_only_missing_selector_presence() -> None:
         apply_composition_policy(parsed, [conflicting], require_all=False)
 
 
+@pytest.mark.parametrize("require_all", [False, True])
+def test_policy_application_validates_present_pin_eligibility_by_default(
+    require_all: bool,
+) -> None:
+    parsed = parse_composition_policy(
+        policy(
+            pins=[
+                {
+                    "family": "package:org.example.old",
+                    "variant": "dual",
+                    "match": rule()["match"],
+                    "rationale": "Require the selected dual build.",
+                }
+            ]
+        )
+    )
+    with pytest.raises(CompositionPolicyError, match="pin.*eligibility"):
+        apply_composition_policy(
+            parsed,
+            [candidate(eligibility=frozenset({Variant.SINGLE}))],
+            require_all=require_all,
+        )
+
+
 def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:
     other = rule(
         match={

@@ -198,12 +198,18 @@ def apply_composition_policy(
     candidates: list[App] | tuple[App, ...],
     *,
     require_all: bool = True,
+    validate_pins: bool = True,
 ) -> AppliedPolicy:
-    """Collapse candidates, match original selectors once, and apply corrections."""
+    """Apply rules; composition defers pin validation until after exclusions.
+
+    Deferring pins preserves candidate-rule presence and identity checks.
+    Ingestion retains full pin validation, including required selectors.
+    """
     collapsed = _collapse(candidates)
     by_selector = {_candidate_selector(app).key: app for app in collapsed}
     rules = {rule.match.key: rule for rule in policy.candidate_rules}
-    for selector in (*rules, *(pin.match.key for pin in policy.pins)):
+    pin_selectors = tuple(pin.match.key for pin in policy.pins) if validate_pins else ()
+    for selector in (*rules, *pin_selectors):
         if require_all and selector not in by_selector:
             shown = CandidateSelector(*selector)
             raise CompositionPolicyError(
@@ -249,15 +255,19 @@ def apply_composition_policy(
         result.append(updated)
         applied_by_selector[selector.key] = updated
 
-    for pin in policy.pins:
-        candidate = applied_by_selector.get(pin.match.key)
-        if candidate is None:
-            continue
-        if candidate.family != pin.family or pin.variant not in candidate.eligibility:
-            raise CompositionPolicyError(
-                f"pin for family {pin.family!r} target {pin.variant.value!r} "
-                "conflicts with candidate family or eligibility"
-            )
+    if validate_pins:
+        for pin in policy.pins:
+            candidate = applied_by_selector.get(pin.match.key)
+            if candidate is None:
+                continue
+            if (
+                candidate.family != pin.family
+                or pin.variant not in candidate.eligibility
+            ):
+                raise CompositionPolicyError(
+                    f"pin for family {pin.family!r} target {pin.variant.value!r} "
+                    "conflicts with candidate family or eligibility"
+                )
 
     return AppliedPolicy(tuple(result), dict(policy.projected_pins))
 

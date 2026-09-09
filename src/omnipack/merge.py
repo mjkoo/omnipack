@@ -123,7 +123,9 @@ def compose(
     report = report or CompositionReport()
     exclusions = _parse_exclusions(denylist)
     try:
-        candidates = list(apply_composition_policy(policy, candidates).candidates)
+        candidates = list(
+            apply_composition_policy(policy, candidates, validate_pins=False).candidates
+        )
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
     pins = {(pin.family, pin.variant): pin.match for pin in policy.pins}

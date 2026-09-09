@@ -10,6 +10,7 @@ from omnipack.composition_policy import (
     CompositionPolicy,
     Pin,
     Projection,
+    parse_composition_policy,
     rendered_key,
 )
 from omnipack.merge import (
@@ -169,7 +170,7 @@ def test_pin_wins_and_denied_or_ineligible_pin_fails() -> None:
             [],
             policy=policy,
         )
-    with pytest.raises(CompositionError, match=r"pin.*eligibility"):
+    with pytest.raises(CompositionError, match=r"pin.*ineligible"):
         compose(
             [high, replace(pinned, eligibility=frozenset({Variant.SINGLE}))],
             [],
@@ -196,6 +197,49 @@ def test_family_denial_cannot_hide_missing_pin() -> None:
     policy = pin_policy(missing, "app:gone", Variant.DUAL)
     with pytest.raises(CompositionError, match=r"selector.*missing"):
         compose([], [{"family": "app:gone", "reason": "gone"}], [], [], policy=policy)
+
+
+@pytest.mark.parametrize("present", [False, True], ids=["missing", "ineligible"])
+def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) -> None:
+    pinned = app("pinned", eligibility=frozenset({Variant.SINGLE}))
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [],
+            "pins": [
+                {
+                    "family": "package:pinned",
+                    "variant": "dual",
+                    "match": {
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": pinned.id,
+                        "url": pinned.url,
+                    },
+                    "rationale": "Require this build for dual.",
+                }
+            ],
+        }
+    )
+    report = CompositionReport()
+    with pytest.raises(CompositionError, match=r"pin.*(?:missing|ineligible)"):
+        compose(
+            [app("removed"), *([pinned] if present else [])],
+            [
+                {"id": "removed", "variant": "dual", "reason": "unsupported"},
+                {"id": "retired", "reason": "obsolete"},
+            ],
+            [],
+            [],
+            policy=policy,
+            report=report,
+        )
+    assert [
+        (item.package_id, item.variant, item.reason) for item in report.removals
+    ] == [("removed", Variant.DUAL, "unsupported")]
+    assert [(item.package_id, item.reason) for item in report.stale_exclusions] == [
+        ("retired", "obsolete")
+    ]
 
 
 def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal() -> (

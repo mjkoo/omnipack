@@ -433,30 +433,45 @@ def test_ingestion_applies_policy_before_coverage_and_after_generation(
     assert result.policy is policy
 
 
+@pytest.mark.parametrize("selector_kind", ["rule", "pin"])
 def test_ingestion_requires_generated_policy_selectors_after_resolution(
     monkeypatch: pytest.MonkeyPatch,
+    selector_kind: str,
 ) -> None:
+    required = {
+        "match": {
+            "source": "codm2000",
+            "origin": "codm-generated",
+            "id": "missing.id",
+            "url": "https://github.com/owner/missing",
+        },
+        "rationale": "Required generated candidate.",
+    }
     policy = parse_composition_policy(
         {
             "schemaVersion": 1,
-            "candidates": [
+            "candidates": [required] if selector_kind == "rule" else [],
+            "pins": [
                 {
-                    "match": {
-                        "source": "codm2000",
-                        "origin": "codm-generated",
-                        "id": "missing.id",
-                        "url": "https://github.com/owner/missing",
-                    },
-                    "rationale": "Required generated candidate.",
+                    **required,
+                    "family": "package:missing.id",
+                    "variant": "dual",
                 }
-            ],
-            "pins": [],
+            ]
+            if selector_kind == "pin"
+            else [],
         }
     )
     monkeypatch.setattr(rjny, "fetch", lambda *_args: [])
     monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
     monkeypatch.setattr(extras, "fetch", lambda *_args: [])
-    monkeypatch.setattr(codm, "fetch", lambda *_args: [])
+    resolved = []
+
+    def generate(*_args):
+        resolved.append(True)
+        return []
+
+    monkeypatch.setattr(codm, "fetch", generate)
     with pytest.raises(CompositionPolicyError, match="matched no candidate"):
         ingest_all(
             FakeHttp({}),
@@ -465,6 +480,7 @@ def test_ingestion_requires_generated_policy_selectors_after_resolution(
             StubResolver(),
             policy,
         )
+    assert resolved == [True]
 
 
 @pytest.mark.parametrize("missing", ["id", "url", "name"])
