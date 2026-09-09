@@ -36,6 +36,7 @@ def read(path):
 
 
 def curated():
+    """Apply maintained overlays to historical, already selected output records."""
     baseline = read(FIXTURES / "baseline-apps.json")
     selected = {variant: [] for variant in Variant}
     for variant in Variant:
