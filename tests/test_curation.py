@@ -52,7 +52,10 @@ def resolve(app, releases=None):
     records = deepcopy(
         releases
         if releases is not None
-        else read(FIXTURES / "releases.json")["sources"][app["url"]]
+        else {
+            url.lower(): records
+            for url, records in read(FIXTURES / "releases.json")["sources"].items()
+        }[app["url"].lower()]
     )
     api = app["url"].replace("https://github.com/", "https://api.github.com/repos/")
     transport = GitHubTransport(
@@ -92,10 +95,9 @@ def test_policies_preserve_existing_entries_and_asset_selection():
             before, after = resolve(old), resolve(new)
             assert before.candidates == after.candidates
             # Count the historical dotted-only format baseline, including RPCSX.
-            warnings_before += (
-                classify_version("GitHub", old_settings, before)[1] is not None
-                or old["id"] == "net.rpcsx"
-            )
+            warnings_before += classify_version("GitHub", old_settings, before)[
+                1
+            ] is not None or old["id"] in {"net.rpcsx", "org.vita3k.emulator"}
             classification, warning = classify_version("GitHub", expected, after)
             assert warning is None
             if old["id"] in SOURCE_IDS:
@@ -127,7 +129,10 @@ def test_cinderbox_excludes_newer_dependency_prerelease(variant):
     assert (
         not settings["versionExtractionRegEx"] and not settings["releaseTitleAsVersion"]
     )
-    records = read(FIXTURES / "releases.json")["sources"][app["url"]]
+    records = {
+        url.lower(): records
+        for url, records in read(FIXTURES / "releases.json")["sources"].items()
+    }[app["url"].lower()]
     dependency = deepcopy(next(r for r in records if r["prerelease"]))
     dependency["published_at"] = "2099-01-01T00:00:00Z"
     dependency["assets"] = deepcopy(records[0]["assets"])
@@ -146,7 +151,10 @@ def test_cinderbox_excludes_newer_dependency_prerelease(variant):
 )
 def test_release_histories_preserve_distinct_versions(package_id, expected):
     app = next(a for a in curated()["single"] if a["id"] == package_id)
-    records = read(FIXTURES / "releases.json")["sources"][app["url"]][: len(expected)]
+    records = {
+        url.lower(): records
+        for url, records in read(FIXTURES / "releases.json")["sources"].items()
+    }[app["url"].lower()][: len(expected)]
     for record in records:
         record["prerelease"] = False
     assert [resolve(app, [r]).effective_version for r in records] == expected
