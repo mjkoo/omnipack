@@ -313,7 +313,7 @@ def test_resolution_error_preserves_context_but_redacts_query_values() -> None:
         ("", {}, VersionClass.NONNUMERIC, True),
         ("1junk", {}, VersionClass.NONNUMERIC, True),
         ("1-beta", {}, VersionClass.NONNUMERIC, True),
-        ("1.2\\n", {}, VersionClass.NONNUMERIC, True),
+        ("1.2\n", {}, VersionClass.NONNUMERIC, True),
         (
             "continuous",
             {"versionExtractionRegEx": "(.*)"},
