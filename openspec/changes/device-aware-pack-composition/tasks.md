@@ -30,10 +30,10 @@
 
 ## 6. Migrate maintained configuration and validate outputs
 
-- [ ] 6.1 Add the initial committed composition policy using the evidenced family decisions, seed historical mappings for baseline rendered identities including default package families, retain history when retiring active candidate rules, and migrate every overlay to explicit repository selectors; verify fixtures preserve existing intended version settings, Cinderbox inclusion and Ludashi's current filter/source-version policy.
-- [ ] 6.2 Rebuild both packs and inspect the complete selection diff; deliver an explanation for every policy-driven package/project transition, family addition/removal and explicit exclusion, separating unrelated upstream drift.
-- [ ] 6.3 Run focused regression suites followed by just check-all, pack verify and authenticated pack verify --live; record exact outcomes and output fingerprints, with no unresolved selection or serialized coverage errors.
-- [ ] 6.4 Document any device migration steps and validate import/re-import and installation on an available Android device; record actual observations or explicitly outstanding device acceptance without substituting metadata success.
+- [x] 6.1 Add the initial committed composition policy using the evidenced family decisions, seed historical mappings for baseline rendered identities including default package families, retain history when retiring active candidate rules, and migrate every overlay to explicit repository selectors; verify fixtures preserve existing intended version settings, Cinderbox inclusion and Ludashi's current filter/source-version policy.
+- [x] 6.2 Rebuild both packs and inspect the complete selection diff; deliver an explanation for every policy-driven package/project transition, family addition/removal and explicit exclusion, separating unrelated upstream drift.
+- [x] 6.3 Run focused regression suites followed by just check-all, pack verify and authenticated pack verify --live; record exact outcomes and output fingerprints, with no unresolved selection or serialized coverage errors.
+- [x] 6.4 Document any device migration steps and validate import/re-import and installation on an available Android device; record actual observations or explicitly outstanding device acceptance without substituting metadata success.
 
 ## 7. Complete review and durable documentation
 
