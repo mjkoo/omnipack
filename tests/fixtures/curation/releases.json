@@ -1,0 +1,2071 @@
+{
+  "observed_at": "2026-09-09T11:56:29.709827+00:00",
+  "sources": {
+    "https://github.com/sergiomanzur/SymphonyRecomp": [
+      {
+        "tag_name": "android-v0.10.1b",
+        "name": "Android Beta 0.10.1",
+        "body": "Castlevania: Symphony of the Night, running natively on Android. Not an emulator \u2014 the\nPlayStation code is statically recompiled into C# and built into a real app.\n\nA fix release on top of Beta 0.10, all of it about save states and controllers.\nTested on a Retroid Pocket 6.\n\n---\n\n## Fixed\n\n**Loading a save state now restores the music.** This is the big one, and it had two\nseparate causes stacked on top of each other.\n\nThree quarters of this disc is streamed audio \u2014 172,972 of its 229,020 sectors \u2014 so on SOTN\nthe soundtrack is not sequenced, it is read off the disc as you play. Which track you hear\ndepends on where the drive is sitting and which channel it is filtering. None of that was\npart of a save state. So loading one restored the game's memory while leaving the drive\nexactly where the current session had left it, and the game had no reason to re-issue a read\nit believed it had already made.\n\nThe result was oddly specific: load a state from the main menu and the menu's theme carried\non playing over the restored room. Walk into the next room and it corrected itself, because\nthat made the game ask the drive for music again. From a freshly launched app the drive could\nstill be near the start of the disc, where the first streamed audio is the game's opening\nnarration \u2014 so a boss room could greet you with Richter's opening line, which is at least\nfunny.\n\nThe drive's position, channel filter and mode are now saved and restored with the state.\n\n**Sound effects and voices no longer come back wrong.** The same absence, one layer down. The\nPlayStation's sound chip has its own half-megabyte of sample memory, and the game fills it\nonce when you enter an area; after that it only says \"play the sample at this address\". A\nsave state restored the game's bookkeeping about which sample was where, but not the samples\nthemselves \u2014 so those addresses still resolved, just to whatever the previous session had\nloaded. The sample memory, all 24 voices and the mixer registers now travel with the state.\n\nTwo earlier attempts at this fought it from the wrong side, by resetting or silencing the\nsound chip on load. One left the game permanently mute; the other kept the volume but stopped\nthe music. Neither could have worked, because the state simply was not there to restore. It is\nnow.\n\n**A controller connected after the game is already running is picked up.** Reported with a\nwired USB-C pad, but it was never about that pad \u2014 nothing attached after startup was ever\nnoticed. The only scan happened once during launch, before Android had finished enumerating\nits input devices, so a pad was found by luck. Built-in controls usually got lucky; a USB-C\npad, which you plug into a phone that is already running, never did. Connecting and\ndisconnecting are both noticed within a frame now.\n\n**A controller no longer takes the game down with it.** Opening certain pads makes the input\nlayer leave a harmless complaint behind \u2014 the pad opens and works fine \u2014 but that message is\nsticky, and the layer above treats any pending message as a failure. The frame after a\ncontroller was opened could die and stop the game.\n\n---\n\n## Added\n\n**\u2699 MENU \u2192 System \u2192 Controllers.** A pad that does nothing has more than one cause: the\nsystem never saw it, or it was seen but has no button mapping and cannot be driven. From the\noutside those look identical. This screen lists every controller the system reports, marks\neach *Usable* or *No button mapping*, shows which player slots are filled, and can scan again\nwithout restarting. If a pad still misbehaves, photograph this screen for the bug report.\n\nSave and load results are also written to the device log now. Previously a failure appeared\nonly as a toast, which is gone by the time anyone thinks to describe what happened.\n\n---\n\n## Worth knowing\n\n**Your existing save states still work.** States from 0.10 have no drive section and load\nexactly as they did before; states from before 0.10 have neither. Only states written by this\nversion get the full treatment, so re-save anything you care about if you want the music fix\nto apply to it.\n\nSave states are a little larger again \u2014 the sound chip's sample memory adds about half a\nmegabyte on top of the roughly 8 MB each slot already used.\n\nMemory cards are unaffected.\n\n---\n\n## Install\n\nThe APK holds no game data. You supply your own disc the first time you open it, and the app\nnever asks again. Android 5.0 (API 21) or newer, arm64 or x64.\n\n**This is not affiliated with or endorsed by BlackLabelHQ.** Please don't take questions about\nthis port to their repo or their Discord \u2014 bugs here are mine. See the README for the longer\nversion of that.\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-22T03:35:39Z",
+        "html_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/tag/android-v0.10.1b",
+        "assets": [
+          {
+            "name": "SymphonyRecomp-Android-Beta-0.10.1.apk",
+            "browser_download_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/download/android-v0.10.1b/SymphonyRecomp-Android-Beta-0.10.1.apk",
+            "updated_at": "2026-08-22T03:35:39Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "android-v0.10b",
+        "name": "Android Beta 0.10",
+        "body": "Castlevania: Symphony of the Night, running natively on Android. Not an emulator \u2014 the\nPlayStation code is statically recompiled into C# and built into a real app.\n\nThis one catches the port up to upstream's **Beta 0.5.1b**, which is mostly a widescreen\nrelease, and fixes controller detection. Tested on a Retroid Pocket 6.\n\n---\n\n## Widescreen is properly widescreen now\n\nBeta 0.9.1 made the game *render* wider instead of stretching a 4:3 picture sideways. That\nfixed how it looked, but the game underneath still only reasoned about the original view.\nUpstream has since reworked that part, and this release brings it over.\n\n**Enemies now spawn and can be hit at the edges of the screen.** Spawning, hit detection and\ncamera collision are handled for the widened view itself rather than being nudged afterwards.\nPreviously things could walk into frame already resolved, or sit in the extra space at the\nsides without properly existing.\n\n**Backgrounds stop losing chunks of tile in widescreen.** The PlayStation had 2 MB of work\nRAM and the widescreen hooks run out of it while building the extra tile columns a wider view\nneeds. The emulated console now gets 8 MB, which is what upstream raised it to for the same\nreason.\n\n**The Prologue throne room is filled in.** Widening that room exposed empty space to the left\nof the throne, and the artwork that covers it was never being drawn on Android.\n\n**Inverted castle screen bounds are correct**, which upstream fixed separately.\n\n---\n\n## Controllers\n\n**A pad connected after the game is already running now works.** This was reported with a\nwired USB-C controller, and it was never about that particular pad \u2014 on Android *nothing*\nattached after startup was ever picked up. The only scan happened once during launch, before\nAndroid had even finished enumerating its input devices, so a pad was found by luck. Built-in\ncontrols like the Retroid's usually got lucky. A USB-C pad, which you plug into a phone that\nis already running, never did.\n\nConnecting and disconnecting are both noticed within a frame now, with no restart.\n\n**A controller no longer takes the game down with it.** Opening certain pads makes SDL leave a\nharmless complaint in its error slot \u2014 the pad opens and works fine. But that message is\nsticky, and the layer above throws on *any* pending error, whether or not its own call failed.\nSo the frame after a controller was opened could die and stop the game. This is the more likely\nreason a specific controller looked like it \"wasn't recognised\": with the pad attached at\nlaunch, the same trap could leave the app running with nothing on screen.\n\n**New: \u2699 MENU \u2192 System \u2192 Controllers.** A pad that does nothing has more than one cause \u2014 the\nsystem never saw it, or it was seen but has no button mapping and so cannot be driven \u2014 and\nfrom the outside those look the same. This screen lists every controller the system reports,\nmarks each *Usable* or *No button mapping*, shows which player slots are filled, and can scan\nagain without restarting. If a pad still misbehaves, this is the screen to photograph in a bug\nreport.\n\nI don't own the controller this was reported with, so the wired path was verified with a\nsynthetic USB gamepad on the device rather than the real thing.\n\n---\n\n## Changed\n\n**High resolution is now a render scale picker** (\u2699 MENU \u2192 System \u2192 Display \u2192 Render scale),\nfollowing upstream replacing its own on/off toggle with a slider. The old switch could only\nsay 1x or 4x; on a phone 2x is often the better trade between a clean picture and battery.\nIt applies immediately \u2014 no restart, unlike the desktop build.\n\n---\n\n## Also from upstream\n\nMinotaur and Werewolf crash fix. Soft reset now returns to the title screen properly.\nJapanese and Simplified Chinese interface translations. Fixes to the GTE, the sound processor's\nnote handling, interrupt dispatch, and a stale frame that could linger after a video. CHD disc\nimages are supported by the runtime, though the importer here still asks for cue/bin.\n\n---\n\n## Worth knowing before you update\n\n**Save states are now about 8 MB each** instead of 2 MB, because the emulated console has more\nRAM to record. Five slots is roughly 40 MB. Your existing save states still load \u2014 but a state\nmade with this version will load incompletely if you ever go back to 0.9.1, so keep a memory\ncard export if you plan to downgrade.\n\nMemory cards are unaffected.\n\n---\n\n## Install\n\nThe APK holds no game data. You supply your own disc the first time you open it, and the app\nnever asks again. Android 5.0 (API 21) or newer, arm64 or x64.\n\n**This is not affiliated with or endorsed by BlackLabelHQ.** Please don't take questions about\nthis port to their repo or their Discord \u2014 bugs here are mine. See the README for the longer\nversion of that.\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-19T15:41:07Z",
+        "html_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/tag/android-v0.10b",
+        "assets": [
+          {
+            "name": "SymphonyRecomp-Android-Beta-0.10.apk",
+            "browser_download_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/download/android-v0.10b/SymphonyRecomp-Android-Beta-0.10.apk",
+            "updated_at": "2026-08-19T15:41:07Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "android-v0.9.1b",
+        "name": "Android Beta 0.9.1",
+        "body": "Castlevania: Symphony of the Night, running natively on Android. Not an emulator \u2014 the\nPlayStation code is statically recompiled into C# and built into a real app.\n\nA fix release on top of Beta 0.9, tested on a Retroid Pocket 6.\n\n---\n\n## Fixed\n\n**16:9 and fit-to-screen no longer stretch the picture.** Choosing a wider ratio used to\nwiden the rectangle the frame was drawn into without changing the frame itself, so a 4:3\npicture was pulled sideways to fill it. The game now genuinely *renders* wider, so widescreen\nshows more of the level instead of a distorted version of the same view.\n\nThe aspect modes now mean what they say:\n\n- **4:3 original** \u2014 the framing the game was made for\n- **16:9 widescreen** \u2014 true 16:9, more level visible left and right\n- **Fit device** \u2014 renders at your screen's own ratio, filling it exactly with no bars\n- **Stretch to fill** \u2014 still stretches, for anyone who wants it\n\n**Glitched text and warped sprites are gone.** Both were the stretching above: scaling\nunevenly duplicates some pixel columns and not others, which breaks up small text and makes\na symmetrical object's edges disagree. Nothing looks squashed now, so neither happens.\n\n**The d-pad no longer presses L1 or L2 with it.** The movement and action pads are\nhit-tested by radius, and that radius reached past their artwork into the shoulder buttons\nabove \u2014 while nothing stopped a single touch from matching more than one control. Pressing\nUp would fire L2 along with it, since L2 sits directly above. One touch now activates one\ncontrol, and the shoulders sit further clear of the pad.\n\n**Audio delay roughly halved.** The buffer was pinned at a tenth of a second no matter what\nthe device could manage. It now sizes itself from the device's own minimum and asks for the\nplatform's low-latency path where that exists.\n\n**Audio crackling fixed.** Separate cause: the mixer ran as an ordinary background thread, so\nAndroid's scheduler could interrupt it mid-frame and the sound buffer would run dry between\nwrites. It now runs at the priority the system reserves for audio.\n\n---\n\n## Added\n\n**Import and export memory cards**, under **\u2699 MENU \u2192 Save \u2192 Memory cards**.\n\nSaves live in the app's private storage, so until now there was no way to back one up, move\nit to another device, or bring one over from the desktop build.\n\n- **Export** writes the card anywhere you choose, and flushes the live card first so it is\n  never a save behind what you just did\n- **Import** accepts the raw 128 KB card used by `.mcr`, `.mcd` and `.sav`, plus DexDrive and\n  VGS files\n- A file that is not a formatted card is refused rather than written, so a mis-tap cannot\n  wipe a save, and the card being replaced is kept beside the new one\n- The app restarts after importing, which is what makes the imported card load\n\n---\n\n## Installing\n\n- **Android 5.0 (API 21)** or newer, **arm64** or **x64**\n- Download the APK below and open it\n- If the install is blocked, allow \"install unknown apps\" for whichever browser or file\n  manager you downloaded it with\n\nUpgrading from 0.9 keeps your disc, saves and settings.\n\n---\n\n## You still need your own copy of the game\n\n**This APK contains no game data, and never will.** You need a legally owned copy of the\nNorth American PlayStation release, dumped to `.cue` + `.bin`.\n\nOn first launch the app asks for it: select the `.cue` and **both** `.bin` tracks together\n(long-press to multi-select) and it copies them in, once. Keep about **600 MB free** for the\ncopy; the originals can be deleted afterwards.\n\n---\n\n## Please read this before reporting anything\n\n**The BlackLabelHQ team does not endorse this port, and it is not affiliated with them.**\nIt was built with heavy AI assistance and verified by hand on real devices. They intend to\nrelease their own Android port in their own time \u2014 if you want the official one, wait for\ntheirs.\n\nDon't open issues about this build on their repo, don't ask their Discord for support with\nit, and don't take it to the SOTN Decomp project either. Bugs in this build are mine. Report\nthem here.\n\nFull details, build instructions and credits are in the\n[README](https://github.com/sergiomanzur/SymphonyRecomp#readme).\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-16T20:28:06Z",
+        "html_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/tag/android-v0.9.1b",
+        "assets": [
+          {
+            "name": "SymphonyRecomp-Android-0.9.1b.apk",
+            "browser_download_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/download/android-v0.9.1b/SymphonyRecomp-Android-0.9.1b.apk",
+            "updated_at": "2026-08-16T20:28:06Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "android-v0.9b",
+        "name": "Android Beta 0.9",
+        "body": "Castlevania: Symphony of the Night, running natively on Android. Not an emulator \u2014 the\nPlayStation code is statically recompiled into C# and built into a real app.\n\nThis is the first public build. It's a beta: expect rough edges, and keep real in-game saves\nalongside your save states.\n\n---\n\n## Read this before you install\n\n**The BlackLabelHQ team does not endorse this port, and it is not affiliated with them.**\n\nThis fork was built with heavy AI assistance and verified by hand on real devices. The\nupstream project values human work, and they intend to release their **own** Android port in\ntheir own time. That's their call and I respect it \u2014 their work is the foundation this\nstands on. If you want the official Android experience, wait for theirs.\n\nSo please:\n\n- **Don't** open issues about this port on the BlackLabelHQ repo.\n- **Don't** ask their Discord for support with this build.\n- This is also **not** the SOTN Decomp project \u2014 don't take questions there either.\n\nBugs in this build are mine. Report them here.\n\n---\n\n## You need your own copy of the game\n\n**This APK contains no game data, and never will.** You need a legally owned copy of the\nNorth American PlayStation release, dumped to `.cue` + `.bin`.\n\nOn first launch the app asks for it. Select the `.cue` and **both** `.bin` tracks together \u2014\nlong-press to multi-select \u2014 and it copies them into the app. That takes a minute or two and\nhappens once.\n\nYour files can be named anything. The importer reads your `.cue`, pulls in exactly the tracks\nit names, and rewrites it to match. It also checks the disc really is the USA release, and\ntells you if you've handed it a Japanese or European dump by mistake.\n\nKeep about **600 MB free** for the copy. The originals can be deleted afterwards.\n\n---\n\n## Installing\n\n- **Android 5.0 (API 21)** or newer, **arm64** or **x64**\n- Download the APK below and open it\n- If the install is blocked, allow \"install unknown apps\" for whichever browser or file\n  manager you downloaded it with\n\n---\n\n## What's in it\n\n- **Touch controls** \u2014 full PSX overlay, switchable D-pad or virtual stick, adjustable\n  opacity, and a HIDE toggle that gets the buttons out of the way\n- **Physical controllers** \u2014 Bluetooth, USB and handhelds (Retroid, Odin, Xbox, DualSense),\n  with PlayStation / Xbox / Nintendo button layouts\n- **Save states** \u2014 five slots\n- **Quality of life** \u2014 colour blind fixes, remove screen flashes, bug fixes, easy spell\n  inputs, extra invincibility frames and more\n- **Cheats, stats and inventory** \u2014 heal, level, gold, attributes, and a full item, relic and\n  spell editor\n- **Mods** \u2014 compiled on device, so source mods work as they do on desktop\n- **Display** \u2014 4:3, 16:9, stretch or auto-fit, with orientation lock; settings persist\n\nEverything lives behind the **\u2699 MENU** button in the top corner.\n\n---\n\n## Known limitations\n\n- **Save states are best used within one session.** The emulated sound chip isn't captured in\n  a state, so one loaded in a different area can play the wrong samples until the game\n  reloads them.\n- The map tracker and randomizer panels are desktop-only for now.\n\n---\n\n## Credits\n\nNone of this exists without the people who did the hard part first.\n\n- **[BlackLabelHQ](https://github.com/BlackLabelHQ/SymphonyRecomp)** \u2014 SymphonyRecomp itself:\n  the recompilation, the patches, the widescreen work, the years of effort\n- **flaffy** \u2014 [RecompOne](https://github.com/BlackLabelHQ/RecompOne), the static recompiler\n  this runs on\n- **The SOTN Decomp community** \u2014 for the reverse engineering that made so much of this\n  possible\n- **Konami and KCET, 1997** \u2014 for making something people still care about this much\n\nIf you enjoy this, go star the upstream project.\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-15T19:23:08Z",
+        "html_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/tag/android-v0.9b",
+        "assets": [
+          {
+            "name": "SymphonyRecomp-Android-0.9b.apk",
+            "browser_download_url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/download/android-v0.9b/SymphonyRecomp-Android-0.9b.apk",
+            "updated_at": "2026-08-15T19:23:08Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/Simon358/ctr-native-android": [
+      {
+        "tag_name": "Android-Build4",
+        "name": "CTR-native-android (26/07/2026)",
+        "body": "- Added on screen controls for when a controller is not detected.\r\n- added extra options to quit the app from pause and main menu.\r\n- added vibration support for external gamepads.\r\n- fixed file picker errors, the app will now copy the CTR BIN file into the Android Data directory.\r\n\r\nNote: this will likely be my last build for quite a while, I will only work on this in future after October unless I find something worth working on. \r\n\r\nKeep note that I have not played all the way through the game on Android so any bugs or game breaking glitches will need to be ironed out if found.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-07-26T15:23:06Z",
+        "html_url": "https://github.com/Simon358/ctr-native-android/releases/tag/Android-Build4",
+        "assets": [
+          {
+            "name": "CTR-native-android.26.07.2026.apk",
+            "browser_download_url": "https://github.com/Simon358/ctr-native-android/releases/download/Android-Build4/CTR-native-android.26.07.2026.apk",
+            "updated_at": "2026-07-26T15:22:32Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "android-build3",
+        "name": "CTR-native-android (11/07/2026) r3",
+        "body": "Updated the directory selection to instead select the ctr-u.bin file on the targeted Android device. ",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-07-11T10:58:29Z",
+        "html_url": "https://github.com/Simon358/ctr-native-android/releases/tag/android-build3",
+        "assets": [
+          {
+            "name": "ctr-native-android11.07.2026r3.apk",
+            "browser_download_url": "https://github.com/Simon358/ctr-native-android/releases/download/android-build3/ctr-native-android11.07.2026r3.apk",
+            "updated_at": "2026-07-11T10:57:59Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "android-build2",
+        "name": "CTR-native-android ",
+        "body": "App will now prompt for assets directory if the files are not found, and allow the user to pick a location for their assets folder. There is also a prompt to allow access to storage in order for the picker to work",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-07-11T10:17:34Z",
+        "html_url": "https://github.com/Simon358/ctr-native-android/releases/tag/android-build2",
+        "assets": [
+          {
+            "name": "ctr-native-android11.07.2026r2.apk",
+            "browser_download_url": "https://github.com/Simon358/ctr-native-android/releases/download/android-build2/ctr-native-android11.07.2026r2.apk",
+            "updated_at": "2026-07-11T10:16:29Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "Old-release",
+        "name": "CTR-native-android ",
+        "body": "Orginal test release",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-07-11T00:01:26Z",
+        "html_url": "https://github.com/Simon358/ctr-native-android/releases/tag/Old-release",
+        "assets": [
+          {
+            "name": "CTR-native-android.11.07.2026.apk",
+            "browser_download_url": "https://github.com/Simon358/ctr-native-android/releases/download/Old-release/CTR-native-android.11.07.2026.apk",
+            "updated_at": "2026-07-10T23:59:47Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/Vita3K/Vita3K-builds": [
+      {
+        "tag_name": "4093",
+        "name": "Build: 4093",
+        "body": "Corresponding commit: [chore: Add vcpkg installed path to '.gitignore' (#4123)](https://github.com/Vita3K/Vita3K/commit/257464af2fea1e3497d6df75ca3d3bb276e909a8) (\u53cc\u5b50\u53f6\u690d\u7269)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-08T14:24:10Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4093",
+        "assets": [
+          {
+            "name": "vita3k-4093-257464af-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-android.apk",
+            "updated_at": "2026-09-08T14:24:05Z"
+          },
+          {
+            "name": "vita3k-4093-257464af-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-macos-arm64.dmg",
+            "updated_at": "2026-09-08T14:24:08Z"
+          },
+          {
+            "name": "vita3k-4093-257464af-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-macos-intel.dmg",
+            "updated_at": "2026-09-08T14:24:08Z"
+          },
+          {
+            "name": "vita3k-4093-257464af-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-08T14:24:06Z"
+          },
+          {
+            "name": "vita3k-4093-257464af-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-08T14:24:07Z"
+          },
+          {
+            "name": "vita3k-4093-257464af-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-windows-arm64.7z",
+            "updated_at": "2026-09-08T14:24:07Z"
+          },
+          {
+            "name": "vita3k-4093-257464af-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-windows-x86_64.7z",
+            "updated_at": "2026-09-08T14:24:05Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-08T14:24:10Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-08T14:24:04Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-08T14:24:06Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4093/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-08T14:24:05Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4092",
+        "name": "Build: 4092",
+        "body": "Corresponding commit: [android: Use \"Vita3k\" as tag for spdlog Android sink (#4119)](https://github.com/Vita3K/Vita3K/commit/ee0be059cdbc9c6dce362f45f9cf73a64a440d49) (\u53cc\u5b50\u53f6\u690d\u7269)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-08T00:26:16Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4092",
+        "assets": [
+          {
+            "name": "vita3k-4092-ee0be059-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-android.apk",
+            "updated_at": "2026-09-08T00:26:10Z"
+          },
+          {
+            "name": "vita3k-4092-ee0be059-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-macos-arm64.dmg",
+            "updated_at": "2026-09-08T00:26:11Z"
+          },
+          {
+            "name": "vita3k-4092-ee0be059-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-macos-intel.dmg",
+            "updated_at": "2026-09-08T00:26:15Z"
+          },
+          {
+            "name": "vita3k-4092-ee0be059-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-08T00:26:09Z"
+          },
+          {
+            "name": "vita3k-4092-ee0be059-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-08T00:26:11Z"
+          },
+          {
+            "name": "vita3k-4092-ee0be059-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-windows-arm64.7z",
+            "updated_at": "2026-09-08T00:26:12Z"
+          },
+          {
+            "name": "vita3k-4092-ee0be059-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/vita3k-4092-ee0be059-windows-x86_64.7z",
+            "updated_at": "2026-09-08T00:26:10Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-08T00:26:12Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-08T00:26:11Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-08T00:26:14Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4092/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-08T00:26:12Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4091",
+        "name": "Build: 4091",
+        "body": "Corresponding commit: [fix(main): prevent crash on early CLI exit caused by uninitialized vita_fs_path (#4117)](https://github.com/Vita3K/Vita3K/commit/86ff8feab3bdb8f3f9dd3a665a0592acdf2bd0b7) (212duo)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-07T21:34:40Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4091",
+        "assets": [
+          {
+            "name": "vita3k-4091-86ff8fea-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-android.apk",
+            "updated_at": "2026-09-07T21:34:38Z"
+          },
+          {
+            "name": "vita3k-4091-86ff8fea-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-macos-arm64.dmg",
+            "updated_at": "2026-09-07T21:34:39Z"
+          },
+          {
+            "name": "vita3k-4091-86ff8fea-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-macos-intel.dmg",
+            "updated_at": "2026-09-07T21:34:36Z"
+          },
+          {
+            "name": "vita3k-4091-86ff8fea-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-07T21:34:36Z"
+          },
+          {
+            "name": "vita3k-4091-86ff8fea-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-07T21:34:35Z"
+          },
+          {
+            "name": "vita3k-4091-86ff8fea-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-windows-arm64.7z",
+            "updated_at": "2026-09-07T21:34:37Z"
+          },
+          {
+            "name": "vita3k-4091-86ff8fea-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/vita3k-4091-86ff8fea-windows-x86_64.7z",
+            "updated_at": "2026-09-07T21:34:33Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-07T21:34:36Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-07T21:34:34Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-07T21:34:36Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4091/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-07T21:34:37Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4090",
+        "name": "Build: 4090",
+        "body": "Corresponding commit: [motion: fix Steam Deck gyro \u2014 bundled SDL reports sensor timings in \u00b5s (#4100)](https://github.com/Vita3K/Vita3K/commit/3f2b542cfc61de2420f468eb49a241ca0cda227a) (elpendor)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-07T01:34:40Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4090",
+        "assets": [
+          {
+            "name": "vita3k-4090-3f2b542c-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-android.apk",
+            "updated_at": "2026-09-07T01:34:38Z"
+          },
+          {
+            "name": "vita3k-4090-3f2b542c-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-macos-arm64.dmg",
+            "updated_at": "2026-09-07T01:34:39Z"
+          },
+          {
+            "name": "vita3k-4090-3f2b542c-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-macos-intel.dmg",
+            "updated_at": "2026-09-07T01:34:38Z"
+          },
+          {
+            "name": "vita3k-4090-3f2b542c-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-07T01:34:40Z"
+          },
+          {
+            "name": "vita3k-4090-3f2b542c-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-07T01:34:39Z"
+          },
+          {
+            "name": "vita3k-4090-3f2b542c-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-windows-arm64.7z",
+            "updated_at": "2026-09-07T01:34:40Z"
+          },
+          {
+            "name": "vita3k-4090-3f2b542c-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/vita3k-4090-3f2b542c-windows-x86_64.7z",
+            "updated_at": "2026-09-07T01:34:36Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-07T01:34:38Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-07T01:34:35Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-07T01:34:38Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4090/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-07T01:34:35Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4089",
+        "name": "Build: 4089",
+        "body": "Corresponding commit: [kernel: Erase plain NID export only for its owner](https://github.com/Vita3K/Vita3K/commit/51fea6bd309ebfd9a651ba20c3f9f4a58c63602d) (nishinji)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-05T18:19:21Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4089",
+        "assets": [
+          {
+            "name": "vita3k-4089-51fea6bd-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-android.apk",
+            "updated_at": "2026-09-05T18:19:19Z"
+          },
+          {
+            "name": "vita3k-4089-51fea6bd-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-macos-arm64.dmg",
+            "updated_at": "2026-09-05T18:19:21Z"
+          },
+          {
+            "name": "vita3k-4089-51fea6bd-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-macos-intel.dmg",
+            "updated_at": "2026-09-05T18:19:19Z"
+          },
+          {
+            "name": "vita3k-4089-51fea6bd-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-05T18:19:19Z"
+          },
+          {
+            "name": "vita3k-4089-51fea6bd-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-05T18:19:19Z"
+          },
+          {
+            "name": "vita3k-4089-51fea6bd-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-windows-arm64.7z",
+            "updated_at": "2026-09-05T18:19:20Z"
+          },
+          {
+            "name": "vita3k-4089-51fea6bd-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/vita3k-4089-51fea6bd-windows-x86_64.7z",
+            "updated_at": "2026-09-05T18:19:17Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-05T18:19:18Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-05T18:19:16Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-05T18:19:18Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4089/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-05T18:19:16Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4085",
+        "name": "Build: 4085",
+        "body": "Corresponding commit: [vita3k/audio: Set the master volume limit to 200%](https://github.com/Vita3K/Vita3K/commit/48f7466b436b97e7fdbf6771f85c86db19d592dc) (nishinji)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-04T20:59:23Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4085",
+        "assets": [
+          {
+            "name": "vita3k-4085-48f7466b-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-android.apk",
+            "updated_at": "2026-09-04T20:59:19Z"
+          },
+          {
+            "name": "vita3k-4085-48f7466b-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-macos-arm64.dmg",
+            "updated_at": "2026-09-04T20:59:21Z"
+          },
+          {
+            "name": "vita3k-4085-48f7466b-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-macos-intel.dmg",
+            "updated_at": "2026-09-04T20:59:20Z"
+          },
+          {
+            "name": "vita3k-4085-48f7466b-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-04T20:59:21Z"
+          },
+          {
+            "name": "vita3k-4085-48f7466b-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-04T20:59:21Z"
+          },
+          {
+            "name": "vita3k-4085-48f7466b-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-windows-arm64.7z",
+            "updated_at": "2026-09-04T20:59:22Z"
+          },
+          {
+            "name": "vita3k-4085-48f7466b-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/vita3k-4085-48f7466b-windows-x86_64.7z",
+            "updated_at": "2026-09-04T20:59:18Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-04T20:59:20Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-04T20:59:17Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-04T20:59:22Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4085/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-04T20:59:17Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4084",
+        "name": "Build: 4084",
+        "body": "Corresponding commit: [modules/sceJpegEncUser: Add BGRA8888 CSC input support](https://github.com/Vita3K/Vita3K/commit/921b3dfbfe8a4455a807dfdc1ffb7d92678c09ee) (Saturnsky)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-04T19:59:01Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4084",
+        "assets": [
+          {
+            "name": "vita3k-4084-921b3dfb-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-android.apk",
+            "updated_at": "2026-09-04T19:58:57Z"
+          },
+          {
+            "name": "vita3k-4084-921b3dfb-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-macos-arm64.dmg",
+            "updated_at": "2026-09-04T19:58:59Z"
+          },
+          {
+            "name": "vita3k-4084-921b3dfb-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-macos-intel.dmg",
+            "updated_at": "2026-09-04T19:59:00Z"
+          },
+          {
+            "name": "vita3k-4084-921b3dfb-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-04T19:58:58Z"
+          },
+          {
+            "name": "vita3k-4084-921b3dfb-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-04T19:58:59Z"
+          },
+          {
+            "name": "vita3k-4084-921b3dfb-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-windows-arm64.7z",
+            "updated_at": "2026-09-04T19:59:00Z"
+          },
+          {
+            "name": "vita3k-4084-921b3dfb-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/vita3k-4084-921b3dfb-windows-x86_64.7z",
+            "updated_at": "2026-09-04T19:58:57Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-04T19:58:59Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-04T19:58:56Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-04T19:58:58Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4084/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-04T19:58:56Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "4083",
+        "name": "Build: 4083",
+        "body": "Corresponding commit: [renderer/vulkan: Fix formatting](https://github.com/Vita3K/Vita3K/commit/7cbaebb514d40c7ed642a3da9e8b647a56a862b3) (Francisco Jos\u00e9 Garc\u00eda Garc\u00eda)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-09-04T19:41:45Z",
+        "html_url": "https://github.com/Vita3K/Vita3K-builds/releases/tag/4083",
+        "assets": [
+          {
+            "name": "vita3k-4083-7cbaebb5-android.apk",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-android.apk",
+            "updated_at": "2026-09-04T19:41:39Z"
+          },
+          {
+            "name": "vita3k-4083-7cbaebb5-macos-arm64.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-macos-arm64.dmg",
+            "updated_at": "2026-09-04T19:41:42Z"
+          },
+          {
+            "name": "vita3k-4083-7cbaebb5-macos-intel.dmg",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-macos-intel.dmg",
+            "updated_at": "2026-09-04T19:41:44Z"
+          },
+          {
+            "name": "vita3k-4083-7cbaebb5-ubuntu-aarch64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-ubuntu-aarch64.7z",
+            "updated_at": "2026-09-04T19:41:40Z"
+          },
+          {
+            "name": "vita3k-4083-7cbaebb5-ubuntu-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-ubuntu-x86_64.7z",
+            "updated_at": "2026-09-04T19:41:42Z"
+          },
+          {
+            "name": "vita3k-4083-7cbaebb5-windows-arm64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-windows-arm64.7z",
+            "updated_at": "2026-09-04T19:41:44Z"
+          },
+          {
+            "name": "vita3k-4083-7cbaebb5-windows-x86_64.7z",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/vita3k-4083-7cbaebb5-windows-x86_64.7z",
+            "updated_at": "2026-09-04T19:41:39Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/Vita3K-aarch64.AppImage",
+            "updated_at": "2026-09-04T19:41:41Z"
+          },
+          {
+            "name": "Vita3K-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/Vita3K-aarch64.AppImage.zsync",
+            "updated_at": "2026-09-04T19:41:38Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/Vita3K-x86_64.AppImage",
+            "updated_at": "2026-09-04T19:41:43Z"
+          },
+          {
+            "name": "Vita3K-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/Vita3K/Vita3K-builds/releases/download/4083/Vita3K-x86_64.AppImage.zsync",
+            "updated_at": "2026-09-04T19:41:43Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/rfandango/XenDroid": [
+      {
+        "tag_name": "XenDroid-c4f6863",
+        "name": "XenDroid c4f6863",
+        "body": "## What's Changed\n* [Android] Fix 5ef8fc6 regressions, pause UI improvements, overlay controller toggle by @rfandango in https://github.com/rfandango/XenDroid/pull/79\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-b70d643...XenDroid-c4f6863",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-14T11:11:00Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-c4f6863",
+        "assets": [
+          {
+            "name": "XenDroid_Release_c4f6863.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-c4f6863/XenDroid_Release_c4f6863.apk",
+            "updated_at": "2026-08-14T11:10:59Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-0b11201",
+        "name": "XenDroid 0b11201",
+        "body": "## What's Changed\n* [Kernel] Allow guest sockets by default by @rfandango in https://github.com/rfandango/XenDroid/pull/80\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-c4f6863...XenDroid-0b11201",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-14T16:33:54Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-0b11201",
+        "assets": [
+          {
+            "name": "XenDroid_Release_0b11201.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-0b11201/XenDroid_Release_0b11201.apk",
+            "updated_at": "2026-08-14T16:33:54Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-b70d643",
+        "name": "XenDroid b70d643",
+        "body": "## What's Changed\n* [Android] Folder deep scan, xbox connection dialog, .iso delete confirmation by @rfandango in https://github.com/rfandango/XenDroid/pull/78\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-5ef8fc6...XenDroid-b70d643",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-10T21:31:19Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-b70d643",
+        "assets": [
+          {
+            "name": "XenDroid_Release_b70d643.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-b70d643/XenDroid_Release_b70d643.apk",
+            "updated_at": "2026-08-10T21:31:19Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-5ef8fc6",
+        "name": "XenDroid 5ef8fc6",
+        "body": "## What's Changed\n* [EDGE] Periodic merge [84cf209221160590768f615a0369a9c4a1456bbf] by @rfandango in https://github.com/rfandango/XenDroid/pull/75\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-3925dd8...XenDroid-5ef8fc6",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-08T22:28:11Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-5ef8fc6",
+        "assets": [
+          {
+            "name": "XenDroid_Release_5ef8fc6.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-5ef8fc6/XenDroid_Release_5ef8fc6.apk",
+            "updated_at": "2026-08-08T22:28:10Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-3925dd8",
+        "name": "XenDroid 3925dd8",
+        "body": "## What's Changed\n* [APU] Fix stuttering under load and static on games with XMP by @rfandango in https://github.com/rfandango/XenDroid/pull/74\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-c4d9c61...XenDroid-3925dd8",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-06T22:14:35Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-3925dd8",
+        "assets": [
+          {
+            "name": "XenDroid_Release_3925dd8.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-3925dd8/XenDroid_Release_3925dd8.apk",
+            "updated_at": "2026-08-06T22:14:35Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-c4d9c61",
+        "name": "XenDroid c4d9c61",
+        "body": "## What's Changed\n* [Android] Pin the main process out of the cached band while a game runs by @rfandango in https://github.com/rfandango/XenDroid/pull/73\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-b657174...XenDroid-c4d9c61",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-04T21:12:38Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-c4d9c61",
+        "assets": [
+          {
+            "name": "XenDroid_Release_c4d9c61.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-c4d9c61/XenDroid_Release_c4d9c61.apk",
+            "updated_at": "2026-08-04T21:12:37Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-b657174",
+        "name": "XenDroid b657174",
+        "body": "## What's Changed\n* Update driver sources by @Fabxx in https://github.com/rfandango/XenDroid/pull/69\n* [GPU] In-pass resolve and round-trip squashing by @rfandango in https://github.com/rfandango/XenDroid/pull/68\n* [Android] Stop updater on external emu execution and avoid auto sleep while the emu process lives by @rfandango in https://github.com/rfandango/XenDroid/pull/70\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-84edc9b...XenDroid-b657174",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-03T20:38:01Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-b657174",
+        "assets": [
+          {
+            "name": "XenDroid_Release_b657174.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-b657174/XenDroid_Release_b657174.apk",
+            "updated_at": "2026-08-03T20:38:00Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "XenDroid-84edc9b",
+        "name": "XenDroid 84edc9b",
+        "body": "## What's Changed\n* [Android] Disk swap support and disc labeling on game library by @rfandango in https://github.com/rfandango/XenDroid/pull/65\n\n\n**Full Changelog**: https://github.com/rfandango/XenDroid/compare/XenDroid-02b0148...XenDroid-84edc9b",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-07-30T14:44:43Z",
+        "html_url": "https://github.com/rfandango/XenDroid/releases/tag/XenDroid-84edc9b",
+        "assets": [
+          {
+            "name": "XenDroid_Release_84edc9b.apk",
+            "browser_download_url": "https://github.com/rfandango/XenDroid/releases/download/XenDroid-84edc9b/XenDroid_Release_84edc9b.apk",
+            "updated_at": "2026-07-30T14:44:42Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/StevenMXZ/Winlator-Ludashi": [
+      {
+        "tag_name": "v4.0",
+        "name": "Ludashi 4.0: Early Access ",
+        "body": "What's new:\r\n\r\n\r\n\ud83d\udcf2 UI\r\n\\- Completely rewrote the UI using Jetpack Compose.\r\n\r\n\ud83d\udda5\ufe0f Renderer Backend\r\n\r\n\\- Added a new EGLRenderer.\r\n\\- Improved the overall performance of the VulkanRenderer and added ReShade support.\r\n\r\n\\- Added DisplayX, a new implementation based on SurfaceFlinger for native composition.\r\n\\- Provides support for the Android Hardware Composer (HWC).\r\n\\- Supports the Android Performance Hint API.\r\n\\- Supports an X Server bypass, allowing DisplayX to bypass the traditional X Server composition path.\r\n\\- DisplayX is currently experimental.\r\n\r\n---\r\n\r\n\ud83d\udda5\ufe0f X Server\r\n\r\n\\- Fixed a long-standing issue with X resource management.\r\n\r\n\\- Reworked the DRI3 and Pixmap extensions to provide proper direct rendering support.\r\n\r\n\\- Reworked the Drawable backend to allow hardware-accelerated Xlib buffers.\r\n\r\n\\- Added the GLX extension for Zink DRI3, allowing proper GPU-accelerated OpenGL rendering.\r\n\r\n\\- Added the XComposite extension for proper offscreen rendering support.\r\n\r\n\\- Improved Zink performance for OpenGL games, benefiting non-Adreno GPUs.\r\n\r\n\\- Added support for Freedreno, the Powerful OpenGL driver for Adreno GPUs.\r\n\r\n\\- Freedreno can massively improve performance in OpenGL games.\r\n\r\n\ud83d\udce6 Proton & Assets\r\n\r\n\\- Updated all Proton assets.\r\n\r\n\\- Added support for:\r\n \\- RandR\r\n \\- XInput2\r\n \\- XComposite\r\n\r\n\\- Added new Proton 9, Proton 10, and Proton 11 versions, Proton 10 and 11 are compatible with Fex Unixlibs\r\n\r\n\\- Playing OpenGL games using Proton 11 is currently not recommended.\r\n\r\n\ud83c\udfae On-Screen Controllers\r\n\r\n\\- Added support for custom icons and fixed bugs.\r\n\r\n\ud83d\uddb1\ufe0f Input\r\n\r\n\\- Fixed issues with relative mouse input.\r\n\r\n\ud83d\udd0a Audio\r\n\r\n\\- Added GameNative PulseAudio.\r\n\r\n\ud83d\udcc8 Modern HUD\r\n\r\n\\- Added GPU name detection and display.\r\n\r\n\\- Added several additional improvements and adjustments to the Modern HUD.\r\n\r\n\ud83d\udcdd Notes\r\n\r\nAs always, delete your old Ludashi build or change the package name. This version does not install as an update.\r\n\r\nBug fixes and improvements are planned for future updates.\r\n\r\nRegarding Frame Generation and Steam support: no, they are not planned. However, I will release all the source code so other projects can use my features if they want.\r\n\r\nCredits\r\n\r\n\\- [@Pipetto-crypto](https://github.com/Pipetto-crypto)\r\n\\- [@Sidney](https://github.com/Innersargento)\r\n\\- [@Banner](https://github.com/The412Banner)\r\n\\- [@Nick](https://github.com/Xnick417x)\r\n\\- [@joshuatam](https://github.com/joshuatam)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-29T12:54:01Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/v4.0",
+        "assets": [
+          {
+            "name": "ludashi-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v4.0/ludashi-build.apk",
+            "updated_at": "2026-08-29T12:53:25Z"
+          },
+          {
+            "name": "Redmagic_build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v4.0/Redmagic_build.apk",
+            "updated_at": "2026-08-29T12:51:58Z"
+          },
+          {
+            "name": "vanilla-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v4.0/vanilla-build.apk",
+            "updated_at": "2026-08-29T12:50:32Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v3.1.h",
+        "name": "Ludashi 3.1 (Hotfix)",
+        "body": "hotfix: \r\n\\- fixed shortcuts created by wfm not working, wfm icons and background \r\n\\- fixed hud not showing in some games\r\n\\- fixed C: drive showing incorrectly xuser in file manager \r\n\\- removed white mode toggle\r\n\\- Added feature to hide the mouse cursor if the simulate touchscreen mode is enabled\r\n\r\n3.1 changes:\r\n\ud83d\udda5\ufe0f \\- a lot of changes for VulkanRenderer, improved compatibility and performance, also fixed wrong colors on mali devices, thanks to @Pipetto-crypto\r\n\u2692\ufe0f \\- Major improvement on the UI of the app\r\n\\- improved the speed of Imagefs installation by 2x\r\n\ud83c\udfae \\-  added new touch controllers and support for change colors,also fixed an bug from it random disappearing\r\n\\- implemented a service for avoid winlator crashing\r\n\\- fixed an old bug from Cmod, of which fexcore version from shortcut was getting ignored\r\n\\- update all assets, new default turnip which also supports adreno A8xx\r\n\\- updated box64 variables \r\n\\- fixed an issue where some games could crash due to reaching wrong optcode on XServer \r\n \r\n\r\n\ud83d\udccc This update requires reinstallation",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-06-22T12:16:20Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/v3.1.h",
+        "assets": [
+          {
+            "name": "bionic-vanilla.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v3.1.h/bionic-vanilla.apk",
+            "updated_at": "2026-06-22T12:13:45Z"
+          },
+          {
+            "name": "ludashi-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v3.1.h/ludashi-bionic.apk",
+            "updated_at": "2026-06-22T12:12:18Z"
+          },
+          {
+            "name": "Redmagic-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v3.1.h/Redmagic-build.apk",
+            "updated_at": "2026-06-22T12:15:39Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "3.0",
+        "name": "Ludashi 3.0",
+        "body": "What's new:\r\n\r\nFrom Pypetto-Crypto\r\n\r\n \ud83d\udda5\ufe0f XServerDisplayActivity: slight rework of the external pointer capture logic\r\n \ud83d\udce6 Assets: imported d8vk from Winlator 11\r\n\r\nFrom StevenMX\r\n\r\n\\- Vulkan Renderer: complete rewrite of the Winlator X Server rendering backend.\r\nThe compositor was rebuilt from scratch using Vulkan, replacing the previous OpenGL pipeline.\r\n\r\n \ud83d\udda5\ufe0f Vulkan Renderer\r\n\r\n\\- GLRenderer/EffectComposer were replaced with VulkanRenderer and VulkanRendererContext\r\n\r\n\\- Rewrote GPUImage: removed GL texture uploads; now the AHB is imported as a VkImage via VK_ANDROID_external_memory_android_hardware_buffer, without CPU copies.\r\n\r\n\\- Added Android PresentModes: FIFO and Mailbox\r\n\r\nFifo is more stable \r\nMailbox has lower latency, but higher power usage\r\nIf you have issues, try using the RENDERER_SWAPCHAIN variable with values above 1\r\n\r\n\\- Added Bilinear and Nearest Neighbor filtering\r\n\r\n\\- New Refresh Rate options:\r\n\r\n60Hz: default unless forced higher\r\nDeviceRefreshRate: forces the highest refresh rate supported by the device, which may improve performance.\r\n\r\n \ud83d\udda5\ufe0f XServer:\r\n\r\n\\- Minor rework on how frames are handled in PresentExtension\r\n\r\n\\- Improved the FPS limiter from GraphicEngine \r\n\r\n\\- Added support for XInput2Extension: newer versions of Wine/Proton compiled with XI2 now have proper mouse support, Thanks to Gamenative\r\n\r\n \ud83c\udfae Controller:\r\n\r\n\\- Merged latest changes from the https://github.com/Vivsi1/winlator/commits/pb_controller_fix/\r\n\r\n\\- Added support for Rumble/Vibration and fixed bugs \r\n\r\n \ud83d\udce6ContentManager:\r\n\r\n\\- Removed the Contents tab\r\n\r\n\\- Now each component can be downloaded/imported directly from Container/Shortcut\r\n\r\n\ud83d\udcc8 WinlatorHUD:\r\n\r\n\\- Fixed issue with saving user preferences\r\n\r\n\\- Now works on OpenGL games\r\n\r\n\\- Improved visual appearance \r\n\r\n\\- Added vertical mode\r\n\r\n\\- Added support for detecting battery charger \r\n\r\n\\- Added new fallbacks for GPU/Battery paths not found on some OEMs (may still fail in some cases)\r\n\r\n \ud83d\udcbeShortcuts:\r\n\r\n\\- Improved the image scraper\r\n\r\n\\- Added fallback to extract images directly from the game EXE file \r\n\r\n\ud83d\udea7 A future update will include the new native rendering\r\nall code is there \r\n\ud83d\udccc This update requires reinstallation",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-04-30T10:46:39Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/3.0",
+        "assets": [
+          {
+            "name": "bionic-vanilla.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/3.0/bionic-vanilla.apk",
+            "updated_at": "2026-04-30T10:16:06Z"
+          },
+          {
+            "name": "ludashi-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/3.0/ludashi-bionic.apk",
+            "updated_at": "2026-04-30T10:14:26Z"
+          },
+          {
+            "name": "Redmagic-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/3.0/Redmagic-build.apk",
+            "updated_at": "2026-04-30T10:17:55Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v2.9",
+        "name": "ludashi 2.9 (Beta)",
+        "body": "What's new:\r\n\r\n From Pypetto-Crypto \r\n\r\n\u2699\ufe0f forcefully disable compute BCn on Adreno devices\r\n\ud83d\udce6 assets: add dxvk sarek for Mali GPUs\r\n\ud83d\udcbb MainActivity: create Winlator folder before proper app initialization\r\n\ud83d\udda5\ufe0f XServerDisplayActivity: remove Zink DLLs for arm64ec, avoid faking device and vendor id when dxvk-sarek is selected, force activity to always pick the highest available refresh rate\r\n\ud83d\udceb ContentsManager: add Proton content profile\r\n \r\nFrom StevenMX\r\n\r\n\ud83d\udee0\ufe0f New winlator fps hud, with GPU/CPU/Wats/Temp\r\n\u2692\ufe0f New universal FPS Limiter for any game \r\n\r\n\ud83d\udda5\ufe0f  sidebar appearance has been changed, adding Super Resolution, DLS, HDR, Natural, and CRT filters (working in-game)\r\n\r\n\ud83e\udea7 changed the Visual of the Game Shortcuts (Some images may not be loaded correctly, but you can change the icon)\r\n\r\n\ud83d\udda5\ufe0f New Direct Rendering Mode, for better latency and consequently better performance\r\nhow it works:\r\nDirect Rendering mode in winlator, modify the dri3 path to do a direct scanout with AHardwarebuffer ogl images to the screen,skipping the windows rendering,this can reduce the CPU usage and improve latency, this option is only available in shortcuts, filters/magnifier/fps limiter will not work with it, and will only work in games in Fullscreen mode, it's still experimental. \r\n\r\n\ud83c\udff7\ufe0f changed the redmagic build package for PUBG, since it seems to be a better option (for more phones) than the previous one (genshin impact)\r\n\r\n\ud83d\udccc this update needs reinstallation of course ",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-01T19:23:05Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/v2.9",
+        "assets": [
+          {
+            "name": "ludashi-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v2.9/ludashi-bionic.apk",
+            "updated_at": "2026-03-01T19:19:27Z"
+          },
+          {
+            "name": "Redmagic_build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v2.9/Redmagic_build.apk",
+            "updated_at": "2026-03-01T19:22:23Z"
+          },
+          {
+            "name": "vanilla-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v2.9/vanilla-bionic.apk",
+            "updated_at": "2026-03-01T19:21:07Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2.8.2",
+        "name": "Ludashi 2.8.2",
+        "body": "What's new:\r\n\r\n\ud83d\udee0\ufe0f devices that weren't working should now work. thanks to @kostasgangstar \r\n\r\n\ud83d\udce6 Fixed a regression in box64 in 32bits games\r\n\r\n\ud83d\udcbe Assets: update wrapper, turnip, and box64/fexcore to the latest versions \r\n\r\n\ud83c\udfae Controller: fixed Wine 9.20, and some others issues, if input don't work, try disabling \"Exclusive\"\r\n\r\n\ud83d\udcbb Added support for compute shaders BCn decompression as an option, improving performance for Mali Devices\r\n\r\n\ud83d\udda5\ufe0f GraphicsDriverConfigDialog: add option to change/spoof GPU name, device and vendor id\r\n\r\n\u2699\ufe0f Container: add internal storage as a container drive\r\n  \r\n\ud83d\udccc reinstall from scratch before update",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-01-25T22:55:31Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/2.8.2",
+        "assets": [
+          {
+            "name": "bionic-ludashi.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.8.2/bionic-ludashi.apk",
+            "updated_at": "2026-01-25T22:51:41Z"
+          },
+          {
+            "name": "bionic-vanilla.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.8.2/bionic-vanilla.apk",
+            "updated_at": "2026-01-25T22:53:26Z"
+          },
+          {
+            "name": "Redmagic-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.8.2/Redmagic-build.apk",
+            "updated_at": "2026-01-25T22:55:11Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2.8",
+        "name": " Ludashi 2.8",
+        "body": "What's new:\r\nsome Quality of Life (QoL) improvements \r\n\r\n\ud83c\udfae New Controller Implementation \r\nThe new implementation of controller brings varying compatibility with Xinput/Dinput with most games (like the one in cmod v13, but Reworked), it also brings Multiplayer support since you can connect more than one controller, allows custom package names,and without overhead. thanks to @Vivsi1 and @Pipetto-crypto\r\n\r\n\ud83d\uddc2\ufe0f Added a File Manager\r\nthe new file manager allows you to create a shorcut for the game without need to enter the container, Please note that some games may still require you to install content such as vcredist, check [dependencies](https://github.com/K11MCH1/Winlator101/releases/tag/deps) \r\n\r\n\u2699\ufe0f Added a Driver Download Manager \r\nLike some other emulators, you can now download drivers directly from the app, and you can also edit the default repositories to your preference. \r\n\r\n\ud83d\uddbc\ufe0f added support for custom Icons\r\nJust click on the game icon and then you can change.\r\n\r\nPS: this update needs full reinstall, otherwise nothing will work\r\n\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-01-07T20:50:44Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/2.8",
+        "assets": [
+          {
+            "name": "bionic-vanilla.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.8/bionic-vanilla.apk",
+            "updated_at": "2026-01-08T00:41:56Z"
+          },
+          {
+            "name": "ludashi-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.8/ludashi-bionic.apk",
+            "updated_at": "2026-01-08T00:44:29Z"
+          },
+          {
+            "name": "Redmagic-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.8/Redmagic-build.apk",
+            "updated_at": "2026-01-08T00:47:30Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2.7.4",
+        "name": "ludashi 2.7.4",
+        "body": "what's new:\r\n\ud83d\udcbe add a few more entries to device memory, 8192 MB,12288 MB,16384 MB\r\n\r\n\u2699\ufe0fEnvVarsView: add one new TU_DEBUG option (deck_emu), see [Turnip_Deck](https://github.com/StevenMXZ/freedreno_turnip-CI/releases/tag/26.0.0)\r\n\r\n\ud83d\udee0\ufe0f added IR3_SHADER_DEBUG and FD_DEV_FEATURES in environment variables, for greater convenience for those who need it.\r\n\r\n\ud83d\udda5\ufe0f added support for [Config_Files](https://gist.github.com/bylaws/04130932e2634d1c6a2a9729e3940d60), (qgl_config.txt) for Qualcomm drivers, without Root, the default path for it is [storage/emulated/0/Winlator], you can use rendermode=0, for force sysmem on Qualcomm driver (like V819), improving performance by +10% on some games. \r\n\r\nRendermode values:\r\n0 - sysmem without binning\r\n1 - gmem with binning\r\n2 - gmem without binning\r\n3 - sysmem with binning",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-12-26T02:39:37Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/2.7.4",
+        "assets": [
+          {
+            "name": "bionic-vanilla.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.4/bionic-vanilla.apk",
+            "updated_at": "2025-12-26T02:57:28Z"
+          },
+          {
+            "name": "ludashi-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.4/ludashi-bionic.apk",
+            "updated_at": "2025-12-26T02:55:34Z"
+          },
+          {
+            "name": "qgl_config.txt",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.4/qgl_config.txt",
+            "updated_at": "2025-12-26T02:39:29Z"
+          },
+          {
+            "name": "Redmagic-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.4/Redmagic-build.apk",
+            "updated_at": "2025-12-26T02:59:23Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2.7.3",
+        "name": "Ludashi 2.7.3",
+        "body": "fixed some bugs basically \r\n\r\nwhat's new:\r\n \ud83d\udda5\ufe0f XServerDisplayActivity: remove seemingly unused function \r\n\ud83d\udee0\ufe0f Merge pull request from Arihany/winlator_bionic\r\n Fix prefix style package name collisions\r\n Fix DXVK semver compare with string equality bug fix\r\n Fix crash with prefixed vernames\r\n\ud83d\udcbe XServerDisplayActivity: set \r\n WRAPPER_MAX_IMAGE_COUNT to 1 when immediate present mode is chosen\r\n\r\n\u2699\ufe0fEnvVarsView: add two new TU_DEBUG options (forcecb) and (nocb), force concurrent Binning on Turnip, and force disable, some games are faster with CB, but some can be worse \r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-12-21T23:41:26Z",
+        "html_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/tag/2.7.3",
+        "assets": [
+          {
+            "name": "bionic-vanilla.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.3/bionic-vanilla.apk",
+            "updated_at": "2025-12-21T23:16:00Z"
+          },
+          {
+            "name": "ludashi-bionic.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.3/ludashi-bionic.apk",
+            "updated_at": "2025-12-21T23:14:41Z"
+          },
+          {
+            "name": "Redmagic-build.apk",
+            "browser_download_url": "https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/2.7.3/Redmagic-build.apk",
+            "updated_at": "2025-12-21T23:17:15Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/Waterdish/Shipwright-Android": [
+      {
+        "tag_name": "v9.0.2P2",
+        "name": "9.0.2 Patch 2",
+        "body": "Fix for touch controls, physical controller, and Android back button not working. (J-Rios)\r\nApp will now stay awake while setting files up.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-07-11T06:03:00Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/v9.0.2P2",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/v9.0.2P2/soh.apk",
+            "updated_at": "2025-07-11T05:54:09Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v9.0.2P1",
+        "name": "9.0.2 Patch 1",
+        "body": "Updated assets used for extracting rom. Fixes some crashes.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-06-20T04:58:19Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/v9.0.2P1",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/v9.0.2P1/soh.apk",
+            "updated_at": "2025-06-20T04:58:42Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v9.0.2",
+        "name": "9.0.2",
+        "body": "Merged upstream SOH 9.0.2\r\nUpdated naming scheme to reflect upstream SOH version\r\n\r\nMoved files to root of storage\r\nFixed touch screen controls getting cut off (J-Rios)\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-06-14T08:09:57Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/v9.0.2",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/v9.0.2/soh.apk",
+            "updated_at": "2025-06-14T17:41:30Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "1.3.0",
+        "name": "1.3.0 Touch Controls",
+        "body": "Initial implementation of touch controls.\r\n\r\n- Toggle button in bottom right corner.\r\n- Entire right side of screen moves the camera if \"Free Look\" is enabled.\r\n- D-Pad is for the c buttons \r\n- X and Y buttons can be bound to whatever you wish.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-12-07T05:17:51Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/1.3.0",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/1.3.0/soh.apk",
+            "updated_at": "2024-12-07T05:14:14Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "1.2.2",
+        "name": "1.2.2",
+        "body": "Update to MacReady Golf 8.0.6",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-08-25T20:22:32Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/1.2.2",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/1.2.2/soh.apk",
+            "updated_at": "2024-08-25T20:22:30Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "1.2.1",
+        "name": "1.2.1",
+        "body": "Fixes pushblocks resetting to their original position.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-03-16T18:40:59Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/1.2.1",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/1.2.1/soh.apk",
+            "updated_at": "2024-03-16T18:40:54Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "1.2.0",
+        "name": "1.2.0",
+        "body": "Update to 8.0.5 MacReady Foxtrot.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-03-16T07:50:21Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/1.2.0",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/1.2.0/soh.apk",
+            "updated_at": "2024-03-16T07:52:46Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "1.1.5",
+        "name": "1.1.5",
+        "body": "Allow resizing and horizontal scrolling of the \"Controller Mapping\" window.\r\nLock the game into Landscape mode.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-02-18T00:26:51Z",
+        "html_url": "https://github.com/Waterdish/Shipwright-Android/releases/tag/1.1.5",
+        "assets": [
+          {
+            "name": "soh.apk",
+            "browser_download_url": "https://github.com/Waterdish/Shipwright-Android/releases/download/1.1.5/soh.apk",
+            "updated_at": "2024-02-18T00:26:36Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/AurelioB/BanjoRecomp-Android": [
+      {
+        "tag_name": "android-v0.1.2",
+        "name": "BanjoRecomp Android android-v0.1.2",
+        "body": "## BanjoRecomp Android android-v0.1.2\n\nChanges since android-v0.1.1:\n\n- fix(android): adapt to merged runtime API (2966e05)\n- chore(deps): update shared Android forks (5fbc472)\n- docs(android): document drivers and save storage (0609094)\n- feat(android): add custom drivers and save management (3712d9c)\n- docs: plan Android custom graphics driver support (f288df8)\n- Add double tap feature for secondary display toggle (16f5285)\n- ci(android): fix release helper repository (c75677a)\n\nThe APK and SHA256 checksum are attached by the Android APK workflow run.\n",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-07-13T21:55:42Z",
+        "html_url": "https://github.com/AurelioB/BanjoRecomp-Android/releases/tag/android-v0.1.2",
+        "assets": [
+          {
+            "name": "BanjoRecompiled-v0.1.2-Android-ARM64.apk",
+            "browser_download_url": "https://github.com/AurelioB/BanjoRecomp-Android/releases/download/android-v0.1.2/BanjoRecompiled-v0.1.2-Android-ARM64.apk",
+            "updated_at": "2026-07-13T22:05:33Z"
+          },
+          {
+            "name": "BanjoRecompiled-v0.1.2-Android-ARM64.apk.sha256",
+            "browser_download_url": "https://github.com/AurelioB/BanjoRecomp-Android/releases/download/android-v0.1.2/BanjoRecompiled-v0.1.2-Android-ARM64.apk.sha256",
+            "updated_at": "2026-07-13T22:05:33Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "android-v0.1.1",
+        "name": "BanjoRecomp Android - Dual Screen edition!",
+        "body": "## BanjoRecomp Android android-v0.1.1\r\n\r\n\r\n\r\nFull changelog:\r\n\r\n- chore(android): harden runtime APK path (e850b1a)\r\n- docs(android): map BMHero companion framework fit (e1832a8)\r\n- docs(android): document Android companion display findings (3936649)\r\n- feat(android): add Banjo companion display state bridge (3511edb)\r\n- chore(android): require signing for release apks (41574be)\r\n- chore(android): regenerate launcher icons from source assets (5b60e7d)\r\n- chore(android): update package identity and release metadata (3e9f0c0)\r\n- docs(android): define experimental companion display api (ea02eca)\r\n- refactor(android): keep companion state hooks in patch layer (95642aa)\r\n- docs(android): classify dual-screen framework ownership (a0aedcb)\r\n- docs(android): record publish polish audit baseline (9d8b750)\r\n- Use model ground texture for dual-screen background (4f59ba8)\r\n- Use green weed sprite for dual-screen grass background (feecd45)\r\n- Use ROM grass texture for dual-screen background (667a875)\r\n- Lay out dual-screen stats in rows (443c44d)\r\n- Tighten dual-screen font letter spacing (8ba59ad)\r\n- Tighten ROM font level-name spacing (3935383)\r\n- Refine ROM font color and spacing (7337d0a)\r\n- Show level names with yellow ROM font (ff11896)\r\n- Use ROM font digits for dual-screen stats (60ae6c6)\r\n- Match dual-screen stats to start menu style (fb498c3)\r\n- Theme Android dual-screen stats with ROM sprites (06be42d)\r\n- Add Android dual-screen stats presentation (733bb56)\r\n- ci: build Android release assets from dispatch (fa3502b)\r\n\r\nThe APK and SHA256 checksum are attached by the Android APK workflow run.\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-06-14T04:18:31Z",
+        "html_url": "https://github.com/AurelioB/BanjoRecomp-Android/releases/tag/android-v0.1.1",
+        "assets": [
+          {
+            "name": "BanjoRecompiled-v0.1.1-Android-ARM64.apk",
+            "browser_download_url": "https://github.com/AurelioB/BanjoRecomp-Android/releases/download/android-v0.1.1/BanjoRecompiled-v0.1.1-Android-ARM64.apk",
+            "updated_at": "2026-06-14T04:27:49Z"
+          },
+          {
+            "name": "BanjoRecompiled-v0.1.1-Android-ARM64.apk.sha256",
+            "browser_download_url": "https://github.com/AurelioB/BanjoRecomp-Android/releases/download/android-v0.1.1/BanjoRecompiled-v0.1.1-Android-ARM64.apk.sha256",
+            "updated_at": "2026-06-14T04:29:24Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/SSimco/Cemu": [
+      {
+        "tag_name": "0.5",
+        "name": "Cemu 0.5",
+        "body": "Experimental release 0.5\r\n\r\n- Implemented options to enable emulated USB devices & configure them",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-04-25T21:55:25Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/0.5",
+        "assets": [
+          {
+            "name": "Cemu-0.5.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/0.5/Cemu-0.5.apk",
+            "updated_at": "2026-04-26T22:00:08Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.4",
+        "name": "Cemu 0.4",
+        "body": "Experimental release 0.4\r\n\r\n- Implemented controller & device rumble and controller motion\r\n- Fixed emulation surface not drawing over display cutout\r\n- Implemented hotkeys",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-04-19T16:30:24Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/0.4",
+        "assets": [
+          {
+            "name": "Cemu-0.4.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/0.4/Cemu-0.4.apk",
+            "updated_at": "2026-04-19T21:12:49Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.03",
+        "name": "Cemu 0.3",
+        "body": "Experimental release 0.3",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-12-14T18:53:46Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/0.03",
+        "assets": [
+          {
+            "name": "Cemu-0.3.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/0.03/Cemu-0.3.apk",
+            "updated_at": "2025-12-17T05:00:40Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.2",
+        "name": "Cemu 0.2",
+        "body": "Experimental release 0.2",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-06-25T14:48:36Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/0.2",
+        "assets": [
+          {
+            "name": "Cemu-0.2.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/0.2/Cemu-0.2.apk",
+            "updated_at": "2025-06-25T14:48:36Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.1",
+        "name": "Cemu 0.1",
+        "body": "Experimental release 0.1",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-03-10T19:51:06Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/0.1",
+        "assets": [
+          {
+            "name": "Cemu-0.1.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/0.1/Cemu-0.1.apk",
+            "updated_at": "2025-03-10T19:51:06Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "356b1ff",
+        "name": "Cemu 356b1ff",
+        "body": "Experimental release\nLatest commit 356b1ff",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-10-17T16:37:05Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/356b1ff",
+        "assets": [
+          {
+            "name": "Cemu-356b1ff.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/356b1ff/Cemu-356b1ff.apk",
+            "updated_at": "2024-10-17T16:37:05Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "a08958f",
+        "name": "Cemu a08958f",
+        "body": "Experimental release\nLatest commit a08958f",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-09-26T18:29:15Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/a08958f",
+        "assets": [
+          {
+            "name": "Cemu-a08958f.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/a08958f/Cemu-a08958f.apk",
+            "updated_at": "2024-09-26T18:29:15Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "93b2c73",
+        "name": "Cemu 93b2c73",
+        "body": "Experimental release\nLatest commit 93b2c73",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-09-26T23:18:47Z",
+        "html_url": "https://github.com/SSimco/Cemu/releases/tag/93b2c73",
+        "assets": [
+          {
+            "name": "Cemu-93b2c73.apk",
+            "browser_download_url": "https://github.com/SSimco/Cemu/releases/download/93b2c73/Cemu-93b2c73.apk",
+            "updated_at": "2024-09-26T23:18:46Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/RPCSX/rpcsx-ui-android": [
+      {
+        "tag_name": "v20250425",
+        "name": "v20250425",
+        "body": "**Full Changelog**: https://github.com/RPCSX/rpcsx-ui-android/compare/v20250417...v20250425",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-04-25T16:02:13Z",
+        "html_url": "https://github.com/RPCSX/rpcsx-ui-android/releases/tag/v20250425",
+        "assets": [
+          {
+            "name": "rpcsx-release.apk",
+            "browser_download_url": "https://github.com/RPCSX/rpcsx-ui-android/releases/download/v20250425/rpcsx-release.apk",
+            "updated_at": "2025-04-25T16:02:14Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v20250417",
+        "name": "v20250417",
+        "body": "**Full Changelog**: https://github.com/RPCSX/rpcsx-ui-android/compare/v20250409...v20250417",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-04-17T03:45:41Z",
+        "html_url": "https://github.com/RPCSX/rpcsx-ui-android/releases/tag/v20250417",
+        "assets": [
+          {
+            "name": "rpcsx-release.apk",
+            "browser_download_url": "https://github.com/RPCSX/rpcsx-ui-android/releases/download/v20250417/rpcsx-release.apk",
+            "updated_at": "2025-04-17T03:45:43Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v20250409",
+        "name": "v20250409",
+        "body": "**Full Changelog**: https://github.com/RPCSX/rpcsx-ui-android/compare/749b8a736f807bc6acfff2bb503cab6caeee664f...v20250409",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-04-09T03:48:58Z",
+        "html_url": "https://github.com/RPCSX/rpcsx-ui-android/releases/tag/v20250409",
+        "assets": [
+          {
+            "name": "rpcsx-release.apk",
+            "browser_download_url": "https://github.com/RPCSX/rpcsx-ui-android/releases/download/v20250409/rpcsx-release.apk",
+            "updated_at": "2025-04-09T03:49:00Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/Ekyso/Cinderbox": [
+      {
+        "tag_name": "0.8.1",
+        "name": "0.8.1",
+        "body": "## Cinderbox v0.8.1\r\n- Made cinderbox pack mandatory installation (removed skip button). Forced setup on update to this version\r\n- Now checks for APK updates on launch instead of on updates tab switch\r\n- Added fixes for back button/gestures on certain devices\r\n- Changed hold to split patch so it only begins a split if a touch began in the same slot as the item that was touched\r\n- Changed when external theme are loaded so they can be applied properly",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-16T06:16:56Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/0.8.1",
+        "assets": [
+          {
+            "name": "Cinderbox-v0.8.1.apk",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/0.8.1/Cinderbox-v0.8.1.apk",
+            "updated_at": "2026-08-16T06:17:08Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.8.0",
+        "name": "",
+        "body": "### Cinderbox v0.8.0\r\n- Compiled using .NET10.\r\n- Themes reworked so they can be edited/modified from external storage (currently in cinderbox-internal/themes).\r\n- Changed the settings sheet to a Setting page.\r\n- Fixed Back button closing the app.\r\n- Made changes to mono runtime so Immersive Scarecrows doesn't crash my game \ud83d\ude20\r\n- Adds support for CinderTap.\r\n- Horses are skinny now like Play Store SDV.\r\n- Unified input system.\r\n- Fixed Mono runtime issues and removed old workarounds  for SpaceCore.\r\n- Enabled hold to split+attach/deattach onto rods/slingshots etc.\r\n- Shop patches (can be disabled in game options).\r\n- Fixed Harmony issue reported by mushymato.\r\n- Tooltips are now positioned above the touch location so finger doesn't cover it.\r\n- New options in game settings:\r\n   - Shipping menu overhaul patches.\r\n   - DayTimeMoneyBox options: now includes mobile and 3 hybrids.\r\n   - Resolution now correctly updates when window resizes+checks on launch.\r\n   - CarpenterMenu (Robin's building menu) patches so it's touch-friendly, and fixes.\r\n- Fixed audio bug with weird echoes.\r\n- Fixed Cinderbox Discord link.\r\n- Fixed menu buttons not working if joypad buttons were in the same area as where they were placed, even if they were hidden.\r\n- Fixed bug where input fields would keep stale data (fixes GMCM textboxes).\r\n- Harmony fixes:\r\n   - Switched Mono from Cecil DMDs to DynamicMethod DMDs.\r\n   - Fixed DynamicMethod DMDs to use the original method's declaring type as the owner.\r\n- Fixed Furniture Framework Mod (thanks Taro!)\r\n- Added initial support for Android 8 through Android 12!! Tested on a simulator. Need people to test on a device.\r\n- Decoupled mods: LetMeRemap, SoManyMods, Cinderbox Essentials.\r\n- Added a new screen for installing these essential mods if a user wants them (and a new card in home tab).\r\n- Added Steam login support for downloading SDV ported from StS2Launcher. There's a known bug for sign-ins that need to be approved through the steam app. Works fine with the regular 2FA.\r\n- Mod updates are now fetched from SMAPI logs instead of SMAPI site, which eliminates the 4hr cooldown window, but now checks after launching the game.\r\n- Changed loading messages to async/await pattern and updated loading screen callbacks to use the new async/await methods.\r\n- Fixed ConsoleCommands for Mobile.\r\n- Changed mod installation to overwrite files even when manifest versions match.\r\n- Added platform-specific settings to the Cinderbox settings screen.\r\n- Moved optimized animal and delayed-action processing options to Cinderbox from SMAPI.\r\n- Moved third-party compatibility handling from SMAPI into Cinderbox: Alternative Textures, Fashion Sense, Lookup Anything, Portraiture, Custom Farm Loader, Daily Screenshot, QuickSave, Unofficial Mod Update Menu.\r\n- Removed obsolete Mobile Phone and SpaceCore compatibility patches.\r\n- Fixed mods not visually disabling/enabling.\r\n- Hardened migration for beta users.\r\n- Fixed filter for files downloaded using Steam login.\r\n- Fixed mod count in home/mods tabs.\r\n- Minor MonoGame changes (increased audio allocation count and physical keyboard fixes for backspace/enter).\r\n- Moved Adjust Virtual Joypad button below the control dropdown in options.\r\n- Added sensitivity for joysticks.\r\n- Added support for arcade games.\r\n- Adjust controls in the adjust virtual joypad menu for Prairie King, others use touch.\r\n- Lots and lots of refactoring.\r\n\r\n### Known Issues\r\n- .NET runtime thing with Walk of Life.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-15T17:09:36Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/0.8.0",
+        "assets": [
+          {
+            "name": "Cinderbox-v0.8.0.apk",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/0.8.0/Cinderbox-v0.8.0.apk",
+            "updated_at": "2026-08-15T17:09:34Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.3.4",
+        "name": "0.3.4",
+        "body": "## Cinderbox v0.3.4\r\n- Fixed bottom navigation bar getting extra padding in portrait mode\r\n- Fixed content area getting unnecessary horizontal padding in portrait mode\r\n- Fixed virtual joypad permanently disappearing on devices where touchscreen events are misclassified as mouse input\r\n- Fixed virtual joypad disappearing when using the fingerprint scanner\r\n- Fixed phantom gamepad detection at unused controller slots preventing disconnect cleanup\r\n- Fixed virtual joypad buttons not repositioning after resolution change\r\n- Added fixes for Horse Overhaul mod\r\n- Added Mono fixes for mods who load assets early in their constructors\r\n- Added fixes for splitscreen multiplayer\r\n- moved .nomedia file to subdirectories besides Screenshots folder\r\n- Updated Mono runtime to 8.0.24\r\n### Note: Uninstall the old version before installing. A permanent signing key has been set up so future updates will install normally. ",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-27T07:30:59Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/0.3.4",
+        "assets": [
+          {
+            "name": "Cinderbox-v0.3.4.apk",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/0.3.4/Cinderbox-v0.3.4.apk",
+            "updated_at": "2026-03-27T07:30:55Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.3.3",
+        "name": "0.3.3",
+        "body": "## Cinderbox v0.3.3\r\n- Added Mod Highlight section to the Home menu\r\n- Condensed Status and Enabled cards to a single card\r\n- Added 4 new themes:\r\n  - Bumblebee\r\n  - Honey Blossom\r\n  - Mint\r\n  - Neopolitan\r\n- Added support for mods copied from Stardrop\r\n  - Bundles will appear correctly in the Mods tab\r\n  - Updates will be applied correctly if it's in a nested folder\r\n- Added icons to all cards to make it easier to identify what they do at a glance\r\n- Search bar now hidden by default, can be toggled with the search icon\r\n- Updated loading screen to match theme and show mod loading progress",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-25T08:05:54Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/0.3.3",
+        "assets": [
+          {
+            "name": "Cinderbox-v0.3.3.apk",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/0.3.3/Cinderbox-v0.3.3.apk",
+            "updated_at": "2026-03-25T08:26:19Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.3.2",
+        "name": "0.3.2",
+        "body": "## Cinderbox v0.3.2\r\n- Fixed a bug where physical mouse users couldn't send left clicks properly due to forced gamepad mode.\r\n- Fixed a bug where users copying their entire SDV Folder caused errors on load, preventing the game from running.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-24T04:59:08Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/0.3.2",
+        "assets": [
+          {
+            "name": "Cinderbox-v0.3.2.apk",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/0.3.2/Cinderbox-v0.3.2.apk",
+            "updated_at": "2026-03-24T04:59:03Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "build-deps-v3",
+        "name": "Cinderbox Build Dependencies v3",
+        "body": "Build dependency bundle for compiling Cinderbox.\r\n\r\n## Included\r\n\r\n- Patched MonoGame Framework for Android\r\n- Patched .NET Mono runtime and matching CoreLib\r\n- Patched OpenAL Soft for Android arm64\r\n- Rebuilt SkiaSharp libraries for arm64 and arm32\r\n- Rebuilt zstd libraries for arm64 and arm32\r\n- LWJGL LZ4 bridge libraries for arm64 and arm32\r\n- Component licenses and third-party notices\r\n- Manifest containing source commits, file sizes, and SHA-256 hashes\r\n\r\n## Verification\r\n\r\nBundle SHA-256:\r\n\r\n`aa1c309f3998020d686c2702c3bbc606d08da3a5ea246a9f03af1e75ccb8fefe`\r\n\r\nMonoGame Framework:\r\n\r\n`74304036433c5999d4a1c74d3a674516d5b9bd70ec07a00d966a2fa6eba56d67`\r\n\r\n.NET Mono runtime:\r\n\r\n`5d3a6efde422530d4bdb5f336230f012f19a0056e754336c1535f1510b11d71d`\r\n\r\n.NET CoreLib:\r\n\r\n`f9b29611901643db5a39832d9f6d43a7e4a98204e3b0ba5a532655ba5323edef`\r\n\r\nOpenAL Soft:\r\n\r\n`8f15bb48724f7aa7fce6cc4f098b2c0c6147fb46b379784e2c438bacf2925c42`",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-08-16T17:56:25Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/build-deps-v3",
+        "assets": [
+          {
+            "name": "cinderbox-build-deps-v3.zip",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/build-deps-v3/cinderbox-build-deps-v3.zip",
+            "updated_at": "2026-08-16T17:56:22Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "build-deps-v2",
+        "name": "Cinderbox Build Dependencies v2",
+        "body": "Description:\r\n\r\nBuild dependency bundle for compiling Cinderbox.\r\n\r\n## Included\r\n\r\n- Patched MonoGame Framework for Android\r\n- Patched .NET Mono runtime and matching CoreLib\r\n- Patched OpenAL Soft for Android arm64\r\n- Rebuilt SkiaSharp libraries for arm64 and arm32\r\n- Rebuilt zstd libraries for arm64 and arm32\r\n- LWJGL LZ4 bridge libraries for arm64 and arm32\r\n- Component licenses and third-party notices\r\n- Manifest containing source commits, file sizes, and SHA-256 hashes\r\n\r\n## Verification\r\n\r\nBundle SHA-256:\r\n\r\n`25c8544e179dd881c6b0bf0629ffcf503df4e542316df010c35a24c11a9ef717`\r\n\r\nMonoGame Framework:\r\n\r\n`37fdc70f93154d5daad596723df86142245ae749b5d7807a323fdd3ba51c3674`\r\n\r\n.NET Mono runtime:\r\n\r\n`5d3a6efde422530d4bdb5f336230f012f19a0056e754336c1535f1510b11d71d`\r\n\r\n.NET CoreLib:\r\n\r\n`f9b29611901643db5a39832d9f6d43a7e4a98204e3b0ba5a532655ba5323edef`\r\n\r\nOpenAL Soft:\r\n\r\n`8f15bb48724f7aa7fce6cc4f098b2c0c6147fb46b379784e2c438bacf2925c42`",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-08-15T01:35:06Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/build-deps-v2",
+        "assets": [
+          {
+            "name": "cinderbox-build-deps-v2.zip",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/build-deps-v2/cinderbox-build-deps-v2.zip",
+            "updated_at": "2026-08-15T01:35:03Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "build-deps-v1",
+        "name": "Cinderbox Build Dependencies v1",
+        "body": "Build dependency bundle for compiling Cinderbox.\r\n\r\n## Included\r\n\r\n- Patched MonoGame Framework for Android\r\n- MonoGame license\r\n- Manifest containing the source commit, target, file size, and SHA-256 hash\r\n\r\n## Verification\r\n\r\nMonoGame DLL SHA-256: `37fdc70f93154d5daad596723df86142245ae749b5d7807a323fdd3ba51c3674`\r\n\r\nBundle SHA-256: `8575a6c6a4afdbecfee62d06eb6c68b1852b1686d98a912ea625a2d8280fb488`\r\n ",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-08-14T23:50:10Z",
+        "html_url": "https://github.com/Ekyso/Cinderbox/releases/tag/build-deps-v1",
+        "assets": [
+          {
+            "name": "cinderbox-build-deps-v1.zip",
+            "browser_download_url": "https://github.com/Ekyso/Cinderbox/releases/download/build-deps-v1/cinderbox-build-deps-v1.zip",
+            "updated_at": "2026-08-14T23:48:30Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/coffincolors/winlator": [
+      {
+        "tag_name": "winlator_cmod_update_december_2025",
+        "name": "Cmod Progress Update - December 2025: What's next?",
+        "body": "Hello!\r\n\r\nIt's been a little while, so I thought I would just give a small update on project status. \r\n\r\n- Winlator Cmod development continues!\r\n- My focus on next release will either be mostly QoL. This means addressing long standing bug fixes, but more importantly, **merging and crediting improvements from other forks of Cmod from trusted developers.** Primarily I'll be focused on:\r\n- Fixing dynamic package name paths for the gamepad implementation so that name can be changed, such as adding a ludashi benchmark version with the SDL joystick native controller support.\r\n- Input control / touch screen control bindings bug fixes\r\n- Minor UI improvements and enhancements\r\n- Updating all drivers, Fex, Box64, and graphics Wrapper, following Pipetto-Crypto's advice when it comes to Streamlining and avoiding feature creep (...and avoiding pure AI code slop). \r\n- Improve ALSA-Reflector so audio stops cutting out after 15 minutes unless you switch to headphones.\r\n\r\nI'm leaning on this being v13.2. A v14 Cmod should be more substantial. Ultimately I would like to overhaul how Containers are created, with a focus on something more aligned and user friendly like Gamehub, such as starting the app and choosing a Windows based executable directly in the UI, then auto creating or maintain a single container or edge case containers. This would work well with something like Per Game Fixes, or a standardized compatibility list like what's on Reddit.  \r\n\r\nLastly, I'm sorry I'm not good about addressing Github issues. I just have not had any time. However, it is all incredibly helpful for me; the time that I do have to spend on the next release and addressing what issues have been posted this past year (...and _cough_ Arc _cough_ raiding...). I am also looking forward to what Valve brings to the table with the Frame and it's ARM based Linux OS with Android app support. I imagine Proton is going to be getting some major improvements for ARM over the next year, so I don't see things slowing down much. Google seems to be walking back some of the unknown app restrictions they announced this year, so that's also good. Lots to look forward to. \r\n\r\nStay Kazzy,\r\nGoro Majima\r\n_Majima Construction_\r\n\r\n**Little update here... 03/06/2026** \r\nI pretty much finished my Joy-Con 2 / Nintendo Switch 2 Pro controller bluetooth driver/CLI tool for Linux systems, so I can get back to Winlator/PC Emulation on Android in general. \r\n\r\nYou can check that out here: https://github.com/coffincolors/jc2mouse/releases/tag/v0.3.0-beta1\r\n ",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2025-12-09T22:36:49Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/winlator_cmod_update_december_2025",
+        "assets": []
+      },
+      {
+        "tag_name": "cmod_v13.1",
+        "name": "Winlator Cmod v13.1.1",
+        "body": "_Minor update v13.1.1 fixed custom icons, default renderer, and warning prompt handling on new installs_ \r\n\r\n------------------------------\r\n\r\n-   **`evshim` Rewrite:** The entire controller shim (`libevshim.so`) has been rewritten, **completely eliminating the use of shared memory (`mmap`)**, resulting in a massive reduction in CPU overhead and a significant performance boost, especially on lower-end devices. Box64 3.2 and 3.6 are now compatible, and have been restored.\r\n\r\n-   **ALSA-Reflector Improved** The pacer's ring buffer and reconnection logic have been refined, expect better performance and reliability.\r\n\r\n-   **Universal CPU Overhead Reduction:** I've gone through the code to find and eliminate performance bottlenecks, once again, big thanks to @Pipetto-crypto as always for the guidance and his improvements to the Graphics Wrapper. \r\n\r\n### \u2728 New Feature: VkBasalt Integration\r\n\r\n-   **Per-Shortcut Sharpening & Effects:** Thanks to @Pipetto-crypto You can now enable VkBasalt on a per-shortcut basis to apply CAS and DLS to your games.\r\n\r\n### \ud83d\udc1e Stability & Bug Fixes:\r\n\r\nThis update includes a huge number of fixes for a smoother experience.\r\n\r\n-   **Corrupted Shortcut Crash Fixed:** Implemented safety checks to prevent the app from crashing when parsing corrupted `.desktop` files.\r\n\r\n-   **Proton & Frontend Fixes:** Resolved issues that caused crashes when launching the frontend or using XrActivity.\r\n\r\n-   **Input Controls Fixed:** Corrected bugs with toggle switches and range buttons in the input controls overlay.\r\n\r\n-   **Gyro Zeroing Improved:** The gyroscope now has better logic for finding its origin point, resulting in more responsive and accurate motion controls.\r\n\r\n-   **Renderer Selection for DDraw:** Added a renderer selection option to fix black screens in older DDraw games, thanks to some last minute insight to **@Pipetto-Crypto**.\r\n\r\n### \u2699\ufe0f Core & Asset Updates\r\n\r\n-   **Proton 10 Support:** The codebase is now prepared for the next major Proton release. Stay tuned. (...and Wine 9.20)\r\n\r\n-   **Updated Assets:** The default Box64, Proton packs, and other core assets have been updated with the latest fixes and improvements. Additional .wcp have been added to Contents: updated DXVK (+ Stripped, Sarek for lower end devices), updated VKD3D, and Turnip. Thank you @K11MCH1 for your excellent repository.\r\n\r\nThe list goes on actually. More planned as always- now get to testing! Spin up GTA IV and watch it fly! \ud83e\udee1\r\n\r\n-Alex\r\n\r\n**WARNING: _Make new Containers_.** And if you were fast enough to get the apk within the first 5 minutes, please re-download it.\r\n\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-08-07T07:49:41Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/cmod_v13.1",
+        "assets": [
+          {
+            "name": "cmod-hotfix-checklist-08-07-2025.png",
+            "browser_download_url": "https://github.com/coffincolors/winlator/releases/download/cmod_v13.1/cmod-hotfix-checklist-08-07-2025.png",
+            "updated_at": "2025-08-07T07:49:41Z"
+          },
+          {
+            "name": "Winlator-Cmod-v13.1.1.apk",
+            "browser_download_url": "https://github.com/coffincolors/winlator/releases/download/cmod_v13.1/Winlator-Cmod-v13.1.1.apk",
+            "updated_at": "2025-08-10T06:32:17Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "cmod_v13",
+        "name": "Winlator Cmod v13: The Controller Revolution is Here! (And much more...)",
+        "body": "<img width=\"460\" height=\"128\" alt=\"logo-git\" src=\"https://github.com/user-attachments/assets/644584a3-928a-4652-830e-3f50b00357e0\" />\r\n\r\n\r\n\r\nThe wait is over. After months of work the next major evolution of Winlator Cmod has arrived. I teased that a controller revolution was coming, but the reality is so much bigger. This isn't just an update; it's a top-to-bottom overhaul focused on bringing a native, seamless gaming experience to your device.\r\n\r\nThis release is the culmination of a journey, and I'm proud to share it with you.\r\n\r\n\u2728 What's New in Cmod v13 \u2728\r\n--------------------------\r\n\r\n### \ud83c\udfae The Controller Revolution: Native Gamepad Support is Here!\r\n\r\nThe old input methods are gone (sorta), replaced by a completely new, from-the-ground-up controller implementation built on a native SDL2 backend.\r\n\r\n-   **Native XInput & DInput Support:** No more switching settings per game! Controllers are now treated like real controllers. If it works on a PC, it should just work here.\r\n\r\n-   **Multiplayer (Up to 4 Players!):** You heard that right. Connect up to four controllers and they will be properly recognized as Player 1, 2, 3, and 4.\r\n\r\n-   **Vibration / Rumble:** Feel the action with full haptic feedback support. It can be toggled on or off.\r\n\r\n-   **Advanced Motion Controls (Gyro):** A completely revamped and customizable gyroscope implementation. Map it to the left or right stick, fine-tune sensitivity, deadzone, and smoothing, and set an activation button.\r\n\r\n-   **Turbo & Macros:** Set up autofire for any button (including triggers!) for each of your controllers.\r\n\r\n-   **Virtual Gamepad Enhancements:** The on-screen controls are now more responsive than ever, with reactive visual feedback to show when a button is pressed.\r\n\r\n### \ud83d\udd0a ALSA-Reflector: The Unbreakable Audio Engine\r\n\r\nSo- you're in a game, you connect your Bluetooth headphones or a phone call comes in, and the audio dies, forcing a restart. **Those days are over.**\r\n\r\n-   **Introducing \"ALSA-Reflector\":** A new, optional audio driver that creates a virtual, unbreakable audio sink. It provides stable back-pressure to Wine, completely immune to Android's device changes.\r\n\r\n-   **Seamless Recovery:** Real audio is mirrored to your hardware. If the connection breaks, the playback stream is automatically rebuilt in the background without interrupting the game's audio flow. The music never stops. (Well... it might, it's a work in progress!)\r\n\r\n### \ud83d\ude80 Core System & Proton Enhancements\r\n\r\n-   **Bionic Native Libs:** Thanks to **@Pipetto-Crypto**, Winlator Cmod now uses native Bionic libraries.\r\n\r\n### \ud83c\udfa8 UI & Quality-of-Life Tsunami\r\n\r\n-   **Favorite Shortcut Launcher:** See that new star icon in the toolbar? Set your favorite game shortcut and launch it with a single tap from the main screen.\r\n\r\n-   **\"Disable Touchscreen Mouse\" Option:** You can now completely disable the touchscreen as a mouse input device when using a virtual gamepad.\r\n\r\n-   **Countless Fixes:** From custom shortcut icons and `.lnk` file parsing to a smarter app shutdown process and dozens of UI polish updates, nearly every corner of the app has been refined.\r\n\r\nThe Journey & Thank You\r\n-----------------------\r\n\r\nThis release absolutely would not have been possible alone.\r\n\r\n-   A massive thank you to **@Pipetto-crypto** for his phenomenal work on the graphics wrappers, Bionic native libraries, for taking the time to teach me the intricacies of compiling bionic native libraries, and for keeping the Cmod torch lit while I was on break.\r\n\r\n-   To **@K11MCH1** for pushing me to learn how to compile Bionic libs in the first place and [his excellent videos,](https://www.youtube.com/@Zerokimchii) and the entire **EmuGear Discord community**: Your endless testing, feedback, bug reports, and encouragement were the fuel for this entire project. You guys make this all worth it.\r\n\r\n-   And finally, a shout-out to my digital homies Gemini and GPT. For the countless late-night debugging sessions, untangling the multithreaded madness of the ALSA-Reflector, and providing the sanity checks I needed that kept this project on the rails---I genuinely couldn't have done it without you.\r\n\r\nThis release is for all of you. Now, go play some games!\r\n\r\n*Alex*\r\n\r\n*ps: I'll write some helpful release notes tomorrow... time to rest haha...*\r\n**ALSO - IMPORTANT: CONTROLLERS REQUIRE NORMAL OR ESSENTIAL START-UP FOR SERVICES!** And box64 MUST be 3.7- it's a special patched version. Working on that next!",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-07-29T04:27:06Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/cmod_v13",
+        "assets": [
+          {
+            "name": "Winlator-Cmod-v13.apk",
+            "browser_download_url": "https://github.com/coffincolors/winlator/releases/download/cmod_v13/Winlator-Cmod-v13.apk",
+            "updated_at": "2025-07-29T04:36:01Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "winlator_mangohud_glibc_v1",
+        "name": "MangoHud for Winlator Glibc - Fixed** GPU/CPU stats",
+        "body": "Huge thanks to @hisham2630 of DarkOS for providing the source code for his implementation for certain hardware stats, which made this release possible (or significantly faster).\r\n\r\n---\r\n\r\n### Notes:\r\n- **Battery Stats:** Requires root access and SELinux enforcement disabled. Other stats do not require root access.**\r\n- **Limitations:** I/O RW is not implemented, and some features might not work on Android.\r\n- **Fork:** Source code will be available on my MangoHub repo for contributions as soon as I prepare it.\r\n- **Compatibility:** Currently works only with Glibc environments. **GPU Load on the Adreno a618 and a619 is currently not supported.\r\n- **OpenGL:** _Can_ be enabled with `MANGOHUD_DLSYM` however, I cannot get it working in my testing. If you get different results, let me know. \r\n---\r\n\r\n### Installation Instructions:\r\n\r\n1. Set the following environment variables in your Winlator container settings:\r\n   - `MANGOHUD=1`\r\n   - _Optionally_: `MANGOHUD_CONFIG=engine_version,gpu_temp,fps,frametime,ram,vulkan_driver,arch`\r\n     *(You can customize these. See [MangoHud Parameters](https://github.com/flightlessmango/MangoHud))*.\r\n\r\n2. Download and unzip `Winlator_Mangohud_Glibc_Release.zip` somewhere on your storage.\r\n\r\n3. Launch a _Glibc_ \ud83d\ude09 container, and Run the provided `install_mangohud.bat`:\r\n   - This will merge the `usr` directory with the existing `usr` directory in Wine's Z: drive.\r\n\r\n4. Alternatively:\r\n   - Copy the `usr` directory manually to your Wine Z:/ drive and merge it.\r\n\r\n5. You're all set! Launch your Wine application to enjoy MangoHud overlays.\r\n\r\nThis will be included by default in the next Winlator Cmod release.\r\n\r\n---\r\n\r\n### Screenshot:\r\n![mangohud](https://github.com/user-attachments/assets/6510bde3-86e7-4a4b-9e35-c103e01d65b0)\r\n![mangohud](https://github.com/user-attachments/assets/ed10f365-5c0d-4403-8666-10b492a69f6f)\r\n\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-01-20T03:38:20Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/winlator_mangohud_glibc_v1",
+        "assets": [
+          {
+            "name": "Winlator_Mangohud_Glibc_Release.zip",
+            "browser_download_url": "https://github.com/coffincolors/winlator/releases/download/winlator_mangohud_glibc_v1/Winlator_Mangohud_Glibc_Release.zip",
+            "updated_at": "2025-01-20T07:24:03Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "winlator_corefonts_pack_v1",
+        "name": "Winlator Corefonts Pack (Fixes Steam UI, Epic Games Launcher, and others in Winlator Glibc)",
+        "body": "While I continue working on Cmod V12 and my implementation of Winetricks I've got a little surprise.  This pack will fix the UI issues in Steam, Epic Games Launcher, and others. Follow the instructions per the folder names, or read this short guide:\r\n\r\n1. Download the Winlator Corefonts Pack.zip\r\n2. Extract it\r\n3. Launch a 9.2 container in Cmod, Amod, or Frost, (might work in others idk - but it must be Winlator Glibc)\r\n4. Copy the contents of folder 1 directly to Drive Z, (the home, usr, and opt directories)\r\n5. Import the registry files I included from Folder 2 by going to Start Menu \\ System Tools \\ Registry Editor, then File \\ Import Registry File and import the files, 1.reg, 2.reg, and 3.reg\r\n6. Launch Steam\r\n\r\n(Step 3 and 4 are optional if you have issues)\r\n\r\nLogin by typing your credentials, no more QR code, and now working fonts in Steam and other source engine games! \r\n\r\nLatest Steam (Use steam.cfg from [Longjunyu2 old steam](https://github.com/longjunyu2/OldSteam/releases) to prevent updates. Or just use Longjunyu2's old steam with \"-vgui\" added to the included 1.bat file:\r\n![image](https://github.com/user-attachments/assets/a8d2f9a5-0399-422f-bb4a-e2db8bb59905)\r\n\r\nEpic Games Launcher (Install on PC and copy files directly to Winlator, then use WineD3D to see the Store/Library):\r\n![image](https://github.com/user-attachments/assets/9c4d1271-a28b-44d4-898a-56d02919a260)\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-11-23T20:04:38Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/winlator_corefonts_pack_v1",
+        "assets": [
+          {
+            "name": "Winlator.Corefonts.Pack.zip",
+            "browser_download_url": "https://github.com/coffincolors/winlator/releases/download/winlator_corefonts_pack_v1/Winlator.Corefonts.Pack.zip",
+            "updated_at": "2024-11-23T20:00:09Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "winlator_cmod_update_april_2025",
+        "name": "Winlator Cmod - Project Status Update - April 2025",
+        "body": "### Statement on BrunoSX\u2019s hiatus\r\nBruno (@brunodev85) announced he\u2019s pausing Winlator development after false virus accusations. There are no viruses in Winlator, at least not intentionally\u2014debug symbols in the bundled Wine builds can trigger antivirus heuristics, but I realize that the latest release had something a bit different that scrambled executable file names. The reality is that these things can happen, it's certainly not intentional. *Update: TestD3D.exe _was_ infected with floxif. Again, this was not intentional, but it should be noted.  \r\n\r\n### Where Cmod & the Bionic fork stand\r\nMy own Cmod branch has been quiet since Prototype 5 / v12 alpha (Discord-only). Meanwhile, amazing work continues:\r\n\r\n@Pipetto-crypto \u2013 Bionic & graphics wrappers\r\n\r\n@cjxyz \u2013 Bionic Winlator fork and new features\r\n\r\n### My roadmap\r\nI\u2019m resuming work\u2014slowly, around a busier job\u2014but the plan is:\r\n\r\n\ud83d\udd27 Fix Gamepad Configurator\r\n\r\n\ud83d\udda5\ufe0f Streamline Big Picture Mode (Cmod Big Picture Mode, the frontend looking menu I made a while back. But Steam support is still on my radar)\r\n\r\n\ud83c\udf77 Update Wine & core assets\r\n\r\n\ud83c\udff7\ufe0f Expand on shortcut settings / per-app tweaks\r\n\r\nExpect incremental releases rather than one big drop.\r\n\r\n### Thank you, Bruno\r\nWithout Bruno\u2019s vision there\u2019d be no Winlator. Whatever he chooses next, he has the community\u2019s respect and gratitude.\r\n\r\n\u00a0\r\n_Stay tuned_",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-04-29T23:07:17Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/winlator_cmod_update_april_2025",
+        "assets": []
+      },
+      {
+        "tag_name": "winlator_cmod_hype_v2025",
+        "name": "The Winlator Controller Revolution is coming...",
+        "body": "Are you Ready 2 Rumble? Or vibrate? \r\n\r\nDo you have friends? Like, up to 4? \r\n\r\nAre you tired of switching between dinput and xinput?\r\n\r\nWouldn't it be great if every game just treated your controller like a real controller? No more remapping madness?\r\n\r\nWell I have news for you... very good news. Seriously- stay tuned. \r\n\r\nSHM you soon! ;)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-06-30T07:32:39Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/winlator_cmod_hype_v2025",
+        "assets": []
+      },
+      {
+        "tag_name": "wine_9.2_winlator8",
+        "name": "Wine 9.2 from Winlator 8.0r1 for Glibc - BrunoSX latest commits + Longjunyu2 Xinput/Dinput ",
+        "body": "This is Bruno's latest commits from his wine-custom repo for Winlator 8.0, but recompiled to work on Glibc. This means it contains the latest Winlator 8.0 patches and workarounds (except for his Xinput/Dinput implementation, as that won't work without changes to Winlator itself). It will likely be the included default in  Cmod v12. In the meantime, I've been able to run a few games that would not work without this Wine specifically. Make sure to add the following Environmental Variables:\r\n\r\n**Key = Value**\r\n\r\nWINEFORCENTCONTINUE = 1\r\nWINEVMEMMAXSIZE = 16384 \r\n\r\nThere are a few other env vars worth looking into but games I've tested successfully so far:\r\n\r\n**Deus Ex - Mankind Divided** (DX12 only, requires WINEVMEMMAXSIZE)\r\n**GRIP: Combat Racing** - Requires (WINEFORCENTCONTINUE)\r\n**Need for Speed ProStreet** - Fixes the UI in the menu by default\r\n\r\nThere are I'm sure plenty of more games/apps to be tested. But think of this as a preview of things to come. \r\n\r\nOther features added to wine:\r\n\r\nRestart/Reconfigure Container via Start Menu\r\nWINEOVERRIDEAFFINITYMASK which I haven't quite figured out how to use yet, but it forces the task affinity to a value you set\r\nWINVERSION forces the selected windows version as Wine's current default, such as \"winxp\" or \"win7\"\r\n\r\nI will push the source code for this to my wine-custom forked repo. In the meantime, you can download the .wcp here! \r\n\r\nDeus Ex - Mankind Divided (DX12, Glibc):\r\n![image](https://github.com/user-attachments/assets/e1e89af8-2492-4bf6-ab8a-1efd8d470df1)\r\n\r\nGRIP: Combat Racing:\r\n![image](https://github.com/user-attachments/assets/7e4d3a9f-1b56-4d22-b5ca-e0ba3fbb2b0a)\r\n\r\nNeed for Speed ProStreet:\r\n![image](https://github.com/user-attachments/assets/5d14572b-cbb6-45c4-911b-827faeebb8dc)\r\n\r\nNote: For GRIP and Deus Ex, I highly recommend turning OFF debug logs. Make sure you use VKD3D for Deus Ex, and turn on DirectX 12 in the splash screen configuration. \r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2024-12-20T16:02:52Z",
+        "html_url": "https://github.com/coffincolors/winlator/releases/tag/wine_9.2_winlator8",
+        "assets": [
+          {
+            "name": "wine-9.2-winlator8.wcp",
+            "browser_download_url": "https://github.com/coffincolors/winlator/releases/download/wine_9.2_winlator8/wine-9.2-winlator8.wcp",
+            "updated_at": "2024-12-20T15:50:24Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/SapphireRhodonite/Cemu": [
+      {
+        "tag_name": "0.5.2",
+        "name": "CEMU Android v0.5.2: Graphic Packs Custom Root Fix",
+        "body": "# CEMU Android v0.5.2: Graphic Packs Custom Root Fix\r\n\r\nVersion 0.5.2 is a small maintenance release focused on graphic pack storage handling.\r\n\r\nThis release fixes how CEMU Android determines the graphic packs root directory. Graphic pack downloads and updates now use the active `CemuDataStorage` root when available, instead of always using Android's external app files directory.\r\n\r\nThis should make graphic pack management behave correctly when using **Data storage > Custom root**.\r\n\r\n---\r\n\r\n## Fixed\r\n\r\n- Graphic packs now resolve their root directory through `CemuDataStorage`.\r\n- Graphic pack downloads and updates now follow the active/custom storage root.\r\n- Added fallback to the Android app external files directory when no active `CemuDataStorage` root is available.\r\n\r\n## Notes\r\n\r\nThis release contains only one Android-side change:\r\n\r\n- `Use CemuDataStorage to determine graphic packs root directory`\r\n\r\nNo other emulator core, rendering, input, save sync, or external display changes are included in this release.\r\n\r\n---\r\n\r\n## Reporting Issues\r\n\r\nPlease report any issues with:\r\n\r\n- Device model\r\n- Android version\r\n- Game name\r\n- Storage mode used\r\n- Custom root path setup, if used\r\n- Graphic pack being downloaded or updated\r\n- Steps to reproduce the issue\r\n- Screenshots or logs if possible\r\n\r\n---\r\n\r\n## Support\r\n\r\nThank you to everyone testing CEMU Android and reporting issues.\r\n\r\nIf you want to support future Android emulator work, testing, and experimental features, you can support the project on Patreon!.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-07-03T22:39:10Z",
+        "html_url": "https://github.com/SapphireRhodonite/Cemu/releases/tag/0.5.2",
+        "assets": [
+          {
+            "name": "Cemu.DualScreen.0.5.2.apk",
+            "browser_download_url": "https://github.com/SapphireRhodonite/Cemu/releases/download/0.5.2/Cemu.DualScreen.0.5.2.apk",
+            "updated_at": "2026-07-03T22:39:07Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.5.1",
+        "name": "CEMU Android v0.5.1: External Save Sync, Custom Storage Root, External Display Support, and Odin 2 Dual-Screen Support",
+        "body": "This release is based on the latest upstream Android port and adds several important improvements for save management, portable data, external displays, and Odin 2 support.\r\n\r\nThe main new feature is **external save file sync**, which makes it easier to use cloud sync, backups, or external synchronization tools with your CEMU save data.\r\n\r\nThis release also adds **Data storage > Custom root** support, allowing users to keep portable save data in a custom location.\r\n\r\nAnd finally, **proper Odin 2 dual-screen support is here**.\r\n\r\nSorry for the wait on this one. I know Odin 2 users have been waiting for better support, and this release should make the experience much better.\r\n\r\n---\r\n\r\n## New Features:\r\n\r\n* **External save file sync support**\r\n\r\n  * Added support for syncing game save files through an external location.\r\n  * This makes it easier to use cloud sync, backups, or external synchronization tools.\r\n  * Game saves can now be kept in a more portable and user-accessible location.\r\n\r\n* **Custom root support**\r\n\r\n  * Added support for **Data storage > Custom root**.\r\n  * This allows portable save data to be stored in a custom root folder.\r\n  * Useful for users who want more control over where CEMU stores save-related data.\r\n\r\n* **Automatic game save sync**\r\n\r\n  * Game saves are synchronized automatically.\r\n  * This should make external save workflows easier and safer to use.\r\n\r\n* **Manual portable data import/export**\r\n\r\n  * Settings, graphic packs, logs, and other portable data can be imported or exported manually.\r\n  * This gives users more control over what data is moved or backed up.\r\n\r\n* **External display support**\r\n\r\n  * Added support for external displays.\r\n  * Improved behavior when using CEMU with a second screen.\r\n\r\n* **Screen swapping support**\r\n\r\n  * Added screen swapping support.\r\n  * This is useful for dual-screen and external display setups.\r\n\r\n* **Proper Odin 2 dual-screen support**\r\n\r\n  * Added proper dual-screen support for Odin 2.\r\n  * This should make the Odin 2 experience much better for users using dual-screen layouts or external display setups.\r\n\r\n---\r\n\r\n## Save Sync and Portable Data:\r\n\r\nThis release improves how CEMU Android handles save data and portable files.\r\n\r\nGame saves now support external sync, which can help users who want to:\r\n\r\n* Sync saves with cloud storage.\r\n* Keep backups outside app storage.\r\n* Use external synchronization tools.\r\n* Move saves more easily between devices.\r\n* Keep save data in a custom root folder.\r\n\r\nGame saves are synchronized automatically.\r\n\r\nOther portable data, such as settings, graphic packs, logs, and related files, can be imported or exported manually.\r\n\r\n---\r\n\r\n## Odin 2 Support:\r\n\r\nThis release finally adds proper Odin 2 dual-screen support.\r\n\r\nSorry for the delay.\r\n\r\nOdin 2 users should now have a much better experience with dual-screen layouts, screen swapping, and external display usage.\r\n\r\nPlease test your games and layouts, especially if you use external displays or custom screen setups.\r\n\r\n---\r\n\r\n## Important Upgrade Notice:\r\n\r\nThe signing key changed for this release.\r\n\r\nBecause of that, Android may refuse to install CEMU Android v0.5.1 over a previous build.\r\n\r\nIf Android refuses to update:\r\n\r\n1. Back up your saves first, especially if they are still only stored inside app storage.\r\n2. Uninstall the old version.\r\n3. Install CEMU Android v0.5.1.\r\n4. Restore or reconfigure your save sync / custom root setup if needed.\r\n\r\nPlease do not uninstall the old version until your saves are backed up or synced externally.\r\n\r\n---\r\n\r\n## Notes:\r\n\r\nThis release is focused on save portability, external display workflows, Odin 2 support, and keeping the Android port closer to the latest upstream work.\r\n\r\nPlease report any issues with:\r\n\r\n* Device model\r\n* Android version\r\n* Game name\r\n* Storage mode used\r\n* Custom root path setup\r\n* External display setup, if used\r\n* Steps to reproduce the issue\r\n* Screenshots or videos if possible\r\n\r\n---\r\n\r\n## Support:\r\n\r\nThank you to everyone testing CEMU Android, reporting issues, and waiting patiently for Odin 2 support.\r\n\r\nIf you want to support future Android emulator work, testing, and experimental features, you can support the project on Patreon.\r\n\r\n* Sapphire \ud83d\udc99\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-06-13T06:44:07Z",
+        "html_url": "https://github.com/SapphireRhodonite/Cemu/releases/tag/0.5.1",
+        "assets": [
+          {
+            "name": "Cemu.DualScreen.0.5.1.apk",
+            "browser_download_url": "https://github.com/SapphireRhodonite/Cemu/releases/download/0.5.1/Cemu.DualScreen.0.5.1.apk",
+            "updated_at": "2026-06-13T06:44:02Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.3.1",
+        "name": "Cemu Android v0.3.1 Upstream Sync + Dual-Screen Support",
+        "body": "# Cemu Android v0.3.1: Upstream Sync + Dual-Screen Support\r\n\r\nVersion **0.3.1** is now available.\r\n\r\nThis release integrates **all current upstream changes** from the main Cemu branch and adds **dual-screen compatibility** for supported Android devices.  \r\nIt represents a new baseline for future Android-specific development.\r\n\r\n---\r\n\r\n## Highlights\r\n\r\n- **Upstream Sync**\r\n  - Fully synced with the latest changes from the main Cemu branch.\r\n  - All fixes, improvements, and core updates from upstream are included.\r\n\r\n- **Dual-Screen Support (Android)**\r\n  - Added compatibility for dual-screen Android devices.\r\n  - Proper handling of GamePad rendering on a secondary display.\r\n  - Improved screen routing and presentation logic for multi-display setups.\r\n\r\n---\r\n\r\n## Versioning Change (Android Branch)\r\n\r\nStarting with this release, **Cemu Android will follow the versioning of the Android upstream branch**.\r\n\r\n- The **base version number** matches the Android upstream version.\r\n- The **last digit** is incremented to indicate **additional changes from this branch** on top of Android upstream.\r\n- This makes it clear what comes directly from upstream and what is added or modified here.\r\n\r\nExample:\r\n- Android upstream version: `0.3.0`\r\n- This branch releases: `0.3.1`, `0.3.2`, etc.\r\n\r\n---\r\n\r\n## Notes\r\n\r\nThis release focuses on **alignment, stability, and clarity**.  \r\nFuture updates will continue adding Android-specific improvements on top of the upstream branch, including further dual-screen refinements, input handling, and performance work.\r\n\r\n---\r\n\r\n## Support & Early Access\r\n\r\nWant early access to future builds, help shape development direction, or request features on my different forks or a new fork?  \r\nJoin the Patreon: https://tinyurl.com/SapphireLair\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-01-04T08:10:38Z",
+        "html_url": "https://github.com/SapphireRhodonite/Cemu/releases/tag/0.3.1",
+        "assets": [
+          {
+            "name": "Cemu.DualScreen.0.3.1.apk",
+            "browser_download_url": "https://github.com/SapphireRhodonite/Cemu/releases/download/0.3.1/Cemu.DualScreen.0.3.1.apk",
+            "updated_at": "2026-01-04T08:09:58Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.0.3",
+        "name": "Cemu for Android External Screen Support",
+        "body": "# Cemu for Android v0.0.3\r\n\r\nThis version is based on the official SSimco build but includes **all the external screen support and fixes** from v0.0.2, plus a complete touch input refactor.\r\n\r\n## Tested on **Ayaneo Pocket DS** Full support for dual-screen emulation\r\n\r\n## What's New\r\n\r\n### Codebase\r\n- Built on top of the **official SSimco release**\r\n\r\n### New in v0.0.3: Touch Handling Refactor\r\n- `CanvasOnTouchListener` now tracks pointer IDs correctly\r\n- Normalized and scaled touch coordinates\r\n- Handles `MotionEvent.ACTION_MOVE` events properly\r\n- Respects rotation state (`rotateLeft`)\r\n- Dynamic configuration updates via `updateConfiguration()`\r\n- Properly maps input to the correct canvas (TV vs Pad)\r\n- Introduces `CanvasType` enum (Main vs Pad)\r\n- Accurate surface tracking\r\n- Dynamically assigns touch listeners to all surfaces\r\n- Cleans up and reinitializes PadPresentation when needed\r\n\r\n> \u26a0\ufe0f **Disclaimer**  \r\n> External screen support is still **experimental** and intended as a proof of concept.  \r\n> Bugs and limitations may exist. Use at your own risk \u2014 improvements will continue in future versions.\r\n\r\n## \ud83d\ude4f Special Thanks\r\n\r\nHuge thanks to [**@retrogamecorps**](https://github.com/retrogamecorps) for his testing efforts!\r\n\r\n---\r\n\r\n## \ud83d\udca1 Support & Early Access\r\n\r\nIf you'd like **early access to upcoming builds** on my diferent forks, help decide development priorities, or request new features,  \r\nconsider supporting my development on Patreon:  \r\n[https://patreon.com/SapphireRhodonite](https://tinyurl.com/SapphireLair)\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-09-21T05:08:05Z",
+        "html_url": "https://github.com/SapphireRhodonite/Cemu/releases/tag/0.0.3",
+        "assets": [
+          {
+            "name": "Cemu.DualScreen.0.0.3.apk",
+            "browser_download_url": "https://github.com/SapphireRhodonite/Cemu/releases/download/0.0.3/Cemu.DualScreen.0.0.3.apk",
+            "updated_at": "2025-09-21T05:07:54Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.0.2",
+        "name": "Cemu Android 0.0.2",
+        "body": "# Cemu for Android External Screen Support\r\n\r\n### \u26a0\ufe0f Disclaimer\r\n\r\nExternal screen support is currently experimental and intended as a proof of concept.  \r\nThere are known bugs and limitations, and stability is not guaranteed.\r\n\r\nThis feature will be gradually improved in future versions, with the goal of delivering a more polished dual-screen experience on Android.\r\n\r\n---\r\n### Tested and verified on the **Ayaneo Pocket DS** for external display functionality.\r\n---\r\n\r\n### Changes in this version\r\n\r\n**Add support for rendering GamePad to external display**\r\n\r\n- Allows toggling the GamePad screen to an external display.\r\n- Introduces a `PadPresentation` using `DisplayManager` and `DisplayListener`.\r\n- Lifecycle-aware handling of connected/disconnected displays.\r\n- Side menu updated with a checkbox to toggle external display mode.\r\n- Updates to `NativeEmulation.cpp` to manage pad surface lifecycle and native window state.\r\n\r\n**Add DisplayUtils and setPadRotatedLeft JNI**\r\n\r\n- Introduces `DisplayUtils.kt` to centralize screen-related logic.\r\n- Adds `setPadRotatedLeft()` JNI to handle GamePad screen rotation explicitly.\r\n\r\n**Refactor screen rotation and add screen swapping feature**\r\n\r\n- Adds a new `swap_screens` boolean to flip the main and GamePad displays.\r\n- Updates UI, touch input, and renderer logic accordingly.\r\n- Adds screen swap checkbox to side menu.\r\n\r\n**Add WindowManager flags to prevent focus and touch modal in EmulationActivity**\r\n\r\n- Ensures external display windows do not steal focus or input from the main display.\r\n\r\n**Fix screen swap touch controls**\r\n\r\n- Corrects touch logic for both main and external GamePad views when screens are swapped.\r\n- Canvas touch listeners now respect the swapped state for accurate interaction.\r\n\r\n---\r\n\r\n### Tested on\r\n\r\n- **Ayaneo Pocket DS**\r\n- Pocket ACE + Retroid Dual Screen Add-on.\r\n\r\n---\r\n\r\n### \ud83d\ude4f Special Thanks\r\n\r\nHuge thanks to [@retrogamecorps](https://github.com/retrogamecorps) for his testing efforts in making this version possible.\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-09-14T21:18:44Z",
+        "html_url": "https://github.com/SapphireRhodonite/Cemu/releases/tag/0.0.2",
+        "assets": [
+          {
+            "name": "Cemu.DualScreen.0.0.2.apk",
+            "browser_download_url": "https://github.com/SapphireRhodonite/Cemu/releases/download/0.0.2/Cemu.DualScreen.0.0.2.apk",
+            "updated_at": "2025-09-14T21:17:24Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "0.0.1.Beta",
+        "name": "Cemu for Android External Screen Support v0.0.1.Beta",
+        "body": "# External Display Support\r\n\r\nThis is the **first public beta** of Cemu for Android with **external display support**.\r\n\r\n## Key Features\r\n\r\n- **External Display Mode:**  \r\n  Introduced a new `ExternalDisplayManager` utility that uses `MediaProjection` to show the **GamePad screen** on a separate display using Android's `Presentation` API. This enables true dual-screen gameplay when an external monitor is connected.\r\n\r\n- **Side Menu Toggle:**  \r\n  A new toggle has been added to the **side menu**, allowing users to easily activate or deactivate the external display mode during gameplay.\r\n\r\n## \u26a0\ufe0f Disclaimer (Read Me)\r\n\r\nExternal screen support is currently **experimental** and intended as a **proof of concept**.  \r\nThere are known bugs and limitations, and stability is not guaranteed.\r\n\r\nThis feature will be gradually improved in future versions, with the goal of delivering a more polished dual-screen experience on Android.\r\n\r\n---\r\n\r\nThis marks the first step toward full external screen support on Android.  \r\nMore improvements and refinements will come as we continue adapting the experience for handheld and dual-screen devices.\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-08-06T10:57:44Z",
+        "html_url": "https://github.com/SapphireRhodonite/Cemu/releases/tag/0.0.1.Beta",
+        "assets": [
+          {
+            "name": "Cemu.DualScreen.0.0.1.Beta.apk",
+            "browser_download_url": "https://github.com/SapphireRhodonite/Cemu/releases/download/0.0.1.Beta/Cemu.DualScreen.0.0.1.Beta.apk",
+            "updated_at": "2025-08-06T10:57:34Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/blacksheepmvp/mjolnir": [
+      {
+        "tag_name": "v0.2.7a-hotfix",
+        "name": "v0.2.7a - Hotfix",
+        "body": " ## Mjolnir v0.2.7a\r\n\r\n  ### Hotfix\r\n\r\n  - Fixed obscure gesture combinations.\r\n  - Improved Home routing reliability across mixed/edge configurations.\r\n  - Added Discord support entry in Settings (Help & Community).\r\n  - Updated README links, including Add to Obtanium at the top.",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-05T05:28:44Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.7a-hotfix",
+        "assets": [
+          {
+            "name": "Mjolnir-v0.2.7a-hotfix.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.7a-hotfix/Mjolnir-v0.2.7a-hotfix.apk",
+            "updated_at": "2026-03-05T05:28:34Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v0.2.7",
+        "name": "v0.2.7 - Dual Screen Edition",
+        "body": "## Public Release\r\n\r\n  After a public beta cycle, I\u2019m promoting v0.2.7 to public release.\r\n\r\n  This update is about two things:\r\n\r\n  1. Safety and guardrails (to eliminate bad config/soft-lock scenarios)\r\n  2. Better interoperability with dual-screen frontends (Cocoon, Console Launcher, iiSU, etc.)\r\n\r\n  ### Highlights\r\n\r\n  - Users can no longer soft-lock the system by unloading all activities from a given display's activity stack on boot up.\r\n  - Gestures reworked with presets, new options and new defaults.\r\n  - 'Start on boot' can be modified in Settings.\r\n    More control over boot behavior (default home vs top/bottom flow), with less fragile setup requirements.\r\n  - Settings file migration\r\n    Config now lives under:\r\n    /Android/data/xyz.blacksheep.mjolnir/\r\n  - Code refactoring\r\n    Broad cleanup and polish across onboarding and settings surfaces.\r\n\r\n  ### Notes\r\n\r\n  - RG-DS is not officially supported in 0.2.7 (planned target for 0.2.8).",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-03T01:58:42Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.7",
+        "assets": [
+          {
+            "name": "mjolnir-v0.2.7.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.7/mjolnir-v0.2.7.apk",
+            "updated_at": "2026-03-03T01:16:47Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v0.2.6a",
+        "name": "HOTFIX v0.2.6a - PREVENT SOFT LOCK",
+        "body": "# **Mjolnir v0.2.6a \u2014 HOTFIX: Preventing a Rare Soft-Lock Scenario**\r\n\r\n### **Update Safety Summary**\r\n\r\n* **If you're on any 0.2.5 build:**\r\n  \u279c **Upgrade immediately.**\r\n* **If you're on 0.2.4h or earlier stable:**\r\n  \u279c **0.2.6a is safe to upgrade to.**\r\n* **If you specifically want the Emergency Recovery Panel:**\r\n  \u279c That feature arrives in **v0.2.6b**. You may stay on **0.2.4h** until then if you prefer.\r\n\r\n---\r\n\r\n# **What Happened? (HOTFIX Context)**\r\n\r\nA small number of users on **Basic Mode** discovered a rare edge case:\r\n\r\n* If one screen was assigned a frontend\r\n* And the other screen was assigned `<Nothing>`\r\n* And the device rebooted\r\n\r\n\u2026Android would attempt to launch Mjolnir with only one valid Activity target.\r\n\r\nThis resulted in:\r\n\r\n* A black or frozen display on one screen\r\n* Inability to launch Settings\r\n* Inability to change default launcher\r\n* Inability to open Mjolnir itself\r\n* Inability to uninstall \r\n* Under specific conditions, inability to recover at all without a factory reset\r\n\r\nThis was internally called the **\u201cBottomless Pit\u201d** configuration.\r\n\r\n**v0.2.6a fixes this completely.**\r\nIt prevents users from entering this configuration, detects it at startup if already present, and forces a safe recovery.\r\n\r\n---\r\n\r\n# **What\u2019s Fixed in v0.2.6a**\r\n\r\n## **1. Panic & State Handlers**\r\n\r\n### **\u2022 Automatic Invalid Config Detection (Basic Mode)**\r\n\r\nIf Mjolnir detects that Basic Mode is missing a required app on either screen, it now:\r\n\r\n* clears the invalid config,\r\n* prevents the pit from forming,\r\n* and cleanly reroutes the user to onboarding.\r\n\r\n### **\u2022 Advanced Mode Save Fix**\r\n\r\nIn certain conditions, Advanced configurations were not being saved after returning from default-home settings. This caused inconsistent behavior.\r\nThis is now fully resolved \u2014 configuration always saves once requirements are met.\r\n\r\n---\r\n\r\n## **2. Onboarding Flow Hardening**\r\n\r\n### **\u2022 Strict Basic Mode Completion**\r\n\r\nThe app picker in Basic Mode now requires **both** Top and Bottom selections before allowing you to continue.\r\n\r\n### **\u2022 Required Permissions in Advanced Mode**\r\n\r\nNotification and Accessibility permissions can no longer be skipped.\r\nThese are mandatory for correct Advanced behavior.\r\n\r\n### **\u2022 Duplicate App Prevention**\r\n\r\nSelecting an app already assigned to the opposite screen now swaps the two entries, preventing duplicate or invalid setups.\r\n\r\n### **\u2022 Correct Default Home Logic**\r\n\r\nThe final onboarding step now correctly determines when a specific default launcher is required:\r\n\r\n* Normal dual-frontend setups \u2192 **Any default launcher works**\r\n* Bottom = `<Nothing>` \u2192 **Quickstep must be default**\r\n\r\n---\r\n\r\n## **3. UI & Quality Improvements**\r\n\r\n### **\u2022 Markdown Rendering in \u201cWhat\u2019s New\u201d**\r\n\r\nFixed an issue where markdown symbols and `\\n` characters appeared literally.\r\nChangelogs now display clean, formatted text.\r\n\r\n### **\u2022 Safer Gesture Defaults**\r\n\r\nNew installs (or resets) now start with safe, functional gestures:\r\n\r\n* **Tap \u2192 Both Home**\r\n* **Double Tap \u2192 Top Home**\r\n* **Triple Tap \u2192 Recents**\r\n* **Long Press \u2192 Bottom Home**\r\n\r\nThese defaults help ensure users always have a recovery path.\r\n\r\n---\r\n\r\n# **Coming in v0.2.6b \u2014 The Emergency Recovery Panel**\r\n\r\nv0.2.6a **prevents** invalid states.\r\n**v0.2.6b will introduce a recovery tool for any state \u2014 even ones not yet discovered.**\r\n\r\nPlanned capabilities:\r\n\r\n* Emergency recovery UI triggered by a gesture sequence\r\n* Re-run onboarding\r\n* Reset configuration\r\n* Open Settings on either screen\r\n* Export logs\r\n* Attempt uninstall\r\n* Enter a fallback safe-mode activity\r\n\r\nThis panel lives inside Mjolnir itself and does not rely on permissions or services, making it resilient even in extreme edge cases.\r\n\r\n---\r\n\r\n# **Should You Update? (Summary)**\r\n\r\n* **On 0.2.5?**\r\n  \u279c **Upgrade immediately.**\r\n  (0.2.5 contains the soft-lock bug.)\r\n\r\n* **On 0.2.4h/earlier?**\r\n  \u279c **0.2.6a is safe and stable.**\r\n\r\n* **Waiting for the Emergency Recovery Panel?**\r\n  \u279c That arrives in **0.2.6b**. Staying on 0.2.4h until then is fine.",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2025-12-08T08:29:59Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.6a",
+        "assets": [
+          {
+            "name": "mjolnir-hotfix-v0.2.6a.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.6a/mjolnir-hotfix-v0.2.6a.apk",
+            "updated_at": "2025-12-08T08:29:50Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v0.2.5h",
+        "name": "",
+        "body": "**UPDATE: APK PULLED. LEAVING THIS HERE FOR HISTORICAL PURPOSES ONLY. PLEASE SEE v0.2.6a**\r\n\r\n# v0.2.5h \u2013 Pre-Release Notes\r\n\r\n## Features\r\n- New \u201cHome Setup\u201d flow with Basic and Advanced modes.\r\n- DualShot improvements: clearer status, refined instructions, more consistent behavior.\r\n- Added \u201cCreate Steam Files\u201d tool with SteamDB, Custom, and Edit Folder options.\r\n- Dynamic \u201cWhat\u2019s New\u201d dialog sourced from assets.\r\n- Added app blacklist access from app pickers.\r\n- Added system double-tap delay control to Advanced Home setup.\r\n- Quick Tile updated to show \u201cAdvanced / Basic / Off\u201d.\r\n- Notification updated to match tile mode.\r\n\r\n## UI / UX\r\n- Onboarding text rewritten for clarity and consistency.\r\n- Updated screen titles and subtitles across onboarding.\r\n- Reworked Home Button Behavior layout (2\u00d74 grid).\r\n- Refined visual hierarchy, padding, and scroll behavior in multiple screens.\r\n- Updated icons for actions in gesture configuration.\r\n- Added app icons where relevant (default home, top/bottom selections).\r\n- MainActivity cleanup: consolidated Steam tools, removed noise, reorganized controls.\r\n- Replaced \u201cInitialize Mjolnir Home\u201d with \u201cHome Setup\u201d.\r\n- Added About button in top bar.\r\n- Added bottom-center info bubble for changelog + Ko-fi link.\r\n\r\n## Bug Fixes\r\n- Fixed multiple onboarding navigation issues.\r\n- Fixed invalid configuration loop caused by incorrect Accessibility Service detection.\r\n- Fixed onboarding data loss by committing prefs early.\r\n- Fixed app picker bugs and folder-state refresh issues.\r\n- Fixed DualShot observer registration and stale candidate detection.\r\n- Fixed gesture edge cases and system delay handling.\r\n- Fixed HomeActivity logic around valid/invalid states.\r\n\r\n## Misc\r\n- Added version tracking pref for detecting updates.\r\n- Cleaned up code paths for default home handling.\r\n- Improved internal diagnostics logging.\r\n",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2025-12-06T20:13:55Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.5h",
+        "assets": []
+      },
+      {
+        "tag_name": "v0.2.4b",
+        "name": "v0.2.4b",
+        "body": "### v0.2.3 was a big update that addressed 2 major bugs.\r\n\r\n1. \"Clear all\" would kill the Mjolnir process, and the service along with it. To fix this, I made a number of changes so that Mjolnir is no longer visible to the \"Clear all\" function and the service stays alive. This was a bug, and in v0.2.3 it's fixed.\r\n\r\n2. Assigning the same app to both top and bottom screen would cause numerous bugs that would break input control when the user would send both screens home - so in v0.2.3, I removed the ability for users to assign the same screen as top and bottom. After all, that was never the intended purpose of Mjolnir.\r\n\r\nBut one user wanted the same app on top and bottom. So I turned the bug into a feature.\r\n\r\n### v0.2.4b introduces Nothing.\r\n\r\n- You can now assign Nothing to the top or bottom screen.\r\n- As long as you have ONE frontend or launcher assigned to either Top or Bottom and Nothing in the other, the following occurs:\r\n\r\n>  - Top Home sends your assigned app to the Top Screen\r\n>  - Bottom Home sends your assigned app to the Bottom Screen\r\n>  - Both Home sends your assigned app to whichever screen is selected as the Main Screen\r\n\r\n - **IT IS STRONGLY RECOMMENDED** to enable the experimental workaround if you're going to assign Nothing. There is a bug in AYN's Focus Lock that causes input to break, and the experimental workaround... works around it.\r\n \r\n### Here's a big thank you to Mothmantek for bringing this to my attention!",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-11-19T06:46:46Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.4b",
+        "assets": [
+          {
+            "name": "mjolnir-v0.2.4b.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.4b/mjolnir-v0.2.4b.apk",
+            "updated_at": "2025-11-19T06:44:07Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v0.2.3",
+        "name": "v0.2.3",
+        "body": "# Mjolnir v0.2.3 \u2014 Stability, Diagnostics & Quality of Life\r\n\r\nThis release focuses on **long-term stability**, **diagnostics**, and solving the biggest issue users reported:  \r\n**Mjolnir dying when clearing all apps from Recents.**\r\n\r\n## \ud83d\udee0 Major Fix: Home Capture Now Survives \u201cClear All\u201d\r\nThe Thor\u2019s \u201cClear All\u201d gesture used to kill Mjolnir outright.  \r\nNot anymore.\r\n\r\nMjolnir\u2019s Home interception service is now:\r\n- Persistent  \r\n- Isolated  \r\n- Protected  \r\n- Immune to Recents \u2192 Clear All  \r\n\r\nYour Home gestures stay active no matter what.\r\n\r\n## \ud83e\uddea New: Full Diagnostics Framework\r\nA brand-new diagnostics system is included to help track down rare bugs.\r\n\r\n- Toggle diagnostics on/off\r\n- View, export, and delete logs\r\n- Logs include gesture events, service lifecycle, notification state, settings snapshots, and more\r\n\r\nAll stored locally. No network access, no privacy concerns.\r\n\r\n## \ud83c\udfae New Gesture Option: \u201cOpen Recents\u201d\r\nYou can now assign the **App Switcher / Recents menu** to any Home gesture:\r\n- Single tap  \r\n- Double tap  \r\n- Long press  \r\n\r\nA highly-requested addition.\r\n\r\n## \ud83e\udded App Picker Improvements\r\n- Fixed Quickstep and system apps not appearing in the full app list\r\n- Implemented a functional **Blacklist** to prevent selecting apps that break the launcher workflow\r\n- Added intelligent **slot-swap**: assigning the same app to both screens now swaps them instead of duplicating\r\n\r\n## \ud83d\udd27 General Improvements\r\n- Dedicated :keepalive process for stronger persistence\r\n- Reduced background overhead in keepalive process\r\n- Improved notification text clarity\r\n- Cleaner state reporting\r\n\r\n## \ud83d\udd2d What\u2019s Next?\r\nMjolnir will soon receive an architectural refinement:  \r\nA clean separation between the **stable launcher engine** and the **toolkit UI**.\r\n\r\nThis will make:\r\n- The launcher even more reliable  \r\n- Settings easier to access  \r\n- Future tools easier to build  \r\n\r\nFor now, v0.2.3 is the most stable and capable version of Mjolnir yet.\r\n\r\nThank you to everyone who contacted me on Discord with issues, suggestions or just appreciation!",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-11-19T01:43:31Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.3",
+        "assets": [
+          {
+            "name": "mjolnir-v0.2.3.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.3/mjolnir-v0.2.3.apk",
+            "updated_at": "2025-11-19T01:56:53Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v0.2.2e",
+        "name": "v0.2.2e",
+        "body": "## Version 0.2.2e - Major Refresh\r\n\r\nplaceholder - i've been coding all day and night, all week. I'll update the release notes tomorrow. this is a biiiiiiiiig update.\r\n\r\n### \ud83d\ude80 UI & UX Improvements\r\n\r\n*   TBD\r\n\r\n### \ud83d\udc1b Bug Fixes\r\n\r\n*   TBD",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-11-15T07:19:16Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.2e",
+        "assets": [
+          {
+            "name": "mjolnir-v0.2.2e.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.2e/mjolnir-v0.2.2e.apk",
+            "updated_at": "2025-11-15T07:17:28Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "v0.2.1",
+        "name": "v0.2.1 HOTFIX",
+        "body": "# Release v0.2.1\r\n\r\nThis is a hotfix release that addresses a critical bug for users on the AYN Thor.\r\n\r\n## Bug Fixes\r\n\r\n*   Fixed an issue where the accessibility service would incorrectly intercept presses of the **AYN button** as a HOME press. This resolves two major bugs:\r\n    *   The TCC (bottom control panel) now opens and closes correctly with the AYN button.\r\n    *   Pressing the AYN button while in a game no longer causes the game to crash.\r\n",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-11-12T20:16:24Z",
+        "html_url": "https://github.com/blacksheepmvp/mjolnir/releases/tag/v0.2.1",
+        "assets": [
+          {
+            "name": "mjolnir-v0.2.1.apk",
+            "browser_download_url": "https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.1/mjolnir-v0.2.1.apk",
+            "updated_at": "2025-11-12T20:17:20Z"
+          }
+        ]
+      }
+    ],
+    "https://github.com/citron-neo/emulator": [
+      {
+        "tag_name": "2026-04-27",
+        "name": "2026-04-27",
+        "body": "TOMODACHI LIFE RENDERS SO PERFECTLY you may as well frolick in the citrus fields with meadow peace!\r\nnaturally this means the grass now renders 100% fine\r\nalso fixed a lot of crashes related to audio\r\nmore fw22 compatibility\r\nalso mip map level fixes wohooo\r\nffmpeg super updated now it's like better in every single way\r\nbunch of fixes to allow for full unity builds\r\nLONG LIVE THE UNITY BUILDS",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-04-27T13:57:23Z",
+        "html_url": "https://github.com/citron-neo/emulator/releases/tag/2026-04-27",
+        "assets": [
+          {
+            "name": "app-mainline-release.apk",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/app-mainline-release.apk",
+            "updated_at": "2026-04-27T13:56:57Z"
+          },
+          {
+            "name": "Citron-28560-Android-8.Elite-Lyb.apk",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/Citron-28560-Android-8.Elite-Lyb.apk",
+            "updated_at": "2026-04-27T13:57:00Z"
+          },
+          {
+            "name": "Citron-macOS-nightly-0237a9b88.dmg",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/Citron-macOS-nightly-0237a9b88.dmg",
+            "updated_at": "2026-04-27T13:57:17Z"
+          },
+          {
+            "name": "Citron-windows-nightly-0237a9b88-x64-clangtron.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/Citron-windows-nightly-0237a9b88-x64-clangtron.zip",
+            "updated_at": "2026-04-27T13:56:29Z"
+          },
+          {
+            "name": "Citron-windows-nightly-0237a9b88-x64-msvc.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/Citron-windows-nightly-0237a9b88-x64-msvc.zip",
+            "updated_at": "2026-04-27T13:56:24Z"
+          },
+          {
+            "name": "citron_nightly-0237a9b88-linux-aarch64.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/citron_nightly-0237a9b88-linux-aarch64.AppImage",
+            "updated_at": "2026-04-27T13:57:09Z"
+          },
+          {
+            "name": "citron_nightly-0237a9b88-linux-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/citron_nightly-0237a9b88-linux-aarch64.AppImage.zsync",
+            "updated_at": "2026-04-27T13:56:33Z"
+          },
+          {
+            "name": "citron_nightly-0237a9b88-linux-x86_64.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/citron_nightly-0237a9b88-linux-x86_64.AppImage",
+            "updated_at": "2026-04-27T13:56:53Z"
+          },
+          {
+            "name": "citron_nightly-0237a9b88-linux-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/citron_nightly-0237a9b88-linux-x86_64.AppImage.zsync",
+            "updated_at": "2026-04-27T13:56:32Z"
+          },
+          {
+            "name": "citron_nightly-0237a9b88-linux-x86_64_v3.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/citron_nightly-0237a9b88-linux-x86_64_v3.AppImage",
+            "updated_at": "2026-04-27T13:56:44Z"
+          },
+          {
+            "name": "citron_nightly-0237a9b88-linux-x86_64_v3.AppImage.zsync",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-27/citron_nightly-0237a9b88-linux-x86_64_v3.AppImage.zsync",
+            "updated_at": "2026-04-27T13:56:31Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2026-04-17",
+        "name": "2026-04-17",
+        "body": "hello people made out of lemons, we bring bunch of random vulkan fixes, we nuked the garbage collector DEATH TO THE GARBAGE COLLECTOR RATATATATATAT!!!\r\n- TOMODACHI LIFE BOOTS AND WORKS :)\r\n- new revamped epic UI\r\n- UI with minigames and stuff (surprise me button)\r\n- fast rmx is now fast (used to be slow)\r\n- qlaunch be launching\r\n- atmosphere changes added to citron\r\n- firmware 21 stuffs\r\n- miscelly dynarmic spinlock optimizations",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-04-17T11:03:26Z",
+        "html_url": "https://github.com/citron-neo/emulator/releases/tag/2026-04-17",
+        "assets": [
+          {
+            "name": "citron_stable-0db11ed05-android-8E.apk",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05-android-8E.apk",
+            "updated_at": "2026-04-17T10:59:45Z"
+          },
+          {
+            "name": "citron_stable-0db11ed05-android.apk",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05-android.apk",
+            "updated_at": "2026-04-17T10:59:53Z"
+          },
+          {
+            "name": "citron_stable-0db11ed05-linux-aarch64.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05-linux-aarch64.AppImage",
+            "updated_at": "2026-04-17T10:59:37Z"
+          },
+          {
+            "name": "citron_stable-0db11ed05-linux-x86_64.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05-linux-x86_64.AppImage",
+            "updated_at": "2026-04-17T10:58:51Z"
+          },
+          {
+            "name": "citron_stable-0db11ed05-linux-x86_64_v3.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05-linux-x86_64_v3.AppImage",
+            "updated_at": "2026-04-17T10:58:13Z"
+          },
+          {
+            "name": "citron_stable-0db11ed05-msvc.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05-msvc.zip",
+            "updated_at": "2026-04-18T03:53:34Z"
+          },
+          {
+            "name": "citron_stable-0db11ed05.dmg",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-04-17/citron_stable-0db11ed05.dmg",
+            "updated_at": "2026-04-17T11:03:26Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2026-03-27",
+        "name": "2026-03-27",
+        "body": "PORTABLE MODE ON BY DEFAULT: this means you can use `user` folder naw\r\nfixes for audctl wrong init\r\nfixes for wrong ipc responses\r\nsome fw22 fixes so it doesnt outright crash\r\ninvalidated ALL shader cache (sorry)\r\nbuild fixes\r\nfun minigames\r\nspinny logo on about",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-27T10:01:46Z",
+        "html_url": "https://github.com/citron-neo/emulator/releases/tag/2026-03-27",
+        "assets": [
+          {
+            "name": "citron-android-8elite.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/citron-android-8elite.zip",
+            "updated_at": "2026-03-27T10:00:37Z"
+          },
+          {
+            "name": "citron-android-nightly.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/citron-android-nightly.zip",
+            "updated_at": "2026-03-27T10:00:41Z"
+          },
+          {
+            "name": "Citron-macOS-Nightly.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/Citron-macOS-Nightly.zip",
+            "updated_at": "2026-03-27T10:00:18Z"
+          },
+          {
+            "name": "Citron-Windows-Nightly-x64.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/Citron-Windows-Nightly-x64.zip",
+            "updated_at": "2026-03-27T10:00:11Z"
+          },
+          {
+            "name": "Linux_Artifacts_aarch64.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/Linux_Artifacts_aarch64.zip",
+            "updated_at": "2026-03-27T10:00:34Z"
+          },
+          {
+            "name": "Linux_Artifacts_v3.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/Linux_Artifacts_v3.zip",
+            "updated_at": "2026-03-27T10:00:57Z"
+          },
+          {
+            "name": "Linux_Artifacts_x86_64.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-27/Linux_Artifacts_x86_64.zip",
+            "updated_at": "2026-03-27T10:01:13Z"
+          }
+        ]
+      },
+      {
+        "tag_name": "2026-03-20",
+        "name": "2026-03-20",
+        "body": "hello pookies this is the first stable build for citron neo\r\n\r\n    spinny logo: weee\r\n    new ISBERD implementation and gpu alloc ctx\r\n    new improved dynarmic: improved cpu performance for totk and other cpu intensive games\r\n    new gpu decoder that's homogenous: faster shader compilation\r\n    coalesced gpu pagetables: faster pagetable resolution, faster gpu mem access\r\n    fix the game list taking too long to load\r\n    port to freebsd\r\n    mario galaxy lag fixed\r\n    new forked mod download/compat list\r\n\r\nexpect increased CPU performance and very decreased CPU latency (basically lesser loading times and less stutter on CPU-intensive areas)\r\ncontinuity of android support is on the line, as nobody here really wants to update it\r\nas for the future of the project, the focus is on vulkan only; not necesarily making all games work astoundingly, but rather make the ones that work already work even better; i.e do fewer things right than to do many things wrong\r\nfocus will primarily shift on maintenance of Dynarmic-GPLv3 as Citron NEO will be ground-zero for any improvements to Dynarmic-GPLv3 coming forward",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-20T08:08:43Z",
+        "html_url": "https://github.com/citron-neo/emulator/releases/tag/2026-03-20",
+        "assets": [
+          {
+            "name": "app-mainline-release.apk",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/app-mainline-release.apk",
+            "updated_at": "2026-03-20T04:09:25Z"
+          },
+          {
+            "name": "Citron-28330-Android-8.Elite-Lyb.apk",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/Citron-28330-Android-8.Elite-Lyb.apk",
+            "updated_at": "2026-03-20T04:09:21Z"
+          },
+          {
+            "name": "Citron-macOS-stable-61dd61eec.dmg",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/Citron-macOS-stable-61dd61eec.dmg",
+            "updated_at": "2026-03-20T04:08:21Z"
+          },
+          {
+            "name": "Citron-windows-stable-61dd61eec-x64.zip",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/Citron-windows-stable-61dd61eec-x64.zip",
+            "updated_at": "2026-03-20T04:08:25Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-aarch64.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-aarch64.AppImage",
+            "updated_at": "2026-03-20T04:09:17Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-aarch64.AppImage.zsync",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-aarch64.AppImage.zsync",
+            "updated_at": "2026-03-20T04:08:48Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-aarch64.tar.zst",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-aarch64.tar.zst",
+            "updated_at": "2026-03-20T04:08:47Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-x86_64.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-x86_64.AppImage",
+            "updated_at": "2026-03-20T04:09:03Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-x86_64.AppImage.zsync",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-x86_64.AppImage.zsync",
+            "updated_at": "2026-03-20T04:08:31Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-x86_64.tar.zst",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-x86_64.tar.zst",
+            "updated_at": "2026-03-20T04:08:29Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-x86_64_v3.AppImage",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-x86_64_v3.AppImage",
+            "updated_at": "2026-03-20T04:08:46Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-x86_64_v3.AppImage.zsync",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-x86_64_v3.AppImage.zsync",
+            "updated_at": "2026-03-20T04:08:28Z"
+          },
+          {
+            "name": "citron_stable-61dd61eec-linux-x86_64_v3.tar.zst",
+            "browser_download_url": "https://github.com/citron-neo/emulator/releases/download/2026-03-20/citron_stable-61dd61eec-linux-x86_64_v3.tar.zst",
+            "updated_at": "2026-03-20T04:08:27Z"
+          }
+        ]
+      }
+    ]
+  }
+}
