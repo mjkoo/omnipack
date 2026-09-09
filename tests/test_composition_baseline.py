@@ -94,3 +94,19 @@ def test_different_package_build_pairs_preserve_original_source_records() -> Non
             assert candidate["url"].startswith("https://github.com/")
             assert isinstance(json.loads(candidate["additionalSettings"]), dict)
             assert candidate["name"]
+
+
+def test_ctr_origin_matches_captured_standard_asset_record() -> None:
+    index = json.loads((FIXTURES / "index.json").read_text())
+    candidate = next(
+        item
+        for item in index["representativeCandidates"]
+        if item["id"] == "com.simon358.ctrnative"
+    )
+    assert (candidate["source"], candidate["origin"]) == (
+        "bboi",
+        "bboi-standard-asset",
+    )
+    document = json.loads((FIXTURES / "replacement-candidates.json").read_text())
+    record = document["identityConflictCandidates"][0]
+    assert (candidate["id"], candidate["url"]) == (record["id"], record["url"])

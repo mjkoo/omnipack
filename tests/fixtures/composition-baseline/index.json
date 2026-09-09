@@ -26,64 +26,103 @@
       "origin": "rjny-catalog",
       "id": "info.cemu.cemu",
       "url": "https://github.com/SSimco/Cemu",
-      "eligible": ["single"],
-      "selectedIn": ["single"]
+      "eligible": [
+        "single"
+      ],
+      "selectedIn": [
+        "single"
+      ]
     },
     {
       "source": "rjny",
       "origin": "rjny-catalog",
       "id": "info.cemu.cemu",
       "url": "https://github.com/sapphirerhodonite/cemu",
-      "eligible": ["dual"],
-      "selectedIn": ["dual"]
+      "eligible": [
+        "dual"
+      ],
+      "selectedIn": [
+        "dual"
+      ]
     },
     {
-      "source": "rjny",
-      "origin": "rjny-catalog",
+      "source": "bboi",
+      "origin": "bboi-standard-asset",
       "id": "com.simon358.ctrnative",
       "url": "https://github.com/Simon358/ctr-native-android",
-      "eligible": ["single", "dual"],
-      "selectedIn": ["single", "dual"]
+      "eligible": [
+        "single",
+        "dual"
+      ],
+      "selectedIn": [
+        "single",
+        "dual"
+      ]
     },
     {
       "source": "bboi",
       "origin": "bboi-standard-asset",
       "id": "com.samyost1.zelda3android",
       "url": "https://github.com/samyost1/zelda3-android",
-      "eligible": ["single", "dual"],
-      "selectedIn": ["single"]
+      "eligible": [
+        "single",
+        "dual"
+      ],
+      "selectedIn": [
+        "single"
+      ]
     },
     {
       "source": "bboi",
       "origin": "bboi-dual-asset",
       "id": "com.samyost1.zelda3android",
       "url": "https://github.com/samyost1/zelda3-android",
-      "eligible": ["dual"],
-      "selectedIn": ["dual"]
+      "eligible": [
+        "dual"
+      ],
+      "selectedIn": [
+        "dual"
+      ]
     },
     {
       "source": "extras",
       "origin": "extras",
       "id": "com.game.cinderbox",
       "url": "https://github.com/Ekyso/Cinderbox",
-      "eligible": ["single", "dual"],
-      "selectedIn": ["single", "dual"]
+      "eligible": [
+        "single",
+        "dual"
+      ],
+      "selectedIn": [
+        "single",
+        "dual"
+      ]
     },
     {
       "source": "codm2000",
       "origin": "codm-generated",
       "id": "com.ctrnative",
       "url": "https://github.com/igawa6/ctr-native-android",
-      "eligible": ["dual"],
-      "selectedIn": ["dual"]
+      "eligible": [
+        "dual"
+      ],
+      "selectedIn": [
+        "dual"
+      ]
     },
     {
       "source": "rjny",
       "origin": "rjny-catalog",
       "id": "com.winlator.ludashi",
       "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
-      "eligible": ["single", "dual"],
-      "selectedIn": ["single", "dual"],
+      "eligible": [
+        "single",
+        "dual"
+      ],
+      "selectedIn": [
+        "single",
+        "dual"
+      ],
       "selectedRelease": "v3.1.h",
       "selectedAsset": "bionic-vanilla.apk",
       "settings": {
