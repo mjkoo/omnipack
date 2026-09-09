@@ -46,7 +46,7 @@ def fetch(
         covered = {
             normalize_project_url(app.url)
             for app in higher_precedence
-            if app.variant is Variant.DUAL
+            if Variant.DUAL in app.eligibility
         }
         result: list[App] = []
         seen: set[str] = set()

@@ -9,6 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from omnipack.build import previous_ids, publish_build
+from omnipack.composition_policy import load_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.package_id import PackageIdCache, PackageIdResolver
@@ -92,7 +93,8 @@ def _ingest_for_build(
     extras_config = load_json(root / "config/extras.json", "extras")
     http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
     resolver = PackageIdResolver(http, PackageIdCache(root / "config/package-ids.json"))
-    return ingest_all(http, source_config, extras_config, resolver, report)
+    policy = load_composition_policy((root / "config/composition.json").read_bytes())
+    return ingest_all(http, source_config, extras_config, resolver, policy, report)
 
 
 def _object(path: Path, source: str) -> dict[str, Any]:

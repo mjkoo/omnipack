@@ -114,6 +114,9 @@ def normalize_record(
     source: str,
     variant: Variant,
     derive_type: bool = False,
+    eligibility: frozenset[Variant] | None = None,
+    dual_preferred: bool = False,
+    origin: str | None = None,
 ) -> App:
     if not isinstance(record, dict):
         raise SourceError(source, "catalog entry must be an object")
@@ -143,6 +146,15 @@ def normalize_record(
         "additionalSettings",
         "meta",
         "variants",
+        "dualPreferred",
+        "dual_preferred",
+        "eligible",
+        "eligibility",
+        "family",
+        "origin",
+        "originalId",
+        "original_id",
+        "provenance",
     }
     return App(
         id=record["id"],
@@ -156,4 +168,7 @@ def normalize_record(
             record.get("additionalSettings"), source=source, entry=str(label)
         ),
         raw={key: value for key, value in record.items() if key not in modeled},
+        eligibility=(frozenset({variant}) if eligibility is None else eligibility),
+        dual_preferred=dual_preferred,
+        origin=origin,
     )

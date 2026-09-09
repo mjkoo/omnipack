@@ -4,7 +4,9 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any
+from typing import Any, cast
+
+_ELIGIBILITY_UNSET = cast(frozenset["Variant"], object())
 
 
 class Variant(str, Enum):
@@ -48,7 +50,7 @@ class App:
     provenance: Provenance
     additional_settings: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
-    eligibility: frozenset[Variant] = field(default_factory=frozenset)
+    eligibility: frozenset[Variant] = field(default=_ELIGIBILITY_UNSET)
     dual_preferred: bool = False
     origin: str | None = None
     original_id: str | None = None
@@ -57,7 +59,7 @@ class App:
     def __post_init__(self) -> None:
         # Adapters migrate to source-derived, multi-target eligibility separately.
         # These defaults keep the existing per-variant normalized record contract.
-        if not self.eligibility:
+        if self.eligibility is _ELIGIBILITY_UNSET:
             object.__setattr__(self, "eligibility", frozenset({self.variant}))
         if self.origin is None:
             object.__setattr__(self, "origin", self.provenance.source)

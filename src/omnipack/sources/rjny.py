@@ -36,14 +36,28 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
                 raise TypeError("entry meta must be an object")
             if meta.get("excludeFromExport") is True:
                 continue
-            if meta.get("includeInStandard") is not False:
-                result.append(
-                    normalize_record(record, source="rjny", variant=Variant.SINGLE)
+            eligibility = frozenset(
+                variant
+                for variant, included in (
+                    (Variant.SINGLE, meta.get("includeInStandard")),
+                    (Variant.DUAL, meta.get("includeInDualScreen")),
                 )
-            if meta.get("includeInDualScreen") is not False:
-                result.append(
-                    normalize_record(record, source="rjny", variant=Variant.DUAL)
+                if included is not False
+            )
+            result.append(
+                normalize_record(
+                    record,
+                    source="rjny",
+                    variant=(
+                        Variant.SINGLE
+                        if Variant.SINGLE in eligibility
+                        else Variant.DUAL
+                    ),
+                    eligibility=eligibility,
+                    dual_preferred=eligibility == frozenset({Variant.DUAL}),
+                    origin="rjny-catalog",
                 )
+            )
         return result
     except SourceError:
         raise

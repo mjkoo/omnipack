@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from dataclasses import replace
 
 from omnipack.model import App, Variant
 from omnipack.sources.common import SourceError, normalize_record
@@ -16,12 +15,10 @@ def fetch(entries: Sequence[object]) -> list[App]:
         if not isinstance(entry, dict):
             raise SourceError("extras", f"entry {index} must be an object")
         label = entry.get("name") or entry.get("id") or f"entry {index}"
-        normalized = normalize_record(
-            entry, source="extras", variant=Variant.SINGLE, derive_type=True
-        )
         variants = entry.get("variants", [variant.value for variant in Variant])
         if not isinstance(variants, list):
             raise SourceError("extras", f"entry {label!r} variants must be a list")
+        eligibility: set[Variant] = set()
         for value in variants:
             try:
                 variant = Variant(value)
@@ -29,5 +26,29 @@ def fetch(entries: Sequence[object]) -> list[App]:
                 raise SourceError(
                     "extras", f"entry {label!r} has unknown variant {value!r}"
                 ) from error
-            result.append(replace(normalized, variant=variant))
+            eligibility.add(variant)
+        if not eligibility:
+            raise SourceError("extras", f"entry {label!r} variants must not be empty")
+        preferred = entry.get("dualPreferred", False)
+        if type(preferred) is not bool:
+            raise SourceError(
+                "extras", f"entry {label!r} dualPreferred must be boolean"
+            )
+        if preferred and Variant.DUAL not in eligibility:
+            raise SourceError(
+                "extras", f"entry {label!r} dualPreferred requires dual eligibility"
+            )
+        result.append(
+            normalize_record(
+                entry,
+                source="extras",
+                variant=(
+                    Variant.SINGLE if Variant.SINGLE in eligibility else Variant.DUAL
+                ),
+                derive_type=True,
+                eligibility=frozenset(eligibility),
+                dual_preferred=preferred,
+                origin="extras",
+            )
+        )
     return result

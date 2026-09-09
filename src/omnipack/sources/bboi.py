@@ -46,19 +46,24 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
         single = _catalog(http, single_url)
         dual = _catalog(http, dual_url)
         result = [
-            normalize_record(record, source="bboi", variant=Variant.SINGLE)
+            normalize_record(
+                record,
+                source="bboi",
+                variant=Variant.SINGLE,
+                eligibility=frozenset(Variant),
+                origin="bboi-standard-asset",
+            )
             for record in single
         ]
-        dual_by_id = {
-            record.get("id"): record for record in dual if isinstance(record, dict)
-        }
         result.extend(
-            normalize_record(record, source="bboi", variant=Variant.DUAL)
-            for record in single
-            if record.get("id") not in dual_by_id
-        )
-        result.extend(
-            normalize_record(record, source="bboi", variant=Variant.DUAL)
+            normalize_record(
+                record,
+                source="bboi",
+                variant=Variant.DUAL,
+                eligibility=frozenset({Variant.DUAL}),
+                dual_preferred=True,
+                origin="bboi-dual-asset",
+            )
             for record in dual
         )
         return result

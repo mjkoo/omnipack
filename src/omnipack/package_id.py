@@ -223,6 +223,9 @@ def generated_project_entry(
         variant=Variant.DUAL,
         provenance=Provenance(source="codm2000", url=project_url),
         raw={"author": owner},
+        eligibility=frozenset({Variant.DUAL}),
+        dual_preferred=True,
+        origin="codm-generated",
     )
     return GeneratedProjectResult(app, resolution)
 

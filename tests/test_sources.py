@@ -11,6 +11,11 @@ from urllib.request import Request
 import pytest
 
 from omnipack import cli
+from omnipack.composition_policy import (
+    CompositionPolicyError,
+    apply_composition_policy,
+    parse_composition_policy,
+)
 from omnipack.http import HttpClient, HttpError, HttpResponse
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.package_id import ResolutionResult, ResolutionStatus
@@ -20,6 +25,7 @@ from omnipack.sources import (
     bboi,
     codm,
     extras,
+    ingest_all,
     rjny,
 )
 
@@ -80,8 +86,9 @@ def test_rjny_matches_both_upstream_exports() -> None:
     ):
         expected = json.loads(fixture(export_name))["apps"]
         assert len(expected) == count
-        assert len([app for app in apps if app.variant is variant]) == count
-        assert {(app.id, app.url) for app in apps if app.variant is variant} == {
+        eligible = [app for app in apps if variant in app.eligibility]
+        assert len(eligible) == count
+        assert {(app.id, app.url) for app in eligible} == {
             (entry["id"], entry["url"]) for entry in expected
         }
 
@@ -99,6 +106,53 @@ def test_rjny_rejects_empty_location_and_unsupported_source() -> None:
         )
 
 
+def test_rjny_policy_can_revive_target_flags_but_not_export_exclusions() -> None:
+    url = "https://raw.githubusercontent.com/r/main/p"
+    records = [
+        {
+            "id": "app.disabled",
+            "name": "Disabled",
+            "url": "https://github.com/owner/disabled",
+            "overrideSource": "GitHub",
+            "meta": {"includeInStandard": False, "includeInDualScreen": False},
+        },
+        {
+            "id": "app.excluded",
+            "name": "Excluded",
+            "url": "https://github.com/owner/excluded",
+            "overrideSource": "GitHub",
+            "meta": {"excludeFromExport": True},
+        },
+    ]
+    apps = rjny.fetch(
+        FakeHttp({url: json.dumps({"apps": records})}),
+        {"repo": "r", "branch": "main", "path": "p"},
+    )
+    assert [(app.id, app.eligibility) for app in apps] == [
+        ("app.disabled", frozenset())
+    ]
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [
+                {
+                    "match": {
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "app.disabled",
+                        "url": "https://github.com/owner/disabled",
+                    },
+                    "eligible": ["dual"],
+                    "rationale": "Explicitly restore dual eligibility.",
+                }
+            ],
+            "pins": [],
+        }
+    )
+    revived = apply_composition_policy(policy, apps).candidates
+    assert revived[0].eligibility == frozenset({Variant.DUAL})
+
+
 @pytest.mark.parametrize("response", [HttpError("offline"), "not json"])
 def test_rjny_fetch_and_parse_failures_name_source(response: object) -> None:
     url = "https://raw.githubusercontent.com/r/main/p"
@@ -108,7 +162,7 @@ def test_rjny_fetch_and_parse_failures_name_source(response: object) -> None:
         )
 
 
-def test_bboi_latest_release_maps_assets_and_dual_overrides_same_id() -> None:
+def test_bboi_latest_release_retains_both_asset_origins() -> None:
     api = "https://codeberg.org/api/v1/repos/BBoi34/Obtainium-Recomp-Decomp/releases/latest"
     release = json.loads(fixture("codeberg-release.json"))
     single_url, dual_url = (
@@ -128,20 +182,28 @@ def test_bboi_latest_release_maps_assets_and_dual_overrides_same_id() -> None:
             "dual_asset_pattern": "Dual-Screen-Decomp-Recomp.V*.json",
         },
     )
-    dual_ids = [app.id for app in apps if app.variant is Variant.DUAL]
-    assert len(dual_ids) == len(set(dual_ids))
     overlapping_ids = {
         "com.aure.banjorecomp",
         "com.igawa6.harvestmoon64",
         "com.samyost1.zelda3android",
         "com.samyost1.tmcandroid",
     }
-    for variant, asset in (
-        (Variant.SINGLE, "bboi-single.json"),
-        (Variant.DUAL, "bboi-dual.json"),
+    for origin, asset, eligibility, preferred in (
+        (
+            "bboi-standard-asset",
+            "bboi-single.json",
+            frozenset(Variant),
+            False,
+        ),
+        (
+            "bboi-dual-asset",
+            "bboi-dual.json",
+            frozenset({Variant.DUAL}),
+            True,
+        ),
     ):
         expected = {entry["id"]: entry for entry in json.loads(fixture(asset))["apps"]}
-        actual = {app.id: app for app in apps if app.variant is variant}
+        actual = {app.id: app for app in apps if app.origin == origin}
         assert set(actual) == set(expected) == overlapping_ids
         for app_id in overlapping_ids:
             entry, app = expected[app_id], actual[app_id]
@@ -150,6 +212,8 @@ def test_bboi_latest_release_maps_assets_and_dual_overrides_same_id() -> None:
             assert app.categories == tuple(entry["categories"])
             assert app.source_type is SourceType(entry["overrideSource"])
             assert app.additional_settings == json.loads(entry["additionalSettings"])
+            assert app.eligibility == eligibility
+            assert app.dual_preferred is preferred
 
 
 def test_bboi_rejects_malformed_settings() -> None:
@@ -236,7 +300,13 @@ def test_codm_extracts_all_github_links_skips_other_hosts_and_deduplicates_dual(
     assert "https://github.com/igawa6/dusklight" not in urls
     assert "https://github.com/Josh-Daniels/OpenMW-DS" in urls
     assert "https://github.com/cylonid/NativeAlphaForAndroid" in urls
-    assert all(app.variant is Variant.DUAL and not app.categories for app in apps)
+    assert all(
+        app.eligibility == frozenset({Variant.DUAL})
+        and app.dual_preferred
+        and app.origin == "codm-generated"
+        and not app.categories
+        for app in apps
+    )
     assert all(app.source_type is SourceType.GITHUB for app in apps)
     assert (
         next(app for app in apps if app.url.endswith("OpenMW-DS")).name == "OpenMW-DS"
@@ -286,6 +356,117 @@ def test_codm_reports_unresolved_and_cached_resolution_failures() -> None:
     assert retained_report.retained_failures[0]["failure"] == "release unavailable"
 
 
+def test_ingestion_applies_policy_before_coverage_and_after_generation(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    higher = App(
+        "app.standard",
+        "https://www.github.com/owner/project.git/",
+        "Standard",
+        SourceType.GITHUB,
+        (),
+        Variant.SINGLE,
+        Provenance("rjny", "catalog"),
+        eligibility=frozenset(Variant),
+        origin="rjny-catalog",
+    )
+    generated = App(
+        "app.generated",
+        "https://github.com/owner/project",
+        "project",
+        SourceType.GITHUB,
+        (),
+        Variant.DUAL,
+        Provenance("codm2000", "readme"),
+        eligibility=frozenset({Variant.DUAL}),
+        dual_preferred=True,
+        origin="codm-generated",
+    )
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [
+                {
+                    "match": {
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "app.standard",
+                        "url": "https://github.com/owner/project",
+                    },
+                    "eligible": ["single"],
+                    "rationale": "Generate the dual-specific candidate.",
+                },
+                {
+                    "match": {
+                        "source": "codm2000",
+                        "origin": "codm-generated",
+                        "id": "app.generated",
+                        "url": "https://github.com/owner/project",
+                    },
+                    "family": "app:project",
+                    "rationale": "Group the generated candidate after resolution.",
+                },
+            ],
+            "pins": [],
+        }
+    )
+    monkeypatch.setattr(rjny, "fetch", lambda *_args: [higher])
+    monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
+    monkeypatch.setattr(extras, "fetch", lambda *_args: [])
+
+    def generate(_http, _config, _resolver, candidates, _report):
+        assert candidates[0].eligibility == frozenset({Variant.SINGLE})
+        return [generated]
+
+    monkeypatch.setattr(codm, "fetch", generate)
+    result = ingest_all(
+        FakeHttp({}),
+        {"rjny": {}, "bboi": {}, "codm": {}},
+        [],
+        StubResolver(),
+        policy,
+    )
+    assert [(app.id, app.family) for app in result.apps] == [
+        ("app.standard", "package:app.standard"),
+        ("app.generated", "app:project"),
+    ]
+    assert result.policy is policy
+
+
+def test_ingestion_requires_generated_policy_selectors_after_resolution(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [
+                {
+                    "match": {
+                        "source": "codm2000",
+                        "origin": "codm-generated",
+                        "id": "missing.id",
+                        "url": "https://github.com/owner/missing",
+                    },
+                    "rationale": "Required generated candidate.",
+                }
+            ],
+            "pins": [],
+        }
+    )
+    monkeypatch.setattr(rjny, "fetch", lambda *_args: [])
+    monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
+    monkeypatch.setattr(extras, "fetch", lambda *_args: [])
+    monkeypatch.setattr(codm, "fetch", lambda *_args: [])
+    with pytest.raises(CompositionPolicyError, match="matched no candidate"):
+        ingest_all(
+            FakeHttp({}),
+            {"rjny": {}, "bboi": {}, "codm": {}},
+            [],
+            StubResolver(),
+            policy,
+        )
+
+
 @pytest.mark.parametrize("missing", ["id", "url", "name"])
 @pytest.mark.parametrize("variants", [None, []])
 def test_extras_requires_named_fields(missing: str, variants: list[str] | None) -> None:
@@ -313,15 +494,66 @@ def test_extras_defaults_variants_derives_source_and_validates_subset() -> None:
             },
         ]
     )
-    assert {(app.id, app.variant, app.source_type) for app in apps} == {
-        ("a", Variant.SINGLE, SourceType.GITHUB),
-        ("a", Variant.DUAL, SourceType.GITHUB),
-        ("b", Variant.SINGLE, SourceType.HTML),
+    assert {(app.id, app.eligibility, app.source_type) for app in apps} == {
+        ("a", frozenset(Variant), SourceType.GITHUB),
+        ("b", frozenset({Variant.SINGLE}), SourceType.HTML),
     }
     with pytest.raises(SourceError, match="extras.*Bad.*wide"):
         extras.fetch(
             [{"id": "c", "url": "https://x", "name": "Bad", "variants": ["wide"]}]
         )
+
+
+def test_extras_rejects_empty_variants_and_invalid_dual_preference() -> None:
+    with pytest.raises(SourceError, match="extras.*Empty.*must not be empty"):
+        extras.fetch([{"id": "a", "url": "https://x", "name": "Empty", "variants": []}])
+    with pytest.raises(SourceError, match="extras.*Typed.*must be boolean"):
+        extras.fetch(
+            [
+                {
+                    "id": "b",
+                    "url": "https://x",
+                    "name": "Typed",
+                    "dualPreferred": 1,
+                }
+            ]
+        )
+    with pytest.raises(SourceError, match="extras.*Single.*requires dual"):
+        extras.fetch(
+            [
+                {
+                    "id": "c",
+                    "url": "https://x",
+                    "name": "Single",
+                    "variants": ["single"],
+                    "dualPreferred": True,
+                }
+            ]
+        )
+    preferred = extras.fetch(
+        [
+            {
+                "id": "d",
+                "url": "https://x",
+                "name": "Preferred",
+                "variants": ["dual"],
+                "dualPreferred": True,
+                "family": "app:ignored",
+                "origin": "ignored",
+                "originalId": "ignored",
+                "provenance": {"source": "ignored"},
+            }
+        ]
+    )[0]
+    assert preferred.dual_preferred
+    assert not preferred.raw.keys() & {
+        "dualPreferred",
+        "family",
+        "origin",
+        "originalId",
+        "provenance",
+        "variants",
+    }
 
 
 def test_settings_json_string_must_decode_to_object() -> None:
@@ -351,6 +583,9 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
     single.write_text("old single", encoding="utf-8")
     dual.write_text("old dual", encoding="utf-8")
     shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
+    (tmp_path / "config/composition.json").write_text(
+        '{"schemaVersion":1,"candidates":[],"pins":[]}', encoding="utf-8"
+    )
     before = {path.name: path.read_bytes() for path in dist.iterdir()}
     monkeypatch.chdir(tmp_path)
     requests: list[str] = []
@@ -410,7 +645,7 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
         FakeHttp({url: json.dumps({"apps": [record]})}),
         {"repo": "r", "branch": "main", "path": "p"},
     )
-    assert len(apps) == 2
+    assert len(apps) == 1
     assert all(app.source_type is declared for app in apps)
 
 

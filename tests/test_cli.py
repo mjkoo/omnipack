@@ -245,6 +245,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "sources.json": source_config,
         "http.json": {"credentials": {}},
         "extras.json": [],
+        "composition.json": {"schemaVersion": 1, "candidates": [], "pins": []},
         "package-ids.json": {
             "github.com/fixture/retained": {"packageId": "app.retained", "releaseId": 1}
         },

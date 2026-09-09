@@ -8,6 +8,10 @@ from dataclasses import dataclass, field
 from os import PathLike
 from typing import Any
 
+from omnipack.composition_policy import (
+    CompositionPolicy,
+    apply_composition_policy,
+)
 from omnipack.model import App
 from omnipack.package_id import ProjectResolver, ResolutionStatus
 
@@ -44,6 +48,7 @@ __all__ = ["IngestionReport", "SourceError"]
 class IngestionResult:
     apps: list[App]
     report: IngestionReport
+    policy: CompositionPolicy | None = None
 
 
 def ingest_all(
@@ -51,6 +56,7 @@ def ingest_all(
     source_config: Mapping[str, object],
     extras_config: object,
     resolver: ProjectResolver,
+    policy: CompositionPolicy,
     report: IngestionReport | None = None,
 ) -> IngestionResult:
     """Fetch every source in precedence order and retain structured outcomes."""
@@ -69,8 +75,13 @@ def ingest_all(
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)
     higher = [*extra_apps, *rjny_apps, *bboi_apps]
-    generated = codm.fetch(http, section("codm"), resolver, higher, report)
-    return IngestionResult([*rjny_apps, *bboi_apps, *generated, *extra_apps], report)
+    applied_higher = apply_composition_policy(
+        policy, higher, require_all=False
+    ).candidates
+    generated = codm.fetch(http, section("codm"), resolver, applied_higher, report)
+    all_candidates = [*rjny_apps, *bboi_apps, *generated, *extra_apps]
+    applied = apply_composition_policy(policy, all_candidates)
+    return IngestionResult(list(applied.candidates), report, policy)
 
 
 def load_json(path: str | PathLike[str], source: str) -> object:
