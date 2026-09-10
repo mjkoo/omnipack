@@ -260,6 +260,7 @@ def test_maintained_policy_composes_captured_replacement_families(
         "is.xyz.vcmi",
         "com.github.bvschaik.julius",
         "su.xash.engine.test",
+        "809443320",
     }
     assert set(expected) <= set(selected)
     assert {app.data["id"] for app in result.apps[variant]} >= curated_ids

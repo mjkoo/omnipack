@@ -119,6 +119,11 @@ def is_eligible(environ: Mapping[str, str]) -> bool:
     )
 
 
+def is_bootstrap_eligible(environ: Mapping[str, str]) -> bool:
+    """Bootstrap may run from any local ref but can target only the canonical repo."""
+    return environ.get("GITHUB_REPOSITORY") == CANONICAL_REPOSITORY
+
+
 def run_publication(
     environ: Mapping[str, str],
     *,
@@ -208,6 +213,7 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("publish")
+    commands.add_parser("bootstrap-release")
     setup = commands.add_parser("finalize-setup")
     setup.add_argument("--stage", required=True)
     setup.add_argument("--detail", required=True)
@@ -215,6 +221,24 @@ def main(argv: list[str] | None = None) -> int:
     upload.add_argument("--status", choices=("success", "failure"))
     arguments = parser.parse_args(argv)
     environ = os.environ
+    if arguments.command == "bootstrap-release":
+        if not is_bootstrap_eligible(environ):
+            print("Release bootstrap is restricted to the canonical repository.")
+            return 1
+        token = environ.get("GITHUB_TOKEN", "")
+        if not token:
+            print("Release bootstrap requires GITHUB_TOKEN.", file=sys.stderr)
+            return 1
+        from scripts.nightly_release import ReleaseError, bootstrap_release
+
+        try:
+            result = bootstrap_release(_api(environ))
+        except ReleaseError as error:
+            print(f"Release bootstrap failed: {error}", file=sys.stderr)
+            return 1
+        action = "created" if result.created else "already exists"
+        print(f"Owned rolling release {action} (id {result.release.release_id}).")
+        return 0
     if not is_eligible(environ):
         print("Nightly publishing is ineligible for this repository or ref.")
         return 0

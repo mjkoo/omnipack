@@ -101,5 +101,27 @@
       "trackOnly": false,
       "about": "Rolling prerelease engine. Requires user-supplied Half-Life game data."
     }
+  },
+  {
+    "id": "809443320",
+    "url": "https://github.com/mjkoo/omnipack",
+    "name": "omnipack updates",
+    "author": "mjkoo",
+    "categories": ["Utilities"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": true,
+      "fallbackToOlderReleases": true,
+      "filterReleaseTitlesByRegEx": "^omnipack revision [0-9]+$",
+      "verifyLatestTag": false,
+      "sortMethodChoice": "none",
+      "releaseTitleAsVersion": true,
+      "versionExtractionRegEx": "[0-9]+$",
+      "matchGroupToUse": "0",
+      "useLatestAssetDateAsReleaseDate": false,
+      "releaseDateAsVersion": false,
+      "versionDetection": false,
+      "trackOnly": true
+    }
   }
 ]
