@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from stat import S_IMODE
 
 import pytest
 
@@ -30,7 +31,9 @@ def test_output_transaction_restores_bytes_or_absence_and_cleans_temporary_files
     for path in paths:
         if existing or path.name == "README.md":
             path.write_bytes(b"previous:" + path.name.encode())
+            path.chmod(0o640 if path.name == "README.md" else 0o644)
     before = {path: path.read_bytes() if path.exists() else None for path in paths}
+    modes = {path: S_IMODE(path.stat().st_mode) for path in paths if path.exists()}
     original_write = Path.write_bytes
     original_replace = Path.replace
     calls = 0
@@ -61,9 +64,36 @@ def test_output_transaction_restores_bytes_or_absence_and_cleans_temporary_files
         build._replace_outputs({path: b"new" for path in paths})
     for path, snapshot in before.items():
         assert (path.read_bytes() if path.exists() else None) == snapshot
+        if snapshot is not None:
+            assert S_IMODE(path.stat().st_mode) == modes[path]
     assert {path for path in tmp_path.rglob("*") if path.is_file()} == {
         path for path, value in before.items() if value is not None
     }
+
+
+@pytest.mark.parametrize("mode", [0o600, 0o640, 0o644, 0o755])
+def test_output_replacement_preserves_existing_permissions(
+    tmp_path: Path, mode: int
+) -> None:
+    output = tmp_path / "README.md"
+    output.write_bytes(b"previous")
+    output.chmod(mode)
+
+    build._replace_outputs({output: b"new"})
+
+    assert output.read_bytes() == b"new"
+    assert S_IMODE(output.stat().st_mode) == mode
+
+
+def test_new_output_uses_normal_file_creation_permissions(tmp_path: Path) -> None:
+    reference = tmp_path / "reference.json"
+    reference.write_bytes(b"reference")
+    output = tmp_path / "new.json"
+
+    build._replace_outputs({output: b"new"})
+
+    assert output.read_bytes() == b"new"
+    assert S_IMODE(output.stat().st_mode) == S_IMODE(reference.stat().st_mode)
 
 
 @pytest.mark.parametrize(

@@ -38,8 +38,10 @@ written pack would be published. The system SHALL leave the existing output
 files unchanged when a build fails at any stage, and SHALL exit with a
 non-zero status. The two import files and README SHALL be published as a recoverable unit.
 A handled failure during replacement SHALL restore every replaced file to its
-previous bytes or absence. Before publication, a README changed since capture
-SHALL cause failure without overwriting that edit. Recovery covers handled
+previous bytes or absence. Successful replacement and recovery SHALL preserve
+existing file permission modes; new outputs SHALL use normal file creation
+permissions subject to the process umask. Before publication, a README changed
+since capture SHALL cause failure without overwriting that edit. Recovery covers handled
 exceptions, not process termination, runner loss or rollback storage failure. The resolved package id cache is exempt: a newly
 resolved id SHALL be written to the cache as soon as it resolves, so that a
 build failing later keeps the resolution work it already paid for.

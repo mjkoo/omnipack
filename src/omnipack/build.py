@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
-import tempfile
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
+from stat import S_IMODE
 from typing import Any
+from uuid import uuid4
 
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
@@ -181,9 +182,14 @@ def publish_build(
 def _replace_outputs(
     rendered: dict[Path, bytes], *, before_replace: Callable[[], None] | None = None
 ) -> None:
-    """Recover prior bytes or absence on handled staging/replacement failures."""
+    """Preserve modes and recover prior bytes or absence on handled failures."""
     snapshots = {
         path: path.read_bytes() if path.exists() else None for path in rendered
+    }
+    modes = {
+        path: S_IMODE(path.stat().st_mode)
+        for path, snapshot in snapshots.items()
+        if snapshot is not None
     }
     temporary: list[Path] = []
     staged: dict[Path, Path] = {}
@@ -191,12 +197,14 @@ def _replace_outputs(
 
     def stage(path: Path, content: bytes) -> Path:
         path.parent.mkdir(parents=True, exist_ok=True)
-        with tempfile.NamedTemporaryFile(
-            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, delete=False
-        ) as handle:
-            temp = Path(handle.name)
+        temp = path.with_name(f".{path.name}.{uuid4().hex}.tmp")
+        # Exclusive creation respects the umask for outputs that do not yet exist.
+        with temp.open("xb"):
+            pass
         temporary.append(temp)
         temp.write_bytes(content)
+        if path in modes:
+            temp.chmod(modes[path])
         return temp
 
     try:
