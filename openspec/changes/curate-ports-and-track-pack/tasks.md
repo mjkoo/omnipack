@@ -19,9 +19,9 @@
 
 ## 4. Rolling release synchronization
 
-- [ ] 4.1 Implement owned release-state parsing and desired-pair comparison with completed/pending revisions and digests; verify malformed/unowned state is rejected, bootstrap promotes to one, either JSON changes one shared revision, and unchanged/cache-only/catalog-only cases do not increment.
-- [ ] 4.2 Implement bounded asset replacement, remote digest verification and final title/state promotion on the same release; verify exact asset bytes, stable tag/release identity, credential boundaries, no unrelated asset writes and no revision advertisement before both assets are ready.
-- [ ] 4.3 Implement readback reconciliation for interrupted uploads and ambiguous state/promotion writes; verify no duplicate increment, repair of missing or corrupt assets without revision changes, superseded pending targets, restoration of the completed pair, and permission/protection errors without repository-setting changes.
+- [x] 4.1 Implement owned release-state parsing and desired-pair comparison with completed/pending revisions and digests; verify malformed/unowned state is rejected, bootstrap promotes to one, either JSON changes one shared revision, and unchanged/cache-only/catalog-only cases do not increment.
+- [x] 4.2 Implement bounded asset replacement, remote digest verification and final title/state promotion on the same release; verify exact asset bytes, stable tag/release identity, credential boundaries, no unrelated asset writes and no revision advertisement before both assets are ready.
+- [x] 4.3 Implement readback reconciliation for interrupted uploads and ambiguous state/promotion writes; verify no duplicate increment, repair of missing or corrupt assets without revision changes, superseded pending targets, restoration of the completed pair, and permission/protection errors without repository-setting changes.
 
 ## 5. Nightly integration and recovery
 
