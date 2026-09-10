@@ -71,7 +71,7 @@ use and reputation; they are not endorsements by the original game publishers.
 | Super Mario 64 (Ghostship) | [Source](https://github.com/HarbourMasters/Ghostship/releases/tag/3.0.0) | [Reference](https://www.reddit.com/r/EmulationOnAndroid/comments/1ufaooy/super_mario_64_port_crash_on_android/) |
 | Mario Kart 64 (SpaghettiKart) | [Source](https://github.com/izzy2lost/SpaghettiKart) | [Reference](https://www.resetera.com/threads/retro-portables-are-neat.299129/page-483) |
 | Perfect Dark Recomp | [Source](https://github.com/izzy2lost/perfect_dark) | [Reference](https://www.resetera.com/threads/retro-portables-are-neat.299129/page-483) |
-| Super Metroid Android (Dual Screen) | [Source](https://github.com/Raekwon1603/super_metroid-android) | [Reference](https://www.reddit.com/r/AynThor/comments/1vdopik/super_metroid_dual_screen_mod/) |
+| MetroidArch (Super Metroid) | [Source](https://github.com/Raekwon1603/RetroArch) | [Reference](https://www.reddit.com/r/AynThor/comments/1w4gdlg/metroidarch_super_metroid_dual_screen/) |
 | RetroArch (AArch64) | [Source](https://buildbot.libretro.com/stable) | [Reference](https://www.retroarch.com/?page=platforms) |
 | Star Fox 64 (Starship) | [Source](https://github.com/izzy2lost/Starship) | [Reference](https://www.resetera.com/threads/retro-portables-are-neat.299129/page-483) |
 | Pokémon Red/Blue Recomp | [Source](https://github.com/bryanthaboi/gen1recomp) | [Reference](https://www.reddit.com/r/EmulationOniOS/comments/1vi5hqu/gen1recompsideloaded/) |
