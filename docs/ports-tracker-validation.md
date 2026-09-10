@@ -6,7 +6,9 @@ baselines 1.6.14 for GitHub/HTML and 1.6.15 for the bounded GitLab adapter.
 
 This record covers generated output, offline verification, controlled publisher
 tests, the authorized real revision-zero release bootstrap, and complete live
-metadata verification. Nightly publication and device import remain unaccepted.
+metadata verification. Subsequent captured evidence establishes revision-one
+release synchronization after a verified main no-op and matching JSON downloads.
+Device import and notification acceptance remain incomplete.
 
 ## Rebuilt outputs
 
@@ -117,14 +119,49 @@ The tracker was not omitted from verification. The exact live report SHA-256 is
 No live metadata blockers remained in this run. Asset probes were not requested;
 metadata verification does not establish download, installation or device behavior.
 
+## Captured publication acceptance
+
+The earlier [workflow run 34448657542](https://github.com/mjkoo/omnipack/actions/runs/34448657542)
+completed at `2026-09-10T07:15:16.418886+00:00` with a successful main no-op.
+Its orchestration record has no release outcome fields, and its live report uses
+verifier 0.5.0. This older workflow does not establish release synchronization.
+
+The later [workflow run 34490627048](https://github.com/mjkoo/omnipack/actions/runs/34490627048)
+recorded completion at `2026-09-10T14:45:29.213257+00:00`, with
+`workflow_status: success`, `publication_status: no-op`,
+`release_status: success`, `release_revision: 1`, and `pending_revision: null`.
+Its verified source was commit `8bcf92abcc1cd00184a4b76c1c2fd5c0b9f932e7`;
+`published_sha: null` confirms this was release synchronization after a main
+no-op, not a new main push. The live report was complete and successful from
+`2026-09-10T14:41:23.865665+00:00` to
+`2026-09-10T14:45:22.614675+00:00`, using verifier 0.6.0 and the split
+GitHub/HTML 1.6.14 and GitLab 1.6.15 compatibility baselines. Its SHA-256 is
+`a58f6ce34f0e90301e3cb5514559a5af5049bbe0fc5b4f04b4d24d554580df90`.
+
+Captured downloads of both stable release assets match that run's verified
+input hashes byte for byte:
+
+| Release asset | SHA-256 |
+| --- | --- |
+| [single-screen.json](https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json) | `48384aaf02d0ba849f4aba13d8471214c30dad4650eb0955045c7f5b00bc2abf` |
+| [dual-screen.json](https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json) | `8e8eccb5d2d5adfd4e6cfac1d671600aa418fcd0868bcb8d919efc2c020be9fd` |
+
+These observations establish completed revision-one synchronization and matching
+downloads for this captured pair. The bootstrap section above records the
+earlier empty revision-zero state; it is not the later release state. The stable
+links are mutable, so the recorded hashes identify the accepted bytes rather
+than guaranteeing that future downloads retain them.
+
 ## Operational checks still incomplete
 
-No workflow was dispatched, no push or release synchronization occurred, and no
-real failure issue was created, updated, or closed. Nightly token permissions,
-publication under tag or release protections, stable asset downloads,
-interruption recovery, and actual main-to-release publication remain
-operationally unaccepted. The seed still has no JSON assets; the first successful
-synchronized pair will advertise revision one.
+The successful run establishes that its workflow credentials and protections
+permitted that release synchronization. It does not establish a new main push,
+interruption recovery, subsequent changed-content publication, or behavior under
+different permissions or protections. Both captured runs report
+`issue_status: unchanged`, so they do not establish real failure-issue creation,
+update or closure. Their orchestration snapshots retain
+`diagnostic_upload_status: pending`; those fields do not prove final diagnostic
+upload completion.
 
 No Android device acceptance was performed. Initial import of each JSON,
 unchanged checks, a changed shared-revision notification, acknowledgement,
