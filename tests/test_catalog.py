@@ -23,6 +23,7 @@ def app(
     url: str,
     *,
     categories: list[str] | None = None,
+    source: str = "GitHub",
     **extra: object,
 ) -> dict[str, object]:
     return {
@@ -32,7 +33,7 @@ def app(
         "name": name,
         "additionalSettings": "{}",
         "categories": categories or [],
-        "overrideSource": "GitHub",
+        "overrideSource": source,
         **extra,
     }
 
@@ -145,6 +146,29 @@ def test_source_url_cannot_break_the_table_or_html() -> None:
 
     assert 'href="https://example.test/a%7Cb%0Anext?q=%22quoted%22&amp;x=1"' in catalog
     assert catalog.count("\n") == 8
+
+
+def test_source_label_and_category_render_as_text_without_changing_payload() -> None:
+    hostile = app(
+        "hostile.source",
+        "Safe name",
+        "https://example.test/app",
+        categories=["<script>bad</script> | *category*\nnext"],
+        source="A|B *bold* <img>\nnext",
+        unknown={"preserved": True},
+    )
+
+    catalog = generate_catalog(pack(hostile), pack(), policy())
+    text = catalog.decode()
+
+    assert (
+        "<summary>&lt;script&gt;bad&lt;/script&gt; &#124; &#42;category&#42; next</summary>"
+        in text
+    )
+    assert ">A&#124;B &#42;bold&#42; &lt;img&gt; next</a>" in text
+    assert "<script>" not in text
+    assert "<img>" not in text
+    assert decoded_apps(catalog) == [hostile]
 
 
 def test_duplicate_projected_family_in_one_variant_is_rejected() -> None:

@@ -93,7 +93,7 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
             lines.extend(
                 (
                     "<details>",
-                    f"<summary>{_html_text(row.category)}</summary>",
+                    f"<summary>{_inline_html_text(row.category)}</summary>",
                     "",
                     "| Program | Single-screen | Dual-screen |",
                     "| --- | --- | --- |",
@@ -154,6 +154,17 @@ def _markdown_text(value: str) -> str:
     return re.sub(r"([\\`*{}\[\]()#+.!|_-])", r"\\\1", escaped)
 
 
+def _inline_html_text(value: str) -> str:
+    collapsed = re.sub(r"\s+", " ", value).strip()
+    markdown = frozenset(r"\`*{}[]()#+.!|_-")
+    return "".join(
+        f"&#{ord(character)};"
+        if character in markdown
+        else escape(character, quote=True)
+        for character in collapsed
+    )
+
+
 def _cell(record: dict[str, Any] | None) -> str:
     if record is None:
         return "-"
@@ -176,7 +187,7 @@ def _cell(record: dict[str, Any] | None) -> str:
     redirect = REDIRECT_URL + "?" + urlencode({"r": deep_link})
     redirect_url = escape(redirect, quote=True)
     return (
-        f'<a href="{source_url}">{_html_text(source)}</a> · '
+        f'<a href="{source_url}">{_inline_html_text(source)}</a> · '
         f'<a href="{redirect_url}">Add to Obtainium</a>'
     )
 
