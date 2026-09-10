@@ -18,6 +18,7 @@ from scripts.nightly_issues import GitHubApi, IssueReconciler
 from scripts.nightly_reporting import (
     RESULT_NAME,
     FinalizationResult,
+    _write_json,
     finalize_publication,
     finalize_setup_failure,
     record_upload_status,
@@ -356,10 +357,11 @@ def _existing_finalization(output_dir: Path) -> FinalizationResult:
     document = json.loads((output_dir / RESULT_NAME).read_bytes())
     if not isinstance(document, dict):
         raise OSError("orchestration result is not an object")
+    if document.get("release_status") != "success":
+        document["workflow_status"] = "failed"
+        _write_json(output_dir / RESULT_NAME, document, ())
     return FinalizationResult(
-        str(document.get("workflow_status", "failed"))
-        if document.get("release_status") == "success"
-        else "failed",
+        str(document.get("workflow_status", "failed")),
         str(document.get("publication_status", document.get("status", "failed"))),
         str(document.get("issue_status", "failed")),
         "",

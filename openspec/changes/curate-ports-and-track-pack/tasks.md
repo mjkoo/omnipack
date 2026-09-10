@@ -25,8 +25,8 @@
 
 ## 5. Nightly integration and recovery
 
-- [ ] 5.1 Run release synchronization only after confirmed main publication or verified no-op using that attempt's exact verified pair; verify uncertain pushes and failed verification prevent release writes, existing allowlists/retry gates hold, and a main no-op still repairs incomplete release publication.
-- [ ] 5.2 Extend orchestration diagnostics, fallback finalization and owned-issue recovery with separate main/release outcomes; verify release failure preserves the main SHA and keeps the issue open, completed synchronization enables recovery, and cleanup/upload failures do not erase confirmed outcomes.
+- [x] 5.1 Run release synchronization only after confirmed main publication or verified no-op using that attempt's exact verified pair; verify uncertain pushes and failed verification prevent release writes, existing allowlists/retry gates hold, and a main no-op still repairs incomplete release publication.
+- [x] 5.2 Extend orchestration diagnostics, fallback finalization and owned-issue recovery with separate main/release outcomes; verify release failure preserves the main SHA and keeps the issue open, completed synchronization enables recovery, and cleanup/upload failures do not erase confirmed outcomes.
 
 ## 6. Documentation and acceptance
 

@@ -534,3 +534,6 @@ def test_completed_fallback_missing_release_status_cannot_claim_success(
     assert result.workflow_status == "failed"
     assert result.release_status == "failed"
     assert result.publication_status == status
+    assert json.loads(path.read_text())["workflow_status"] == "failed"
+    assert record_upload(environment, "success") == "failed"
+    assert json.loads(path.read_text())["workflow_status"] == "failed"
