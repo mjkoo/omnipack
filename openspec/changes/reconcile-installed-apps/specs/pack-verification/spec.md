@@ -2,10 +2,11 @@
 
 ### Requirement: Live checks honor a declared compatibility boundary
 
-The system SHALL provide live GitHub and HTML resolution against the repository's
-Obtainium v1.6.14 compatibility baseline. It SHALL document supported settings
+The system SHALL retain live GitHub and HTML resolution against the repository's
+Obtainium v1.6.14 compatibility baseline and add native public GitLab resolution
+against the bounded Obtainium v1.6.15 GitLab adapter behavior. It SHALL document supported settings
 and explicit device-independent limitations. It SHALL support the release and
-HTML behavior specified below and SHALL reject active unsupported resolution
+HTML behavior specified below and the native public GitLab requirements and SHALL reject active unsupported resolution
 features with the setting and entry identified, rather than ignoring them.
 
 Unsupported features SHALL include archives other than GitHub ZIP asset selection, non-date/non-none GitHub
@@ -17,9 +18,20 @@ live compatibility error unless explicitly classified as harmless presentation
 or device controls. Final device architecture filtering and preferred APK
 selection SHALL be outside the guarantee and SHALL be identified as such.
 
+GitLab support SHALL be limited to explicit installable public gitlab.com project
+entries with release-tag versions, APK filtering, optional version extraction
+and older-release fallback. GitLab resolution SHALL include named asset links
+and project-upload APK links in release descriptions, and inspect at most 100
+releases in API order. Active GitLab options outside this boundary SHALL fail
+before HTTP; inactive defaults SHALL be classified explicitly. Public GitLab
+requests SHALL work without a token under the shared exact-host credential,
+request-bound, evidence and optional-probe guarantees. Adding GitLab SHALL NOT
+relax the existing GitHub credential requirement or HTML compatibility checks.
+
+
 #### Scenario: Unsupported feature is enabled
 
-- **WHEN** an HTML entry enables ZIP downloads
+- **WHEN** an HTML or GitLab entry enables ZIP downloads
 - **THEN** live verification reports unsupported resolution behavior
 - **AND** it does not pass the entry by checking only a direct APK
 
@@ -28,6 +40,11 @@ selection SHALL be outside the guarantee and SHALL be identified as such.
 - **WHEN** an HTML entry successfully extracts an explicit version and retains
   its default pseudo-versioning setting
 - **THEN** that unused default does not cause a compatibility error
+
+#### Scenario: Supported native GitLab entry dispatches to GitLab resolution
+
+- **WHEN** offline verification passes for an installable GitLab entry using supported settings
+- **THEN** live verification uses native GitLab release resolution and retains separate per-variant evidence without requiring a public GitLab token
 
 ### Requirement: GitHub resolution respects configured release selection
 

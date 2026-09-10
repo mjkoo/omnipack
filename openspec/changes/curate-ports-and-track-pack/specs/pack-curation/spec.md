@@ -6,8 +6,9 @@ Both exports SHALL include installable entries for Aurora Store (`https://gitlab
 
 #### Scenario: Upstream refresh repeats a curated project
 
-- **WHEN** an upstream also supplies one of these projects
-- **THEN** each variant contains one effective entry with the maintained identity and selection policy
+- **WHEN** an upstream also supplies one of these projects with the same package id and project URL, including a dual-preferred BBoi34 candidate with different APK or version settings
+- **THEN** each variant contains one effective entry selected by an explicit pin to the maintained extra, retaining its identity, APK selection and version policy
+- **AND** unpinned families retain the existing composition precedence
 
 ### Requirement: Xash3D tracks the continuous Android asset
 

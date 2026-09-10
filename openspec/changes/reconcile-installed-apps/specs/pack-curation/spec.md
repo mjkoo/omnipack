@@ -46,6 +46,10 @@ configured package ids in every variant containing them:
 - `com.winlator.cmod`
 - `xyz.blacksheep.mjolnir`
 
+The `com.ctrnative` policy SHALL apply to both retained repository choices:
+`https://github.com/simon358/ctr-native-android` in the single-screen pack and
+`https://github.com/igawa6/ctr-native-android` in the dual-screen pack.
+
 These policies SHALL preserve complete selected source versions, without adding
 numeric extraction or date conversion. They SHALL NOT enable track-only mode,
 disable update checks or notifications, or change release/APK selection settings.
@@ -126,6 +130,8 @@ The retained identity corrections SHALL be exactly:
   `https://github.com/Matteo842/CrashBandicoot-Launcher`
 - `com.joshdaniels.openmwds` to `org.openmw.ds` for
   `https://github.com/Josh-Daniels/OpenMW-DS`
+- `com.simon358.ctrnative` to `com.ctrnative` for
+  `https://github.com/simon358/ctr-native-android` in the single-screen pack
 
 No unrelated app identity SHALL change as part of this reconciliation;
 `com.winlator.ludashi` is explicitly outside its identity-correction scope.
@@ -134,6 +140,17 @@ CTR for dual and Simon CTR for single. Gen1Recomp SHALL use its canonical
 bryanthaboi/gen1recomp repository. Both packs SHALL select HarbourMasters/Ghostship
 as dev.net64.ghostship from its Android ZIP, exclude legacy izzy2lost Ghostship,
 and exclude the retired Super Metroid family without adding MetroidArch.
+
+Both retained CTR repositories SHALL use effective package `com.ctrnative`:
+`https://github.com/simon358/ctr-native-android` in the single-screen pack and
+`https://github.com/igawa6/ctr-native-android` in the dual-screen pack. The igawa6
+catalog ID is already `com.ctrnative` and SHALL remain unchanged, without an
+additional identity mapping. Both original catalog IDs SHALL remain in provenance.
+Implementation acceptance SHALL require separate dated manifest evidence from
+each repository's selected APK confirming `com.ctrnative`, plus verification that
+both rendered entries explicitly set `versionDetection: false` and preserve their
+complete selected source versions after repeated upstream refreshes. Metadata
+resolution or this planning revision SHALL NOT substitute for that APK evidence.
 
 Curation acceptance SHALL use documented source reputation and basic source/APK
 vetting; independent binary reproduction SHALL NOT be required. Documentation

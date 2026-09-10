@@ -8,7 +8,10 @@ installation for publisher changes without save or controller migration.
 ## What Changes
 
 - Correct retained installed-app identities persistently across catalog refreshes.
-- Keep Symphony's unofficial beta, OpenMW-DS, and the igawa6 dual-screen CTR fork.
+- Keep Symphony's unofficial beta, OpenMW-DS, Simon CTR for single-screen and
+  igawa6 CTR for dual-screen; use `com.ctrnative` for both CTR repositories, require
+  separate APK manifest evidence, preserve original catalog IDs in provenance,
+  and disable APK version detection for both.
 - Replace legacy Ghostship with HarbourMasters' Android ZIP release in both packs.
 - Remove retired Super Metroid from both packs without adding MetroidArch.
 - Support GitHub ZIP release selection with Obtainium's on-device APK extraction.

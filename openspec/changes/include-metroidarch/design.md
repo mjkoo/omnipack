@@ -1,7 +1,8 @@
 ## Context
 
-See proposal.md for motivation. This change depends on the completed, unmerged
-reconciliation work and supersedes only its decision to omit MetroidArch. Its
+See proposal.md for motivation. This change depends on the existing, unmerged
+reconciliation work, whose revised CTR identity and version-policy verification
+remains open, and supersedes only its decision to omit MetroidArch. Its
 modified requirement is copied in full from that preceding delta. Implementation
 can proceed on this stacked branch, but synchronize or archive the predecessor
 before publishing this change's spec. Preserve its other app choices and evidence.
@@ -35,6 +36,10 @@ Promote concise metadata and source references from the inspected v1.0.0/v1.0.1
 APKs into committed regression evidence, without committing binaries or scratch
 references. Test through real composition with captured catalog data and mocked
 release HTTP. Preserve existing version policies and the rest of both packs.
+Reverify the predecessor's revised CTR requirements: Simon single-screen and
+igawa6 dual-screen both use `com.ctrnative` with APK version detection disabled,
+original catalog IDs retained in provenance, and separate dated manifest evidence
+for each repository's selected APK. This propagation does not establish that evidence.
 
 Publish a durable MetroidArch setup/vetting document. State menu Directory
 settings and exact config keys from the release source. ADB procedure is:
