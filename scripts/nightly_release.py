@@ -63,11 +63,22 @@ class RollingState:
 
 
 @dataclass(frozen=True)
+class ReleaseAsset:
+    asset_id: int
+    name: str
+    api_url: str
+
+
+@dataclass(frozen=True)
 class OwnedRelease:
     release_id: int
     title_revision: int
     state: RollingState
-    asset_names: tuple[str, ...]
+    assets: tuple[ReleaseAsset, ...]
+
+    @property
+    def asset_names(self) -> tuple[str, ...]:
+        return tuple(asset.name for asset in self.assets)
 
 
 @dataclass(frozen=True)
@@ -78,21 +89,34 @@ class BootstrapResult:
 
 def seed_body() -> str:
     """Return the canonical, machine-readable revision-zero seed body."""
-    state = {
-        "schemaVersion": 1,
-        "completed": {
-            "revision": 0,
-            "sourceCommit": None,
-            "digests": {ASSET_NAMES[0]: None, ASSET_NAMES[1]: None},
-        },
-        "pending": None,
-    }
-    encoded = json.dumps(state, sort_keys=True, separators=(",", ":"))
-    return (
-        f"{OWNERSHIP_MARKER}\n\n"
-        "Initial pack publication is pending; JSON assets are not yet published.\n\n"
-        f"{STATE_START}{encoded}{STATE_END}"
+    return state_body(
+        RollingState(PublishedTarget(0, None, DigestPair(None, None)), None),
+        introduction="Initial pack publication is pending; JSON assets are not yet published.",
     )
+
+
+def state_body(
+    state: RollingState, *, introduction: str = "Rolling pack publication state."
+) -> str:
+    """Encode the canonical owned state body without losing completed state."""
+
+    def target(value: PublishedTarget) -> dict[str, object]:
+        return {
+            "revision": value.revision,
+            "sourceCommit": value.source_commit,
+            "digests": {
+                ASSET_NAMES[0]: value.digests.single,
+                ASSET_NAMES[1]: value.digests.dual,
+            },
+        }
+
+    value = {
+        "schemaVersion": 1,
+        "completed": target(state.completed),
+        "pending": None if state.pending is None else target(state.pending),
+    }
+    encoded = json.dumps(value, sort_keys=True, separators=(",", ":"))
+    return f"{OWNERSHIP_MARKER}\n\n{introduction}\n\n{STATE_START}{encoded}{STATE_END}"
 
 
 def parse_owned_release(document: object) -> OwnedRelease:
@@ -125,6 +149,7 @@ def parse_owned_release(document: object) -> OwnedRelease:
     assets = document.get("assets")
     if not isinstance(assets, list):
         raise BootstrapConflict("release assets must be a list")
+    parsed_assets: list[ReleaseAsset] = []
     names: list[str] = []
     for asset in assets:
         if not isinstance(asset, dict) or not isinstance(asset.get("name"), str):
@@ -135,7 +160,18 @@ def parse_owned_release(document: object) -> OwnedRelease:
         if name in names:
             raise BootstrapConflict(f"duplicate release asset: {name}")
         names.append(name)
-    return OwnedRelease(release_id, title_revision, state, tuple(names))
+        asset_id = asset.get("id")
+        api_url = asset.get("url")
+        if (
+            not isinstance(asset_id, int)
+            or isinstance(asset_id, bool)
+            or asset_id <= 0
+            or not isinstance(api_url, str)
+            or not api_url.startswith("https://api.github.com/")
+        ):
+            raise BootstrapConflict("release asset metadata is malformed")
+        parsed_assets.append(ReleaseAsset(asset_id, name, api_url))
+    return OwnedRelease(release_id, title_revision, state, tuple(parsed_assets))
 
 
 def parse_state(body: object) -> RollingState:
