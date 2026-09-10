@@ -32,3 +32,44 @@ These checks establish local specification alignment and regression coverage.
 They do not establish binary identity, extraction, installation, notification,
 or device behavior. Operational and on-device acceptance remain deferred until
 the branch has settled, with any findings handled in follow-up work.
+
+## GitLab specification ownership
+
+The pre-archive comparison on September 10, 2026 verified that both detailed
+GitLab requirements move verbatim into their pipeline capabilities:
+
+| Receiving specification | Requirement | Preserved scenarios |
+| --- | --- | --- |
+| [Source ingestion](../openspec/specs/source-ingestion/spec.md) | Public GitLab entries retain native source identity | 1 |
+| [Pack verification](../openspec/specs/pack-verification/spec.md) | GitLab release resolution includes uploaded description APKs | 6 |
+
+The modified source-type summary retains its five existing scenarios verbatim;
+the modified live-compatibility summary retains its three. Every detailed
+statement in both moved requirements is unchanged. Repeated summary clauses
+have the following surviving owners:
+
+| Summary clause | Surviving obligation |
+| --- | --- |
+| Public HTTPS gitlab.com project URL, namespace/project, subgroup depth and case preservation | Native identity requirement; the source-type summary retains the invalid-URL rejection scenario |
+| GitLab settings defaults, explicit-setting precedence and avoiding HTML defaults | Native identity requirement and source-type summary |
+| No expansion of generated GitHub package-ID discovery | Native identity requirement |
+| Explicit installable public projects, tag versions, APK filtering, extraction and older-release fallback | Detailed GitLab release requirement; native identity requirement supplies the gitlab.com URL boundary |
+| Named assets, description uploads and at most 100 releases in API order | Detailed GitLab release requirement |
+| Reject unsupported active options before HTTP and classify inactive defaults | Detailed GitLab release requirement |
+| Token-free public requests, exact-host credentials, bounded requests, per-variant evidence and optional probes | Detailed GitLab release requirement and shared verification requirements |
+| Preserve existing GitHub credential and HTML compatibility checks | Live-compatibility summary |
+
+Strict change validation passed. An in-memory merge check produced nine
+capabilities and 81 requirements, compared with ten capabilities and the same
+81 requirements before consolidation. A search of living specs, `docs/` and
+`README.md` found no operational references to the retiring capability beyond
+its own title. Historical archives remain unchanged.
+
+A Git comparison against `e0b4abd` confirmed unchanged runtime, tests, scripts,
+configuration, generated exports, README, dependencies and workflows. The
+999-test baseline above therefore remains applicable; no additional behavior
+or tests were introduced. These are pre-archive preservation checks. Final
+acceptance of the relocation requires verifying the receiving main specs,
+retiring the empty capability with explicit metadata, and strict validation of
+the resulting nine-capability inventory. Operational and device acceptance
+remain deferred.
