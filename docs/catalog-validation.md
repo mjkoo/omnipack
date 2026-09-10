@@ -16,7 +16,8 @@ interior, including CRLF and non-UTF8 handwritten bytes.
 Build integration tests inject staging and replacement failures with and without
 prior exports, including failure to replace README after both packs. They verify
 restoration to prior bytes or absence and cleanup of temporary files. Concurrent
-README and policy edits prevent publication. Standalone verification tests reject
+README and policy edits, including edits during the final temporary-file write,
+prevent publication and preserve the edits. Standalone verification tests reject
 missing, unreadable, malformed and stale catalogs without input writes or live
 requests, detect input mutation, and allow fresh verification after handwritten
 edits. Historical seven- and eight-input reports remain readable but stale.
@@ -38,8 +39,10 @@ Checked on 2026-09-09 against the official [deep-link documentation](https://wik
 and [redirect source](https://github.com/ImranR98/apps.obtainium.imranr.dev/blob/main/src/pages/redirect.astro).
 The redirect reads the decoded `r` query value, strips `obtainium://app/`, decodes
 the percent-encoded JSON, parses it, and reserializes the object before handoff.
-The fixture in `tests/fixtures/obtainium-redirect-decoding.json` covers those
-steps with Unicode, reserved characters, regex escaping and nested typed data.
+The test for `tests/fixtures/obtainium-redirect-decoding.json` generates a catalog
+from its complete app record, matches the generated redirect to the fixture URL,
+and follows those decoding and handoff steps. It checks exact payload and type
+fidelity with Unicode, reserved characters, regex escaping and nested typed data.
 
 An audit of the initial generated README matched all 195 decoded variant links
 to the exported app-record multiset exactly. Its 107 family rows appear in nine

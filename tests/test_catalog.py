@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
+from html import unescape
 from pathlib import Path
-from urllib.parse import parse_qs, unquote, urlsplit
+from urllib.parse import parse_qs, quote, unquote, urlsplit
 
 import pytest
 
@@ -198,15 +199,30 @@ def test_malformed_serialized_pack_is_rejected(serialized: bytes) -> None:
 
 def test_redirect_fixture_matches_the_real_decoder_round_trip() -> None:
     fixture = json.loads((FIXTURES / "obtainium-redirect-decoding.json").read_text())
-    outer_query = urlsplit(fixture["url"]).query
+    catalog = generate_catalog(
+        pack(fixture["app"], settings={"packWide": "excluded"}), pack(), policy()
+    )
+    redirects = [
+        unescape(part.split('"', 1)[0])
+        for part in catalog.decode().split('href="')[1:]
+        if part.startswith("https://apps.obtainium.imranr.dev/redirect?")
+    ]
+    assert redirects == [fixture["url"]]
+
+    outer_query = urlsplit(redirects[0]).query
     deep_link = parse_qs(outer_query)["r"][0]
+    assert deep_link.startswith("obtainium://app/")
     encoded = deep_link.removeprefix("obtainium://app/")
     decoded = json.loads(unquote(encoded))
     reserialized = json.dumps(decoded, ensure_ascii=False, separators=(",", ":"))
+    handoff = "obtainium://app/" + quote(reserialized, safe="~()*!.'-")
+    imported = json.loads(unquote(handoff.removeprefix("obtainium://app/")))
 
-    assert deep_link.startswith("obtainium://app/")
     assert decoded == fixture["app"]
-    assert json.loads(reserialized) == fixture["app"]
+    assert imported == fixture["app"]
+    assert json.dumps(imported, sort_keys=True) == json.dumps(
+        fixture["app"], sort_keys=True
+    )
 
 
 def test_split_and_replace_preserve_every_byte_outside_marker_interior() -> None:

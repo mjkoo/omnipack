@@ -181,3 +181,49 @@ def test_policy_snapshot_is_rechecked_when_caller_does_not_supply_one(
         )
     assert failure.value.findings[0]["code"] == "input_changed"
     assert not (tmp_path / "dist").exists()
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("input_name", ["README.md", "config/composition.json"])
+def test_input_edit_during_staging_preserves_inputs_outputs_and_cleans_temps(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    existing: bool,
+    input_name: str,
+) -> None:
+    write_config(tmp_path)
+    readme = tmp_path / "README.md"
+    readme.write_bytes(MARKED)
+    outputs = [tmp_path / "dist" / name for name in build.OUTPUTS.values()]
+    if existing:
+        outputs[0].parent.mkdir()
+        for output in outputs:
+            output.write_bytes(b"previous pack")
+    preserved = [readme, tmp_path / "config/composition.json", *outputs]
+    expected = {
+        path: path.read_bytes() if path.exists() else None for path in preserved
+    }
+    edited = tmp_path / input_name
+    edited_bytes = edited.read_bytes() + b"\n"
+    expected[edited] = edited_bytes
+    original_write = Path.write_bytes
+    staged = 0
+
+    def mutate_during_write(path: Path, content: bytes) -> int:
+        nonlocal staged
+        result = original_write(path, content)
+        if path.suffix == ".tmp" and path.parent in {tmp_path, tmp_path / "dist"}:
+            if staged == 2:
+                original_write(edited, edited_bytes)
+            staged += 1
+        return result
+
+    monkeypatch.setattr(Path, "write_bytes", mutate_during_write)
+    with pytest.raises(build.OfflineVerificationError) as failure:
+        build.publish_build(tmp_path, composition("one"), {}, IngestionReport())
+
+    assert staged == 3
+    assert failure.value.findings[0]["code"] == "input_changed"
+    for path, snapshot in expected.items():
+        assert (path.read_bytes() if path.exists() else None) == snapshot
+    assert not list(tmp_path.rglob("*.tmp"))

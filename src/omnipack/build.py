@@ -173,11 +173,14 @@ def publish_build(
                 for variant, value in rendered.items()
             },
             readme_path: readme_rendered,
-        }
+        },
+        before_replace=require_current_inputs,
     )
 
 
-def _replace_outputs(rendered: dict[Path, bytes]) -> None:
+def _replace_outputs(
+    rendered: dict[Path, bytes], *, before_replace: Callable[[], None] | None = None
+) -> None:
     """Recover prior bytes or absence on handled staging/replacement failures."""
     snapshots = {
         path: path.read_bytes() if path.exists() else None for path in rendered
@@ -199,6 +202,8 @@ def _replace_outputs(rendered: dict[Path, bytes]) -> None:
     try:
         for path, content in rendered.items():
             staged[path] = stage(path, content)
+        if before_replace is not None:
+            before_replace()
         for path, temp in staged.items():
             temp.replace(path)
             replaced.append(path)

@@ -1,13 +1,30 @@
 {
   "source": "https://github.com/ImranR98/apps.obtainium.imranr.dev/blob/main/src/pages/redirect.astro",
-  "url": "https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2522fixture.test%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fexample.test%252Fapp%253Fx%253D%2525%2526y%253D%2523%2522%252C%2522name%2522%253A%2522Caf%25C3%25A9%2522%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522pattern%255C%2522%253A%255C%2522a%255C%255Cd%252B%255C%2522%257D%2522%252C%2522future%2522%253A%257B%2522typed%2522%253Atrue%257D%257D",
+  "url": "https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%2522fixture.test%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fexample.test%252Fapp%253Fx%253D%2525%2526y%253D%2523%252Breserved%2522%252C%2522author%2522%253A%2522fixture%2522%252C%2522name%2522%253A%2522Caf%25C3%25A9%2520%25E6%2597%25A5%25E6%259C%25AC%2520%25F0%259F%258E%25AE%2522%252C%2522preferredApkIndex%2522%253A0%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522pattern%255C%2522%253A%255C%2522a%255C%255C%255C%255Cd%252B%2525%2526%2523%255C%2522%252C%255C%2522trackOnly%255C%2522%253Afalse%257D%2522%252C%2522categories%2522%253A%255B%2522Games%2522%255D%252C%2522overrideSource%2522%253A%2522HTML%2522%252C%2522allowIdChange%2522%253Afalse%252C%2522future%2522%253A%257B%2522typed%2522%253Atrue%252C%2522absent%2522%253Anull%252C%2522count%2522%253A7%252C%2522ratio%2522%253A1.5%252C%2522text%2522%253A%2522false%2522%252C%2522list%2522%253A%255Bfalse%252C0%252C%25220%2522%252C%252250%2525%2520%2526%2520%2523%2520%252B%2522%255D%257D%257D",
   "app": {
     "id": "fixture.test",
-    "url": "https://example.test/app?x=%&y=#",
-    "name": "Café",
-    "additionalSettings": "{\"pattern\":\"a\\d+\"}",
+    "url": "https://example.test/app?x=%&y=#+reserved",
+    "author": "fixture",
+    "name": "Café 日本 🎮",
+    "preferredApkIndex": 0,
+    "additionalSettings": "{\"pattern\":\"a\\\\d+%&#\",\"trackOnly\":false}",
+    "categories": [
+      "Games"
+    ],
+    "overrideSource": "HTML",
+    "allowIdChange": false,
     "future": {
-      "typed": true
+      "typed": true,
+      "absent": null,
+      "count": 7,
+      "ratio": 1.5,
+      "text": "false",
+      "list": [
+        false,
+        0,
+        "0",
+        "50% & # +"
+      ]
     }
   }
 }

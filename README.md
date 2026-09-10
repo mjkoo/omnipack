@@ -206,7 +206,8 @@ resources and may not provide an installable app.
 
 This pack curates
 [RJNY's source JSON](https://github.com/RJNY/Obtainium-Emulation-Pack/blob/main/src/applications.json),
-[BBoi34's standard and dual-screen release catalogs](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases),
+[BBoi34's standard release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Decomp-Recomp.V3.2.json)
+and [dual-screen release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Dual-Screen-Decomp-Recomp.V3.2.json),
 and [codm2000's project catalog](https://github.com/codm2000/Dual-Screen-Games).
 Thanks to [Obtainium](https://github.com/ImranR98/Obtainium), those catalog
 maintainers, and the individual app developers linked as sources in every row.
