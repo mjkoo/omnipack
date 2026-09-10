@@ -60,14 +60,15 @@ def synchronize_release(
     """Publish one verified pair, promoting only after both remote bytes match."""
     if re.fullmatch(r"[0-9a-f]{40}", source_commit) is None:
         raise ReleaseError("source commit is malformed")
+    discovery = _ReleaseDiscovery(remote)
     try:
-        return _synchronize_release(remote, single, dual, source_commit)
+        return _synchronize_release(remote, discovery, single, dual, source_commit)
     except SyncFailure:
         raise
     except ReleaseError as error:
         pending_revision = None
         try:
-            observed = _discover(remote).state.pending
+            observed = discovery.read().state.pending
             pending_revision = None if observed is None else observed.revision
         except ReleaseError:
             pass
@@ -75,10 +76,14 @@ def synchronize_release(
 
 
 def _synchronize_release(
-    remote: ReleaseRemote, single: bytes, dual: bytes, source_commit: str
+    remote: ReleaseRemote,
+    discovery: _ReleaseDiscovery,
+    single: bytes,
+    dual: bytes,
+    source_commit: str,
 ) -> SyncResult:
     desired = DigestPair(sha256(single).hexdigest(), sha256(dual).hexdigest())
-    release = _discover(remote)
+    release = discovery.read()
     completed = release.state.completed
     changed = desired != completed.digests
     target = (
@@ -89,41 +94,60 @@ def _synchronize_release(
 
     if changed and release.state.pending != target:
         expected = RollingState(completed, target)
-        release = _update_state(remote, release, completed.revision, expected)
+        release = _update_state(
+            remote, discovery, release, completed.revision, expected
+        )
 
     repaired = False
     for name, content, digest in zip(
         ASSET_NAMES, (single, dual), (desired.single, desired.dual), strict=True
     ):
-        release, replaced = _ensure_asset(remote, release, name, content, digest)
+        release, replaced = _ensure_asset(
+            remote, discovery, release, name, content, digest
+        )
         repaired = repaired or replaced
 
     # An upload acknowledgement, asset metadata, or one successful download is
     # never sufficient. Independently re-read and hash both remote objects.
-    release = _discover(remote)
+    release = discovery.read()
     _verify_pair(remote, release, desired)
 
     final_state = RollingState(target, None)
     if release.title_revision != target.revision or release.state != final_state:
-        release = _update_state(remote, release, target.revision, final_state)
-    release = _discover(remote)
+        release = _update_state(
+            remote, discovery, release, target.revision, final_state
+        )
+    release = discovery.read()
     if release.title_revision != target.revision or release.state != final_state:
         raise ReleaseError("release promotion readback does not match desired state")
     _verify_pair(remote, release, desired)
     return SyncResult(target.revision, changed, repaired and not changed)
 
 
-def _discover(remote: ReleaseRemote) -> OwnedRelease:
-    try:
-        return parse_owned_release(remote.discover())
-    except BootstrapConflict:
-        raise
-    except OSError as error:
-        raise ReleaseError("release discovery failed") from error
+@dataclass
+class _ReleaseDiscovery:
+    """Keep every readback, including diagnostics, on the initial release."""
+
+    remote: ReleaseRemote
+    release_id: int | None = None
+
+    def read(self) -> OwnedRelease:
+        try:
+            release = parse_owned_release(self.remote.discover())
+        except BootstrapConflict:
+            raise
+        except OSError as error:
+            raise ReleaseError("release discovery failed") from error
+        if self.release_id is None:
+            self.release_id = release.release_id
+        elif release.release_id != self.release_id:
+            raise ReleaseError("release identity changed during synchronization")
+        return release
 
 
 def _update_state(
     remote: ReleaseRemote,
+    discovery: _ReleaseDiscovery,
     release: OwnedRelease,
     title_revision: int,
     state: RollingState,
@@ -133,11 +157,11 @@ def _update_state(
     try:
         remote.update(release.release_id, title=title, body=body)
     except OSError:
-        readback = _discover(remote)
+        readback = discovery.read()
         if readback.title_revision == title_revision and readback.state == state:
             return readback
         raise ReleaseError("release update outcome is unknown")
-    readback = _discover(remote)
+    readback = discovery.read()
     if readback.title_revision != title_revision or readback.state != state:
         raise ReleaseError("release update readback does not match requested state")
     return readback
@@ -145,6 +169,7 @@ def _update_state(
 
 def _ensure_asset(
     remote: ReleaseRemote,
+    discovery: _ReleaseDiscovery,
     release: OwnedRelease,
     name: str,
     content: bytes,
@@ -160,17 +185,17 @@ def _ensure_asset(
         try:
             remote.delete_asset(existing)
         except OSError:
-            readback = _discover(remote)
+            readback = discovery.read()
             if any(asset.name == name for asset in readback.assets):
                 raise ReleaseError(f"{name} deletion outcome is unknown")
-        release = _discover(remote)
+        release = discovery.read()
         if any(asset.name == name for asset in release.assets):
             raise ReleaseError(f"{name} remains after deletion")
 
     try:
         remote.upload_asset(release.release_id, name, content)
     except OSError:
-        release = _discover(remote)
+        release = discovery.read()
         candidate = next(
             (asset for asset in release.assets if asset.name == name), None
         )
@@ -183,7 +208,7 @@ def _ensure_asset(
             raise ReleaseError(f"{name} upload readback failed") from error
         return release, True
 
-    release = _discover(remote)
+    release = discovery.read()
     candidate = next((asset for asset in release.assets if asset.name == name), None)
     if candidate is None:
         raise ReleaseError(f"{name} is absent after upload")

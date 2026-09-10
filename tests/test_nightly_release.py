@@ -229,6 +229,60 @@ def test_ambiguous_delete_rediscovers_absence_before_one_upload() -> None:
     ] == [("delete", "single-screen.json")]
 
 
+@pytest.mark.parametrize("operation", ["pending", "delete", "upload", "promotion"])
+@pytest.mark.parametrize("ambiguous", [False, True])
+def test_replacement_release_stops_reconciliation(
+    operation: str, ambiguous: bool
+) -> None:
+    class ReplacingRemote(ControlledReleaseRemote):
+        replacement_seen_at: int | None = None
+
+        def discover(self) -> dict[str, object]:
+            last = self.calls[-1][0] if self.calls else None
+            trigger = (
+                last == "update"
+                and self.update_count == (1 if operation == "pending" else 2)
+                if operation in {"pending", "promotion"}
+                else last == operation
+            )
+            if trigger and self.replacement_seen_at is None:
+                self.document["id"] = 456
+                self.replacement_seen_at = len(self.calls)
+            return super().discover()
+
+    remote = ReplacingRemote(
+        completed_release(b"old-s", b"old-d"),
+        {"single-screen.json": b"old-s", "dual-screen.json": b"old-d"},
+    )
+    if ambiguous:
+        if operation in {"pending", "promotion"}:
+            remote.ambiguous_update_number = 1 if operation == "pending" else 2
+        else:
+            remote.ambiguous.add(operation)
+    with pytest.raises(SyncFailure, match="release identity changed") as failure:
+        synchronize_release(remote, b"new-s", b"new-d", "f" * 40)
+    assert failure.value.pending_revision is None
+    assert remote.replacement_seen_at is not None
+    assert all(
+        call[0] == "discover" for call in remote.calls[remote.replacement_seen_at :]
+    )
+
+
+def test_failure_diagnostics_do_not_use_replacement_pending_state() -> None:
+    class ReplacingRemote(ControlledReleaseRemote):
+        def discover(self) -> dict[str, object]:
+            if self.calls and self.calls[-1][0] == "upload":
+                self.document["id"] = 456
+            return super().discover()
+
+    remote = ReplacingRemote(release())
+    remote.fail["upload"] = ReleaseError("upload denied")
+    with pytest.raises(SyncFailure, match="upload denied") as failure:
+        synchronize_release(remote, b"single", b"dual", "f" * 40)
+    assert failure.value.pending_revision is None
+    assert remote.calls[-1] == ("discover", None)
+
+
 def test_invalid_source_commit_fails_before_remote_access() -> None:
     remote = ControlledReleaseRemote(release())
     with pytest.raises(ReleaseError, match="source commit"):
