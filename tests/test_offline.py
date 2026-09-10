@@ -264,6 +264,24 @@ def test_defaults_are_required_and_known_types_are_checked() -> None:
     assert {"missing_setting_default", "wrong_setting_type"} <= codes(result)
 
 
+def test_complete_native_gitlab_entry_passes_offline_validation() -> None:
+    value = app("aurora", source="GitLab")
+    value["url"] = "https://gitlab.com/AuroraOSS/AuroraStore"
+    result = validate_offline(inputs([value], [dict(value)]))
+    assert result.ok
+    assert [entry.source for entry in result.entries["single"]] == ["GitLab"]
+
+
+@pytest.mark.parametrize(
+    "url",
+    ["http://gitlab.com/a/b", "https://other.test/a/b", "https://gitlab.com/one"],
+)
+def test_native_gitlab_url_boundary_is_checked_offline(url: str) -> None:
+    value = app(source="GitLab")
+    value["url"] = url
+    assert "invalid_gitlab_url" in codes(validate_offline(inputs([value], [])))
+
+
 @pytest.mark.parametrize(
     ("field", "nested", "code"),
     [

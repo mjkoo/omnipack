@@ -109,6 +109,19 @@ def test_catalog_groups_variants_by_current_family_and_preserves_exact_apps() ->
     assert all("packWide" not in linked for linked in decoded_apps(catalog))
 
 
+def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() -> None:
+    gitlab = app(
+        "com.aurora.store",
+        "Aurora Store",
+        "https://gitlab.com/AuroraOSS/Parent/AuroraStore",
+        source="GitLab",
+        additionalSettings=json.dumps({"fallbackToOlderReleases": True}),
+    )
+    catalog = generate_catalog(pack(gitlab), pack(dict(gitlab)), policy())
+    assert catalog.decode().count(">GitLab</a>") == 2
+    assert decoded_apps(catalog) == [gitlab, gitlab]
+
+
 def test_catalog_handles_dual_only_ordering_and_escapes_source_text() -> None:
     lower = app("z.id", "alpha", "https://example.test/z", categories=["beta"])
     exact = app("a.id", "Alpha", "https://example.test/a", categories=["Beta"])

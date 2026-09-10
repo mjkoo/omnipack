@@ -21,6 +21,7 @@ class SourceType(str, Enum):
 
     GITHUB = "GitHub"
     HTML = "HTML"
+    GITLAB = "GitLab"
 
 
 @dataclass(frozen=True, slots=True)

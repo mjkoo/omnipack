@@ -288,6 +288,17 @@ def _validate_entry(
             "overrideSource",
         )
         source = None
+    if source == "GitLab" and isinstance(url, str) and not _valid_gitlab_url(url):
+        _add(
+            findings,
+            "entry",
+            "invalid_gitlab_url",
+            "GitLab URL must identify a public HTTPS gitlab.com project",
+            variant,
+            entry_id,
+            index,
+            "url",
+        )
     preferred = raw.get("preferredApkIndex")
     if "preferredApkIndex" in raw and (
         not isinstance(preferred, int) or isinstance(preferred, bool)
@@ -310,6 +321,25 @@ def _validate_entry(
     if entry_id is None or source is None or settings is None:
         return None
     return ValidatedEntry(variant, index, entry_id, source, raw, settings)
+
+
+def _valid_gitlab_url(url: str) -> bool:
+    try:
+        parsed = urlsplit(url)
+    except ValueError:
+        return False
+    parts = [part for part in parsed.path.split("/") if part]
+    return (
+        parsed.scheme == "https"
+        and parsed.hostname == "gitlab.com"
+        and parsed.username is None
+        and parsed.password is None
+        and parsed.port is None
+        and len(parts) >= 2
+        and "-" not in parts
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 def _decode_additional(

@@ -147,6 +147,53 @@ def test_github_probes_candidates_until_success_and_warns_for_prior_failure() ->
     )
 
 
+def gitlab_entry(variant: str = "single") -> ValidatedEntry:
+    settings = {**SETTINGS_DEFAULTS["GitLab"], "apkFilterRegEx": r"app\.apk$"}
+    raw = {
+        "id": "gitlab.app",
+        "url": "https://gitlab.com/Group/Subgroup/App",
+        "additionalSettings": settings,
+    }
+    return ValidatedEntry(variant, 0, "gitlab.app", "GitLab", raw, settings)
+
+
+def test_gitlab_live_dispatch_deduplicates_metadata_but_keeps_variant_results() -> None:
+    encoded = "Group%2FSubgroup%2FApp"
+    project = f"https://gitlab.com/api/v4/projects/{encoded}"
+    releases = f"{project}/releases?per_page=100"
+    http, transport = client(
+        {
+            project: [response(project, json.dumps({"id": 42}).encode())],
+            releases: [
+                response(
+                    releases,
+                    json.dumps(
+                        [
+                            {
+                                "tag_name": "1.0",
+                                "description": "[apk](/uploads/x/app.apk)",
+                                "assets": {"links": []},
+                            }
+                        ]
+                    ).encode(),
+                )
+            ],
+        }
+    )
+    result = verify_live(
+        {"single": (gitlab_entry(),), "dual": (gitlab_entry("dual"),)}, http
+    )
+    assert result.ok
+    assert [(item.variant, item.source) for item in result.entries] == [
+        ("single", "GitLab"),
+        ("dual", "GitLab"),
+    ]
+    assert len(transport.requests) == 2
+    assert all(
+        request.get_header("Authorization") is None for request in transport.requests
+    )
+
+
 def test_all_candidates_failing_is_one_entry_error_and_later_entries_continue() -> None:
     releases_url = "https://api.github.com/repos/example/app/releases?per_page=100"
     dead = "https://downloads.example/dead.apk"

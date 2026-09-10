@@ -13,6 +13,7 @@ from typing import Any
 from omnipack.http import HttpClient, HttpError, HttpResponse, redact_url
 from omnipack.offline import Finding, ValidatedEntry
 from omnipack.resolution.github import resolve_github
+from omnipack.resolution.gitlab import resolve_gitlab
 from omnipack.resolution.html import resolve_html
 from omnipack.resolution.types import ResolutionError, ResolutionResult
 
@@ -171,7 +172,11 @@ def _verify_entry(
         outcome = resolutions.get(key)
         if outcome is None:
             try:
-                resolver = resolve_github if entry.source == "GitHub" else resolve_html
+                resolver = {
+                    "GitHub": resolve_github,
+                    "HTML": resolve_html,
+                    "GitLab": resolve_gitlab,
+                }[entry.source]
                 outcome = (resolver(entry.raw, http), None)
             except (ResolutionError, HttpError, OSError, ValueError) as error:
                 outcome = (None, error)

@@ -106,6 +106,56 @@ def test_rjny_rejects_empty_location_and_unsupported_source() -> None:
         )
 
 
+def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups() -> None:
+    [app] = extras.fetch(
+        [
+            {
+                "id": "com.example.app",
+                "name": "Example",
+                "url": "https://gitlab.com/Case/Parent/Project",
+                "overrideSource": "GitLab",
+                "additionalSettings": {"apkFilterRegEx": "ordinary\\.apk$"},
+            }
+        ]
+    )
+    assert app.source_type is SourceType.GITLAB
+    assert app.url == "https://gitlab.com/Case/Parent/Project"
+
+
+def test_undeclared_extra_keeps_existing_url_inference() -> None:
+    records = [
+        {"id": "github", "name": "GitHub", "url": "https://github.com/a/b"},
+        {"id": "other", "name": "Other", "url": "https://gitlab.com/a/b"},
+    ]
+    assert [app.source_type for app in extras.fetch(records)] == [
+        SourceType.GITHUB,
+        SourceType.HTML,
+    ]
+
+
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://gitlab.com/a/b",
+        "https://example.com/a/b",
+        "https://gitlab.com/one",
+        "https://user@gitlab.com/a/b",
+    ],
+)
+def test_explicit_gitlab_extra_rejects_urls_outside_public_boundary(url: str) -> None:
+    with pytest.raises(SourceError, match="GitLab.*URL|URL.*GitLab"):
+        extras.fetch(
+            [
+                {
+                    "id": "bad",
+                    "name": "Bad",
+                    "url": url,
+                    "overrideSource": "GitLab",
+                }
+            ]
+        )
+
+
 def test_rjny_policy_can_revive_target_flags_but_not_export_exclusions() -> None:
     url = "https://raw.githubusercontent.com/r/main/p"
     records = [

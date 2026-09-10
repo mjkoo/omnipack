@@ -72,10 +72,12 @@ _SOURCE_IMPLEMENTED = {
         "versionExtractWholePage",
         "requestHeader",
     },
+    "GitLab": {"fallbackToOlderReleases"},
 }
 _SOURCE_UNSUPPORTED = {
     "GitHub": {"github-creds": "", "GHReqPrefix": ""},
     "HTML": {},
+    "GitLab": {},
 }
 
 
@@ -102,7 +104,22 @@ def classify_settings(
 
     result: dict[str, SettingSupport] = {}
     for key, value in settings.items():
-        if (
+        if source == "GitLab" and key in {
+            "trackOnly",
+            "versionDetection",
+            "releaseDateAsVersion",
+            "invertAPKFilter",
+        }:
+            inactive = {
+                "trackOnly": False,
+                "versionDetection": True,
+                "releaseDateAsVersion": False,
+                "invertAPKFilter": False,
+            }[key]
+            result[key] = _unsupported(
+                value, inactive, "outside the supported GitLab release-tag boundary"
+            )
+        elif (
             key == "sortMethodChoice"
             and source == "GitHub"
             and value

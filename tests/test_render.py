@@ -64,14 +64,14 @@ def test_defaults_match_every_source_key_set_in_upstream_exports() -> None:
                 json.loads(app["additionalSettings"])
             )
 
-    assert OBTAINIUM_VERSION == "1.6.14"
-    assert {
-        source: set(defaults) for source, defaults in SETTINGS_DEFAULTS.items()
-    } == observed
-    assert all(len(defaults) == 29 for defaults in SETTINGS_DEFAULTS.values())
+    assert OBTAINIUM_VERSION == "GitHub/HTML 1.6.14; GitLab 1.6.15"
+    assert {source: set(SETTINGS_DEFAULTS[source]) for source in observed} == observed
+    assert len(SETTINGS_DEFAULTS["GitHub"]) == 29
+    assert len(SETTINGS_DEFAULTS["HTML"]) == 29
+    assert len(SETTINGS_DEFAULTS["GitLab"]) == 20
 
 
-@pytest.mark.parametrize("source", ["GitHub", "HTML"])
+@pytest.mark.parametrize("source", ["GitHub", "HTML", "GitLab"])
 def test_hydration_fills_sparse_settings_in_canonical_order(source: str) -> None:
     hydrated = hydrate_settings(source, {"trackOnly": True, "futureKey": 42})
 

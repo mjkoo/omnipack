@@ -1,7 +1,8 @@
 """Canonical per-source settings defaults used by pack rendering.
 
-The key sets and values were seeded from Obtainium v1.6.14 and checked against
-the exports produced by RJNY/Obtainium-Emulation-Pack. Obtainium source schema:
+The GitHub and HTML key sets were seeded from Obtainium v1.6.14 and checked
+against the exports produced by RJNY/Obtainium-Emulation-Pack. The bounded
+GitLab defaults were checked against Obtainium v1.6.15. Source schema:
 https://github.com/ImranR98/Obtainium/tree/v1.6.14/lib/app_sources
 """
 
@@ -9,7 +10,7 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-OBTAINIUM_VERSION: Final = "1.6.14"
+OBTAINIUM_VERSION: Final = "GitHub/HTML 1.6.14; GitLab 1.6.15"
 
 _COMMON: dict[str, Any] = {
     "trackOnly": False,
@@ -58,6 +59,10 @@ SETTINGS_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
         "versionExtractWholePage": False,
         "requestHeader": [{"requestHeader": "User-Agent: Obtainium/1.0"}],
         "defaultPseudoVersioningMethod": "partialAPKHash",
+        **_COMMON,
+    },
+    "GitLab": {
+        "fallbackToOlderReleases": True,
         **_COMMON,
     },
 }
