@@ -67,9 +67,13 @@ substitute for fresh live verification.
 ### Requirement: Publish only the verified output and cache
 
 The publisher SHALL limit commits to `dist/single-screen.json`,
-`dist/dual-screen.json`, and `config/package-ids.json`. It SHALL reject missing
+`dist/dual-screen.json`, `README.md`, and `config/package-ids.json`.
+README changes SHALL be restricted to the interior of exactly one valid catalog
+marker pair; prefix and suffix bytes, including markers, SHALL match the selected
+base revision. This restriction SHALL be rechecked at candidate capture and
+when staging finishes. It SHALL reject missing
 candidate files, symlink replacements, unexpected tracked modifications, and
-changes to candidate bytes after verification. Both packs and the cache SHALL
+changes to candidate bytes after verification. Both packs, the README and the cache SHALL
 be published in one commit when any allowed bytes differ from the base.
 Unchanged files need not appear in the commit diff. Reports and transient
 caches SHALL NOT be committed. A byte-identical candidate SHALL create no commit, even if file modes changed.
@@ -100,6 +104,16 @@ or alter repository protection settings to bypass a rejection.
 - **WHEN** an unrelated tracked file changes or verified candidate bytes change
   before staging completes
 - **THEN** publication is rejected
+
+#### Scenario: Generated catalog refresh
+
+- **WHEN** verified generated catalog bytes differ from the base
+- **THEN** the README change is published with any changed packs and cache in one commit
+
+#### Scenario: Handwritten README mutation
+
+- **WHEN** a candidate changes README content outside the generated section
+- **THEN** publication fails even if standalone verification succeeds
 
 ### Requirement: Concurrent changes require a fresh attempt
 

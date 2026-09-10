@@ -213,9 +213,10 @@ maintainers, and the individual app developers linked as sources in every row.
 
 The **Nightly publishing** workflow refreshes main daily at 06:23 UTC and also
 supports manual dispatch on main. It runs offline checks, rebuilds, and requires
-fresh metadata-only verification before publishing changed packs and the
-package-id cache. See [publishing](docs/publishing.md) for permissions, failure
-recovery, diagnostics, and the post-landing acceptance procedure.
+fresh metadata-only verification before publishing changed packs, the generated
+README catalog, and the package-id cache. See [publishing](docs/publishing.md)
+for permissions, failure recovery, diagnostics, and the post-landing acceptance
+procedure.
 
 ## Development
 
@@ -227,25 +228,28 @@ check-all` runs everything CI runs.
 
 Run `uv run pack build` from the repository root. It fetches the configured
 upstreams, updates resolved package ids in `config/package-ids.json`, and
-writes both import files to `dist/` after validating their serialized bytes
-offline. An optional `GITHUB_TOKEN` authenticates
-requests to `api.github.com` through `config/http.json`.
+writes both import files to `dist/` and regenerates the README catalog after
+validating their serialized bytes offline. Keep exactly one standalone pair of
+catalog markers in README; the build preserves all bytes outside them. An
+optional `GITHUB_TOKEN` authenticates requests to `api.github.com` through
+`config/http.json`.
 
 The JSON diagnostics are in `.build/report.json`, including generated and
 unresolved projects, family selections and alternatives, selection reasons,
 identity transitions, exclusions, and changes from the previous output. A
-failed build returns a nonzero status and preserves the previous output pair;
+failed build returns a nonzero status and preserves the previous packs and README;
 successfully resolved ids remain cached for later runs.
 
 ## Verify and inspect
 
-Run `uv run pack verify` (or `just verify`) to validate the committed output
-and local configuration without network access. `uv run pack verify --live`
-also resolves configured GitHub and HTML metadata and versions without probing
+Run `uv run pack verify` (or `just verify`) to validate the committed packs,
+README catalog and local configuration without network access.
+`uv run pack verify --live` also resolves configured GitHub and HTML metadata
+and versions without probing
 downloads. Use `uv run pack verify --live --probe-assets` for explicit asset
 reachability diagnostics. GitHub live requests require the `GITHUB_TOKEN`
 environment variable mapped in `config/http.json`.
-Verification leaves distribution files, configuration, package-id caches, and
+Verification leaves distribution files, README, configuration, package-id caches, and
 the build report unchanged. Standalone evidence is written to `.build/verify.json`.
 
 Run `uv run pack report` to display build and verification results, warnings,

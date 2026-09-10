@@ -20,28 +20,36 @@ Run commands from the repository root:
 
 | Command | Work performed |
 | --- | --- |
-| `uv run pack verify` or `just verify` | Validate both existing serialized packs and local composition settings without network access |
+| `uv run pack verify` or `just verify` | Validate both existing serialized packs, their README catalog and local composition settings without network access |
 | `uv run pack verify --live` | Run offline validation, then resolve source metadata, versions and eligible candidates without probing downloads |
 | `uv run pack verify --live --probe-assets` | Add bounded download reachability diagnostics |
 | `uv run pack report` | Display available build and standalone verification evidence without fetching or writing files |
-| `uv run pack build` | Ingest and compose sources, validate newly rendered bytes offline, then publish the pair |
+| `uv run pack build` | Ingest and compose sources, validate newly rendered bytes offline, then publish both packs and the README catalog as a recoverable unit |
 
 Standalone verification writes `.build/verify.json` on success or failure. An
 initial incomplete record replaces previous evidence before live work starts.
 The report records mode, observation times, verifier identity, baseline, findings,
 and SHA-256 fingerprints of the exact distribution files, denylist, both overlays,
-composition policy, pack settings, and HTTP configuration. Environment credential
-values are excluded.
+composition policy, pack settings, README, and HTTP configuration. Environment
+credential values are excluded.
 If inputs change during a run, the run fails instead of claiming to verify the
 new files. Missing and unreadable inputs are reported explicitly.
 
-Verification does not rebuild or update distribution files, overlays, package-id
-caches, or `.build/report.json`. Build diagnostics remain separate and include
-the offline gate's verdict. A rejected build preserves both previous output files.
+Verification does not rebuild or update distribution files, README, overlays,
+package-id caches, or `.build/report.json`. Build diagnostics remain separate and
+include the offline gate's verdict. A rejected build preserves both previous
+output files and README. Before publication,
+build rejects changes to the captured README or consumed composition policy. A
+handled replacement failure restores previous bytes or absence and cleans its
+sibling temporary files; this is exception recovery, not protection against
+process termination, runner loss or rollback storage failure.
 
 `pack report` labels verification stale when any local input fingerprint or the
-verifier identity differs, including a composition-only change with unchanged
-distribution files. Evidence is current only when every recorded input byte
+verifier identity differs, including a composition-only or README-only change
+with unchanged distribution files.
+Historical reports with seven or eight input fingerprints remain readable but
+are stale under the current nine-input verifier and cannot authorize publication.
+Evidence is current only when every recorded input byte
 snapshot and the verifier identity match. It also shows incomplete attempts,
 mode, and observation time.
 Current local fingerprints do not mean an upstream source is still healthy.
@@ -60,6 +68,16 @@ losing source candidates, so offline verification cannot reconstruct provenance,
 candidate presence, preference or source ranking. It also cannot prove that the
 configured patch values produced the rendered values. Those checks belong to a
 build against acquired candidates; offline success does not repair output.
+
+Offline catalog verification compares the generated marker interior against the
+captured serialized packs and current policy. Missing, unreadable, malformed or
+stale catalogs fail before live resolution. Handwritten content is excluded from
+catalog comparison but included in the exact README fingerprint, so a handwritten
+edit permits a fresh verification while making prior evidence stale. Verification
+never repairs the catalog or fetches upstream sources to generate it.
+
+See [README catalog validation](catalog-validation.md) for redirect decoding,
+rendered-preview evidence and the pending Android acceptance checks.
 
 ## Compatibility boundary
 

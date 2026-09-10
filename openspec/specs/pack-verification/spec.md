@@ -492,7 +492,7 @@ baseline, mode (`offline`, `live`, or `live-probe`), observation times, completi
 and status, input fingerprints,
 errors, warnings, and per-variant entry results with resolution and probe evidence.
 Fingerprints SHALL cover exact bytes of both output files, the denylist, both
-overlays, composition policy, pack settings and HTTP configuration, identifying missing/unreadable
+overlays, composition policy, pack settings, README and HTTP configuration, identifying missing/unreadable
 inputs explicitly and excluding token values. Input changes during a run SHALL
 prevent a successful result for the current files.
 
@@ -541,3 +541,32 @@ errors, regardless of any cached package id or prior verification report.
 
 - **WHEN** recorded evidence predates the policy fingerprint or current verifier identity
 - **THEN** it is stale rather than proof that current family constraints passed
+
+#### Scenario: README changes during verification
+
+- **WHEN** README bytes change during a verification run
+- **THEN** the result cannot be successful for the current files
+
+#### Scenario: Old evidence lacks README
+
+- **WHEN** recorded evidence predates the README fingerprint or current verifier identity
+- **THEN** reports remain readable but evidence is stale and cannot authorize publication
+
+### Requirement: Offline verification checks the generated catalog
+
+Verification SHALL reject a missing, unreadable or malformed README and a catalog
+that differs from deterministic generation using the captured serialized packs
+and current composition policy. Handwritten content SHALL NOT affect catalog
+comparison but SHALL be included in the exact input fingerprint. Verification
+SHALL NOT rewrite any inputs or fetch sources to generate the expected catalog.
+Catalog errors SHALL prevent live requests like other offline errors.
+
+#### Scenario: Stale import link
+
+- **WHEN** an app's exported configuration differs from its README import payload
+- **THEN** offline verification fails without repairing either file
+
+#### Scenario: Handwritten instructions change
+
+- **WHEN** README instructions change outside valid markers and the catalog remains current
+- **THEN** a new offline verification succeeds and fingerprints the new README bytes

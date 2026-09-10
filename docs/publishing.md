@@ -32,12 +32,19 @@ The only publishable paths are:
 
 - `dist/single-screen.json`
 - `dist/dual-screen.json`
+- `README.md` (generated catalog interior only)
 - `config/package-ids.json`
+
+README must contain exactly one valid standalone catalog marker pair. Its prefix
+and suffix, including both marker lines, must match the selected base revision
+byte-for-byte. Candidate capture and final staged validation both enforce this
+boundary, so successful standalone verification cannot authorize handwritten
+README changes.
 
 The publisher checks verified bytes against the staged content and resulting
 commit. Missing files, symlink replacements, unrelated tracked modifications,
 and changed verified bytes reject the candidate. Any changed allowed bytes,
-including a cache-only change, produce one bot commit with subject
+including a cache-only or catalog-only change, produce one bot commit with subject
 `chore(dist): nightly rebuild YYYY-MM-DD`. The date is UTC; the body identifies
 the run URL and base SHA. Reports and transient caches stay out of commits.
 A byte-identical refresh is a successful no-op and creates no commit, including
