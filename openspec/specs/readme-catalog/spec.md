@@ -9,19 +9,22 @@ that stays consistent with the published Obtainium app configurations.
 
 ### Requirement: Consumer instructions identify installation routes and sources
 
-The README SHALL link to Obtainium installation first, then both raw main-branch
-pack JSON files in mjkoo/omnipack, with single-screen and dual-screen guidance and
-file-import instructions. It SHALL explain that individual links require import
-confirmation and subsequent installation in Obtainium, and identify track-only
-entries as tracking resources rather than necessarily installable apps. It SHALL
-credit RJNY's source JSON, BBoi34's two release JSON catalogs, codm2000's project
-catalog, Obtainium, and individual app developers through direct source links.
-Development instructions SHALL remain available below the consumer sections.
+The README SHALL present labeled raw main-branch single-screen and dual-screen JSON download links for mjkoo/omnipack immediately below its title, with device guidance. It SHALL provide a prominent ordered installation list before the individual catalog: install Obtainium, download the suitable pack, import the downloaded JSON through Import/Export, and install desired apps in Obtainium. It SHALL distinguish importing configurations from installing apps.
+
+It SHALL explain that individual links require import confirmation and subsequent installation in Obtainium, and identify track-only entries as tracking resources rather than necessarily installable apps. It SHALL credit RJNY's source JSON, BBoi34's two release JSON catalogs, codm2000's project catalog, Obtainium, and individual app developers through a bulleted credits list with direct source links, including the app sources in catalog rows.
+
+Development, build, verification, and detailed publishing guidance SHALL be available under docs. The root README SHALL provide a brief Contributing section linking to docs rather than embedding development commands or a documentation index.
 
 #### Scenario: New visitor chooses a pack
 
 - **WHEN** a visitor reads the README without Obtainium installed
-- **THEN** installation guidance precedes both pack downloads and individual links
+- **THEN** both device-labeled downloads are immediately visible below the title
+- **AND** ordered instructions explain Obtainium installation before importing the selected file and installing apps
+
+#### Scenario: Visitor looks for attribution or development information
+
+- **WHEN** a visitor reads beyond the catalog
+- **THEN** credits are a bulleted list and a brief Contributing section links to documentation under docs
 
 ### Requirement: Catalog groups final variant configurations by family
 
