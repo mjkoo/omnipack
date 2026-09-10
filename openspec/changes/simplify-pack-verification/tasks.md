@@ -19,6 +19,6 @@
 
 ## 4. Documentation and integrated validation
 
-- [ ] 4.1 Update current development, verification, publishing, curation and version-detection guidance for structural scope, removed flags and old-report regeneration; verify active instructions no longer require live verification while dated evidence, archived changes and protected review records remain intact.
-- [ ] 4.2 Run required project checks, the retained suite, structural verification and publication boundary tests; record results and implementation/test line reductions, and verify no export/configuration changes or external publication writes occurred.
-- [ ] 4.3 Verify and synchronize the reviewed spec deltas through the project workflow, updating the main verification Purpose to structural guarantees at synchronization; validate specs and check that current requirements no longer promise automated live app resolution.
+- [x] 4.1 Update current development, verification, publishing, curation and version-detection guidance for structural scope, removed flags and old-report regeneration; verify active instructions no longer require live verification while dated evidence, archived changes and protected review records remain intact.
+- [x] 4.2 Run required project checks, the retained suite, structural verification and publication boundary tests; record results and implementation/test line reductions, and verify no export/configuration changes or external publication writes occurred.
+- [x] 4.3 Verify and synchronize the reviewed spec deltas through the project workflow, updating the main verification Purpose to structural guarantees at synchronization; validate specs and check that current requirements no longer promise automated live app resolution.
