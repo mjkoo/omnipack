@@ -13,29 +13,58 @@ apps it accompanied. Export exclusion does not guarantee deletion on a device.
 
 ### Tracking omnipack itself
 
-No omnipack tracker is included yet. On 2026-09-10, inspection of Obtainium's
-[GitHub source](https://github.com/ImranR98/Obtainium/blob/main/lib/app_sources/github.dart)
-showed release tracking with a tags fallback for track-only entries. A repository
-URL with `trackOnly` does not monitor JSON files committed to main.
+Both packs include the same track-only GitHub entry, **omnipack updates**
+(`809443320`). It follows the numeric title of the owned `continuous` prerelease.
+Either pack changing advances one shared revision after both JSON assets have
+been read back and verified. A notification therefore means the collection may
+have changed for either device variant; it does not identify which pack changed.
 
-A candidate follow-up is one explicit HTML-source tracker per device variant,
-reading the GitHub contents API for its pack on main, extracting the file's blob
-SHA as a version, and selecting its raw JSON download URL with a custom link
-filter. This could notify on pack content changes without reacting to every
-documentation commit or requiring releases.
+After an update notification, acknowledge the tracker update in Obtainium,
+download the appropriate pack, and import it again through **Settings >
+Import/export > Obtainium import**. Re-importing applies current app definitions;
+the tracker cannot synchronize them automatically. Keep using the same variant
+unless you are intentionally changing device type.
 
-This is research, not verified device support. Obtainium's inspected
-[HTML source](https://github.com/ImranR98/Obtainium/blob/main/lib/app_sources/html.dart)
-requires a selected link before whole-response version extraction. The local
-verifier permits linkless whole-page tracking, so passing that shortcut is not
-evidence of Obtainium compatibility. Before adding the tracker, verify API
-responses, explicit HTML URL preservation, JSON link selection, SHA extraction,
-nonnumeric change detection, and device import/re-import. Check unchanged-content
-no-ops, changed-content notifications, and API rate-limit handling. Use stable
-synthetic IDs and static configuration; embedding the observed SHA in its own
-pack would create a publication feedback loop. A notification would still require
-the user to download and re-import the pack; it would not synchronize app
-configurations automatically.
+Raw-main downloads remain the ordinary consumer links:
+
+- [single-screen JSON](https://raw.githubusercontent.com/mjkoo/omnipack/main/dist/single-screen.json)
+- [dual-screen JSON](https://raw.githubusercontent.com/mjkoo/omnipack/main/dist/dual-screen.json)
+
+The rolling release also exposes stable asset links:
+
+- [single-screen release asset](https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json)
+- [dual-screen release asset](https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json)
+
+The two release assets cannot be replaced atomically. During an interrupted
+publication, one asset can be missing or the pair can temporarily differ. The
+release title remains at its last completed revision until both files match the
+new verified pair. Use the raw-main links if a release asset is temporarily
+unavailable, and wait for a later successful run before treating a new revision
+as complete.
+
+Offline verification validates the complete pair, including this tracker. The
+tracker's real metadata check requires the owned release seed; a missing seed is
+a normal verification failure with maintainer bootstrap guidance. Omitting the
+tracker is not a valid way to make verification pass. Device import, notification,
+acknowledgement, and re-import behavior still require separate device acceptance.
+
+## Port setup
+
+Aurora Store is directly installable and selects the ordinary GitLab APK rather
+than hardware-specific or preload variants. The remaining new ports need game
+data that the project does not distribute:
+
+- **idTech4A++** requires user-supplied data for a supported id Tech game.
+- **VCMI** requires user-supplied Heroes of Might and Magic III data and lets
+  Obtainium select the APK matching the device architecture.
+- **Julius** requires user-supplied Caesar III data.
+- **Xash3D FWGS** requires user-supplied Half-Life data. It follows the rolling
+  continuous-master Android build; temporary absence of that build is an update
+  failure rather than permission to select another channel.
+- **Hollow Knight: Dual Souls** requires user-supplied Hollow Knight files.
+- **Hollow Knight: Silksong** requires user-supplied Linux game files and builds
+  on-device. Its upstream setup currently documents Android 13 only and says
+  Android 15 is unsupported.
 
 ## Version-policy observations
 

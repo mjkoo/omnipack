@@ -10,7 +10,11 @@ and dual-screen devices, combining upstream catalogs with personal additions.
 Version-detection fixes must survive upstream refreshes: manual edits in
 Obtainium previously caused maintenance work and recurring update prompts.
 Declare those fixes in the committed overlay as they are identified.
-Consumers fetch JSON from main; release packaging is not required.
+Consumers normally fetch JSON from main. The pack also includes one shared
+track-only entry backed by an owned rolling prerelease. That release mirrors the
+verified JSON pair under stable asset names and supplies a numeric notification
+revision; it does not replace the raw-main downloads or automatically re-import
+configuration changes.
 
 The original curation request also called for the owner's fork of
 `isledecomp/isle-portable`. Its repository URL was not supplied. This remains

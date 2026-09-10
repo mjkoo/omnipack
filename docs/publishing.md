@@ -64,6 +64,22 @@ commit has followed it. Otherwise, an advanced main can consume the remaining
 attempt; an unchanged rejection fails. An unreadable remote result is reported
 as **uncertain**, without another blind push or a claim of non-publication.
 
+After confirmed main publication or a verified no-op, the same attempt
+synchronizes `single-screen.json` and `dual-screen.json` to the owned prerelease
+at tag `continuous`. The release title is `omnipack revision N`. Both variants
+share that revision, and only a change to either JSON increments it. README-only
+and package-id-cache-only changes do not advertise a pack update. The stable
+release downloads are:
+
+- <https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json>
+- <https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json>
+
+Synchronization records a pending target, replaces only changed assets, verifies
+both downloaded asset digests, then promotes the release title and completed
+state. A failed or uncertain main publication performs no release writes. A
+release failure preserves the independently confirmed main SHA, fails the run,
+and keeps the owned failure issue open.
+
 ## Permissions and repository prerequisites
 
 The workflow uses `GITHUB_TOKEN` with job-scoped `contents: write` and
@@ -81,6 +97,29 @@ Before enabling operational publication, a maintainer must confirm that:
 - Main's branch protections and rulesets permit the intended direct token push.
   Required pull requests, signed commits, or status checks may reject it.
 - Artifact policy permits 14-day retention.
+- The `continuous` tag and prerelease are either absent, ready for the explicit
+  bootstrap below, or already owned by omnipack. A conflicting tag, unowned or
+  malformed release, immutable release, or inadequate release permission blocks
+  synchronization. Automation does not change protections or repository settings.
+
+### One-time rolling release bootstrap
+
+Bootstrap is an explicit, write-capable maintainer operation. Run it only after
+reviewing the repository and tag state and authorizing creation of the real seed:
+
+```sh
+GITHUB_REPOSITORY=mjkoo/omnipack \
+GITHUB_TOKEN="<maintainer token>" \
+uv run --no-sync python -m scripts.nightly bootstrap-release
+```
+
+The command targets `main` and creates the owned `continuous` prerelease at
+revision zero with no assets. It refuses a conflicting tag, malformed or unowned
+release, or immutable release, and safely reports an existing valid seed. The
+token needs permission to read and create releases and tags in the canonical
+repository; branch or tag protections can still reject the operation. Routine
+publishing never invokes bootstrap and normal live verification does not bypass a
+missing seed.
 
 A token-authored push does not trigger ordinary push CI, so the checks before
 publication are required. These platform behaviors were checked against
@@ -113,6 +152,14 @@ Disposable-checkout cleanup failures fail the workflow. Diagnostics retain the
 confirmed publication outcome, published SHA, and per-attempt reports separately
 from cleanup errors. Confirmed publication or a verified no-op still triggers
 issue recovery even when cleanup fails.
+
+Release diagnostics report completed and pending revisions separately from the
+main publication result. If an interruption occurs while replacing assets, the
+old completed revision stays advertised even though manual downloaders can see a
+missing asset or a mixed pair. A later run rediscovers and repairs the owned
+release from a freshly verified pair without duplicating a revision. Permission,
+immutability, ownership, or protection failures remain visible and are not
+worked around by changing repository settings.
 
 ## Diagnostics
 
@@ -167,6 +214,12 @@ Inspect any already-running publisher separately; disabling the workflow does
 not establish that an in-flight push was canceled. The existing raw dist URLs
 continue serving main. Reverting published content is a separate maintainer
 decision, not an automatic rollback performed by the helper.
+
+Do not delete the tracker or rolling release as an implicit rollback. First stop
+new nightly runs and inspect any in-flight run. Restoring older JSON through the
+publisher is a new content publication and receives a higher shared revision.
+If the tracker is intentionally retired, users must remove its Obtainium entry
+manually; removing it from a later import does not guarantee device deletion.
 
 See [publishing validation](publishing-validation.md) for implementation checks
 and the distinction between controlled tests and operational acceptance.
