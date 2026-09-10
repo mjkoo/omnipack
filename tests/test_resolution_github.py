@@ -858,3 +858,15 @@ def test_invalid_zip_member_regex_fails_before_http(enabled: bool) -> None:
         )
     assert raised.value.code == "regex-invalid"
     assert transport.requests == []
+
+
+def test_nonstring_zip_member_regex_fails_by_name_before_http() -> None:
+    transport = GitHubTransport({})
+    with pytest.raises(ResolutionError) as raised:
+        resolve_github(
+            app({"zippedApkFilterRegEx": 7}),
+            HttpClient(HttpConfig({}), retries=0, transport=transport),
+        )
+    assert raised.value.code == "settings-invalid"
+    assert "zippedApkFilterRegEx" in str(raised.value)
+    assert transport.requests == []

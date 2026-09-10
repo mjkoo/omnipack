@@ -70,7 +70,12 @@ def _validate_support(settings: dict[str, Any]) -> None:
             raise ResolutionError(
                 "unsupported-setting", f"unsupported setting {name}: {support.reason}"
             )
-    _optional_regex(settings.get("zippedApkFilterRegEx"))
+    member_pattern = settings.get("zippedApkFilterRegEx", "")
+    if not isinstance(member_pattern, str):
+        raise ResolutionError(
+            "settings-invalid", "setting zippedApkFilterRegEx must be a string"
+        )
+    _optional_regex(member_pattern)
 
 
 def _repository(url: str) -> tuple[str, str]:
