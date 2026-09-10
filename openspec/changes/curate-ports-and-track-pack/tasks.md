@@ -1,9 +1,9 @@
 ## 1. Native GitLab entries
 
-- [ ] 1.1 Add GitLab source identity, supported defaults, explicit extras normalization, renderer and catalog handling; verify subgroup URL preservation, native overrideSource, deterministic exports and individual import round-trips with offline fixtures.
-- [ ] 1.2 Verify ordinary offline verification succeeds on the normally rendered complete Aurora pair with native `overrideSource: GitLab` and complete typed GitLab defaults; verify unsupported source declarations, invalid native GitLab URLs, missing default keys and wrong setting types fail without HTTP or repair. Verify explicit GitLab extras override URL inference while undeclared extras retain GitHub-or-HTML inference.
-- [ ] 1.3 Implement bounded GitLab project/release acquisition and description-upload APK selection through shared HTTP; verify Aurora-style empty asset-links metadata, multiple APK flavors, fallback on/off, malformed responses, missing APKs and rate-limit failures with controlled responses.
-- [ ] 1.4 Integrate GitLab live dispatch, settings classification, per-variant evidence, fingerprint invalidation and optional bounded probes; verify unsupported active options fail before HTTP, public access needs no token, GitHub credentials do not leak, and shared requests retain separate entry results.
+- [x] 1.1 Add GitLab source identity, supported defaults, explicit extras normalization, renderer and catalog handling; verify subgroup URL preservation, native overrideSource, deterministic exports and individual import round-trips with offline fixtures.
+- [x] 1.2 Verify ordinary offline verification succeeds on the normally rendered complete Aurora pair with native `overrideSource: GitLab` and complete typed GitLab defaults; verify unsupported source declarations, invalid native GitLab URLs, missing default keys and wrong setting types fail without HTTP or repair. Verify explicit GitLab extras override URL inference while undeclared extras retain GitHub-or-HTML inference.
+- [x] 1.3 Implement bounded GitLab project/release acquisition and description-upload APK selection through shared HTTP; verify Aurora-style empty asset-links metadata, multiple APK flavors, fallback on/off, malformed responses, missing APKs and rate-limit failures with controlled responses.
+- [x] 1.4 Integrate GitLab live dispatch, settings classification, per-variant evidence, fingerprint invalidation and optional bounded probes; verify unsupported active options fail before HTTP, public access needs no token, GitHub credentials do not leak, and shared requests retain separate entry results.
 
 ## 2. App curation and rolling Xash3D
 
