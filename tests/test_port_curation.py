@@ -76,12 +76,12 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             app.source_type,
             app.categories,
             Variant.DUAL,
-            Provenance("codm2000", app.url),
-            {},
+            Provenance("bboi", app.url),
+            {"apkFilterRegEx": "wrong.apk", "versionDetection": True},
             {},
             frozenset({Variant.DUAL}),
             True,
-            "codm-generated",
+            "bboi-dual-asset",
         )
         for app in maintained
     ]
@@ -93,6 +93,19 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
         pin for pin in document["pins"] if pin["match"]["id"] in PORT_IDS
     ]
     document["history"] = []
+    unpinned = deepcopy(document)
+    unpinned["pins"] = []
+    ordinary = compose(
+        [*maintained, *duplicates],
+        [],
+        [],
+        [],
+        policy=parse_composition_policy(unpinned),
+    )
+    assert all(
+        app.provenance.source == "extras" for app in ordinary.apps[Variant.SINGLE]
+    )
+    assert all(app.provenance.source == "bboi" for app in ordinary.apps[Variant.DUAL])
     result = compose(
         [*maintained, *duplicates],
         [],
@@ -104,6 +117,9 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
         chosen = [app for app in result.apps[variant] if app.data["id"] in PORT_IDS]
         assert len(chosen) == len(PORT_IDS)
         assert all(app.provenance.source == "extras" for app in chosen)
+        expected = {app.id: app.additional_settings for app in maintained}
+        for app in chosen:
+            assert app.data["additionalSettings"] == expected[app.data["id"]]
 
 
 def _resolve_xash(releases):
