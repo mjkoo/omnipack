@@ -1,5 +1,28 @@
 [
   {
+    "id": "com.metroidarch.app.aarch64",
+    "url": "https://github.com/Raekwon1603/RetroArch",
+    "name": "MetroidArch (Super Metroid)",
+    "author": "Raekwon1603",
+    "categories": [
+      "Emulator"
+    ],
+    "variants": [
+      "dual"
+    ],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": false,
+      "releaseTitleAsVersion": false,
+      "versionDetection": false,
+      "trackOnly": false,
+      "includeZips": false,
+      "autoApkFilterByArch": false,
+      "apkFilterRegEx": "^MetroidArch-v[0-9]+(?:\\.[0-9]+)+\\.apk$",
+      "about": "Super Metroid companion interface for ARM64 dual-screen devices. Requires a supplied ROM and first-run setup; isolate its writable directories from normal RetroArch. See the pack MetroidArch setup guide."
+    }
+  },
+  {
     "id": "com.game.cinderbox",
     "url": "https://github.com/Ekyso/Cinderbox",
     "name": "Cinderbox",

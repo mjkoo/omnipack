@@ -8,7 +8,11 @@
     "reason": "Replace the legacy Ghostship Android fork with the maintained official release."
   },
   {
-    "family": "app:super-metroid",
-    "reason": "The retired Super Metroid Android family is no longer curated."
+    "id": "com.raekwon1603.supermetroid",
+    "reason": "Retire the reviewed old Super Metroid catalog entry; dual-screen devices use MetroidArch."
+  },
+  {
+    "id": "com.raekwon1603.supermetroidds",
+    "reason": "Retire the reviewed old Super Metroid catalog entry; dual-screen devices use MetroidArch."
   }
 ]

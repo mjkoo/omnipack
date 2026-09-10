@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 import re
+from copy import deepcopy
 from pathlib import Path
+
+import pytest
 
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.resolution.github import resolve_github
+from omnipack.resolution.types import ResolutionError
 from omnipack.sources import IngestionReport, bboi, codm, rjny
 from omnipack.sources.extras import fetch as fetch_extras
 from tests.test_composition_baseline import CapturedPackageResolver
@@ -143,7 +147,31 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             assert "dev.net64.ghostship" in ids
             assert "com.theboisclub.pokemonred" in ids
             assert "com.ghostship.android" not in ids
-            assert not any(app.family == "app:super-metroid" for app in apps)
+            assert "com.retroarch.aarch64" in ids
+            assert (
+                not {"com.raekwon1603.supermetroid", "com.raekwon1603.supermetroidds"}
+                & ids
+            )
+            metroid = [app for app in apps if app.family == "app:super-metroid"]
+            if variant is Variant.SINGLE:
+                assert not metroid
+            else:
+                assert len(metroid) == 1
+                assert metroid[0].id == "com.metroidarch.app.aarch64"
+                assert metroid[0].url == "https://github.com/Raekwon1603/RetroArch"
+                assert (
+                    next(
+                        selection.source
+                        for selection in result.report.selections
+                        if selection.family == "app:super-metroid"
+                        and selection.variant is Variant.DUAL
+                    )
+                    == "extras"
+                )
+                settings = metroid[0].data["additionalSettings"]
+                assert settings["versionDetection"] is False
+                assert settings["trackOnly"] is False
+                assert settings["autoApkFilterByArch"] is False
             required = expected - (
                 {"org.openmw.ds", "dev.twilitrealm.dusk"}
                 if variant is Variant.SINGLE
@@ -173,3 +201,58 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             app for app in result.apps[Variant.DUAL] if app.family == "app:ctr"
         )
         assert dual_ctr.data["additionalSettings"]["versionDetection"] is False
+
+
+@pytest.mark.parametrize("release_index", [0, 1])
+def test_metroidarch_captured_releases_track_tags_and_only_matching_apks(release_index):
+    evidence = read(ROOT / "tests/fixtures/curation/metroidarch.json")
+    app = next(
+        item
+        for item in read(ROOT / "config/extras.json")
+        if item["id"] == evidence["package"]
+    )
+    releases = deepcopy(evidence["releases"][release_index:])
+    selected = releases[0]
+    expected_asset = selected["assets"][0]
+    for name in ("RetroArch.apk", "MetroidArch-v1.0.1.zip", "MetroidArch-debug.apk"):
+        selected["assets"].append({**expected_asset, "name": name})
+    prerelease = deepcopy(selected)
+    prerelease.update(
+        tag_name="v99.0.0", prerelease=True, published_at="2099-01-01T00:00:00Z"
+    )
+    prerelease["assets"] = [{**expected_asset, "name": "MetroidArch-v99.0.0.apk"}]
+    transport = GitHubTransport(
+        {
+            "https://api.github.com/repos/Raekwon1603/RetroArch/releases?per_page=100": [
+                prerelease,
+                *releases,
+            ]
+        }
+    )
+    result = resolve_github(
+        app, HttpClient(HttpConfig({}), retries=0, transport=transport)
+    )
+    assert result.effective_version == selected["tag_name"]
+    assert result.effective_version != evidence["version_name"]
+    assert [(item.name, item.url) for item in result.candidates] == [
+        (expected_asset["name"], expected_asset["browser_download_url"])
+    ]
+
+
+def test_metroidarch_latest_asset_mismatch_does_not_select_older_release():
+    evidence = read(ROOT / "tests/fixtures/curation/metroidarch.json")
+    app = next(
+        item
+        for item in read(ROOT / "config/extras.json")
+        if item["id"] == evidence["package"]
+    )
+    releases = deepcopy(evidence["releases"])
+    releases[0]["assets"][0]["name"] = "RetroArch.apk"
+    transport = GitHubTransport(
+        {
+            "https://api.github.com/repos/Raekwon1603/RetroArch/releases?per_page=100": releases
+        }
+    )
+    with pytest.raises(ResolutionError) as raised:
+        resolve_github(app, HttpClient(HttpConfig({}), retries=0, transport=transport))
+    assert raised.value.code == "github-no-release"

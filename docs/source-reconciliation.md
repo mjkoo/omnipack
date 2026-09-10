@@ -44,10 +44,11 @@ unknown-code or future publisher-compromise risk.
   igawa6. The installed Simon build and selected igawa6 build share package ID
   `com.ctrnative` but use different signing keys without a rotation lineage.
   Switching that device to the dual choice requires a fresh installation.
-- **Super Metroid is removed from both packs.** The selected project is retired.
-  Its MetroidArch successor modifies RetroArch for second-screen features, but
-  adopting that separate emulator distribution is not part of this pack update.
-  The existing RetroArch entry remains available for ordinary ROM use.
+- **MetroidArch replaces the retired Super Metroid port in dual.** The successor
+  provides a real second-screen companion interface and passes the accepted
+  reputation/basic-vetting standard. Normal RetroArch remains in both packs.
+  The two reviewed retired catalog IDs remain excluded. MetroidArch uses a new
+  package and needs separate writable-directory setup; see [setup and vetting](metroidarch.md).
 - **Gen1Recomp uses its canonical repository.** The old
   `bryanthaboi/pokemon-gen1-recomp-project` URL redirects to
   `bryanthaboi/gen1recomp`. This is a repository rename, not a publisher switch.
@@ -126,7 +127,7 @@ observation about the selected official release, not a claim about future assets
 | CTR Simon to igawa6 dual | `com.ctrnative` | Different signer; uninstall the existing app before installing the dual build |
 | Official Ghostship | `com.ghostship.android` to `dev.net64.ghostship` | New package; install separately and remove the old app if no longer wanted |
 | OpenMW-DS v1.1.0 to v1.2.1 | `org.openmw.ds` | Same signer and higher versionCode; ordinary update is possible, fresh install optional |
-| Retired Super Metroid | `com.raekwon.supermetroid` | Removed from pack; existing device installation remains until manually removed |
+| Super Metroid successor | `com.raekwon.supermetroid` to `com.metroidarch.app.aarch64` | Dual pack adds MetroidArch as a separate install; old app remains until manually removed; isolate writable directories |
 | Other retained identity corrections | IDs listed above | Correct tracking definitions; no reinstall is implied |
 | Gen1Recomp URL rename | `com.theboisclub.pokemonred` | Canonical source URL; same inspected APK |
 

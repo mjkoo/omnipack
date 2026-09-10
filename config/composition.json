@@ -1,6 +1,7 @@
 {
   "schemaVersion": 1,
   "candidates": [
+    {"match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"family":"app:super-metroid","eligible":["dual"],"rationale":"Keep the vetted Super Metroid companion separate from normal RetroArch."},
     {
       "match": {
         "source": "bboi",
@@ -125,6 +126,7 @@
     }
   ],
   "pins": [
+    {"family":"app:super-metroid","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"rationale":"Select the vetted MetroidArch successor for dual-screen devices."},
     {"family":"app:ghostship","variant":"single","match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"rationale":"Keep official Ghostship in the standard pack."},
     {"family":"app:ghostship","variant":"dual","match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"rationale":"Keep official Ghostship in the dual-screen pack."},
     {"family":"app:gen1recomp","variant":"single","match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"rationale":"Keep canonical Gen1Recomp in the standard pack."},

@@ -156,9 +156,9 @@ def test_ctr_origin_matches_captured_standard_asset_record() -> None:
 def test_maintained_policy_and_overlays_cover_the_migrated_selection() -> None:
     document = json.loads((ROOT / "config/composition.json").read_text())
     policy = parse_composition_policy(document)
-    assert len(policy.candidate_rules) == 32
+    assert len(policy.candidate_rules) == 33
     assert len(policy.history) == 113
-    assert len(policy.pins) == 14
+    assert len(policy.pins) == 15
 
     rules = {(rule.match.id, rule.match.url): rule for rule in policy.candidate_rules}
     standard_ctr = rules[
@@ -279,6 +279,8 @@ def test_maintained_policy_composes_captured_replacement_families(
         "dev.net64.ghostship",
         "com.theboisclub.pokemonred",
     }
+    if variant is Variant.DUAL:
+        curated_ids.add("com.metroidarch.app.aarch64")
     assert set(expected) <= set(selected)
     assert {app.data["id"] for app in result.apps[variant]} >= curated_ids
     assert len(result.apps[variant]) == len(expected) + len(curated_ids)
