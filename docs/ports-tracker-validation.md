@@ -4,9 +4,9 @@ Validation date: 2026-09-10 UTC. The checks ran on macOS aarch64 with Python
 3.14.7, uv 0.12.5, verifier 0.6.0, report schema 1, and Obtainium compatibility
 baselines 1.6.14 for GitHub/HTML and 1.6.15 for the bounded GitLab adapter.
 
-This record covers generated output, offline verification, and controlled
-publisher tests. It does not claim that the real rolling release exists, that a
-nightly publication ran, or that a device imported the new pack.
+This record covers generated output, offline verification, controlled publisher
+tests, the authorized real revision-zero release bootstrap, and complete live
+metadata verification. Nightly publication and device import remain unaccepted.
 
 ## Rebuilt outputs
 
@@ -85,19 +85,46 @@ protection boundaries, partial-upload recovery, and rollback. No maintained
 document refers to implementation scratch material or presents the discarded
 HTML tracker approach as the selected strategy.
 
+## Authorized bootstrap and live metadata verification
+
+After explicit maintainer authorization, the documented bootstrap command ran
+successfully on 2026-09-10. Its authenticated conflict checks allowed creation
+of the [owned continuous prerelease](https://github.com/mjkoo/omnipack/releases/tag/continuous).
+Readback confirmed release id `386243625`, title `omnipack revision 0`,
+`draft: false`, `prerelease: true`, `immutable: false`, and no assets. The owned
+state has completed revision zero, null digests and source commit, and no pending
+revision. The release was published at `2026-09-10T11:58:31Z`.
+
+The `continuous` tag points to commit
+`6212a54f8f9e8a317e4a76f6837d031db6c79891`, matching the independently read remote
+`main` at bootstrap. No settings or protections were changed. The credential
+used for this operation could create the seed; this does not establish the
+permissions of the nightly workflow token.
+
+`UV_CACHE_DIR=/private/tmp/omnipack-uv-cache uv run --no-sync pack verify --live`
+then exited zero. The fresh metadata-only report ran from
+`2026-09-10T11:59:15.749041+00:00` to
+`2026-09-10T12:03:15.702104+00:00`, with `complete: true`, `status: success`,
+zero errors and zero warnings. All 205 entries were included: 93 single-screen
+and 112 dual-screen. Verifier 0.6.0 used report schema 1 and the compatibility
+baselines listed above. All captured input hashes matched the current inputs;
+the JSON pair and README hashes are the exact outputs listed above.
+
+Both tracker entries (`809443320`) resolved `omnipack revision 0` to effective
+version `0` from tag `continuous`, with no APK candidates, errors or warnings.
+The tracker was not omitted from verification. The exact live report SHA-256 is
+`7ff55a2109ce89abe1eb02bd38f5e38f0f195de3ad5a42dfd10601faf5d9bb8d`.
+No live metadata blockers remained in this run. Asset probes were not requested;
+metadata verification does not establish download, installation or device behavior.
+
 ## Operational checks still incomplete
 
-The public release endpoint returned 404 before this validation. No authenticated
-conflict or permission preflight was performed, and the write-capable bootstrap
-command was not run. A fresh complete live metadata verification therefore
-remains pending until a maintainer explicitly authorizes creation or validation
-of the real owned seed. A missing seed must fail normal live verification with
-bootstrap guidance; it is not grounds to disable or omit the tracker.
-
 No workflow was dispatched, no push or release synchronization occurred, and no
-real failure issue was created, updated, or closed. Repository token permissions,
-tag or release protections, stable asset downloads, interruption recovery, and
-actual main-to-release publication remain operationally unaccepted.
+real failure issue was created, updated, or closed. Nightly token permissions,
+publication under tag or release protections, stable asset downloads,
+interruption recovery, and actual main-to-release publication remain
+operationally unaccepted. The seed still has no JSON assets; the first successful
+synchronized pair will advertise revision one.
 
 No Android device acceptance was performed. Initial import of each JSON,
 unchanged checks, a changed shared-revision notification, acknowledgement,
