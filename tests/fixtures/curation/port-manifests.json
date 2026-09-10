@@ -1,0 +1,12 @@
+{
+  "observedAt": "2026-09-10T00:00:00Z",
+  "entries": [
+    {"project":"Aurora Store","sourceUrl":"https://gitlab.com/AuroraOSS/AuroraStore","release":"4.8.4","asset":"AuroraStore-4.8.4.apk","sha256":"8a1ed9aa09631290da91cb793e0517b0f20dc70239ac94ae6682cd94f91a4bad","packageId":"com.aurora.store","versionName":"4.8.4","versionCode":76,"abis":["arm64-v8a","armeabi-v7a","x86","x86_64"]},
+    {"project":"idTech4A++","sourceUrl":"https://github.com/glKarin/com.n0n3m4.diii4a","release":"v1.1.0harmattan72","asset":"idTech4A++_1.1.0harmattan72.apk","sha256":"bfc8e4cf3225edd0731054d05d3889ef8577fc8f67b02042fa292accd8cd349e","packageId":"com.karin.idTech4Amm","versionName":"1.1.0harmattan72lindaiyu","versionCode":11072,"abis":["arm64-v8a","armeabi-v7a"]},
+    {"project":"VCMI","sourceUrl":"https://github.com/vcmi/vcmi","release":"1.7.5","asset":"VCMI-Android-arm64-v8a.apk","sha256":"81738076e58c18b050d9b5f46b3dc1455e40afc112292ee439681572f633cbec","packageId":"is.xyz.vcmi","versionName":"1.7.5","versionCode":1770,"abis":["arm64-v8a"]},
+    {"project":"VCMI","sourceUrl":"https://github.com/vcmi/vcmi","release":"1.7.5","asset":"VCMI-Android-armeabi-v7a.apk","sha256":"7ccec9f182fa23f86cf12942dec32dfbaacfbf749a039d635ac24cd0b392cf6f","packageId":"is.xyz.vcmi","versionName":"1.7.5","versionCode":1769,"abis":["armeabi-v7a"]},
+    {"project":"VCMI","sourceUrl":"https://github.com/vcmi/vcmi","release":"1.7.5","asset":"VCMI-Android-x86_64.apk","sha256":"f789e99dd9c1ada463583302753c18935dfab0a070e357985c14eef3920537cb","packageId":"is.xyz.vcmi","versionName":"1.7.5","versionCode":1771,"abis":["x86_64"]},
+    {"project":"Julius","sourceUrl":"https://github.com/bvschaik/julius","release":"v1.8.0","asset":"julius-1.8.0-android.apk","sha256":"f5a0226e458da9f75efa4f704c0e654ed3ea764c468079b90c39cdf5d4856adb","packageId":"com.github.bvschaik.julius","versionName":"1.8.0","versionCode":10800000,"abis":["arm64-v8a","armeabi-v7a","x86","x86_64"]},
+    {"project":"Xash3D FWGS","sourceUrl":"https://github.com/FWGS/xash3d-fwgs","release":"continuous","asset":"xash3d-fwgs-android.apk","sha256":"f6099c1bde2c0c5652edda1c4be05c7c451c408cc576be66ee7e1d4e8955d782","packageId":"su.xash.engine.test","versionName":"0.21-21aab6c","versionCode":41790969,"abis":["arm64-v8a","armeabi-v7a","x86"]}
+  ]
+}
