@@ -1,23 +1,35 @@
 # omnipack
 
-Curated Obtainium import files, `single-screen.json` and
-`dual-screen.json`, built by selecting one device-suitable build per logical
-app family from several upstream packs and a handful of hand-added apps. A
-committed composition policy and per-app overlays survive upstream refreshes.
+- **[Download single-screen pack](https://raw.githubusercontent.com/mjkoo/omnipack/main/dist/single-screen.json)** - conventional Android devices.
+- **[Download dual-screen pack](https://raw.githubusercontent.com/mjkoo/omnipack/main/dist/dual-screen.json)** - dual-screen and foldable devices.
+
+Curated Obtainium app collections, combining several upstream catalogs with
+hand-added apps and choosing a suitable build for your device.
 
 ## Install
 
-First [install Obtainium](https://obtainium.imranr.dev/). Then download the
-[single-screen pack](https://raw.githubusercontent.com/mjkoo/omnipack/main/dist/single-screen.json)
-for conventional Android devices or the
-[dual-screen pack](https://raw.githubusercontent.com/mjkoo/omnipack/main/dist/dual-screen.json)
-for dual-screen and foldable devices. In Obtainium, open Import/Export and import
-the downloaded JSON file.
+1. **Install [Obtainium](https://obtainium.imranr.dev/)** on your Android device.
+2. **Download a pack** using the single-screen or dual-screen link above. Save
+   the `.json` file to your device; if your browser displays its contents, use
+   its download or save option.
+3. **Import the file in Obtainium.** Open **Settings > Import/export**, choose **Obtainium
+   import**, and select the downloaded `.json` file.
+4. **Install the apps you want.** Open an imported app in Obtainium and tap
+   **Install**. Importing the pack adds app configurations; it does not install
+   every app automatically.
 
-The catalog below also provides individual app configurations. An Add to Obtainium
-link opens an import confirmation; after confirming the configuration, install the
-app from Obtainium. Entries configured for tracking only are release-tracking
-resources and may not provide an installable app.
+The catalog below also provides individual app configurations. An **Add to
+Obtainium** link opens an import confirmation; after confirming, install the app
+from Obtainium. **Tracking only** entries provide update notifications and may
+not have an installable app.
+
+Packs refresh daily, scheduled for 3:00 AM Eastern. Obtainium checks updates for
+apps you import; download and re-import a pack to pick up changes to the collection.
+
+If you imported an older pack, you can manually remove the **Obtainium Emulation
+Pack** tracking entry for RJNY/Obtainium-Emulation-Pack in Obtainium. This removes
+only that tracker, not your emulator apps. Re-importing may leave the old tracker
+in place.
 
 ## Individual apps
 
@@ -204,69 +216,13 @@ resources and may not provide an installable app.
 
 ## Sources and credits
 
-This pack curates
-[RJNY's source JSON](https://github.com/RJNY/Obtainium-Emulation-Pack/blob/main/src/applications.json),
-[BBoi34's standard release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Decomp-Recomp.V3.2.json)
-and [dual-screen release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Dual-Screen-Decomp-Recomp.V3.2.json),
-and [codm2000's project catalog](https://github.com/codm2000/Dual-Screen-Games).
-Thanks to [Obtainium](https://github.com/ImranR98/Obtainium), those catalog
-maintainers, and the individual app developers linked as sources in every row.
+- [RJNY's source JSON](https://github.com/RJNY/Obtainium-Emulation-Pack/blob/main/src/applications.json).
+- BBoi34's [standard release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Decomp-Recomp.V3.2.json)
+  and [dual-screen release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Dual-Screen-Decomp-Recomp.V3.2.json).
+- [codm2000's project catalog](https://github.com/codm2000/Dual-Screen-Games).
+- [Obtainium](https://github.com/ImranR98/Obtainium), which makes these imports and app updates possible.
+- The individual app developers, linked through the sources in each catalog row.
 
-The **Nightly publishing** workflow refreshes main daily at 06:23 UTC and also
-supports manual dispatch on main. It runs offline checks, rebuilds, and requires
-fresh metadata-only verification before publishing changed packs, the generated
-README catalog, and the package-id cache. See [publishing](docs/publishing.md)
-for permissions, failure recovery, diagnostics, and the post-landing acceptance
-procedure.
+## Contributing
 
-## Development
-
-Run `direnv allow` (or `nix develop`) to get every tool the `justfile`
-targets need, then `just --list` for the available commands. `just
-check-all` runs everything CI runs.
-
-## Build the packs
-
-Run `uv run pack build` from the repository root. It fetches the configured
-upstreams, updates resolved package ids in `config/package-ids.json`, and
-writes both import files to `dist/` and regenerates the README catalog after
-validating their serialized bytes offline. Keep exactly one standalone pair of
-catalog markers in README; the build preserves all bytes outside them. An
-optional `GITHUB_TOKEN` authenticates requests to `api.github.com` through
-`config/http.json`.
-
-The JSON diagnostics are in `.build/report.json`, including generated and
-unresolved projects, family selections and alternatives, selection reasons,
-identity transitions, exclusions, and changes from the previous output. A
-failed build returns a nonzero status and preserves the previous packs and README;
-successfully resolved ids remain cached for later runs.
-
-## Verify and inspect
-
-Run `uv run pack verify` (or `just verify`) to validate the committed packs,
-README catalog and local configuration without network access.
-`uv run pack verify --live` also resolves configured GitHub and HTML metadata
-and versions without probing
-downloads. Use `uv run pack verify --live --probe-assets` for explicit asset
-reachability diagnostics. GitHub live requests require the `GITHUB_TOKEN`
-environment variable mapped in `config/http.json`.
-Verification leaves distribution files, README, configuration, package-id caches, and
-the build report unchanged. Standalone evidence is written to `.build/verify.json`.
-
-Run `uv run pack report` to display build and verification results, warnings,
-observation times, and whether verification matches the current local inputs.
-A matching fingerprint does not establish current upstream health.
-
-See [verification](docs/verification.md) for supported settings, failure policy,
-and the limits of a successful check. Ordinary CI runs offline verification;
-nightly publication runs metadata-only live verification. Asset probes remain
-an explicit manual troubleshooting operation.
-
-See [pack composition](docs/composition.md) for family selection, policy,
-exclusion, overlay, migration, and rollback behavior.
-
-See [live validation](docs/validation.md) for the observed import results.
-
-See [maintained app curation](docs/curation.md) for version policies and known
-identity findings, and [curation validation](docs/curation-validation.md) for
-fixture, metadata and device acceptance results.
+Development and maintenance information is available in [docs](docs/).

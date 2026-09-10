@@ -1,4 +1,43 @@
-# Maintained app version policies
+# Maintained app curation
+
+## Pack tracking entries
+
+The RJNY/Obtainium-Emulation-Pack tracking entry (`904332840`) is excluded from
+both exports through `config/deny.json`. RJNY remains an app catalog source,
+and its attribution and fixture provenance are retained. This exclusion survives
+upstream refreshes and removes the tracker from the individual app catalog too.
+
+If you imported an older pack, manually remove that tracking entry in Obtainium
+if it remains after re-import. Removing the tracker does not remove the emulator
+apps it accompanied. Export exclusion does not guarantee deletion on a device.
+
+### Tracking omnipack itself
+
+No omnipack tracker is included yet. On 2026-09-10, inspection of Obtainium's
+[GitHub source](https://github.com/ImranR98/Obtainium/blob/main/lib/app_sources/github.dart)
+showed release tracking with a tags fallback for track-only entries. A repository
+URL with `trackOnly` does not monitor JSON files committed to main.
+
+A candidate follow-up is one explicit HTML-source tracker per device variant,
+reading the GitHub contents API for its pack on main, extracting the file's blob
+SHA as a version, and selecting its raw JSON download URL with a custom link
+filter. This could notify on pack content changes without reacting to every
+documentation commit or requiring releases.
+
+This is research, not verified device support. Obtainium's inspected
+[HTML source](https://github.com/ImranR98/Obtainium/blob/main/lib/app_sources/html.dart)
+requires a selected link before whole-response version extraction. The local
+verifier permits linkless whole-page tracking, so passing that shortcut is not
+evidence of Obtainium compatibility. Before adding the tracker, verify API
+responses, explicit HTML URL preservation, JSON link selection, SHA extraction,
+nonnumeric change detection, and device import/re-import. Check unchanged-content
+no-ops, changed-content notifications, and API rate-limit handling. Use stable
+synthetic IDs and static configuration; embedding the observed SHA in its own
+pack would create a publication feedback loop. A notification would still require
+the user to download and re-import the pack; it would not synchronize app
+configurations automatically.
+
+## Version-policy observations
 
 Release metadata and APK manifests were revalidated on 2026-09-09 UTC.
 These observations support configuration choices; metadata lint is not an APK
