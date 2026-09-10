@@ -63,14 +63,14 @@ UV_CACHE_DIR=/private/tmp/omnipack-uv-cache uv run --no-sync pytest -q \
 
 The original integration check passed 927 tests. After the review fixes, the
 final full check ran lock, format, lint, type, dependency audit, Python package
-build, all 956 tests with 92% package coverage, offline pack verification,
+build, all 958 tests with 92% package coverage, offline pack verification,
 actionlint, zizmor, Nix formatting, and native flake checks. All passed. The
 audit found no known vulnerabilities or adverse statuses in ten packages.
 Zizmor ran in its default offline mode with one suppressed finding and no
 reported findings. Nix reported the dirty working tree and omitted incompatible
 non-host systems.
 
-The final offline report ran from
+The recorded offline report ran from
 `2026-09-10T08:09:37.128926+00:00` to
 `2026-09-10T08:09:37.159590+00:00`. It was complete, successful, and covered the
 full current pair, including tracker `809443320`; it did not omit the tracker to

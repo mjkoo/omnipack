@@ -727,3 +727,46 @@ def test_transport_promotion_failure_reconciles_state_and_both_bytes(
         else:
             assert requests[-2][1].endswith("/assets/10")
             assert requests[-1][1].endswith("/assets/2")
+
+
+@pytest.mark.parametrize("redirected", [False, True])
+def test_short_http_body_never_authorizes_asset_replacement(redirected):
+    from http.client import HTTPResponse
+    from io import BytesIO
+    from socket import socket
+    from typing import cast
+
+    document = completed_release(b"single", b"dual")
+    requests = []
+
+    class Socket:
+        def makefile(self, *args, **kwargs):
+            return BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: 6\r\n\r\nsin")
+
+    def short_response():
+        result = HTTPResponse(cast(socket, Socket()))
+        result.begin()
+        return result
+
+    def trusted(request, *, timeout):
+        requests.append(request.get_method())
+        assert request.get_method() == "GET", "unreadable assets must not be replaced"
+        if request.full_url.endswith(RELEASE_PATH):
+            return Opened(200, json.dumps(document).encode())
+        if redirected:
+            return Opened(302, b"", {"Location": "https://objects.example.net/asset"})
+        return short_response()
+
+    def unsigned(request, *, timeout):
+        requests.append(request.get_method())
+        assert request.get_header("Authorization") is None
+        return short_response()
+
+    before = json.dumps(document)
+    remote = GitHubReleaseRemote(
+        "secret", retries=2, trusted_opener=trusted, unsigned_opener=unsigned
+    )
+    with pytest.raises(SyncFailure, match="download"):
+        synchronize_release(remote, b"single", b"dual", "b" * 40)
+    assert json.dumps(document) == before
+    assert requests == ["GET"] * (4 if redirected else 5)

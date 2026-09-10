@@ -182,7 +182,7 @@ class GitHubReleaseRemote:
                     return (
                         status,
                         dict(response.headers),
-                        _bounded_read(response, max_bytes),
+                        _bounded_read(response, max_bytes, response.headers),
                     )
             except HTTPError as error:
                 with error:
@@ -193,7 +193,14 @@ class GitHubReleaseRemote:
                     # A definitive refusal remains definitive even if its error body is truncated.
                     if method != "GET":
                         return error.code, dict(error.headers or {}), b""
-                    body = _bounded_read(error, max_bytes)
+                    try:
+                        body = _bounded_read(
+                            error, max_bytes, dict(error.headers or {})
+                        )
+                    except IncompleteRead as truncated:
+                        if retry and attempt + 1 < attempts:
+                            continue
+                        raise OSError("GitHub release request failed") from truncated
                     if (
                         retry
                         and error.code in {500, 502, 503, 504}
@@ -219,13 +226,27 @@ class GitHubReleaseRemote:
                     raise ReleaseError(
                         f"redirected asset download failed with status {response.getcode()}"
                     )
-                return _bounded_read(response, MAX_ASSET_BYTES)
+                return _bounded_read(response, MAX_ASSET_BYTES, response.headers)
         except (HTTPError, URLError, IncompleteRead) as error:
             raise OSError("redirected asset download failed") from error
 
 
-def _bounded_read(response: Readable, limit: int) -> bytes:
+def _bounded_read(response: Readable, limit: int, headers: Mapping[str, str]) -> bytes:
     body = response.read(limit + 1)
     if len(body) > limit:
         raise ReleaseError("release response exceeds byte limit")
+    normalized = {name.lower(): value for name, value in headers.items()}
+    declared_length = normalized.get("content-length")
+    if declared_length is not None and "transfer-encoding" not in normalized:
+        try:
+            expected = int(declared_length)
+        except ValueError as error:
+            raise ReleaseError(
+                "release response has an invalid content length"
+            ) from error
+        if expected < 0:
+            raise ReleaseError("release response has an invalid content length")
+        # A bounded HTTPResponse.read() can return early without raising IncompleteRead.
+        if len(body) < expected:
+            raise IncompleteRead(body, expected - len(body))
     return body
