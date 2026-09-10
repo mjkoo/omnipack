@@ -17,17 +17,18 @@ Python packaging, tests, and committed packs offline, then runs:
 
 ```sh
 uv run --no-sync pack build
-uv run --no-sync pack verify --live
+uv run --no-sync pack verify
 ```
 
-The live gate requires complete, successful, fresh evidence matching the
+The structural gate requires complete, successful, fresh evidence matching the
 candidate inputs and verifier identity. Evidence validation runs in each
 selected revision's locked runtime, including its identity, input paths, and
 report schema. Existing warnings and generated-source
-soft failures retain their current policy. Metadata verification does not
-probe download assets. Building can still download APK data for package-id
-discovery. For explicit asset troubleshooting, use
-`uv run pack verify --live --probe-assets`; this is not a scheduled operation.
+soft failures retain their current policy. Verification makes no network requests.
+Building retains source fetching and APK package-ID discovery. A structurally
+invalid selected build blocks publication without choosing another project.
+Unavailable app release metadata after a successful build does not add a
+publication gate or trigger reselection.
 
 The only publishable paths are:
 
@@ -118,8 +119,10 @@ revision zero with no assets. It refuses a conflicting tag, malformed or unowned
 release, or immutable release, and safely reports an existing valid seed. The
 token needs permission to read and create releases and tags in the canonical
 repository; branch or tag protections can still reject the operation. Routine
-publishing never invokes bootstrap and normal live verification does not bypass a
-missing seed.
+publishing never invokes bootstrap. It checks seed existence and ownership using
+release discovery before main publication; a missing or unowned seed blocks main
+and release writes. Structural verification never queries the seed and can pass
+before bootstrap. Synchronization rediscovers ownership and retains digest checks.
 
 A token-authored push does not trigger ordinary push CI, so the checks before
 publication are required. These platform behaviors were checked against
@@ -179,9 +182,10 @@ Upload failure fails the workflow without rolling back publication.
 Diagnostic JSON files are replaced atomically. If a later write fails, fallback
 finalization can reload the last complete result and preserve a confirmed
 publication and its SHA. Fallback keeps the triggering helper failure visible in
-the workflow status and preserves unavailable-report markers. A retained offline verification report is labeled
-offline; the summary and orchestration result identify live evidence as
-unavailable until a live report exists.
+the workflow status and preserves unavailable-report markers. Retained pre-build
+verification is labeled as pre-build evidence. Candidate structural/offline
+evidence is unavailable until the post-build verification runs; the two phases
+are distinguished even though both use offline mode.
 
 System Python can finalize handled uv/Python setup failures. Hard cancellation
 or runner loss may prevent finalization or issue delivery; Actions remains the
@@ -197,7 +201,7 @@ performed. It can push to main and maintain a real issue.
 2. In Actions, select **Nightly publishing**, choose **Run workflow**, explicitly
    select **main**, and dispatch it.
 3. Inspect the summary and retained reports. Confirm fresh attempt/base IDs,
-   complete successful `live` evidence, and metadata-only verification mode.
+   complete successful candidate evidence, and structural/offline verification mode.
 4. Confirm either the published SHA in main's history with only allowed paths,
    or a verified no-op. A failed or uncertain result is not acceptance; inspect
    its failing stage and remote history before deciding what to do next.

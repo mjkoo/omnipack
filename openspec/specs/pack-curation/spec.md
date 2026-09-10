@@ -52,7 +52,8 @@ detection; its single numeric component SHALL NOT be rewritten as a dotted versi
 
 - **WHEN** a selected BanjoRecomp or SymphonyRecomp release has no dotted
   numeric version in its tag
-- **THEN** live verification fails extraction and prevents nightly publication
+- **THEN** the maintained extraction policy remains unchanged for Obtainium to evaluate
+- **AND** structural pack verification does not inspect that tag or block publication because of it
 - **AND** the policy does not substitute an old or invented version
 
 ### Requirement: Source-version tracking preserves build identity
@@ -76,7 +77,7 @@ The `com.ctrnative` policy SHALL apply to both retained repository choices:
 These policies SHALL preserve complete selected source versions, without adding
 numeric extraction or date conversion. They SHALL NOT enable track-only mode,
 disable update checks or notifications, or change release/APK selection settings.
-Verification SHALL retain the existing disabled-detection classification. Package
+Structural validation SHALL retain the boolean setting without classifying an effective upstream version. Package
 ids, URLs and variant membership SHALL remain unchanged by these version policies.
 
 #### Scenario: Patch builds share a numeric base
@@ -97,14 +98,15 @@ ids, URLs and variant membership SHALL remain unchanged by these version policie
 
 Durable curation documentation SHALL state each maintained policy and rationale,
 observed release/APK versions and package identities, observation date, and primary
-upstream references. It SHALL distinguish format lint from APK agreement and
-metadata verification from device validation. It SHALL explain that explicit
+upstream references. It SHALL distinguish current structural validation from dated metadata/APK
+observations and device validation. It SHALL explain that automated source
+resolution, format lint, and upstream-health publication gating are retired. It SHALL explain that explicit
 source-version tracking keeps update checks enabled but cannot guarantee
 eliminating a one-time spurious update after re-import or detecting an in-place
 asset replacement that leaves the source version unchanged.
 
 Known upstream package-id mismatches SHALL be recorded without claiming that a
-version policy repairs them. A clean lint result SHALL NOT be described as proof
+version policy repairs them. A successful structural result SHALL NOT be described as proof
 of safe identity, installation, re-import, or update behavior for those entries.
 
 #### Scenario: Resolved APK declares another package id
@@ -156,7 +158,8 @@ Xash3D SHALL select the GitHub release titled exactly `Xash3D FWGS Continuous ma
 #### Scenario: Upstream temporarily removes the release
 
 - **WHEN** the continuous master release or required APK is unavailable
-- **THEN** verification fails without accepting another channel or suppressing the error
+- **THEN** the exported policy remains restricted to the configured channel and asset
+- **AND** structural verification neither detects the absence nor blocks publication because of it
 
 ### Requirement: Hollow Knight entries have recognizable presentation
 
@@ -319,3 +322,25 @@ without claiming that Obtainium imports configure those directories automaticall
 - **WHEN** the user reads the MetroidArch setup documentation
 - **THEN** it identifies the new-package install, potential shared-directory effects, and manual or ADB configuration procedure
 - **AND** it distinguishes source-backed instructions from unperformed on-device checks
+
+### Requirement: Curation regression checks protect exported configuration
+
+Maintained source-selection, version, and asset policies SHALL be expressed as
+Obtainium configuration and preserved across source refreshes. Their selection
+scenarios describe intended Obtainium behavior; the pack builder SHALL NOT
+independently execute those behaviors as a live compatibility guarantee.
+Regression checks SHALL exercise composition and rendering with fixture source
+records and assert the maintained IDs, URLs, variant membership, and override
+values. Known observed versions and asset identities SHALL remain dated evidence,
+not assertions of current upstream health. Tests SHALL NOT require maintaining
+another implementation of Obtainium source resolution or regex semantics.
+
+#### Scenario: Upstream refresh changes a curated setting
+
+- **WHEN** fixture source records change a setting covered by a maintained override
+- **THEN** composed and rendered output retains the intended curated value
+
+#### Scenario: Recorded release examples remain available
+
+- **WHEN** the live verifier is retired
+- **THEN** dated curation evidence remains readable without claiming its observations were freshly verified

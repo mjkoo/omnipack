@@ -42,10 +42,10 @@ new verified pair. Use the raw-main links if a release asset is temporarily
 unavailable, and wait for a later successful run before treating a new revision
 as complete.
 
-Offline verification validates the complete pair, including this tracker. The
-tracker's real metadata check requires the owned release seed; a missing seed is
-a normal verification failure with maintainer bootstrap guidance. Omitting the
-tracker is not a valid way to make verification pass. Device import, notification,
+Offline verification validates the complete pair, including this tracker, without
+querying releases. The publisher separately requires an owned release seed before
+main publication and reports bootstrap guidance when it is missing. Omitting the
+tracker is not a valid way to satisfy either contract. Device import, notification,
 acknowledgement, and re-import behavior still require separate device acceptance.
 
 ## Port setup
@@ -69,8 +69,10 @@ data that the project does not distribute:
 ## Version-policy observations
 
 Release metadata and APK manifests were revalidated on 2026-09-09 UTC.
-These observations support configuration choices; metadata lint is not an APK
-comparison or proof of installation, re-import, signature or device behavior.
+These dated observations support configuration choices. Current structural
+verification does not repeat metadata resolution or APK inspection, or establish
+installation, re-import, signature or device behavior. The policies below describe
+intended Obtainium behavior; regression tests protect exported configuration.
 
 ## Policies
 
@@ -80,8 +82,8 @@ prereleases (including build-dependency releases), and is installable. The
 observed 0.8.1 APK has versionCode 113. No release pin or extraction is used.
 
 BanjoRecomp and SymphonyRecomp extract `[0-9]+(?:\.[0-9]+)+`, group `0`,
-from release tags. No match is a verification error and blocks nightly
-publication. Symphony's observed tags yield distinct 0.9, 0.9.1, 0.10 and
+from release tags. Obtainium evaluates this extraction; a missing match does
+not block structural pack verification or nightly publication. Symphony's observed tags yield distinct 0.9, 0.9.1, 0.10 and
 0.10.1 versions. This treats trailing `b` as a channel label; a future
 stable/beta pair sharing a numeric version requires revisiting the policy.
 Cemu uses each variant's own release tag (0.5 single, 0.5.2 dual), retaining
@@ -132,8 +134,8 @@ An identity correction does not itself require replacing an installed APK.
 
 Ludashi (`com.winlator.ludashi`) remains outside that bounded reconciliation.
 Its inspected APK declares `com.winlator.vanilla`; the configured identity is
-still unresolved. Clean version lint cannot repair that mismatch, and metadata
-checks cannot establish successful device acceptance.
+still unresolved. Structural verification cannot repair that mismatch or
+establish successful device acceptance.
 
 [Ludashi releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
 include v4.0, but the existing APK filter still selects bionic-vanilla.apk from
@@ -155,12 +157,10 @@ still show a one-time update after re-import; external installation may not
 update Obtainium's recorded source version. Replacing an asset under an unchanged
 source version is not detectable through source-version comparison.
 
-The [version service](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/providers/source_provider.dart)
-accepts single-component numeric versions. Our lint accepts bare unsigned
-integers, optionally prefixed by v/V, alongside its existing dotted form.
-Only dotted versions permit suffixes. A date such as 2026-04-27 still warns
-under standard detection. This remains a syntax heuristic, not the full
-Obtainium grammar or a claim of APK agreement.
+Automated source resolution, effective-version format lint and upstream-health
+publication gating are retired. Structural checks retain setting types without
+evaluating patterns, versions or release availability. Investigate changed source
+behavior in Obtainium and record new observations with their dates and provenance.
 
 Policies take effect on the next import. Rollback restores the previous extras
 and overlay and rebuilds both files; publication is a separate maintainer action.

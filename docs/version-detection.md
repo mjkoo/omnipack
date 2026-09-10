@@ -26,24 +26,20 @@ configuration and device testing.
 - **Prerelease tags that aren't app builds** (e.g. a dependency-bump tag):
   keep `includePrereleases: false` so they're ignored entirely.
 
-## Lint
+## Validation and maintenance
 
-`pack verify --live` lints the effective GitHub version after successful
-extraction. Its anchored heuristic accepts an optional `v` or `V`, either a bare unsigned integer or at least
-two dot-separated numeric components. Only the dotted form permits `-` prerelease
-and `+` build suffixes made of ASCII letters, digits, dots, or hyphens. Examples include
-`4093`, `v20250425`, `1.2`, `v1.2.3-beta1`, and `1.2.3+build.4`.
-Integer suffixes and dates such as `2026-04-27` do not pass.
+`pack verify` validates setting types and local structural consistency. It does
+not resolve releases, evaluate extraction patterns, classify effective versions,
+or lint numeric formats. The retired `--live` and `--probe-assets` flags fail;
+regenerate old verification reports with `uv run pack verify`.
 
-Track-only entries, disabled version detection, and intentional date versions
-have distinct classifications without numeric-shape warnings. A title or regex
-setting alone is not an exemption: an extracted `continuous` still warns.
-Warnings do not fail verification; extraction failures do. Offline builds
-perform structural validation and do not run this live lint.
+The recipes above describe intended Obtainium behavior. Check changed release
+selection and extraction in Obtainium, retain dated observations, and maintain
+explicit overlays so upstream refreshes cannot replace curated settings.
+Fixture-driven composition and rendering tests assert the exported policies.
 
-Review findings with `uv run pack report`. Treat the warning list as evidence
-for deliberate configuration changes, not automatic overlay repairs. See
-[verification](verification.md) for the compatibility boundary and report freshness.
-
-See [maintained curation](curation.md) for per-app evidence and source-tracking
+Use `uv run pack report` to inspect structural evidence and its local freshness.
+A successful result does not prove upstream health, APK version agreement, or
+notification behavior. See [verification](verification.md) for the checks and
+[maintained curation](curation.md) for per-app evidence and source-tracking
 re-import and unchanged-tag asset-replacement limitations.

@@ -13,9 +13,9 @@
 
 ## 3. Remove compatibility implementation and preserve curation
 
-- [ ] 3.1 Convert resolver-dependent curation tests into fixture-driven composition/render assertions for maintained identities, variants and override values; verify upstream changes cannot overwrite curated settings and fixture output bytes remain unchanged.
-- [ ] 3.2 Delete live.py, live_http.py, resolution/ and tests exclusively covering retired guarantees; verify no remaining runtime or test imports depend on them and no test-only resolver replacement was introduced.
-- [ ] 3.3 Remove unused verification-only HTTP helpers and cache/probe code after auditing callers; verify source ingestion, package-ID discovery and shared credential/redirect protections retain their existing tests and behavior.
+- [x] 3.1 Convert resolver-dependent curation tests into fixture-driven composition/render assertions for maintained identities, variants and override values; verify upstream changes cannot overwrite curated settings and fixture output bytes remain unchanged.
+- [x] 3.2 Delete live.py, live_http.py, resolution/ and tests exclusively covering retired guarantees; verify no remaining runtime or test imports depend on them and no test-only resolver replacement was introduced.
+- [x] 3.3 Remove unused verification-only HTTP helpers and cache/probe code after auditing callers; verify source ingestion, package-ID discovery and shared credential/redirect protections retain their existing tests and behavior.
 
 ## 4. Documentation and integrated validation
 

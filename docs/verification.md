@@ -1,20 +1,10 @@
 # Pack verification
 
-Pack verification retains Obtainium v1.6.14 for GitHub and HTML, and supports
-a bounded subset of the native GitLab adapter from v1.6.15. The behavioral
-references are the source files at those immutable tags:
-
-- [GitHub source](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/github.dart)
-- [GitLab source](https://github.com/ImranR98/Obtainium/blob/v1.6.15/lib/app_sources/gitlab.dart)
-- [HTML source](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/html.dart)
-- [shared version handling](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/providers/source_provider.dart)
-
-The RJNY verifier was evaluated as an implementation reference at revision
-[`5bb57f833652c389c3b063d3b4af9b42ee11602a`](https://github.com/RJNY/Obtainium-Emulation-Pack/tree/5bb57f833652c389c3b063d3b4af9b42ee11602a),
-particularly `scripts/test-apps.py`. That repository dedicates its code to the
-public domain under the Unlicense. No RJNY helper has been copied or adapted in
-the compatibility classifier. Any future adaptation must retain this revision,
-source path, and licence attribution.
+`pack verify` checks existing pack files, local configuration and the generated
+README catalog without network access. It validates structure and consistency.
+Obtainium evaluates release selection, regular expressions and effective versions
+on the device; the pack builder no longer maintains an independent implementation
+of those behaviors.
 
 ## Commands and evidence
 
@@ -22,294 +12,91 @@ Run commands from the repository root:
 
 | Command | Work performed |
 | --- | --- |
-| `uv run pack verify` or `just verify` | Validate both existing serialized packs, their README catalog and local composition settings without network access |
-| `uv run pack verify --live` | Run offline validation, then resolve source metadata, versions and eligible candidates without probing downloads |
-| `uv run pack verify --live --probe-assets` | Add bounded download reachability diagnostics |
-| `uv run pack report` | Display available build and standalone verification evidence without fetching or writing files |
-| `uv run pack build` | Ingest and compose sources, validate newly rendered bytes offline, then publish both packs and the README catalog as a recoverable unit |
+| `uv run pack verify` or `just verify` | Validate the existing serialized pair, catalog and local configuration offline |
+| `uv run pack report` | Display available build and verification evidence without fetching or writing files |
+| `uv run pack build` | Ingest and compose sources, validate rendered bytes, then publish both packs and the catalog as a recoverable unit |
 
-Standalone verification writes `.build/verify.json` on success or failure. An
-initial incomplete record replaces previous evidence before live work starts.
-The report records mode, observation times, verifier identity, baseline, findings,
-and SHA-256 fingerprints of the exact distribution files, denylist, both overlays,
-composition policy, pack settings, README, and HTTP configuration. Environment
-credential values are excluded.
-If inputs change during a run, the run fails instead of claiming to verify the
-new files. Missing and unreadable inputs are reported explicitly.
+The retired `--live` and `--probe-assets` arguments fail before verification starts
+and leave existing evidence untouched. Replace those invocations with `pack verify`.
+There is no replacement automatic app-resolution or asset-probing command.
 
-Verification does not rebuild or update distribution files, README, overlays,
-package-id caches, or `.build/report.json`. Build diagnostics remain separate and
-include the offline gate's verdict. A rejected build preserves both previous
-output files and README. Before publication,
-build rejects changes to the captured README or consumed composition policy. A
-handled replacement failure restores previous bytes or absence and cleans its
-sibling temporary files; this is exception recovery, not protection against
-process termination, runner loss or rollback storage failure.
+Standalone verification writes schema 2 evidence to `.build/verify.json`, separately
+from the build report. It first writes an incomplete running record and atomically
+replaces it on completion, including failure. Reports contain offline mode,
+verifier identity, observation times, completion, status, contextual errors and
+SHA-256 fingerprints of both distribution files, the denylist, both overlays,
+composition policy, pack settings and README. Missing and unreadable inputs are
+explicit. HTTP configuration and environment credentials are not consulted or
+fingerprinted.
 
-`pack report` labels verification stale when any local input fingerprint or the
-verifier identity differs, including a composition-only or README-only change
-with unchanged distribution files.
-Historical reports with seven or eight input fingerprints remain readable but
-are stale under the current nine-input verifier and cannot authorize publication.
-Evidence is current only when every recorded input byte
-snapshot and the verifier identity match. It also shows incomplete attempts,
-mode, and observation time.
-Current local fingerprints do not mean an upstream source is still healthy.
-One available report is enough; missing both, corrupt reports, and unsupported
-schemas fail display. Displaying a recorded failed operation is itself successful.
+Independent errors are collected across both variants. Input changes during a
+run prevent success. An interrupted run leaves incomplete evidence. Verification
+exits zero only for a complete run without errors; report persistence failure
+also causes a nonzero exit and a stderr diagnostic.
 
-Verification exits zero only for a complete run without errors. Warnings alone
-are successful. Offline errors prevent all live requests; after offline success,
-independent live failures are collected across both variants. Report write errors
-also fail the command and produce a stderr diagnostic.
+Verification never rebuilds or changes the packs, README, configuration,
+package-ID cache or `.build/report.json`. Building still performs source ingestion
+and APK package-ID discovery using the existing network failure policy.
 
-Offline composition validation interprets rendered families, projected pins and
-explicit eligibility, exclusions, package uniqueness, family coverage, and
-id-and-URL overlay targets from local bytes. Rendered output does not contain the
-losing source candidates, so offline verification cannot reconstruct provenance,
-candidate presence, preference or source ranking. It also cannot prove that the
-configured patch values produced the rendered values. Those checks belong to a
-build against acquired candidates; offline success does not repair output.
+`pack report` labels supported evidence stale when any input fingerprint or the
+verifier identity differs. Older verification schemas require regeneration with
+`pack verify` and cannot authorize publication. Existing build reports remain
+readable. One available report is enough; missing both, corrupt reports and
+unsupported schemas fail display. Displaying a recorded failed operation exits
+successfully.
 
-Offline catalog verification compares the generated marker interior against the
-captured serialized packs and current policy. Missing, unreadable, malformed or
-stale catalogs fail before live resolution. Handwritten content is excluded from
-catalog comparison but included in the exact README fingerprint, so a handwritten
-edit permits a fresh verification while making prior evidence stale. Verification
-never repairs the catalog or fetches upstream sources to generate it.
+## Structural checks and limits
 
-See [README catalog validation](catalog-validation.md) for redirect decoding,
-rendered-preview evidence and the pending Android acceptance checks.
+The validator checks JSON types, required app fields, source URL shapes,
+source-specific default settings and known setting types, package uniqueness,
+family composition constraints, configured pack settings and category colours.
+Unknown settings are acceptable when structurally valid. Regex strings are not
+compiled or evaluated, so even a malformed pattern can pass structural checks.
 
-## Compatibility boundary
+Composition checks cover rendered families, projected pins, eligibility,
+exclusions, package uniqueness, family coverage and overlay targets. Rendered
+output omits losing candidates, so verification cannot reconstruct provenance,
+candidate presence, preference or source ranking, or prove that a patch produced
+the rendered values. Fixture-driven composition and rendering tests protect
+maintained IDs, URLs, variant membership and override values across refreshes.
 
-Live verification interprets only behavior needed by the committed packs. Each
-setting is classified before resolution. An unknown key is an error even if its
-value is false or empty, because a value cannot be assumed inactive without
-knowing its semantics.
+Catalog verification compares the generated marker interior against the captured
+packs and policy. Missing, unreadable, malformed or stale catalogs fail. Handwritten
+content is excluded from catalog comparison but included in the README fingerprint.
+A handwritten edit permits fresh verification while making old evidence stale.
+Verification never repairs the catalog.
 
-| Settings | Classification | Live behavior |
-| --- | --- | --- |
-| GitHub `releaseDateAsVersion` | Implemented | Requires a usable release date |
-| HTML `releaseDateAsVersion` | Inactive when false; live error when true | No usable release date; rejected before HTTP |
-| `versionExtractionRegEx`, `matchGroupToUse`, `apkFilterRegEx` | Implemented | Applied during version and candidate selection |
-| GitHub/HTML `trackOnly`, `versionDetection`, `invertAPKFilter` | Implemented | Applied within each source's supported selection behavior |
-| GitLab `fallbackToOlderReleases` | Implemented | Scan for a matching APK in API order, or fail on the first release when disabled |
-| GitLab `trackOnly`, `releaseDateAsVersion`, `invertAPKFilter` | Inactive unsupported or live error | Only false is accepted |
-| GitLab `versionDetection` | Inactive unsupported or live error | Only true is accepted within the supported release-tag boundary |
-| GitHub release eligibility, title and notes filters, older-release fallback, `date` or `none` sorting, asset-date selection, and release-title versions | Implemented | Applied to the first 100 list records and any supplemental latest record |
-| GitHub `verifyLatestTag` | Implemented | Fetch latest metadata and prioritize its exact identity after configured sorting |
-| HTML intermediate links, link and text filters, outside-anchor matching, sorting controls, whole-page extraction, and non-secret request headers | Implemented | Applied to each configured page in order |
-| App name, author, description, notification/background controls, Shizuku presentation, refresh behavior, and OS version-code preference | Harmless for source resolution | Retained but does not alter the device-independent check |
-| `autoApkFilterByArch` and `preferredApkIndex` | Device-specific | Validated but not used to claim device compatibility |
-| HTML/GitLab archive settings, GitHub credentials or request proxies, insecure TLS, and non-`date`/non-`none` GitHub sorting | Inactive unsupported or live error | Default false or empty values are accepted; active values fail by setting name |
-| GitHub `includeZips` | Implemented | Enables ZIP candidates; the APK filename regex and inversion apply to the outer archive name |
-| GitHub `zippedApkFilterRegEx` | Device-specific | Syntax checked before HTTP; extraction and member selection remain on device |
-| HTML pseudo-versioning | Inactive unsupported or live error | Ignored when explicit extraction supplies the version; otherwise active pseudo-versioning fails |
-| Authorization or Cookie request headers and device-dependent filtering on nonempty intermediate steps | Live error | Rejected before a request is made |
-| Any unknown additional setting | Live error | Requires an intentional compatibility decision |
+Success does not establish upstream health, release or download availability,
+effective versions, APK identity, signatures, installation, architecture support,
+re-import behavior or absence of spurious notifications. Investigate source
+selection and version behavior in Obtainium. See [version detection](version-detection.md)
+and [maintained curation](curation.md) for intended policies and their limitations.
 
-Package recognition and generic ZIP selection are separate. GitHub recognizes
-`.apk`, `.xapk`, `.apkm` and `.apks` by asset-name suffix, case-insensitively;
-its APK regex and inversion also apply to the asset name. GitLab recognizes
-those suffixes in either the named link or its URL path, then applies the APK
-regex to the name. Relative Markdown description uploads use the same suffixes
-and filename filtering, with URLs resolved through the numeric project ID.
-Recognized package containers do not require `includeZips`. Generic `.zip`
-assets require that setting on GitHub and do not qualify as GitLab packages.
+## Publication and historical evidence
 
-HTML uses its own link-selection rules. Without a nonempty custom-link filter,
-it chooses the URL or link text, percent-decodes that string, parses it as a URL,
-and checks the path for the same four package suffixes. Thus link text
-`release.apkm?download=1` qualifies, while `release?format=.apkm` does not.
-A nonempty custom-link filter replaces this default extension filter; the final
-APK regex still filters URLs. A custom filter may admit an extensionless URL,
-which does not imply support for extracting an archive from its response.
-Active HTML and GitLab archive-selection settings remain unsupported.
+See [structural validation results](structural-verification-validation.md) for
+the retained test suite, publication boundaries and byte-preservation checks.
 
-Metadata resolution and optional probes inspect no members of package containers.
-They do not prove extraction, package identity, signatures or installability.
-The existing `archive-members-unverified` warning is emitted for GitHub ZIP
-candidates; absence of that warning for another container is not evidence of
-member inspection. Generated package-ID discovery remains a separate operation:
-it reads manifests only from release assets whose names end in `.apk`,
-case-insensitively, and does not discover IDs from these other container formats.
+Nightly publication requires fresh structural evidence for each built candidate,
+validated in the selected revision's runtime. Pre-build checks cannot authorize
+the candidate. Exact bytes, staging, publishable-path restrictions and the README
+handwritten-content boundary remain enforced. Structural failure blocks publication
+without selecting a different project. App release metadata becoming unavailable
+after a successful build does not add a verification gate or cause reselection.
 
-The ordinary live check establishes source metadata resolution and version
-extraction, including eligible candidates for installable entries. It does not
-request selected downloads or claim they are reachable. The explicit asset
-diagnostic adds bounded HTTP reachability. Neither mode establishes APK identity,
-signature, installation success, architecture coverage, or behavior on a device.
+The publisher separately checks the rolling release seed's existence and ownership
+before main publication. Verification itself never queries that release, including
+when the tracker is present. See [publishing](publishing.md) for explicit bootstrap,
+release synchronization and recovery.
 
-The [pinned GitHub provider](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/github.dart) enables ZIP release assets.
-For an enabled GitHub ZIP, metadata selection accepts the outer archive without
-opening it. Explicit probing reads only the bounded prefix of that outer ZIP.
-The `archive-members-unverified` warning makes this limitation visible: neither
-mode proves that the configured APK member exists. The same release ordering,
-filters, date handling, and fallback rules apply to APK and enabled ZIP assets.
-Official Ghostship uses this path; its captured member inspection is separate
-[curation evidence](source-reconciliation.md), not a runtime verifier guarantee.
+Dated observations in [verification validation](verification-validation.md),
+[curation validation](curation-validation.md), and retained fixture provenance
+describe the checks performed at those times. Historical resolver fixtures and
+archived changes remain evidence of the retired implementation, without implying
+current compatibility coverage or upstream health.
 
-Native GitLab support covers explicit installable public `gitlab.com` projects,
-including case-sensitive subgroup paths with at most 21 components. Resolution
-looks up the encoded project path, then inspects at most 100 releases in API
-order. It combines named asset links and APK upload links in release descriptions;
-relative uploads use the numeric project route. Versions come from release tags,
-with optional extraction. Aurora's filename filter excludes hw and preload APKs.
-Malformed metadata, failed requests and missing qualifying APKs remain failures.
-Unsupported active settings fail before HTTP; this is not full GitLab adapter parity.
-
-Public GitLab resolution needs no token and does not relax the GitHub credential
-requirement. Shared HTTP bounds, exact-host credentials and optional bounded probes
-apply to GitLab too. GitHub credentials are never forwarded to GitLab. Shared
-metadata and probe requests retain separate results for each variant; GitLab
-source settings and verifier identity participate in evidence invalidation.
-
-GitHub selection inspects at most the first 100 release-list records. With
-`verifyLatestTag` true, it first fetches `/releases/latest`, retaining the list
-record when its exact `tag_name` (or `name` when the tag is absent or null) matches.
-An absent identity supplements the bounded list. After `date` or `none` ordering,
-the matching record moves first while all other records keep their relative order.
-The latest response must be an object with a nonempty string identity; identities
-are not trimmed, case-folded, or reconciled as versions. False or absent latest
-checking makes no latest request.
-
-Drafts and excluded prereleases do not consume the first eligible release;
-title, notes, and APK mismatches do when older-release fallback is disabled.
-Latest prioritization preserves those filters and subsequent title, regex, and
-date version processing. The reported `window_limit` stays 100, while
-`inspected_count` includes a supplemental latest release and can reach 101.
-Failure does not rule out a usable release beyond this bounded selection.
-
-Track-only sources can use filtered tags fallback when no release qualifies.
-With latest checking enabled, this requests `/tags/latest` before
-`/tags?per_page=100` and applies the same identity, supplementation, ordering,
-and selection rules. The endpoint follows the pinned provider, even when it
-fails upstream. A latest HTTP failure, including 404, transport failure, invalid
-JSON, or invalid identity fails before the corresponding list request. Diagnostics
-identify `releases/latest`, `releases`, `tags/latest`, or `tags`. Acquisition
-failures never trigger tags fallback, and neither do version/date extraction
-failures after selecting a record. Tags fallback retains the release inspection
-count; that field is not a total request count or a tag count.
-
-HTML follows up to ten nonempty intermediate filters, selecting the last link
-after each configured filtering and sorting step. Excess depth fails. A selected
-HTML download cannot be rescued by probing an older link. Track-only whole-page
-version extraction can succeed without a final download, but still requires every
-active intermediate selection; URL-based extraction always requires a selected URL.
-
-Version extraction uses the last regex match, default group 0, and the baseline's
-numeric or `$N` group substitution. Invalid patterns, invalid groups, no match,
-and empty output fail. Python-only constructs, inline flags, named groups,
-atomic/conditional groups, possessive quantifiers, and unsupported Unicode
-property syntax are rejected explicitly. Supported character semantics use ASCII
-`\d`, `\w`, and word boundaries, ECMAScript whitespace for `\s` (including NBSP
-and BOM), a dot that excludes LF, CR and Unicode line/paragraph separators, and
-an end anchor that requires the actual end of input. Class-contained `\s` is
-translated without adding a nested class; escaped dots and anchors stay literal.
-Pattern backreferences, numeric/octal escapes, unknown identity escapes, and
-class-contained `\S`, character-class escapes beside hyphens, empty character
-classes (including negated ones), leading unescaped `]` in classes, and repeated
-groups containing captures are explicitly unsupported. This is a BMP-text subset, not
-a general ECMAScript regex engine; UTF-16 surrogate-pair matching is not modeled.
-A configured GitHub date override runs after extraction and requires a usable
-date, represented in epoch microseconds. HTML resolution supplies no release
-date, so enabling that override is an unsupported-setting error before HTTP.
-
-In `--live --probe-assets` mode, each download probe sends a GET Range request and reads at most 1024 bytes,
-closing the response even if the server ignores Range. Nonempty 200 or 206
-responses establish reachability. GitHub candidates are tried in metadata order
-until one succeeds; failed candidates become warnings when another succeeds.
-Probe failure does not select an older release. Track-only entries need a version
-and do not require a probe.
-
-## Request policy
-
-`pack verify` and ordinary CI remain offline. Use metadata-only `--live` for
-routine source checks; reserve `--live --probe-assets` for reachability diagnosis.
-`--probe-assets` without `--live` is an error. Report modes are `offline`, `live`
-(metadata only), and `live-probe`, with observation times for each. A previous
-version's evidence is stale when its verifier identity differs.
-
-Necessary live requests are sequential with at least two seconds between request
-starts to the same host, including retries and redirects. They use a 30-second
-timeout, at most two transient retries, at most ten redirects and a 10 MiB
-metadata limit. Server retry instructions take precedence over shorter local
-backoff, within a 60-second wait bound. A delay on the final failed attempt still
-applies to the next request to that host; unrelated hosts need not wait.
-A rate-limited host, or one requesting a
-longer wait, receives no more requests during that invocation. Affected entries
-record errors while unrelated hosts can continue.
-
-Credentials come from exact-host environment mappings in `config/http.json` and
-are rebuilt at redirects. GitHub API access requires the configured nonempty
-credential (currently `GITHUB_TOKEN`); missing credentials fail before an API
-request. Do not put tokens into pack settings or checked-in configuration.
-Non-secret configured headers, including User-Agent, are honored; embedded URL
-credentials and pack Authorization/Cookie headers fail. Diagnostic URLs redact
-credentials and query values.
-
-Identical metadata requests, including failures, share work within a run. Release
-responses can serve different variant settings, but each variant selects its own
-version and assets. Resolution reuse requires the exact source URL and settings;
-HTML trailing-slash differences remain distinct. Explicit probes reuse identical
-requests within the run and consume the already-selected URLs without another
-release lookup.
-
-Latest-enabled repositories add one distinct metadata lookup to the ordinary
-release-list path. Track-only tags fallback can add two more distinct lookups
-(latest then list). Without latest checking, the ordinary and fallback paths use
-one list lookup each. These counts exclude retries and redirects; identical
-responses and failures are reused across variants within the run. Routine
-verification makes no asset requests.
-
-Latest metadata is reused only within a run. Persistent conditional caching is
-restricted to eligible release and tag list URLs with `per_page=100`; latest
-endpoints are neither persisted nor conditionally revalidated across runs.
-A bounded GitHub metadata cache under `.build/live-http-cache/` stores response
-bodies and conditional validators, without credentials. A later run must obtain a
-fresh authenticated 304 before using a cached body. Errors never fall back to old
-metadata. This saves response transfer on unchanged repositories, while preserving
-a current observation. There is no persistent asset-probe or verification-success
-cache, and a package-id cache cannot turn a failed source into a pass.
-
-Nightly workflow wiring remains separate. A publisher that already downloads a
-selected asset should use that download as evidence instead of requesting an
-additional probe. The routine contract deliberately does not establish fresh
-reachability for every unchanged asset each night.
-
-Effective GitHub versions receive the non-blocking
-[numeric-shape lint](version-detection.md#lint). A title or extraction regex alone
-does not suppress a warning. The lint does not compare with Android versionName.
-
-Ordinary CI runs fixtures and offline verification of committed distribution
-files. It does not rebuild from upstreams or run live checks. A full manual live
-observation from the original comprehensive mode, the request-reduction rationale,
-and blockers for future nightly publishing are recorded in
-`docs/verification-validation.md`.
-
-## Fixture evidence
-
-The fixture manifest at `tests/fixtures/verification/manifest.json` maps every
-committed HTML entry and every distinct GitHub behavior to response evidence.
-All seven HTML fixtures and the configured RJNY track-only GitHub fixture are
-trimmed live captures dated in their provenance. Synthetic GitHub records cover
-cases that need controlled alternatives. They are labeled as synthetic, cite the
-pinned behavioral source instead of a purported capture URL, and include the
-complete selection settings needed to reproduce each expectation. Cases make
-incorrect sorting, traversal, asset filtering, or regex group handling produce
-a different result. GitHub evidence covers latest identity promotion and supplementation, failure
-boundaries, shared variant metadata, prereleases, title and date versions,
-concatenated extraction groups, and track-only release and tags paths.
-
-Fixtures contain only the response fragments needed to reproduce selection.
-They are deterministic compatibility evidence, not cached claims that the live
-source remains reachable.
-
-## Curated version formats
-
-Verifier identity 0.3.1 accepts bare unsigned integers with optional v/V prefixes,
-while retaining the dotted-version suffix grammar and full-string matching.
-Reports from 0.3.0 are stale; schema 1 and Obtainium 1.6.14 remain unchanged.
-Dates, hashes and labels still warn under standard detection. See
-[curation](curation.md) for policies, APK observations and identity limitations.
+The RJNY verifier was evaluated as an implementation reference at revision
+[`5bb57f833652c389c3b063d3b4af9b42ee11602a`](https://github.com/RJNY/Obtainium-Emulation-Pack/tree/5bb57f833652c389c3b063d3b4af9b42ee11602a),
+particularly `scripts/test-apps.py`, under the Unlicense. No RJNY helper was copied
+or adapted into the retired compatibility classifier. Its independent upstream
+identity and historical attribution remain unchanged.

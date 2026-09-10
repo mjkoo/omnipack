@@ -239,49 +239,33 @@ diff. Building SHALL NOT replace `.build/verify.json` or claim live health.
 - **THEN** the failure report retains the successful offline verdict and identifies
   the later failing stage
 
-### Requirement: The verify command inspects existing output
+### Requirement: The verify command performs structural checks only
 
-The system SHALL implement `pack verify` to check both current distribution
-files and local configuration offline without network requests. It SHALL
-implement `pack verify --live` to add metadata resolution and version checks only
-after offline success, without download probes. `pack verify --live --probe-assets`
-SHALL add explicit bounded reachability diagnostics. `--probe-assets` without
-`--live` SHALL be rejected. All modes SHALL record verification evidence and exit zero only on a complete,
-error-free run; warnings alone SHALL not fail the command. Report write failure
-SHALL cause a nonzero exit with a concise stderr diagnostic. Verification SHALL
-not rebuild, update package ids, alter distribution/configuration files or
-overwrite the last build report.
+The system SHALL implement `pack verify` to check both current distribution files,
+local configuration and generated catalog offline without network requests.
+The retired `--live` and `--probe-assets` flags SHALL be rejected as unsupported
+arguments with nonzero exit before verification runs. The command SHALL record
+structural evidence and exit zero only on a complete, error-free run. Report
+write failure SHALL cause nonzero exit with a concise stderr diagnostic.
+Verification SHALL NOT rebuild, update package IDs, alter distribution or
+configuration files, or overwrite the build report.
 
-#### Scenario: Offline verification is invoked without a build report
+#### Scenario: No build report is available
 
-- **WHEN** both distribution files and the local configuration are valid but no
-  build report exists
-- **THEN** `pack verify` succeeds, records offline evidence and makes no network call
+- **WHEN** the current exports, configuration and catalog pass local checks without a previous build report
+- **THEN** `pack verify` succeeds and writes structural evidence without network access
 
-#### Scenario: Invalid output is passed to live verification
+#### Scenario: A retired flag is supplied
 
-- **WHEN** `pack verify --live` finds malformed output
-- **THEN** it reports offline errors, performs no live request and exits nonzero
+- **WHEN** either `--live` or `--probe-assets` is supplied, alone or together
+- **THEN** argument parsing fails without network requests or replacement verification evidence
 
-#### Scenario: Live check has warnings only
+#### Scenario: Report persistence fails
 
-- **WHEN** every entry resolves a version and any required eligible candidates,
-  but some versions receive lint warnings
-- **THEN** `pack verify --live` records the warnings and exits zero
+- **WHEN** verification cannot write its report
+- **THEN** it exits nonzero with a concise diagnostic
 
-#### Scenario: Routine live verification avoids asset traffic
-
-- **WHEN** `pack verify --live` succeeds
-- **THEN** no selected download is requested and the report identifies metadata-only
-  mode without claiming reachability
-
-#### Scenario: Asset diagnostics require explicit selection
-
-- **WHEN** `pack verify --live --probe-assets` runs
-- **THEN** selected download candidates are probed and evidence identifies
-  `live-probe` mode separately from ordinary `live` mode
-
-### Requirement: The report command displays available evidence and its freshness
+### Requirement: The report command displays structural evidence and its freshness
 
 The system SHALL implement `pack report` to display the available build and
 verification reports as separate human-readable sections without network access
@@ -297,10 +281,13 @@ schema, the command SHALL exit nonzero with a useful diagnostic. Successfully
 displaying a recorded failed operation SHALL exit zero. The existing build-report
 format without a schema field SHALL remain readable. New build reports SHALL
 also display family selections, fallback reasons, identity transitions and
-candidate conflicts. The composition policy SHALL participate in freshness
-checks; evidence predating that input or the new verifier identity SHALL be stale.
+candidate conflicts. The composition policy SHALL participate in freshness checks. Unsupported old
+verification schemas SHALL produce a regeneration diagnostic directing the user
+to `pack verify`, rather than being interpreted as current structural evidence.
+Reports SHALL describe structural scope without resolved versions or live-health
+claims. A supported schema with a different verifier identity SHALL be stale.
 
-#### Scenario: Configuration changed after successful live verification
+#### Scenario: Configuration changed after successful structural verification
 
 - **WHEN** an overlay changes after the recorded run
 - **THEN** `pack report` displays the recorded results as stale

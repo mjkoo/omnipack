@@ -24,11 +24,9 @@ successfully resolved ids remain cached for later runs.
 
 Run `uv run pack verify` (or `just verify`) to validate the committed packs,
 README catalog and local configuration without network access.
-`uv run pack verify --live` also resolves configured GitHub and HTML metadata
-and versions without probing
-downloads. Use `uv run pack verify --live --probe-assets` for explicit asset
-reachability diagnostics. GitHub live requests require the `GITHUB_TOKEN`
-environment variable mapped in `config/http.json`.
+Verification does not consult HTTP configuration or credentials. The retired
+`--live` and `--probe-assets` flags are rejected; use Obtainium to investigate
+source selection and version behavior.
 Verification leaves distribution files, README, configuration, package-id caches, and
 the build report unchanged. Standalone evidence is written to `.build/verify.json`.
 
@@ -36,10 +34,10 @@ Run `uv run pack report` to display build and verification results, warnings,
 observation times, and whether verification matches the current local inputs.
 A matching fingerprint does not establish current upstream health.
 
-See [verification](verification.md) for supported settings, failure policy,
-and the limits of a successful check. Ordinary CI runs offline verification;
-nightly publication runs metadata-only live verification. Asset probes remain
-an explicit manual troubleshooting operation.
+See [verification](verification.md) for structural checks, failure policy,
+and the limits of a successful check. CI verifies committed files offline;
+nightly publication runs fresh structural verification after building its candidate.
+Old verification report schemas require regeneration with `uv run pack verify`.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.

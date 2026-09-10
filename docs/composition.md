@@ -115,7 +115,8 @@ Offline verification checks serialized family/package uniqueness, active rendere
 projections, pins, explicit eligibility, exclusions, coverage, and patch targets.
 It cannot prove source provenance, ranking, presence of losing upstream candidates,
 or that patch values were applied. Composition policy bytes participate in input
-fingerprints; older or mismatched evidence is stale.
+fingerprints; changed inputs or a different supported verifier identity make
+evidence stale. Obsolete verification schemas require regeneration with `pack verify`.
 
 Build reports use schema 2 and selection records use snake_case field names:
 

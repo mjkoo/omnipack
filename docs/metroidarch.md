@@ -12,8 +12,9 @@ The entry uses `https://github.com/Raekwon1603/RetroArch` and the inspected pack
 `com.metroidarch.app.aarch64`. Stable GitHub tags are the update version, with
 `versionDetection: false`, because v1.0.0 and v1.0.1 both declare APK versionName
 `1.22.2_GIT`. Only versioned `MetroidArch-v<version>.apk` files qualify. A newest
-stable release without a matching APK fails verification; no older fallback is
-selected. The APK's filename has no ABI label, so automatic filename architecture
+stable release without a matching APK is intended to fail selection in Obtainium;
+no older fallback is configured. Structural pack verification does not inspect
+release assets or detect that absence. The APK's filename has no ABI label, so automatic filename architecture
 filtering is disabled. The bundled patched cores are ARM64 only.
 
 Obtainium imports configure APK acquisition and tracking. They do not configure

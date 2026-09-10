@@ -35,7 +35,7 @@ The system SHALL offer a daily refresh at 03:00 in America/New_York, following d
 ### Requirement: Publication requires fresh metadata verification
 
 Each attempt SHALL check its selected revision using the repository's offline
-Python checks, then build both packs and run fresh metadata-only live
+Python checks, then build both packs and run fresh structural
 verification on the resulting candidate. Publication SHALL require complete
 successful verification evidence matching the candidate's current inputs and
 verifier identity. Evidence validation SHALL use the selected attempt revision's
@@ -44,13 +44,13 @@ evidence, or incomplete evidence SHALL prevent publication of every candidate
 file, including the package-id cache. Existing non-blocking warnings and
 generated-source soft failures SHALL retain their existing policy.
 
-Routine verification SHALL NOT probe assets. Building SHALL retain its existing
+Verification SHALL use `pack verify` without retired live flags and SHALL make no network requests. Building SHALL retain its existing
 network and APK package-id discovery behavior. Prior-run success SHALL NOT
-substitute for fresh live verification.
+substitute for fresh structural verification.
 
 #### Scenario: Candidate verifies with warnings
 
-- **WHEN** checks, build, and current live verification succeed with warnings only
+- **WHEN** checks, build, and fresh structural verification succeed while build diagnostics contain non-blocking warnings
 - **THEN** the candidate is eligible for publication and warnings remain visible
 
 #### Scenario: Failed refresh after cache updates
@@ -63,6 +63,12 @@ substitute for fresh live verification.
 - **WHEN** verification evidence is absent, incomplete, from another verifier,
   or does not match the candidate inputs
 - **THEN** publication is rejected
+
+#### Scenario: App metadata is unavailable after a successful build
+
+- **WHEN** checks, build and fresh structural verification succeed
+- **THEN** publication eligibility does not depend on a separate lookup of each configured app's release metadata
+- **AND** build-time source ingestion and package-ID discovery retain their existing failure policy
 
 ### Requirement: Publish only the verified output and cache
 
@@ -203,8 +209,9 @@ verification, and orchestration reports as artifacts for 14 days on handled
 success and failure. The summary SHALL distinguish publication, no-op, failure,
 uncertain publication, and issue-maintenance outcomes, with run/base/published
 identifiers where available. Missing early-stage reports SHALL be identified as
-unavailable. A retained offline verification report SHALL be labeled offline
-and SHALL NOT count as available live verification evidence. Diagnostic JSON
+unavailable. A retained pre-build verification report SHALL be labeled as pre-build evidence
+and SHALL NOT substitute for fresh verification of the built candidate. Candidate
+verification SHALL be labeled structural/offline, without live-health claims. Diagnostic JSON
 updates SHALL replace files atomically so an interrupted rewrite preserves the
 last complete result for fallback finalization. Fallback SHALL preserve missing-report
 markers and SHALL keep a triggering helper failure visible as workflow failure,
@@ -221,7 +228,7 @@ direct-push prerequisites without automatically changing repository settings.
 
 #### Scenario: Early failure has no verification report
 
-- **WHEN** setup or building fails before live verification starts
+- **WHEN** setup or building fails before structural verification starts
 - **THEN** the summary records the failure and missing verification evidence,
   and available diagnostics are retained
 

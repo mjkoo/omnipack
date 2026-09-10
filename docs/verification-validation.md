@@ -1,5 +1,10 @@
 # Verification validation
 
+Historical record: the live-verification contract and commands below are retired.
+The observations and results are preserved as recorded. See
+[current verification guidance](verification.md) for structural checks and
+report regeneration.
+
 ## Current contract and request budget
 
 Routine `pack verify --live` now checks metadata and effective versions without
