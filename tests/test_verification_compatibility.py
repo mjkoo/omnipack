@@ -47,7 +47,10 @@ def test_every_setting_in_both_committed_packs_is_classified() -> None:
 @pytest.mark.parametrize(
     ("source", "updates", "key"),
     [
-        ("GitHub", {"includeZips": True}, "includeZips"),
+        ("HTML", {"includeZips": True}, "includeZips"),
+        ("GitLab", {"includeZips": True}, "includeZips"),
+        ("HTML", {"zippedApkFilterRegEx": "app"}, "zippedApkFilterRegEx"),
+        ("GitLab", {"zippedApkFilterRegEx": "app"}, "zippedApkFilterRegEx"),
         ("GitHub", {"GHReqPrefix": "proxy.example"}, "GHReqPrefix"),
         ("HTML", {"allowInsecure": True}, "allowInsecure"),
         (
@@ -138,3 +141,16 @@ def test_all_seven_html_fixtures_are_real_captures() -> None:
         fixture = json.loads((FIXTURES / case["fixture"]).read_text())
         assert fixture["provenance"]["kind"] == "live-capture"
         assert fixture["responses"]
+
+
+def test_github_zip_selection_is_implemented_but_member_filter_is_device_specific() -> (
+    None
+):
+    result = classify_settings(
+        "GitHub", {"includeZips": True, "zippedApkFilterRegEx": r"^Ghostship\.apk$"}
+    )
+    assert result["includeZips"].classification is SupportClass.IMPLEMENTED
+    assert (
+        result["zippedApkFilterRegEx"].classification is SupportClass.DEVICE_OR_HARMLESS
+    )
+    assert "not inspected" in result["zippedApkFilterRegEx"].reason

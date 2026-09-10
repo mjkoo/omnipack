@@ -64,6 +64,15 @@ def test_upstream_pack_tracker_stays_excluded_after_refresh():
         assert b"Obtainium-Emulation-Pack" not in catalog
 
 
+def effective_id(record):
+    corrections = {
+        (rule["match"]["id"], rule["match"]["url"].lower()): rule["packageId"]
+        for rule in read(ROOT / "config/composition.json")["candidates"]
+        if "packageId" in rule
+    }
+    return corrections.get((record["id"], record["url"].lower()), record["id"])
+
+
 def curated():
     """Apply maintained overlays to historical, already selected output records."""
     baseline = read(FIXTURES / "baseline-apps.json")
@@ -72,8 +81,7 @@ def curated():
         for record in baseline[variant.value]:
             data = deepcopy(record)
             data["additionalSettings"] = json.loads(data["additionalSettings"])
-            if data["id"] == "com.simon358.ctrnative":
-                data["id"] = "com.ctrnative"
+            data["id"] = effective_id(data)
             selected[variant].append(
                 ComposedApp(
                     variant,
@@ -134,15 +142,11 @@ def test_policies_preserve_existing_entries_and_asset_selection():
     warnings_before = 0
     for variant, originals in baseline.items():
         actual = {a["id"]: a for a in apps[variant]}
-        expected_ids = {a["id"] for a in originals} | {"com.game.cinderbox"}
-        expected_ids.discard("com.simon358.ctrnative")
-        expected_ids.add("com.ctrnative")
+        expected_ids = {effective_id(a) for a in originals} | {"com.game.cinderbox"}
         assert set(actual) == expected_ids
         for old in originals:
-            effective_id = (
-                "com.ctrnative" if old["id"] == "com.simon358.ctrnative" else old["id"]
-            )
-            new = actual[effective_id]
+            corrected_id = effective_id(old)
+            new = actual[corrected_id]
             old_settings = json.loads(old["additionalSettings"])
             expected = deepcopy(old_settings)
             if old["id"] in SOURCE_IDS:
@@ -157,7 +161,7 @@ def test_policies_preserve_existing_entries_and_asset_selection():
             expected_record = {
                 k: v for k, v in old.items() if k != "additionalSettings"
             }
-            expected_record["id"] = effective_id
+            expected_record["id"] = corrected_id
             assert {
                 k: v for k, v in new.items() if k != "additionalSettings"
             } == expected_record
@@ -214,8 +218,8 @@ def test_cinderbox_excludes_newer_dependency_prerelease(variant):
     "package_id, expected",
     [
         ("com.aure.banjorecomp", ["0.1.2", "0.1.1"]),
-        ("com.sergiomanzur.sotnrecomp", ["0.10.1", "0.10", "0.9.1", "0.9"]),
-        ("com.waterdish.shipwright", ["v9.0.2P2", "v9.0.2P1", "v9.0.2"]),
+        ("com.blacklabelhq.sotn", ["0.10.1", "0.10", "0.9.1", "0.9"]),
+        ("com.dishii.soh", ["v9.0.2P2", "v9.0.2P1", "v9.0.2"]),
     ],
 )
 def test_release_histories_preserve_distinct_versions(package_id, expected):
@@ -227,7 +231,7 @@ def test_release_histories_preserve_distinct_versions(package_id, expected):
     for record in records:
         record["prerelease"] = False
     assert [resolve(app, [r]).effective_version for r in records] == expected
-    if package_id in NUMERIC_IDS:
+    if package_id in {"com.aure.banjorecomp", "com.blacklabelhq.sotn"}:
         records[0]["tag_name"] = "rolling"
         with pytest.raises(ResolutionError, match="did not match"):
             resolve(app, [records[0]])

@@ -223,6 +223,18 @@ def _verify_entry(
     entry_warnings: list[Finding] = []
     if lint is not None:
         entry_warnings.append(_finding(entry, lint.stage, lint.code, lint.message))
+    if entry.source == "GitHub" and any(
+        candidate.name.lower().endswith(".zip") for candidate in resolution.candidates
+    ):
+        entry_warnings.append(
+            _finding(
+                entry,
+                "resolution",
+                "archive-members-unverified",
+                "Only the outer ZIP is resolved or probed; on-device extraction, "
+                "member presence, and inner APK identity/signature are not verified",
+            )
+        )
 
     probes: list[ProbeEvidence] = []
     entry_errors: list[Finding] = []

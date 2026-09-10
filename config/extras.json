@@ -19,6 +19,44 @@
     }
   },
   {
+    "id": "dev.net64.ghostship",
+    "url": "https://github.com/HarbourMasters/Ghostship",
+    "name": "Ghostship",
+    "author": "HarbourMasters",
+    "categories": ["PC Ports"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": true,
+      "apkFilterRegEx": "^.*-Android\\.zip$",
+      "autoApkFilterByArch": false,
+      "versionDetection": false,
+      "includeZips": true,
+      "zippedApkFilterRegEx": "^Ghostship\\.apk$",
+      "trackOnly": false
+    }
+  },
+  {
+    "id": "com.theboisclub.pokemonred",
+    "url": "https://github.com/bryanthaboi/gen1recomp",
+    "name": "Pokémon Red/Blue Recomp",
+    "author": "bryanthaboi",
+    "categories": ["Decomps/Recomps"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": true,
+      "verifyLatestTag": false,
+      "sortMethodChoice": "date",
+      "releaseTitleAsVersion": false,
+      "trackOnly": false,
+      "versionDetection": true,
+      "apkFilterRegEx": ".*\\.apk$",
+      "autoApkFilterByArch": true,
+      "includeZips": false
+    }
+  },
+  {
     "id": "com.aurora.store",
     "url": "https://gitlab.com/AuroraOSS/AuroraStore",
     "name": "Aurora Store",

@@ -270,7 +270,7 @@ def test_transport_failure_does_not_trigger_tags_fallback() -> None:
 @pytest.mark.parametrize(
     "settings",
     [
-        {"includeZips": True},
+        {"allowInsecure": True},
         {"sortMethodChoice": "smartname"},
         {"unknownFlag": False},
     ],
@@ -794,3 +794,67 @@ def test_latest_selected_version_failure_never_attempts_tags_fallback(
         )
     assert raised.value.code == code
     assert len(transport.requests) == 2
+
+
+@pytest.mark.parametrize(
+    "invert,expected",
+    [(False, ["Game-Android.zip"]), (True, ["Game-Linux.zip", "direct.apk"])],
+)
+def test_enabled_zip_assets_use_outer_filename_filter(
+    invert: bool, expected: list[str]
+) -> None:
+    result, transport = resolver(
+        [
+            release(
+                "v3.0.0",
+                assets=[
+                    asset("Game-Android.zip"),
+                    asset("Game-Linux.zip"),
+                    asset("direct.apk"),
+                    asset("source.tar.gz"),
+                ],
+            )
+        ],
+        {
+            "includeZips": True,
+            "apkFilterRegEx": r"-Android\.zip$",
+            "invertAPKFilter": invert,
+            "zippedApkFilterRegEx": r"^MissingMember\.apk$",
+        },
+    )
+    assert [candidate.name for candidate in result.candidates] == expected
+    assert result.effective_version == "v3.0.0"
+    assert len(transport.requests) == 1
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_zip_eligibility_controls_older_release_fallback(enabled: bool) -> None:
+    result, _ = resolver(
+        [
+            release("v2", assets=[asset("Game-Android.zip")]),
+            release("v1", assets=[asset("old.apk")]),
+        ],
+        {
+            "includeZips": enabled,
+            "fallbackToOlderReleases": True,
+            "sortMethodChoice": "none",
+        },
+    )
+    assert result.raw_version == ("v2" if enabled else "v1")
+
+
+def test_disabled_zip_only_release_is_not_installable() -> None:
+    with pytest.raises(ResolutionError, match="no release qualifies"):
+        resolver([release("v3", assets=[asset("Android.zip")])])
+
+
+@pytest.mark.parametrize("enabled", [False, True])
+def test_invalid_zip_member_regex_fails_before_http(enabled: bool) -> None:
+    transport = GitHubTransport({})
+    with pytest.raises(ResolutionError) as raised:
+        resolve_github(
+            app({"includeZips": enabled, "zippedApkFilterRegEx": "["}),
+            HttpClient(HttpConfig({}), retries=0, transport=transport),
+        )
+    assert raised.value.code == "regex-invalid"
+    assert transport.requests == []

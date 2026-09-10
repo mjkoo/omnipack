@@ -1,0 +1,175 @@
+from __future__ import annotations
+
+import json
+import re
+from pathlib import Path
+
+from omnipack.composition_policy import parse_composition_policy
+from omnipack.http import HttpClient, HttpConfig
+from omnipack.merge import compose
+from omnipack.model import Variant
+from omnipack.resolution.github import resolve_github
+from omnipack.sources import IngestionReport, bboi, codm, rjny
+from omnipack.sources.extras import fetch as fetch_extras
+from tests.test_composition_baseline import CapturedPackageResolver
+from tests.test_resolution_github import GitHubTransport
+from tests.test_sources import FakeHttp
+
+ROOT = Path(__file__).parents[1]
+FIXTURE = ROOT / "tests/fixtures/curation/reconciliation.json"
+OBSERVATIONS = ROOT / "tests/fixtures/reconciliation/selected-observations.json"
+SNAPSHOTS = ROOT / "tests/fixtures/reconciliation"
+
+
+def read(path: Path):
+    return json.loads(path.read_text())
+
+
+def test_reconciliation_evidence_is_real_and_configuration_is_complete():
+    evidence = read(FIXTURE)
+    observations = read(OBSERVATIONS)
+    document = read(ROOT / "config/composition.json")
+    rules = document["candidates"]
+
+    expected = {
+        (record["original_id"], item["package"], record["source"])
+        for record in observations
+        for item in record["observations"]
+    }
+    assert set(map(tuple, evidence["identity_corrections"])) == expected
+    for original, effective, url in expected:
+        matches = [
+            rule
+            for rule in rules
+            if rule["match"]["id"] == original and rule["match"]["url"] == url
+        ]
+        assert matches
+        assert {rule.get("packageId") for rule in matches} == {effective}
+        assert any(
+            record["id"] == original and record["url"] == url
+            for record in document["history"]
+        )
+
+    ghost = evidence["ghostship"]
+    assert len(ghost["asset_sha256"]) == len(ghost["member_sha256"]) == 64
+    assert ghost["package"] == "dev.net64.ghostship"
+
+
+def candidates(refresh: int):
+    sources = read(ROOT / "config/sources.json")
+    release = read(SNAPSHOTS / "bboi-release.json")
+    standard = read(SNAPSHOTS / "bboi-standard.json")
+    dual = read(SNAPSHOTS / "bboi-dual.json")
+    rjny_document = read(SNAPSHOTS / "rjny.json")
+    for document in (standard, dual, rjny_document):
+        for app in document["apps"]:
+            app["name"] = f"{app['name']} refresh {refresh}"
+    standard_url, dual_url = (
+        asset["browser_download_url"] for asset in release["assets"]
+    )
+    bboi_api = (
+        "https://codeberg.org/api/v1/repos/"
+        f"{sources['bboi']['codeberg_repo']}/releases/latest"
+    )
+    rjny_url = (
+        f"https://raw.githubusercontent.com/{sources['rjny']['repo']}/"
+        f"{sources['rjny']['branch']}/{sources['rjny']['path']}"
+    )
+    http = FakeHttp(
+        {
+            bboi_api: json.dumps(release),
+            standard_url: json.dumps(standard),
+            dual_url: json.dumps(dual),
+            rjny_url: json.dumps(rjny_document),
+            sources["codm"]["readme_url"]: (
+                SNAPSHOTS / "codm-relevant-readme.md"
+            ).read_text(),
+        }
+    )
+    higher = bboi.fetch(http, sources["bboi"]) + rjny.fetch(http, sources["rjny"])
+    extras = fetch_extras(read(ROOT / "config/extras.json"))
+    report = IngestionReport()
+    generated = codm.fetch(
+        http,
+        sources["codm"],
+        CapturedPackageResolver(),
+        [*higher, *extras],
+        report,
+    )
+    assert not report.skipped
+    return [*higher, *extras, *generated]
+
+
+def test_ghostship_captured_release_selects_configured_outer_and_member():
+    evidence = read(FIXTURE)["ghostship"]
+    app = next(
+        item
+        for item in read(ROOT / "config/extras.json")
+        if item["id"] == "dev.net64.ghostship"
+    )
+    [release] = read(SNAPSHOTS / "ghostship-releases.json")
+    api = "https://api.github.com/repos/HarbourMasters/Ghostship"
+    transport = GitHubTransport({api + "/releases?per_page=100": [release]})
+    result = resolve_github(
+        {**app, "additionalSettings": app["additionalSettings"]},
+        HttpClient(HttpConfig({}), retries=0, transport=transport),
+    )
+    assert [candidate.name for candidate in result.candidates] == [evidence["asset"]]
+    selected = result.candidates[0]
+    assert selected.url == evidence["asset_url"]
+    assert re.fullmatch(
+        app["additionalSettings"]["zippedApkFilterRegEx"], evidence["member"]
+    )
+
+
+def test_full_reconciliation_survives_repeated_catalog_refresh():
+    policy = parse_composition_policy(read(ROOT / "config/composition.json"))
+    deny = read(ROOT / "config/deny.json")
+    expected = {new for _, new, _ in read(FIXTURE)["identity_corrections"]}
+
+    for refresh in range(2):
+        result = compose(
+            candidates(refresh),
+            deny,
+            read(ROOT / "config/overlay.json"),
+            read(ROOT / "config/overlay.dual.json"),
+            policy=policy,
+        )
+        for variant in Variant:
+            apps = result.apps[variant]
+            ids = {app.id for app in apps}
+            assert len(ids) == len(apps)
+            assert len({app.family for app in apps}) == len(apps)
+            assert "dev.net64.ghostship" in ids
+            assert "com.theboisclub.pokemonred" in ids
+            assert "com.ghostship.android" not in ids
+            assert not any(app.family == "app:super-metroid" for app in apps)
+            required = expected - (
+                {"org.openmw.ds", "dev.twilitrealm.dusk"}
+                if variant is Variant.SINGLE
+                else set()
+            )
+            assert required <= ids
+            ghost = next(app for app in apps if app.id == "dev.net64.ghostship")
+            assert ghost.url == "https://github.com/HarbourMasters/Ghostship"
+            settings = ghost.data["additionalSettings"]
+            assert settings["apkFilterRegEx"] == "^.*-Android\\.zip$"
+            assert settings["zippedApkFilterRegEx"] == "^Ghostship\\.apk$"
+            assert settings["includeZips"] is True
+            gen1 = next(app for app in apps if app.id == "com.theboisclub.pokemonred")
+            assert gen1.url == "https://github.com/bryanthaboi/gen1recomp"
+            assert gen1.data["additionalSettings"]["versionDetection"] is True
+
+        ctr = [
+            selection
+            for selection in result.report.selections
+            if selection.family == "app:ctr"
+        ]
+        assert {(item.variant, item.source) for item in ctr} == {
+            (Variant.SINGLE, "bboi"),
+            (Variant.DUAL, "codm2000"),
+        }
+        dual_ctr = next(
+            app for app in result.apps[Variant.DUAL] if app.family == "app:ctr"
+        )
+        assert dual_ctr.data["additionalSettings"]["versionDetection"] is False

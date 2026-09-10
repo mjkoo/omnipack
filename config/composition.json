@@ -19,7 +19,8 @@
         "url": "https://github.com/Josh-Daniels/OpenMW-DS"
       },
       "family": "app:openmw",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see docs/composition-inventory.md."
+      "packageId": "org.openmw.ds",
+      "rationale": "The recorded dual asset is retained with the package identity declared by its inspected APK."
     },
     {
       "match": {
@@ -59,7 +60,8 @@
         "url": "https://github.com/igawa6/dusklight"
       },
       "family": "app:dusklight",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see docs/composition-inventory.md."
+      "packageId": "dev.twilitrealm.dusk",
+      "rationale": "The recorded dual asset is retained with the package identity declared by its inspected APK."
     },
     {
       "match": {
@@ -82,6 +84,25 @@
       "family": "app:ctr",
       "rationale": "The configured dual catalog identifies this repository as CTR-DS with dual-screen support."
     },
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.sergiomanzur.sotnrecomp","url":"https://github.com/sergiomanzur/SymphonyRecomp"},"packageId":"com.blacklabelhq.sotn","rationale":"Use the package identity declared by the inspected retained Symphony APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.carlox33.hitandrun","url":"https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android"},"packageId":"com.c4rlox.simpsons","rationale":"Use the package identity declared by the inspected retained Simpsons APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.waterdish.shipwright","url":"https://github.com/Waterdish/Shipwright-Android"},"packageId":"com.dishii.soh","rationale":"Use the package identity declared by the inspected retained Shipwright APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.samyost1.zelda3android","url":"https://github.com/samyost1/zelda3-android"},"packageId":"com.dishii.zelda3","rationale":"Use the package identity declared by the inspected retained Zelda 3 APK."},
+    {"match":{"source":"bboi","origin":"bboi-dual-asset","id":"com.samyost1.zelda3android","url":"https://github.com/samyost1/zelda3-android"},"packageId":"com.dishii.zelda3","rationale":"Use the package identity declared by the inspected retained Zelda 3 APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.spaghettikart","url":"https://github.com/izzy2lost/SpaghettiKart"},"packageId":"com.izzy.kart","rationale":"Use the package identity declared by the inspected retained SpaghettiKart APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.perfectdark","url":"https://github.com/izzy2lost/perfect_dark"},"packageId":"com.perfectdark.port","rationale":"Use the package identity declared by the inspected retained Perfect Dark APK."},
+    {"match":{"source":"rjny","origin":"rjny-catalog","id":"487343354","url":"https://buildbot.libretro.com/stable"},"packageId":"com.retroarch.aarch64","rationale":"Use the package identity declared by the inspected retained RetroArch APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.starship","url":"https://github.com/izzy2lost/Starship"},"packageId":"com.starship.android","rationale":"Use the package identity declared by the inspected retained Starship APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.bryanthaboi.pokemonredblue","url":"https://github.com/bryanthaboi/pokemon-gen1-recomp-project"},"family":"app:gen1recomp","packageId":"com.theboisclub.pokemonred","rationale":"Retain the original catalog identity as provenance while selecting the canonical repository."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"org.linkzenic.twoship","url":"https://github.com/linkzenic/2ship2harkinian-Android"},"packageId":"com.twoshipfork.mm","rationale":"Use the package identity declared by the inspected retained 2Ship APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.samyost1.tmcandroid","url":"https://github.com/samyost1/tmc-android"},"packageId":"dev.picori.tmc","rationale":"Use the package identity declared by the inspected retained Minish Cap APK."},
+    {"match":{"source":"bboi","origin":"bboi-dual-asset","id":"com.samyost1.tmcandroid","url":"https://github.com/samyost1/tmc-android"},"packageId":"dev.picori.tmc","rationale":"Use the package identity declared by the inspected retained Minish Cap APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.igawa6.harvestmoon64","url":"https://github.com/igawa6/HarvestMoon64Recomp"},"packageId":"io.github.hm64recomp","rationale":"Use the package identity declared by the inspected retained Harvest Moon 64 APK."},
+    {"match":{"source":"bboi","origin":"bboi-dual-asset","id":"com.igawa6.harvestmoon64","url":"https://github.com/igawa6/HarvestMoon64Recomp"},"packageId":"io.github.hm64recomp","rationale":"Use the package identity declared by the inspected retained Harvest Moon 64 APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.matteo842.crashbandicoot","url":"https://github.com/Matteo842/CrashBandicoot-Launcher"},"packageId":"io.github.matteo842.crashlauncher.runtime","rationale":"Use the package identity declared by the inspected retained Crash Bandicoot APK."},
+    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.ghostship","url":"https://github.com/izzy2lost/Ghostship"},"family":"app:ghostship","packageId":"com.ghostship.android","rationale":"Classify and retire the legacy Ghostship Android package."},
+    {"match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"family":"app:ghostship","rationale":"Select the inspected official Ghostship Android ZIP release."},
+    {"match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"family":"app:gen1recomp","rationale":"Select the canonical Gen1Recomp repository while preserving its reviewed settings."},
     {
       "match": {"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},
       "rationale": "The curated GitLab entry carries the verified ordinary Aurora Store APK policy."
@@ -104,6 +125,10 @@
     }
   ],
   "pins": [
+    {"family":"app:ghostship","variant":"single","match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"rationale":"Keep official Ghostship in the standard pack."},
+    {"family":"app:ghostship","variant":"dual","match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"rationale":"Keep official Ghostship in the dual-screen pack."},
+    {"family":"app:gen1recomp","variant":"single","match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"rationale":"Keep canonical Gen1Recomp in the standard pack."},
+    {"family":"app:gen1recomp","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"rationale":"Keep canonical Gen1Recomp in the dual-screen pack."},
     {"family":"package:com.aurora.store","variant":"single","match":{"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},"rationale":"Keep the maintained Aurora Store selection policy."},
     {"family":"package:com.aurora.store","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},"rationale":"Keep the maintained Aurora Store selection policy."},
     {"family":"package:com.karin.idTech4Amm","variant":"single","match":{"source":"extras","origin":"extras","id":"com.karin.idTech4Amm","url":"https://github.com/glKarin/com.n0n3m4.diii4a"},"rationale":"Keep the maintained idTech4A++ selection policy."},
@@ -125,7 +150,7 @@
     {
       "id": "487343354",
       "url": "https://buildbot.libretro.com/stable",
-      "family": "package:487343354",
+      "family": "package:com.retroarch.aarch64",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -203,7 +228,7 @@
     {
       "id": "com.bryanthaboi.pokemonredblue",
       "url": "https://github.com/bryanthaboi/pokemon-gen1-recomp-project",
-      "family": "package:com.bryanthaboi.pokemonredblue",
+      "family": "app:gen1recomp",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -215,7 +240,7 @@
     {
       "id": "com.carlox33.hitandrun",
       "url": "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android",
-      "family": "package:com.carlox33.hitandrun",
+      "family": "package:com.c4rlox.simpsons",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -317,7 +342,7 @@
     {
       "id": "com.igawa6.harvestmoon64",
       "url": "https://github.com/igawa6/HarvestMoon64Recomp",
-      "family": "package:com.igawa6.harvestmoon64",
+      "family": "package:io.github.hm64recomp",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -329,25 +354,25 @@
     {
       "id": "com.izzy2lost.ghostship",
       "url": "https://github.com/izzy2lost/Ghostship",
-      "family": "package:com.izzy2lost.ghostship",
+      "family": "app:ghostship",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
       "id": "com.izzy2lost.perfectdark",
       "url": "https://github.com/izzy2lost/perfect_dark",
-      "family": "package:com.izzy2lost.perfectdark",
+      "family": "package:com.perfectdark.port",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
       "id": "com.izzy2lost.spaghettikart",
       "url": "https://github.com/izzy2lost/SpaghettiKart",
-      "family": "package:com.izzy2lost.spaghettikart",
+      "family": "package:com.izzy.kart",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
       "id": "com.izzy2lost.starship",
       "url": "https://github.com/izzy2lost/Starship",
-      "family": "package:com.izzy2lost.starship",
+      "family": "package:com.starship.android",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -413,7 +438,7 @@
     {
       "id": "com.matteo842.crashbandicoot",
       "url": "https://github.com/Matteo842/CrashBandicoot-Launcher",
-      "family": "package:com.matteo842.crashbandicoot",
+      "family": "package:io.github.matteo842.crashlauncher.runtime",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -497,13 +522,13 @@
     {
       "id": "com.samyost1.tmcandroid",
       "url": "https://github.com/samyost1/tmc-android",
-      "family": "package:com.samyost1.tmcandroid",
+      "family": "package:dev.picori.tmc",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
       "id": "com.samyost1.zelda3android",
       "url": "https://github.com/samyost1/zelda3-android",
-      "family": "package:com.samyost1.zelda3android",
+      "family": "package:com.dishii.zelda3",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -515,7 +540,7 @@
     {
       "id": "com.sergiomanzur.sotnrecomp",
       "url": "https://github.com/sergiomanzur/SymphonyRecomp",
-      "family": "package:com.sergiomanzur.sotnrecomp",
+      "family": "package:com.blacklabelhq.sotn",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -557,7 +582,7 @@
     {
       "id": "com.waterdish.shipwright",
       "url": "https://github.com/Waterdish/Shipwright-Android",
-      "family": "package:com.waterdish.shipwright",
+      "family": "package:com.dishii.soh",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {
@@ -725,7 +750,7 @@
     {
       "id": "org.linkzenic.twoship",
       "url": "https://github.com/linkzenic/2ship2harkinian-Android",
-      "family": "package:org.linkzenic.twoship",
+      "family": "package:com.twoshipfork.mm",
       "rationale": "Retained family classification of the captured published baseline."
     },
     {

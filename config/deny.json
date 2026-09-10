@@ -2,5 +2,13 @@
   {
     "id": "904332840",
     "reason": "Track individual apps without including the upstream RJNY pack tracker."
+  },
+  {
+    "id": "com.ghostship.android",
+    "reason": "Replace the legacy Ghostship Android fork with the maintained official release."
+  },
+  {
+    "family": "app:super-metroid",
+    "reason": "The retired Super Metroid Android family is no longer curated."
   }
 ]

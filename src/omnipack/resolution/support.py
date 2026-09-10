@@ -52,6 +52,7 @@ _COMMON_UNSUPPORTED = {
 }
 _SOURCE_IMPLEMENTED = {
     "GitHub": {
+        "includeZips",
         "verifyLatestTag",
         "includePrereleases",
         "fallbackToOlderReleases",
@@ -164,6 +165,11 @@ def classify_settings(
         elif key == "releaseDateAsVersion" and source == "HTML":
             result[key] = _unsupported(
                 value, False, "HTML source provides no usable release date"
+            )
+        elif source == "GitHub" and key == "zippedApkFilterRegEx":
+            result[key] = SettingSupport(
+                SupportClass.DEVICE_OR_HARMLESS,
+                "ZIP member filtering and extraction occur on device; members are not inspected",
             )
         elif key in _COMMON_IMPLEMENTED or key in implemented:
             result[key] = SettingSupport(

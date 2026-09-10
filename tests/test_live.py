@@ -327,12 +327,12 @@ def test_unsupported_setting_error_names_the_setting() -> None:
     http, transport = client({})
 
     result = verify_live(
-        {"single": (github_entry(settings={"includeZips": True}),)}, http
+        {"single": (github_entry(settings={"allowInsecure": True}),)}, http
     )
 
     assert not result.ok
     assert result.errors[0].code == "unsupported-setting"
-    assert "includeZips" in result.errors[0].message
+    assert "allowInsecure" in result.errors[0].message
     assert transport.requests == []
 
 
@@ -837,3 +837,48 @@ def test_html_probes_preserve_headers_and_cache_each_header_configuration() -> N
         (page, "Agent-Two"),
         (asset, "Agent-Two"),
     ]
+
+
+@pytest.mark.parametrize("probe_assets", [False, True])
+def test_zip_resolution_reports_member_limit_and_only_probes_outer_asset(
+    probe_assets: bool,
+) -> None:
+    metadata = "https://api.github.com/repos/example/app/releases?per_page=100"
+    download = "https://downloads.example/Android.zip"
+    document = release("3.0.0")
+    document["assets"] = [{"name": "Android.zip", "browser_download_url": download}]
+    http, transport = client(
+        {
+            metadata: [response(metadata, json.dumps([document]).encode())],
+            download: [response(download, b"outer archive prefix")],
+        }
+    )
+    result = verify_live(
+        {
+            "single": (
+                github_entry(
+                    settings={
+                        "includeZips": True,
+                        "zippedApkFilterRegEx": r"^Missing\.apk$",
+                    }
+                ),
+            )
+        },
+        http,
+        probe_assets=probe_assets,
+    )
+    assert result.ok
+    assert [warning.code for warning in result.warnings] == [
+        "archive-members-unverified"
+    ]
+    assert [request.full_url for request in transport.requests] == (
+        [metadata, download] if probe_assets else [metadata]
+    )
+    assert transport.max_bytes == (
+        [METADATA_MAX_BYTES, PROBE_BYTES] if probe_assets else [METADATA_MAX_BYTES]
+    )
+    if probe_assets:
+        assert (
+            transport.requests[-1].get_header("Range") == f"bytes=0-{PROBE_BYTES - 1}"
+        )
+        assert result.entries[0].probes[0].name == "Android.zip"

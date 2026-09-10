@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import pytest
 
-from tests.test_curation import FIXTURES, curated, read, resolve
+from tests.test_curation import FIXTURES, curated, effective_id, read, resolve
 
 
 def test_selected_candidates_have_manifest_evidence_and_known_identity_mismatches():
@@ -17,12 +17,7 @@ def test_selected_candidates_have_manifest_evidence_and_known_identity_mismatche
         for app in apps:
             original = originals.get(app["url"].lower())
             if original is not None:
-                expected_id = (
-                    "com.ctrnative"
-                    if original["id"] == "com.simon358.ctrnative"
-                    else original["id"]
-                )
-                assert app["id"] == expected_id
+                assert app["id"] == effective_id(original)
             for candidate in resolve(app).candidates:
                 manifest = by_url[candidate.url]
                 selected_urls.add(candidate.url)
@@ -32,8 +27,6 @@ def test_selected_candidates_have_manifest_evidence_and_known_identity_mismatche
                 if manifest["package"] != app["id"]:
                     mismatches.add((app["id"], manifest["package"]))
     assert mismatches == {
-        ("com.sergiomanzur.sotnrecomp", "com.blacklabelhq.sotn"),
-        ("com.waterdish.shipwright", "com.dishii.soh"),
         ("com.winlator.ludashi", "com.winlator.vanilla"),
     }
     xendroid_urls = {m["url"] for m in manifests if m["id"] == "xendroid.compose"}

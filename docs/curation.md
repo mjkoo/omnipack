@@ -123,19 +123,17 @@ source versions and manifest values are also retained in the
 
 ## Unresolved identity and selection findings
 
-CTR is the one implemented correction from this evidence. The Simon standard
-candidate retains original id `com.simon358.ctrnative` in provenance but renders
-the manifest-backed effective id `com.ctrnative`; explicit family policy groups
-it with the existing igawa6 dual candidate. This can leave the old Obtainium
-entry or installed package beside the replacement, so device migration remains
-manual and unverified. See [composition validation](composition-validation.md)
-for the exact output transition and outstanding device checks.
+CTR retains the manifest-backed `com.ctrnative` identity and variant-specific
+sources. The later [installed-source reconciliation](source-reconciliation.md)
+corrects Symphony and Shipwright plus the other reviewed installed identities,
+replaces Ghostship with its official Android release, and removes retired Super
+Metroid. Its reputation-plus-basic-vetting policy retains Symphony and OpenMW-DS.
+An identity correction does not itself require replacing an installed APK.
 
-Symphony (`com.sergiomanzur.sotnrecomp`), Shipwright
-(`com.waterdish.shipwright`) and Ludashi (`com.winlator.ludashi`) retain their
-configured identities. Correcting them requires separate migration and collision
-analysis. Clean version lint cannot repair these mismatches, and metadata checks
-cannot establish successful device acceptance.
+Ludashi (`com.winlator.ludashi`) remains outside that bounded reconciliation.
+Its inspected APK declares `com.winlator.vanilla`; the configured identity is
+still unresolved. Clean version lint cannot repair that mismatch, and metadata
+checks cannot establish successful device acceptance.
 
 [Ludashi releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
 include v4.0, but the existing APK filter still selects bionic-vanilla.apk from

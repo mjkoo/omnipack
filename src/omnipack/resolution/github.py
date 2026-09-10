@@ -70,6 +70,7 @@ def _validate_support(settings: dict[str, Any]) -> None:
             raise ResolutionError(
                 "unsupported-setting", f"unsupported setting {name}: {support.reason}"
             )
+    _optional_regex(settings.get("zippedApkFilterRegEx"))
 
 
 def _repository(url: str) -> tuple[str, str]:
@@ -190,7 +191,12 @@ def _select_release(
         if release.get("prerelease") is True and not prereleases:
             continue
         title = _release_title(release)
-        candidates = _candidates(release, apk_pattern, invert)
+        candidates = _candidates(
+            release,
+            apk_pattern,
+            invert,
+            include_zips=settings.get("includeZips") is True,
+        )
         matches = (
             (title_pattern is None or title_pattern.search(title.strip()) is not None)
             and (
@@ -223,7 +229,11 @@ def _release_title(release: Mapping[str, Any]) -> str:
 
 
 def _candidates(
-    release: Mapping[str, Any], pattern: Any, invert: bool
+    release: Mapping[str, Any],
+    pattern: Any,
+    invert: bool,
+    *,
+    include_zips: bool = False,
 ) -> tuple[Candidate, ...]:
     assets = release.get("assets")
     if not isinstance(assets, list):
@@ -236,7 +246,9 @@ def _candidates(
         url = asset.get("browser_download_url") or asset.get("url")
         if not isinstance(name, str) or not isinstance(url, str):
             continue
-        if not name.lower().endswith(_APK_EXTENSIONS):
+        if not name.lower().endswith(_APK_EXTENSIONS) and not (
+            include_zips and name.lower().endswith(".zip")
+        ):
             continue
         matched = pattern is None or pattern.search(name) is not None
         if invert:

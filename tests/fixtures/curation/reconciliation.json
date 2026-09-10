@@ -1,0 +1,31 @@
+{
+  "observed_at": "2026-09-10",
+  "identity_corrections": [
+    ["com.sergiomanzur.sotnrecomp", "com.blacklabelhq.sotn", "https://github.com/sergiomanzur/SymphonyRecomp"],
+    ["com.carlox33.hitandrun", "com.c4rlox.simpsons", "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android"],
+    ["com.waterdish.shipwright", "com.dishii.soh", "https://github.com/Waterdish/Shipwright-Android"],
+    ["com.samyost1.zelda3android", "com.dishii.zelda3", "https://github.com/samyost1/zelda3-android"],
+    ["com.izzy2lost.spaghettikart", "com.izzy.kart", "https://github.com/izzy2lost/SpaghettiKart"],
+    ["com.izzy2lost.perfectdark", "com.perfectdark.port", "https://github.com/izzy2lost/perfect_dark"],
+    ["487343354", "com.retroarch.aarch64", "https://buildbot.libretro.com/stable"],
+    ["com.izzy2lost.starship", "com.starship.android", "https://github.com/izzy2lost/Starship"],
+    ["com.bryanthaboi.pokemonredblue", "com.theboisclub.pokemonred", "https://github.com/bryanthaboi/pokemon-gen1-recomp-project"],
+    ["org.linkzenic.twoship", "com.twoshipfork.mm", "https://github.com/linkzenic/2ship2harkinian-Android"],
+    ["com.samyost1.tmcandroid", "dev.picori.tmc", "https://github.com/samyost1/tmc-android"],
+    ["com.igawa6.dusklight", "dev.twilitrealm.dusk", "https://github.com/igawa6/dusklight"],
+    ["com.igawa6.harvestmoon64", "io.github.hm64recomp", "https://github.com/igawa6/HarvestMoon64Recomp"],
+    ["com.matteo842.crashbandicoot", "io.github.matteo842.crashlauncher.runtime", "https://github.com/Matteo842/CrashBandicoot-Launcher"],
+    ["com.joshdaniels.openmwds", "org.openmw.ds", "https://github.com/Josh-Daniels/OpenMW-DS"]
+  ],
+  "ghostship": {
+    "release": "3.0.0",
+    "asset": "Nautilus-Alfa-Android.zip",
+    "asset_url": "https://github.com/HarbourMasters/Ghostship/releases/download/3.0.0/Nautilus-Alfa-Android.zip",
+    "asset_sha256": "f33904ab87c7a99c2465fc244baa43ebdf09d433ef60f63e2b1f8be77b5eafde",
+    "member": "Ghostship.apk",
+    "member_sha256": "4560cfba9eac305c856c9f255517fdf740fb455886d69fd2f3a786b1c74f6dad",
+    "package": "dev.net64.ghostship",
+    "versionName": "3.0.0",
+    "versionCode": 2
+  }
+}

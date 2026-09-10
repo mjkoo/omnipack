@@ -475,3 +475,18 @@ def test_intermediate_arch_filter_only_rejects_active_steps(active: bool) -> Non
     else:
         assert resolve_html(entry, http).effective_version == "1"
         assert len(transport.requests) == 1
+
+
+def test_active_zip_setting_fails_before_http() -> None:
+    transport = PageTransport({})
+    with pytest.raises(ResolutionError) as raised:
+        resolve_html(
+            {
+                "url": "https://example.com/releases/",
+                "additionalSettings": {"includeZips": True},
+            },
+            HttpClient(HttpConfig({}), retries=0, transport=transport),
+        )
+    assert raised.value.code == "unsupported-setting"
+    assert "includeZips" in str(raised.value)
+    assert transport.requests == []

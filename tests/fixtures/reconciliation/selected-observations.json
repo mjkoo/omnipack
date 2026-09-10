@@ -1,0 +1,283 @@
+[
+  {
+    "original_id": "com.sergiomanzur.sotnrecomp",
+    "source": "https://github.com/sergiomanzur/SymphonyRecomp",
+    "release": "android-v0.10.1b",
+    "observations": [
+      {
+        "asset": "SymphonyRecomp-Android-Beta-0.10.1.apk",
+        "url": "https://github.com/sergiomanzur/SymphonyRecomp/releases/download/android-v0.10.1b/SymphonyRecomp-Android-Beta-0.10.1.apk",
+        "package": "com.blacklabelhq.sotn",
+        "versionCode": 12,
+        "versionName": "0.10.1",
+        "sha256": "aea4f38979d9981dbe71957f69df5014a339b744963d7abf9ad66cb3a3ac02e8",
+        "cert_sha256": [
+          "5f61b21d83730644082e188eb4711aadb87b47e1dea5199db422978e1a7abf83"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.carlox33.hitandrun",
+    "source": "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android",
+    "release": "v0.93",
+    "observations": [
+      {
+        "asset": "SimpsonsNTSC.apk",
+        "url": "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android/releases/download/v0.93/SimpsonsNTSC.apk",
+        "package": "com.c4rlox.simpsons",
+        "versionCode": 93,
+        "versionName": "0.93",
+        "sha256": "f2092cb2cacd7cbf95588bef01e418193137e825f01bfa984610f5f805beaaf5",
+        "cert_sha256": [
+          "3096da2457da542d6f42a236b75ca6e7e02e0a35dd3c54fe08fdd43d818401c8"
+        ]
+      },
+      {
+        "asset": "SimpsonsPAL.apk",
+        "url": "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android/releases/download/v0.93/SimpsonsPAL.apk",
+        "package": "com.c4rlox.simpsons",
+        "versionCode": 93,
+        "versionName": "0.93",
+        "sha256": "5a7430d910ea80d5a23e97e590b1ef4a61504dc8e2955267944c0eba5b72ee27",
+        "cert_sha256": [
+          "3096da2457da542d6f42a236b75ca6e7e02e0a35dd3c54fe08fdd43d818401c8"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.waterdish.shipwright",
+    "source": "https://github.com/Waterdish/Shipwright-Android",
+    "release": "v9.0.2P2",
+    "observations": [
+      {
+        "asset": "soh.apk",
+        "url": "https://github.com/Waterdish/Shipwright-Android/releases/download/v9.0.2P2/soh.apk",
+        "package": "com.dishii.soh",
+        "versionCode": 8,
+        "versionName": "9.0.2",
+        "sha256": "7351cb6f8a467cbee9b6a36ae01c2064eab621b0cb7784f0b8a9426902c0b534",
+        "cert_sha256": [
+          "92e4da94a3395ffc9fe9f52aa73f8490d7435171c7915fafcc29babdda356629"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.samyost1.zelda3android",
+    "source": "https://github.com/samyost1/zelda3-android",
+    "release": "v2.0",
+    "observations": [
+      {
+        "asset": "zelda3-dualscreen.apk",
+        "url": "https://github.com/samyost1/zelda3-android/releases/download/v2.0/zelda3-dualscreen.apk",
+        "package": "com.dishii.zelda3",
+        "versionCode": 5,
+        "versionName": "2.0",
+        "sha256": "ccea24452115f5f1d360f6a16bcc78b2494af57d5a054ab4d988b5de375373df",
+        "cert_sha256": [
+          "80b6cc221d0c879434fc0a3ece1251c206fa66fdfdfdd305c4df87f00b0c849f"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.izzy2lost.spaghettikart",
+    "source": "https://github.com/izzy2lost/SpaghettiKart",
+    "release": "2.0.0",
+    "observations": [
+      {
+        "asset": "app-release.apk",
+        "url": "https://github.com/izzy2lost/SpaghettiKart/releases/download/2.0.0/app-release.apk",
+        "package": "com.izzy.kart",
+        "versionCode": 7,
+        "versionName": "2.0.0",
+        "sha256": "530beca60c7d55a901e621ddfcbaf8ba32d87b88a718b6d7793fb9ee03f9d4e2",
+        "cert_sha256": [
+          "062c9556cb5e493d73a29fd21157cf2deca4296fea7c283bf501202d8762a798"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.izzy2lost.perfectdark",
+    "source": "https://github.com/izzy2lost/perfect_dark",
+    "release": "2.0.0",
+    "observations": [
+      {
+        "asset": "app-release.apk",
+        "url": "https://github.com/izzy2lost/perfect_dark/releases/download/2.0.0/app-release.apk",
+        "package": "com.perfectdark.port",
+        "versionCode": 2,
+        "versionName": "2.0.0",
+        "sha256": "7b782d785d4f3fd012da94157aec61379cbb295e525777adb27128c6235d19cb",
+        "cert_sha256": [
+          "3a5dc98bd5770b62ae5dfb73bed395665e3ac943e417304dc8496a1c0c7f719e"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "487343354",
+    "source": "https://buildbot.libretro.com/stable",
+    "release": "https://buildbot.libretro.com/stable/1.22.2/android/RetroArch_aarch64.apk",
+    "observations": [
+      {
+        "asset": "RetroArch_aarch64.apk",
+        "url": "https://buildbot.libretro.com/stable/1.22.2/android/RetroArch_aarch64.apk",
+        "package": "com.retroarch.aarch64",
+        "versionCode": 1763607214,
+        "versionName": "1.22.2_GIT",
+        "sha256": "7bd5d208dfe93cc8e2ea6c04608948ce1a045980f160a58ca2d0993aa20ad213",
+        "cert_sha256": [
+          "d7a5eab30902c9b2775af6fb4eac2d294a64634fb47dd1382bc3ac5bf669982e"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.izzy2lost.starship",
+    "source": "https://github.com/izzy2lost/Starship",
+    "release": "v2.0.0",
+    "observations": [
+      {
+        "asset": "starship-v2.0.0.apk",
+        "url": "https://github.com/izzy2lost/Starship/releases/download/v2.0.0/starship-v2.0.0.apk",
+        "package": "com.starship.android",
+        "versionCode": 8,
+        "versionName": "2.0.0",
+        "sha256": "092818cc7f3a6bef4207f1403db601b6ebd875a6e775b0f6a657df364fc985df",
+        "cert_sha256": [
+          "2c4df788694d3b60b078e6b87e459ed6a0322a8c05638d3eddd34531bea57fc7"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.bryanthaboi.pokemonredblue",
+    "source": "https://github.com/bryanthaboi/pokemon-gen1-recomp-project",
+    "release": "v0.2.57",
+    "observations": [
+      {
+        "asset": "gen1recomp-0.2.57-android.apk",
+        "url": "https://github.com/bryanthaboi/gen1recomp/releases/download/v0.2.57/gen1recomp-0.2.57-android.apk",
+        "package": "com.theboisclub.pokemonred",
+        "versionCode": 2057,
+        "versionName": "0.2.57",
+        "sha256": "6fc6129ea13d9fc4c7ba57793a0294d45adf50944fccc433fd84fa37ac11f2b1",
+        "cert_sha256": [
+          "533ca935ab53dd87a1575dc53e744fdda8c8b68ede803d97d764ee4f3f01fa27"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "org.linkzenic.twoship",
+    "source": "https://github.com/linkzenic/2ship2harkinian-Android",
+    "release": "v5.0.1-android.2",
+    "observations": [
+      {
+        "asset": "2Ship-Android-v5.0.1-android.2.apk",
+        "url": "https://github.com/linkzenic/2ship2harkinian-Android/releases/download/v5.0.1-android.2/2Ship-Android-v5.0.1-android.2.apk",
+        "package": "com.twoshipfork.mm",
+        "versionCode": 5001020,
+        "versionName": "5.0.1-android.2",
+        "sha256": "3bf3406661f71a28f8d09dbddfdc51a410ab44bc1284b7c7508df70a0b70bc3f",
+        "cert_sha256": [
+          "f608b8ed8a09fd6c8890dee105f3268ad5577638ec3aa2544ff4618f399efd3e"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.samyost1.tmcandroid",
+    "source": "https://github.com/samyost1/tmc-android",
+    "release": "v1.2",
+    "observations": [
+      {
+        "asset": "tmc-dual-screen-v1.2.apk",
+        "url": "https://github.com/samyost1/tmc-android/releases/download/v1.2/tmc-dual-screen-v1.2.apk",
+        "package": "dev.picori.tmc",
+        "versionCode": 80300,
+        "versionName": "0.8.3",
+        "sha256": "9f666877ca468ca7944d8cd642803ed4e665fc49e23a3d88546a0d0d1c21424d",
+        "cert_sha256": [
+          "3e9d065e36d575e0907aad30ea8e817a1bc1fffadb86c4edfcdd038a43eaa202"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.igawa6.dusklight",
+    "source": "https://github.com/igawa6/dusklight",
+    "release": "v1.4.1-ds-2.7",
+    "observations": [
+      {
+        "asset": "dusklight-v1.4.1-ds-2.7.apk",
+        "url": "https://github.com/igawa6/dusklight/releases/download/v1.4.1-ds-2.7/dusklight-v1.4.1-ds-2.7.apk",
+        "package": "dev.twilitrealm.dusk",
+        "versionCode": 10401270,
+        "versionName": "1.4.1-ds-2.7",
+        "sha256": "9a6b8ac3c77443eaf3e14034e30573119fafb9eda6d9a27573e1491d127d80b6",
+        "cert_sha256": [
+          "df630e3a06d4e7fa63c4ea7930ec1462c6e21d0333aee90f81d16a3f5129eb2f"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.igawa6.harvestmoon64",
+    "source": "https://github.com/igawa6/HarvestMoon64Recomp",
+    "release": "v0.2.0",
+    "observations": [
+      {
+        "asset": "hm64recomp-android-0.2.0.apk",
+        "url": "https://github.com/igawa6/HarvestMoon64Recomp/releases/download/v0.2.0/hm64recomp-android-0.2.0.apk",
+        "package": "io.github.hm64recomp",
+        "versionCode": 3,
+        "versionName": "0.2.0",
+        "sha256": "8547d75f74d5c86d6042526fd8912fd0446e2013e654bd3ef98d7f5673b9f6fe",
+        "cert_sha256": [
+          "0753862b7df6ce7659b0c282d3d667cf96587971d6395def5fb0436322e84607"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.matteo842.crashbandicoot",
+    "source": "https://github.com/Matteo842/CrashBandicoot-Launcher",
+    "release": "1.9",
+    "observations": [
+      {
+        "asset": "CrashBandicoot-1.9.apk",
+        "url": "https://github.com/Matteo842/CrashBandicoot-Launcher/releases/download/1.9/CrashBandicoot-1.9.apk",
+        "package": "io.github.matteo842.crashlauncher.runtime",
+        "versionCode": 10,
+        "versionName": "1.9",
+        "sha256": "2769d171b8e250cd62b3c56159ddfb38f02f1b5ddf7892ca228d1e609c33c066",
+        "cert_sha256": [
+          "4879193db383c0dace44aabb71486a9a197d6475633ebda6cc9073cd53df79e6"
+        ]
+      }
+    ]
+  },
+  {
+    "original_id": "com.joshdaniels.openmwds",
+    "source": "https://github.com/Josh-Daniels/OpenMW-DS",
+    "release": "v1.2.1",
+    "observations": [
+      {
+        "asset": "OpenMW-DSv1.2.1.apk",
+        "url": "https://github.com/Josh-Daniels/OpenMW-DS/releases/download/v1.2.1/OpenMW-DSv1.2.1.apk",
+        "package": "org.openmw.ds",
+        "versionCode": 10201,
+        "versionName": "9ca36cc",
+        "sha256": "1c7ef39955f5fa12959dadf3bdeb6f2b90bc77011dc82367b667b167c832ab21",
+        "cert_sha256": [
+          "9cc00112006d514c2e64190dd172e5dfbbac3fbe433b9af985c323cb8d0aa56b"
+        ]
+      }
+    ]
+  }
+]

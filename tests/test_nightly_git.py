@@ -667,6 +667,9 @@ def test_cleanup_failure_preserves_confirmed_publication_and_fails_workflow(
 def test_retry_validates_evidence_with_selected_revision_runtime(
     tmp_path: Path, defect: str | None
 ) -> None:
+    from omnipack.verify import VERIFIER_VERSION
+
+    next_version = "test-next-verifier"
     source, bare, _ = _remote(tmp_path)
     project = Path(__file__).resolve().parents[1]
     for directory in ("src", "scripts"):
@@ -685,7 +688,10 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
         verify = source / "src/omnipack/verify.py"
         verify.write_text(
             verify.read_text()
-            .replace('VERIFIER_VERSION = "0.6.0"', 'VERIFIER_VERSION = "0.7.0"')
+            .replace(
+                f'VERIFIER_VERSION = "{VERIFIER_VERSION}"',
+                f'VERIFIER_VERSION = "{next_version}"',
+            )
             .replace("SCHEMA_VERSION = 1", "SCHEMA_VERSION = 2")
             .replace('Path("config/settings.json")', 'Path("config/new-settings.json")')
         )
@@ -717,7 +723,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
                     path = cwd / ".build/verify.json"
                     report = json.loads(path.read_text())
                     if defect == "verifier":
-                        report["verifier"]["version"] = "0.6.0"
+                        report["verifier"]["version"] = VERIFIER_VERSION
                     elif defect == "inputs":
                         report["inputs"]["settings"] = {"state": "missing"}
                     else:
@@ -755,9 +761,9 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
     reports = [
         json.loads(attempt.verify_report or b"{}") for attempt in result.attempts
     ]
-    assert reports[0]["verifier"]["version"] == "0.6.0"
+    assert reports[0]["verifier"]["version"] == VERIFIER_VERSION
     if defect is None:
-        assert reports[1]["verifier"]["version"] == "0.7.0"
+        assert reports[1]["verifier"]["version"] == next_version
         assert reports[1]["schemaVersion"] == 2
         assert reports[1]["inputs"]["settings"]["state"] == "present"
     else:

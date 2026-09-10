@@ -10,7 +10,7 @@
     }
   },
   {
-    "id": "com.sergiomanzur.sotnrecomp",
+    "id": "com.blacklabelhq.sotn",
     "url": "https://github.com/sergiomanzur/SymphonyRecomp",
     "patch": {
       "additionalSettings": {
@@ -29,7 +29,16 @@
     }
   },
   {
-    "id": "com.waterdish.shipwright",
+    "id": "com.ctrnative",
+    "url": "https://github.com/igawa6/ctr-native-android",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "com.dishii.soh",
     "url": "https://github.com/Waterdish/Shipwright-Android",
     "patch": {
       "additionalSettings": {

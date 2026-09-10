@@ -573,15 +573,6 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
     monkeypatch.setattr(
         urllib.request, "urlopen", lambda *args, **kwargs: pytest.fail("network used")
     )
-    composition = json.loads((ROOT / "config/composition.json").read_text())
-    composition["candidates"] = [
-        rule
-        for rule in composition["candidates"]
-        if rule["match"]["source"] != "extras"
-    ]
-    composition["pins"] = [
-        pin for pin in composition["pins"] if pin["match"]["source"] != "extras"
-    ]
     snapshots = OfflineInputs(
         single=(ROOT / "dist/single-screen.json").read_bytes(),
         dual=(ROOT / "dist/dual-screen.json").read_bytes(),
@@ -589,7 +580,7 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
         common_overlay=(ROOT / "config/overlay.json").read_bytes(),
         dual_overlay=(ROOT / "config/overlay.dual.json").read_bytes(),
         settings=(ROOT / "config/settings.json").read_bytes(),
-        composition=json.dumps(composition).encode(),
+        composition=(ROOT / "config/composition.json").read_bytes(),
     )
     before = snapshots.single, snapshots.dual
     result = validate_offline(snapshots)

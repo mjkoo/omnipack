@@ -96,7 +96,9 @@ knowing its semantics.
 | HTML intermediate links, link and text filters, outside-anchor matching, sorting controls, whole-page extraction, and non-secret request headers | Implemented | Applied to each configured page in order |
 | App name, author, description, notification/background controls, Shizuku presentation, refresh behavior, and OS version-code preference | Harmless for source resolution | Retained but does not alter the device-independent check |
 | `autoApkFilterByArch` and `preferredApkIndex` | Device-specific | Validated but not used to claim device compatibility |
-| `includeZips`, ZIP filters, GitHub credentials or request proxies, insecure TLS, and non-`date`/non-`none` GitHub sorting | Inactive unsupported or live error | Default false or empty values are accepted; active values fail by setting name |
+| HTML/GitLab archive settings, GitHub credentials or request proxies, insecure TLS, and non-`date`/non-`none` GitHub sorting | Inactive unsupported or live error | Default false or empty values are accepted; active values fail by setting name |
+| GitHub `includeZips` | Implemented | Enables ZIP candidates; the APK filename regex and inversion apply to the outer archive name |
+| GitHub `zippedApkFilterRegEx` | Device-specific | Syntax checked before HTTP; extraction and member selection remain on device |
 | HTML pseudo-versioning | Inactive unsupported or live error | Ignored when explicit extraction supplies the version; otherwise active pseudo-versioning fails |
 | Authorization or Cookie request headers and device-dependent filtering on nonempty intermediate steps | Live error | Rejected before a request is made |
 | Any unknown additional setting | Live error | Requires an intentional compatibility decision |
@@ -106,6 +108,15 @@ extraction, including eligible candidates for installable entries. It does not
 request selected downloads or claim they are reachable. The explicit asset
 diagnostic adds bounded HTTP reachability. Neither mode establishes APK identity,
 signature, installation success, architecture coverage, or behavior on a device.
+
+The [pinned GitHub provider](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/github.dart) enables ZIP release assets.
+For an enabled GitHub ZIP, metadata selection accepts the outer archive without
+opening it. Explicit probing reads only the bounded prefix of that outer ZIP.
+The `archive-members-unverified` warning makes this limitation visible: neither
+mode proves that the configured APK member exists. The same release ordering,
+filters, date handling, and fallback rules apply to APK and enabled ZIP assets.
+Official Ghostship uses this path; its captured member inspection is separate
+[curation evidence](source-reconciliation.md), not a runtime verifier guarantee.
 
 GitHub selection inspects at most the first 100 release-list records. With
 `verifyLatestTag` true, it first fetches `/releases/latest`, retaining the list

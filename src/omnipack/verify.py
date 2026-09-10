@@ -16,7 +16,7 @@ from omnipack.offline import Finding, OfflineInputs, validate_offline
 from omnipack.settings_defaults import OBTAINIUM_VERSION
 
 SCHEMA_VERSION = 1
-VERIFIER_VERSION = "0.6.0"
+VERIFIER_VERSION = "0.7.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),

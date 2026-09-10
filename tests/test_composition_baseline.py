@@ -24,8 +24,25 @@ ROOT = Path(__file__).parents[1]
 
 def historical_policy_document() -> dict:
     document = json.loads((ROOT / "config/composition.json").read_text())
+    fixture = json.loads((FIXTURES / "replacement-candidates.json").read_text())
+    selectors = set()
+    for pair in fixture["pairs"]:
+        selectors.add(("bboi", "bboi-standard-asset", pair["standard"]["id"]))
+        selectors.add(("bboi", "bboi-dual-asset", pair["dual"]["id"]))
+    selectors.update(
+        ("bboi", "bboi-standard-asset", record["id"])
+        for record in fixture["identityConflictCandidates"]
+    )
+    selectors.add(("codm2000", "codm-generated", "com.ctrnative"))
     document["candidates"] = [
-        rule for rule in document["candidates"] if rule["match"]["source"] != "extras"
+        rule
+        for rule in document["candidates"]
+        if (
+            rule["match"]["source"],
+            rule["match"]["origin"],
+            rule["match"]["id"],
+        )
+        in selectors
     ]
     document["pins"] = [
         pin for pin in document["pins"] if pin["match"]["source"] != "extras"
@@ -139,9 +156,9 @@ def test_ctr_origin_matches_captured_standard_asset_record() -> None:
 def test_maintained_policy_and_overlays_cover_the_migrated_selection() -> None:
     document = json.loads((ROOT / "config/composition.json").read_text())
     policy = parse_composition_policy(document)
-    assert len(policy.candidate_rules) == 13
+    assert len(policy.candidate_rules) == 32
     assert len(policy.history) == 113
-    assert len(policy.pins) == 10
+    assert len(policy.pins) == 14
 
     rules = {(rule.match.id, rule.match.url): rule for rule in policy.candidate_rules}
     standard_ctr = rules[
@@ -157,7 +174,7 @@ def test_maintained_policy_and_overlays_cover_the_migrated_selection() -> None:
     dual = parse_overlay(
         json.loads((ROOT / "config/overlay.dual.json").read_text()), "dual overlay"
     )
-    assert len(common) == 14
+    assert len(common) == 15
     assert not dual
     assert {item.url for item in common if item.package_id == "info.cemu.cemu"} == {
         "github.com/ssimco/cemu",
@@ -228,9 +245,7 @@ def replacement_candidates() -> list[App]:
 def test_maintained_policy_composes_captured_replacement_families(
     replacement_candidates: list[App], variant: Variant
 ) -> None:
-    policy = parse_composition_policy(
-        json.loads((ROOT / "config/composition.json").read_text())
-    )
+    policy = parse_composition_policy(historical_policy_document())
     # Version curation has separate postselection coverage. Here the complete
     # maintained policy must select whole builds from actual source records.
     result = compose(replacement_candidates, [], [], [], policy=policy)
@@ -261,6 +276,8 @@ def test_maintained_policy_composes_captured_replacement_families(
         "com.github.bvschaik.julius",
         "su.xash.engine.test",
         "809443320",
+        "dev.net64.ghostship",
+        "com.theboisclub.pokemonred",
     }
     assert set(expected) <= set(selected)
     assert {app.data["id"] for app in result.apps[variant]} >= curated_ids
@@ -271,8 +288,15 @@ def test_maintained_policy_composes_captured_replacement_families(
             **record,
             "additionalSettings": json.loads(record["additionalSettings"]),
         }
-        if family == "app:ctr":
-            data["id"] = "com.ctrnative"
+        corrected = {
+            "app:ctr": "com.ctrnative",
+            "app:openmw": "org.openmw.ds" if variant is Variant.DUAL else None,
+            "app:dusklight": "dev.twilitrealm.dusk"
+            if variant is Variant.DUAL
+            else None,
+        }.get(family)
+        if corrected is not None:
+            data["id"] = corrected
         assert winner.data == data
         assert winner.original_id == record["id"]
         generated = family == "app:ctr" and variant is Variant.DUAL
