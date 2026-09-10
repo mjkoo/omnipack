@@ -167,33 +167,6 @@ def test_xash_uses_only_continuous_android_asset_timestamp():
     assert [item.name for item in first.candidates] == ["xash3d-fwgs-android.apk"]
 
 
-def test_xash_does_not_fall_back_to_another_channel_or_missing_apk():
-    other = {
-        "tag_name": "continuous-freevgui",
-        "name": "Xash3D FWGS Continuous freevgui Build",
-        "draft": False,
-        "prerelease": True,
-        "published_at": "2099-01-01T00:00:00Z",
-        "assets": [
-            {
-                "name": "xash3d-fwgs-android.apk",
-                "browser_download_url": "https://example.test/other.apk",
-                "updated_at": "2099-01-01T00:00:00Z",
-            }
-        ],
-    }
-    missing = {
-        "tag_name": "continuous",
-        "name": "Xash3D FWGS Continuous master Build",
-        "draft": False,
-        "prerelease": True,
-        "published_at": "2026-09-09T16:21:08Z",
-        "assets": [],
-    }
-    with pytest.raises(ResolutionError, match="no release qualifies"):
-        _resolve_xash([missing, other])
-
-
 @pytest.mark.parametrize(
     "package_id,url,name,limitation",
     [

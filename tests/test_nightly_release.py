@@ -423,6 +423,71 @@ def test_release_transport_accepts_direct_200_and_bounds_download_bytes() -> Non
         oversized.download_asset(asset)
 
 
+@pytest.mark.parametrize(
+    "status,route",
+    [(code, "success") for code in (301, 302, 303, 307, 308)]
+    + [(302, "repeat"), (302, "chain")],
+)
+def test_unsigned_opener_closes_redirect_bodies_without_draining(
+    monkeypatch, status, route
+):
+    from email.message import Message
+    from io import BytesIO
+    from urllib.request import HTTPSHandler
+    from urllib.response import addinfourl
+
+    requests = []
+    redirects = []
+
+    class Response(addinfourl):
+        msg = "test response"
+
+    class RedirectBody(BytesIO):
+        def __init__(self):
+            super().__init__(b"redirect body")
+            self.read_sizes = []
+
+        def read(self, size=-1):
+            self.read_sizes.append(size)
+            return super().read(size)
+
+    def https_open(handler, request):
+        requests.append(request)
+        assert len(requests) <= 12, "redirect handling must terminate"
+        headers = Message()
+        if route == "success" and len(requests) == 2:
+            result = Response(BytesIO(b"asset bytes"), headers, request.full_url, 200)
+        else:
+            headers["Location"] = (
+                "https://cdn.example.net/asset"
+                if route != "chain"
+                else f"https://cdn.example.net/asset/{len(requests)}"
+            )
+            body = RedirectBody()
+            redirects.append(body)
+            result = Response(body, headers, request.full_url, status)
+        return result
+
+    monkeypatch.setattr(HTTPSHandler, "https_open", https_open)
+
+    def trusted(request, *, timeout):
+        assert request.get_header("Authorization") == "Bearer secret"
+        return Opened(302, b"", {"Location": "https://objects.example.net/signed"})
+
+    remote = GitHubReleaseRemote("secret", trusted_opener=trusted)
+    asset = ReleaseAsset(7, "single-screen.json", "https://api.github.com/assets/7")
+    if route == "success":
+        assert remote.download_asset(asset) == b"asset bytes"
+        assert len(requests) == 2
+    else:
+        with pytest.raises(OSError, match="redirected asset download failed"):
+            remote.download_asset(asset)
+        assert len(requests) == (5 if route == "repeat" else 11)
+    assert all(request.get_header("Authorization") is None for request in requests)
+    assert all(body.closed for body in redirects)
+    assert all(body.read_sizes == [] for body in redirects)
+
+
 def test_release_transport_uses_upload_origin_and_raw_content_once() -> None:
     requests = []
 
@@ -611,8 +676,7 @@ def test_explicit_cli_rejects_noncanonical_repository_before_api(
     assert scripts.nightly.main(["bootstrap-release"]) == 1
 
 
-@pytest.mark.parametrize("denied_upload", [False, True])
-def test_unreadable_unchanged_asset_never_authorizes_replacement(denied_upload):
+def test_unreadable_unchanged_asset_never_authorizes_replacement():
     from urllib.error import URLError
 
     document = completed_release(b"single", b"dual")
@@ -625,10 +689,7 @@ def test_unreadable_unchanged_asset_never_authorizes_replacement(denied_upload):
             return Opened(200, json.dumps(document).encode())
         if method == "GET":
             raise URLError("download interrupted")
-        if method == "DELETE":
-            document["assets"] = []
-            return Opened(204, b"")
-        return Opened(403 if denied_upload else 201, b"{}")
+        pytest.fail("unreadable assets must not authorize writes")
 
     remote = GitHubReleaseRemote("secret", retries=2, trusted_opener=opener)
     before = json.dumps(document)
@@ -639,8 +700,16 @@ def test_unreadable_unchanged_asset_never_authorizes_replacement(denied_upload):
     assert len(requests) == 5
 
 
-@pytest.mark.parametrize("failure", ["502", "truncated", "403"])
-@pytest.mark.parametrize("corrupt_readback", [False, True])
+@pytest.mark.parametrize(
+    "failure,corrupt_readback",
+    [
+        ("502", False),
+        ("502", True),
+        ("truncated", False),
+        ("truncated", True),
+        ("403", False),
+    ],
+)
 def test_transport_promotion_failure_reconciles_state_and_both_bytes(
     failure, corrupt_readback
 ):

@@ -4,8 +4,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
-from http.client import IncompleteRead
-from typing import Protocol
+from http.client import HTTPMessage, IncompleteRead
+from io import BytesIO
+from typing import IO, Any, Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
@@ -39,12 +40,33 @@ class _RejectRedirects(HTTPRedirectHandler):
         return None
 
 
+class _UnsignedRedirects(HTTPRedirectHandler):
+    def http_error_302(
+        self,
+        req: Request,
+        fp: IO[bytes],
+        code: int,
+        msg: str,
+        headers: HTTPMessage,
+    ) -> Any:
+        # urllib drains redirect bodies without a bound. Close the real stream
+        # and delegate with an empty body to retain its redirect and loop policy.
+        fp.close()
+        with BytesIO() as empty:
+            return super().http_error_302(req, empty, code, msg, headers)
+
+    http_error_301 = http_error_302
+    http_error_303 = http_error_302
+    http_error_307 = http_error_302
+    http_error_308 = http_error_302
+
+
 def _trusted_open(request: Request, *, timeout: float) -> OpenedResponse:
     return build_opener(_RejectRedirects()).open(request, timeout=timeout)
 
 
 def _unsigned_open(request: Request, *, timeout: float) -> OpenedResponse:
-    return build_opener().open(request, timeout=timeout)
+    return build_opener(_UnsignedRedirects()).open(request, timeout=timeout)
 
 
 class GitHubReleaseRemote:
@@ -228,6 +250,8 @@ class GitHubReleaseRemote:
                     )
                 return _bounded_read(response, MAX_ASSET_BYTES, response.headers)
         except (HTTPError, URLError, IncompleteRead) as error:
+            if isinstance(error, HTTPError):
+                error.close()
             raise OSError("redirected asset download failed") from error
 
 
