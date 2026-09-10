@@ -122,7 +122,8 @@ and explicit device-independent limitations. It SHALL support the release and
 HTML behavior specified below and the native public GitLab requirements and SHALL reject active unsupported resolution
 features with the setting and entry identified, rather than ignoring them.
 
-Unsupported features SHALL include archives other than GitHub ZIP asset selection, non-date/non-none GitHub
+Unsupported features SHALL include active generic ZIP-selection or archive-member
+extraction settings outside GitHub ZIP asset selection, non-date/non-none GitHub
 sorting, request proxies, embedded credentials, disabled TLS
 verification, device-dependent HTML intermediate filtering, and HTML
 pseudo-versioning without explicit version extraction. Inactive defaults SHALL
@@ -141,6 +142,13 @@ requests SHALL work without a token under the shared exact-host credential,
 request-bound, evidence and optional-probe guarantees. Adding GitLab SHALL NOT
 relax the existing GitHub credential requirement or HTML compatibility checks.
 
+
+Recognized Android package containers SHALL include `.apk`, `.xapk`, `.apkm`
+and `.apks`, compared without regard to extension case, under each provider's
+selection rules below. Their recognition SHALL NOT depend on `includeZips`.
+Acceptance of an outer package container SHALL NOT assert member presence,
+extraction, package identity, signatures or installability. Generated package-id
+discovery SHALL retain its separate `.apk`-only manifest-resolution contract.
 
 #### Scenario: Unsupported feature is enabled
 
@@ -169,7 +177,7 @@ for the list request; `inspected_count` SHALL count those list results plus one
 when the latest release supplements them. Matching an existing result SHALL NOT
 increment the count. Tags fallback SHALL retain this release inspection count.
 The system SHALL support `date` and `none` ordering, draft/prerelease eligibility,
-title and notes filters, older-release fallback, direct APK assets, enabled GitHub
+title and notes filters, older-release fallback, recognized Android package assets, enabled GitHub
 ZIP outer assets, outer-asset filename regex filtering and inversion, title
 versions and release/asset dates according to the pinned provider. With
 older-release fallback disabled, only the first non-draft release permitted by
@@ -178,8 +186,9 @@ title, notes or eligible outer-asset mismatch SHALL fail rather than advance to
 another release.
 
 An installable entry SHALL select a release with eligible outer-asset candidates
-and a nonempty version. An eligible candidate SHALL be a direct APK, or a GitHub
-ZIP when `includeZips` is true. Metadata selection SHALL treat the ZIP itself as
+and a nonempty version. An eligible candidate SHALL have an asset name ending in `.apk`, `.xapk`,
+`.apkm` or `.apks`, compared without regard to case, or `.zip` when `includeZips`
+is true. Filename regex filtering and inversion SHALL apply to that asset name. Metadata selection SHALL treat the ZIP itself as
 the candidate and SHALL NOT inspect or assert the presence of an archive member.
 A track-only entry SHALL apply the same configured filtering without requiring an
 outer asset, and SHALL use the pinned provider's tags fallback when no release
@@ -188,7 +197,7 @@ selects a release, failed reachability SHALL NOT select an older one.
 
 #### Scenario: Latest eligible release has no matching APK
 
-- **WHEN** fallback is enabled and an older release has a matching direct APK or
+- **WHEN** fallback is enabled and an older release has a matching recognized package or
   enabled GitHub ZIP
 - **THEN** resolution selects the older release and records its identity
 
@@ -207,6 +216,12 @@ selects a release, failed reachability SHALL NOT select an older one.
 - **WHEN** asset probing is explicitly enabled and every eligible outer-asset
   candidate in the selected release is unreachable
 - **THEN** the entry fails even if an older release has a reachable APK or ZIP
+
+#### Scenario: Package container is eligible without generic ZIP selection
+
+- **WHEN** an eligible GitHub release has an XAPK, APKM or APKS asset matching the configured filename filter and `includeZips` is false
+- **THEN** the container can satisfy installable release selection while a generic ZIP cannot
+- **AND** metadata success does not claim that an inner APK was inspected
 
 ### Requirement: GitHub latest metadata prioritizes release selection
 
@@ -290,6 +305,15 @@ a version or requested date after selecting a record SHALL NOT initiate fallback
 
 ### Requirement: HTML resolution follows the configured path
 
+At each HTML link-selection stage, absent a nonempty custom-link filter, the
+system SHALL choose the link URL, or the link text when text filtering is
+enabled, percent-decode that chosen value, parse it as a URL, and retain the
+link when the parsed path ends in `.apk`, `.xapk`, `.apkm` or `.apks`, without
+regard to extension case. A nonempty custom-link filter SHALL replace that
+extension filter. The final APK regex and inversion SHALL still filter the
+selected URLs. A custom filter admitting another URL SHALL NOT imply archive
+extraction support or prove the response contains a package.
+
 The system SHALL support anchor and link-text filtering, relative URLs resolved
 against final response URLs, links outside anchor tags including JSON strings,
 configured non-secret request headers, intermediate steps, alphanumeric and
@@ -336,6 +360,17 @@ SHALL require a usable final selected URL, including for track-only entries.
 
 - **WHEN** outside-anchor extraction is enabled for a JSON response
 - **THEN** string URLs are extracted, resolved and filtered using the entry settings
+
+#### Scenario: HTML custom filter replaces the default package extension filter
+
+- **WHEN** a final HTML page has a versioned download URL without a package extension and a custom-link filter admits it
+- **THEN** it can be the selected candidate if final filtering and version extraction succeed
+- **AND** with no custom-link filter that URL does not pass the default package-extension filter
+
+#### Scenario: Link-text filtering parses the decoded text as a URL
+
+- **WHEN** text filtering is enabled and decoded link text has a recognized package path followed by a query or fragment
+- **THEN** default extension filtering accepts it based on the parsed path suffix
 
 ### Requirement: Effective versions are real extraction results
 
@@ -386,14 +421,15 @@ explicitly unsupported rather than interpreted with Python semantics.
 
 Ordinary live verification SHALL require successful metadata resolution, a
 nonempty effective version and eligible outer-asset candidates for installable
-entries, without requesting those downloads or claiming reachability. An eligible
-outer candidate SHALL be a direct APK, or a GitHub ZIP when `includeZips` is true.
+entries, without requesting those downloads or claiming reachability. Eligible outer candidates SHALL follow the provider-specific selection rules:
+recognized Android package containers or enabled generic ZIPs for GitHub,
+recognized package links for GitLab, and configured final links for HTML.
 Ordinary live verification of a ZIP SHALL NOT inspect archive members or claim
 that `zippedApkFilterRegEx` matches a member. Only when asset probing is explicitly
 enabled SHALL an installable entry additionally require at least one selected
 eligible outer candidate to respond to a bounded GET with status 200 or 206 and a
-nonempty response prefix. For a selected ZIP, the probe SHALL request the outer
-ZIP itself and SHALL NOT decompress or inspect it. The system SHALL read at most
+nonempty response prefix. For a selected package container or ZIP, the probe SHALL request only the
+outer response and SHALL NOT decompress or inspect its members. The system SHALL read at most
 1024 response-body bytes per probe and close the response, including when the
 server ignores Range. It SHALL NOT require HEAD support or download a whole APK
 or ZIP. The system SHALL report attempted candidate failures as warnings when
@@ -618,8 +654,8 @@ Catalog errors SHALL prevent live requests like other offline errors.
 
 ### Requirement: GitHub ZIP releases expose outer assets with explicit extraction limits
 
-GitHub resolution SHALL admit .zip assets alongside .apk assets only when
-includeZips is true, applying apkFilterRegEx and inversion to the outer filename.
+GitHub resolution SHALL admit generic `.zip` assets alongside recognized
+`.apk`, `.xapk`, `.apkm` and `.apks` assets only when `includeZips` is true, applying apkFilterRegEx and inversion to the outer filename.
 It SHALL preserve existing release filtering, ordering and fallback behavior.
 A configured zippedApkFilterRegEx SHALL be validated before HTTP and classified
 as on-device extraction behavior. Live metadata success SHALL NOT assert that a
