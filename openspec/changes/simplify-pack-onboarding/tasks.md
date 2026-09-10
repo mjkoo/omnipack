@@ -14,4 +14,4 @@
 
 - [x] 3.1 Run `just check-all` and `uv run pack verify`; verify all required checks pass and the generated catalog agrees with both pack files.
 - [x] 3.2 Run metadata-only live verification on regenerated candidates using configured credentials; inspect fresh evidence and record any external blockers without claiming a passed check or device acceptance.
-- [ ] 3.3 Verify implementation against all delta scenarios, including rendered documentation and schedule semantics; complete project review gates and sync the deltas when archiving so observable behavior and specifications land together on the implementation branch.
+- [x] 3.3 Verify implementation against all delta scenarios, including rendered documentation and schedule semantics; complete project review gates and sync the deltas when archiving so observable behavior and specifications land together on the implementation branch.
