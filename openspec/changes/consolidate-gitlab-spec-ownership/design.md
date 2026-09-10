@@ -38,7 +38,7 @@ release limits, error behavior, HTTP guarantees, credentials and evidence.
 | Numeric project route, API-order window, fallback and extraction | same detailed GitLab release requirement |
 | Malformed metadata, no qualifying package, unsupported active settings and rate failures | same detailed GitLab release requirement |
 | Shared timeouts, retry/deduplication/concurrency, exact-host credentials and evidence identity | same detailed GitLab release requirement, plus existing shared verification requirements |
-| All five GitLab release scenarios | same detailed GitLab release requirement, verbatim |
+| All six GitLab release scenarios | same detailed GitLab release requirement, verbatim |
 | GitHub credential and HTML compatibility remain unchanged | pack-verification: Live checks honor a declared compatibility boundary |
 
 ## Risks / Trade-offs

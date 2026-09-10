@@ -7,7 +7,7 @@ so future adapter changes have one detailed contract to maintain.
 ## What Changes
 
 - Move native GitLab identity requirements and their scenario into source-ingestion.
-- Move GitLab release resolution requirements and all five scenarios into pack-verification.
+- Move GitLab release resolution requirements and all six scenarios into pack-verification.
 - Replace repeated detailed paragraphs with references to the owning requirements.
 - Retire the empty gitlab-app-sources capability through explicit archive metadata.
 - Preserve every obligation, all runtime behavior, tests, configuration and generated outputs.
