@@ -215,6 +215,58 @@ def test_main_advancement_discards_candidate_and_runs_fresh_attempt(
     assert all(not root.exists() for root in refresh.roots)
 
 
+def test_fresh_attempt_preserves_new_base_readme_around_generated_catalog(
+    tmp_path: Path,
+) -> None:
+    from omnipack.catalog import replace_catalog, split_catalog
+
+    source, bare, base = _remote(tmp_path)
+    newer: list[str] = []
+
+    def advance_readme() -> None:
+        _git(source, "fetch", "-q", "origin", "main")
+        _git(source, "checkout", "-q", "-B", "advance-readme", "origin/main")
+        readme = source / "README.md"
+        readme.write_bytes(readme.read_bytes().replace(b"guide", b"updated guide"))
+        _git(source, "add", "README.md")
+        _git(source, "commit", "-qm", "update guide")
+        _git(source, "push", "-q", str(bare), "HEAD:main")
+        newer.append(_git(source, "rev-parse", "HEAD"))
+
+    class CatalogRefresh(ChangingRefresh):
+        def __init__(self) -> None:
+            super().__init__(change=None)
+
+        def run(self, root: Path, base_sha: str) -> RefreshResult:
+            readme = root / "README.md"
+            readme.write_bytes(
+                replace_catalog(readme.read_bytes(), f"catalog:{base_sha}\n".encode())
+            )
+            return super().run(root, base_sha)
+
+    refresh = CatalogRefresh()
+    remote = AdvancingRemote(GitRemote(source), advance_readme)
+
+    result = _coordinator(source, remote, refresh).run("run", "token")
+
+    assert result.status == "published"
+    assert refresh.bases == [base, newer[0]]
+    published = subprocess.run(
+        ["git", "show", "main:README.md"],
+        cwd=bare,
+        check=True,
+        capture_output=True,
+    ).stdout
+    prefix, interior, suffix = split_catalog(published)
+    assert b"updated guide" in prefix
+    assert interior == f"catalog:{newer[0]}\n".encode()
+    assert suffix.endswith(b"credits\r\n")
+    assert (
+        _git(bare, "diff-tree", "--no-commit-id", "--name-only", "-r", "main")
+        == "README.md"
+    )
+
+
 class FailingSecondAttempt(LocalAttemptFactory):
     def __init__(self, source: Path) -> None:
         super().__init__(source)

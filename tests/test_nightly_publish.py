@@ -58,7 +58,13 @@ def _repo(tmp_path: Path) -> Path:
     for relative in ALLOWED_PATHS:
         path = root / relative
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"base:{relative}\n")
+        if relative == "README.md":
+            path.write_bytes(
+                b"guide\r\n<!-- omnipack:catalog:start -->\r\n"
+                b"base catalog\n<!-- omnipack:catalog:end -->\r\ncredits\r\n"
+            )
+        else:
+            path.write_text(f"base:{relative}\n")
     (root / "tracked.txt").write_text("base\n")
     _git(root, "add", ".")
     _git(root, "commit", "-qm", "base")
@@ -335,6 +341,106 @@ def test_cache_only_change_is_publishable(tmp_path: Path) -> None:
     assert candidate.snapshots["config/package-ids.json"] == b"new cache\n"
 
 
+def test_catalog_interior_change_is_publishable_with_exact_snapshot(
+    tmp_path: Path,
+) -> None:
+    from omnipack.catalog import replace_catalog
+
+    root = _repo(tmp_path)
+    readme = root / "README.md"
+    expected = replace_catalog(readme.read_bytes(), b"new catalog\n")
+    readme.write_bytes(expected)
+    _evidence(root)
+
+    candidate = validate_candidate(root)
+
+    assert candidate.changed_paths == ("README.md",)
+    assert candidate.snapshots["README.md"] == expected
+    assert (
+        subprocess.run(
+            ["git", "show", ":README.md"], cwd=root, check=True, capture_output=True
+        ).stdout
+        == expected
+    )
+
+
+@pytest.mark.parametrize("phase", ["capture", "staged"])
+def test_candidate_rejects_handwritten_readme_change(
+    tmp_path: Path, phase: str
+) -> None:
+    root = _repo(tmp_path)
+    readme = root / "README.md"
+    readme.write_bytes(readme.read_bytes().replace(b"guide", b"edited guide"))
+    _evidence(root)
+
+    if phase == "capture":
+        with pytest.raises(CandidateError, match="outside catalog"):
+            PublicationCandidate.capture(root)
+        return
+
+    readme.write_bytes(
+        readme.read_bytes()
+        .replace(b"edited guide", b"guide")
+        .replace(b"base catalog", b"new catalog")
+    )
+    _evidence(root)
+    candidate = PublicationCandidate.capture(root)
+    _git(root, "add", "README.md")
+    staged = subprocess.run(
+        ["git", "show", ":README.md"], cwd=root, check=True, capture_output=True
+    ).stdout.replace(b"guide", b"edited guide")
+    blob = (
+        subprocess.run(
+            ["git", "hash-object", "-w", "--stdin"],
+            cwd=root,
+            input=staged,
+            check=True,
+            capture_output=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
+    _git(root, "update-index", "--cacheinfo", "100644", blob, "README.md")
+
+    with pytest.raises(CandidateError, match="outside catalog"):
+        candidate.validate_staged()
+
+
+def test_malformed_readme_is_rejected_during_candidate_capture(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    (root / "README.md").write_text("no catalog markers\n")
+    _evidence(root)
+
+    with pytest.raises(CandidateError, match="catalog marker"):
+        PublicationCandidate.capture(root)
+
+
+def test_candidate_rejects_staged_readme_catalog_mismatch(tmp_path: Path) -> None:
+    from omnipack.catalog import replace_catalog
+
+    root = _repo(tmp_path)
+    readme = root / "README.md"
+    readme.write_bytes(replace_catalog(readme.read_bytes(), b"verified catalog\n"))
+    _evidence(root)
+    candidate = PublicationCandidate.capture(root)
+    staged = replace_catalog(readme.read_bytes(), b"different staged catalog\n")
+    blob = (
+        subprocess.run(
+            ["git", "hash-object", "-w", "--stdin"],
+            cwd=root,
+            input=staged,
+            check=True,
+            capture_output=True,
+        )
+        .stdout.decode()
+        .strip()
+    )
+    _git(root, "update-index", "--cacheinfo", "100644", blob, "README.md")
+
+    with pytest.raises(CandidateError, match="staged content"):
+        candidate.validate_staged()
+
+
 def test_successful_build_command_preserves_soft_failure_policy(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     process = ControlledProcess(root)
@@ -377,6 +483,19 @@ def test_candidate_ignores_mode_changes_and_preserves_base_mode(
     assert candidate.changed_paths == ((ALLOWED_PATHS[0],) if byte_change else ())
     assert _git(root, "ls-files", "--stage", ALLOWED_PATHS[0]).startswith("100644 ")
     assert bool(_git(root, "diff", "--cached", "--name-only")) == byte_change
+
+
+def test_readme_mode_change_is_noop_and_restores_base_mode(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    _git(root, "config", "core.fileMode", "true")
+    (root / "README.md").chmod(0o755)
+    _evidence(root)
+
+    candidate = validate_candidate(root)
+
+    assert candidate.changed_paths == ()
+    assert _git(root, "ls-files", "--stage", "README.md").startswith("100644 ")
+    assert not _git(root, "diff", "--cached", "--name-only")
 
 
 @pytest.mark.parametrize("during_staging", [False, True])

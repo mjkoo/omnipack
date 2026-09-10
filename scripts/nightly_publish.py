@@ -14,12 +14,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 
+from omnipack.catalog import CatalogError, split_catalog
 from omnipack.report import ReportFormatError, _validate_verification_report
 from omnipack.verify import VERIFY_PATH, capture_inputs, verifier_identity
 
 ALLOWED_PATHS = (
     "dist/single-screen.json",
     "dist/dual-screen.json",
+    "README.md",
     "config/package-ids.json",
 )
 
@@ -77,6 +79,7 @@ class PublicationCandidate:
         (validate_evidence or _validate_live_evidence)(root)
         snapshots = _snapshot_allowed(root)
         _reject_unexpected_tracked_changes(root)
+        _validate_readme_change(root, snapshots["README.md"])
         changed = tuple(
             path
             for path in ALLOWED_PATHS
@@ -110,6 +113,8 @@ class PublicationCandidate:
             ]
             if mode != _base_mode(self.root, relative):
                 raise CandidateError(f"staged mode does not match base for {relative}")
+        staged_readme = _git_bytes(self.root, "show", ":README.md")
+        _validate_readme_change(self.root, staged_readme)
         staged = _git_paths(
             self.root, "diff", "--cached", "--name-only", "-z", "HEAD", "--"
         )
@@ -301,6 +306,17 @@ def _base_mode(root: Path, relative: str) -> bytes:
     if not entry or entry[0] not in (b"100644", b"100755"):
         raise CandidateError(f"base publishable path is not a regular file: {relative}")
     return entry[0]
+
+
+def _validate_readme_change(root: Path, candidate: bytes) -> None:
+    base = _git_bytes(root, "show", "HEAD:README.md")
+    try:
+        base_prefix, _, base_suffix = split_catalog(base)
+        candidate_prefix, _, candidate_suffix = split_catalog(candidate)
+    except CatalogError as error:
+        raise CandidateError(str(error)) from error
+    if candidate_prefix != base_prefix or candidate_suffix != base_suffix:
+        raise CandidateError("README changed outside catalog markers")
 
 
 def _snapshot_allowed(root: Path) -> dict[str, bytes]:
