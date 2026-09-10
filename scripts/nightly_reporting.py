@@ -280,12 +280,7 @@ def _verification_mode(attempt: object) -> str:
 
 def _verification_phase(attempt: object) -> str:
     stages = tuple(_field(attempt, "stages", ()))
-    candidate_verified = any(
-        _field(stage, "stage", "") == "candidate-verify"
-        and _field(stage, "status", "") == "success"
-        for stage in stages
-    )
-    if candidate_verified:
+    if any(_field(stage, "stage", "") == "candidate-verify" for stage in stages):
         return "candidate"
     if any(_field(stage, "stage", "") == "offline-verify" for stage in stages):
         return "pre-build"

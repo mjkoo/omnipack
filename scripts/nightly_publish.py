@@ -171,7 +171,9 @@ class RefreshOrchestrator:
         try:
             evidence.unlink(missing_ok=True)
         except OSError as error:
-            outcomes.append(StageOutcome("candidate-verify", "failed", str(error)))
+            outcomes.append(
+                StageOutcome("candidate-evidence-reset", "failed", str(error))
+            )
             return RefreshResult("failed", base_sha, tuple(outcomes))
         invoked_at = datetime.now(UTC)
         if failure := self._run(STRUCTURAL_VERIFY, root):

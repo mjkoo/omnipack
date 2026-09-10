@@ -7,7 +7,7 @@ import pytest
 
 from omnipack import verify
 from omnipack.report import format_reports
-from scripts.nightly_publish import CandidateError, _validate_live_evidence
+from scripts.nightly_publish import CandidateError, _validate_structural_evidence
 from tests.test_verify import copy_inputs
 
 
@@ -85,4 +85,4 @@ def test_historical_reports_require_regeneration_and_cannot_authorize_publicatio
     with pytest.raises(ValueError, match="regenerate with `pack verify`"):
         format_reports(tmp_path)
     with pytest.raises(CandidateError, match="regenerate with `pack verify`"):
-        _validate_live_evidence(tmp_path)
+        _validate_structural_evidence(tmp_path)

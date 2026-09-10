@@ -301,6 +301,36 @@ def test_retained_prebuild_evidence_is_not_labeled_as_candidate_evidence(
     assert "pre-build offline verification report available" in result.summary
 
 
+def test_failed_candidate_report_is_still_labeled_as_candidate_evidence(
+    tmp_path: Path,
+) -> None:
+    offline = b'{"mode":"offline","status":"failed","complete":true}'
+    outcome = _publication()
+    outcome = replace(
+        outcome,
+        attempts=(
+            replace(
+                outcome.attempts[0],
+                stages=(
+                    Stage("offline-verify", "success"),
+                    Stage("build", "success"),
+                    Stage("candidate-verify", "failed"),
+                ),
+                verify_report=offline,
+            ),
+        ),
+    )
+
+    result = finalize_publication(outcome, RecordingIssues(), tmp_path, "run")
+
+    document = json.loads((tmp_path / "orchestration-result.json").read_text())
+    assert document["attempts"][0]["verify_phase"] == "candidate"
+    assert document["attempts"][0]["candidate_structural_report"] == "available"
+    assert (
+        "candidate structural/offline verification report available" in result.summary
+    )
+
+
 @pytest.mark.parametrize("status", ["published", "no-op"])
 def test_missing_release_status_cannot_authorize_recovery(
     tmp_path: Path, status: str

@@ -207,7 +207,7 @@ def test_candidate_report_cleanup_failure_retains_prebuild_evidence(
     result = RefreshOrchestrator(process).run(root, "abc123")
 
     assert result.status == "failed"
-    assert result.stages[-1].stage == "candidate-verify"
+    assert result.stages[-1].stage == "candidate-evidence-reset"
     assert "cannot remove pre-build evidence" in result.stages[-1].detail
     assert json.loads(evidence.read_text())["mode"] == "offline"
     assert len(process.commands) == 8
@@ -251,6 +251,53 @@ def test_bad_structural_evidence_rejects_candidate(tmp_path: Path, defect: str) 
     assert result.status == "failed"
     assert result.stages[-1].stage == "candidate"
     assert result.candidate is None
+
+
+def test_selected_dual_structural_failure_blocks_without_standard_reselection(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    process = ControlledProcess(root, fail_at=9)
+    selected = root / ALLOWED_PATHS[1]
+
+    def build_selected_preferred() -> None:
+        selected.write_text("selected preferred dual; standard alternative available\n")
+
+    process.on_command[8] = build_selected_preferred
+    process.on_command[9] = lambda: _evidence(root)
+
+    result = RefreshOrchestrator(process).run(root, "abc123")
+
+    assert result.status == "failed"
+    assert result.stages[-1].stage == "candidate-verify"
+    assert result.candidate is None
+    assert selected.read_text().startswith("selected preferred dual")
+    assert sum(command[-2:] == ("pack", "build") for command in process.commands) == 1
+
+
+def test_unavailable_app_metadata_is_not_a_postbuild_gate_or_reselection(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    process = ControlledProcess(root)
+    selected = root / ALLOWED_PATHS[1]
+
+    def build_without_release_metadata() -> None:
+        selected.write_text("selected preferred dual; metadata unavailable\n")
+
+    process.on_command[8] = build_without_release_metadata
+    process.on_command[9] = lambda: _evidence(root)
+
+    result = RefreshOrchestrator(process).run(root, "abc123")
+
+    assert result.status == "publishable"
+    assert result.candidate is not None
+    assert result.candidate.snapshots[ALLOWED_PATHS[1]] == selected.read_bytes()
+    assert all(
+        not ({"--live", "--probe-assets", "metadata"} & set(command))
+        for command in process.commands
+    )
+    assert sum(command[-2:] == ("pack", "build") for command in process.commands) == 1
 
 
 def test_disposable_attempt_is_a_clean_checkout_at_requested_sha(
