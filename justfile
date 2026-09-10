@@ -52,7 +52,7 @@ build:
 # Lint the workflows with actionlint and zizmor
 lint-actions:
     actionlint
-    zizmor --persona regular .github/workflows
+    zizmor --persona pedantic .github/workflows
 
 # Run every flake check
 flake-check:

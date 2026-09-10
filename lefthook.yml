@@ -20,7 +20,7 @@ pre-commit:
       run: just lock-check
 
     - name: lint-actions
-      glob: ".github/workflows/*.yml"
+      glob: "{.github/workflows/*.{yml,yaml},justfile,lefthook.yml}"
       run: just lint-actions
 
     - name: no-fancy-dashes
