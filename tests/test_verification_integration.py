@@ -10,6 +10,7 @@ import pytest
 from omnipack import cli
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
+from tests.catalog_support import write_catalog
 
 
 def inputs(root: Path) -> dict[Path, bytes]:
@@ -45,6 +46,7 @@ def inputs(root: Path) -> dict[Path, bytes]:
     (root / ".build/report.json").write_text('{"schemaVersion":1,"status":"success"}')
     (root / ".cache").mkdir()
     (root / ".cache/sentinel").write_bytes(b"cache bytes\x00")
+    write_catalog(root)
     return snapshot(root)
 
 
@@ -241,6 +243,7 @@ def test_latest_metadata_reuse_and_independent_variant_evidence_round_trip(
         }
         pack["apps"][0]["additionalSettings"] = json.dumps(settings)
         path.write_text(json.dumps(pack))
+    write_catalog(tmp_path)
     before = snapshot(tmp_path)
     latest = {
         "tag_name": "v1.0",

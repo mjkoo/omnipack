@@ -701,6 +701,9 @@ def test_seeded_package_id_cache_does_not_hide_dead_source(
         (tmp_path / "dist" / f"{variant}-screen.json").write_text(
             json.dumps({"settings": {"categories": "{}"}, "apps": [entry.raw]})
         )
+    from tests.catalog_support import write_catalog
+
+    write_catalog(tmp_path)
     api, dead = (
         "https://api.github.com/repos/example/app/releases?per_page=100",
         "https://downloads.example/dead.apk",

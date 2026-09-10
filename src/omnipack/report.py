@@ -333,6 +333,17 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
                 "http",
                 "composition",
             },
+            {
+                "single",
+                "dual",
+                "deny",
+                "common_overlay",
+                "dual_overlay",
+                "settings",
+                "http",
+                "composition",
+                "readme",
+            },
         )
         or any(
             not isinstance(value.get(key), list)

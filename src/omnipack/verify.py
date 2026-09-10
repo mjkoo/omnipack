@@ -16,7 +16,7 @@ from omnipack.offline import Finding, OfflineInputs, validate_offline
 from omnipack.settings_defaults import OBTAINIUM_VERSION
 
 SCHEMA_VERSION = 1
-VERIFIER_VERSION = "0.4.0"
+VERIFIER_VERSION = "0.5.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),
@@ -27,6 +27,7 @@ INPUT_PATHS = {
     "settings": Path("config/settings.json"),
     "composition": Path("config/composition.json"),
     "http": Path("config/http.json"),
+    "readme": Path("README.md"),
 }
 _URL = re.compile(r"https?://[^\s\"'<>]+")
 
@@ -86,6 +87,27 @@ def run_verification(
         )
     )
     report["errors"] = [_finding(item) for item in offline_result.findings]
+    from omnipack.catalog import generate_catalog, split_catalog
+    from omnipack.composition_policy import load_composition_policy
+
+    try:
+        readme = snapshots["readme"]
+        if readme is None:
+            raise ValueError("README input is missing or unreadable")
+        _, interior, _ = split_catalog(readme)
+        single, dual, policy = (
+            snapshots[name] for name in ("single", "dual", "composition")
+        )
+        if single is not None and dual is not None and policy is not None:
+            expected = generate_catalog(single, dual, load_composition_policy(policy))
+            if interior != expected:
+                raise ValueError(
+                    "README catalog differs from the captured packs and policy"
+                )
+    except ValueError as error:
+        report["errors"].append(
+            {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
+        )
     for name, fingerprint in fingerprints.items():
         if fingerprint["state"] == "unreadable":
             report["errors"].append(

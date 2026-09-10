@@ -1,8 +1,9 @@
-"""Render and publish the two import files as one recoverable pair."""
+"""Render and publish import files and their README catalog as a recoverable unit."""
 
 from __future__ import annotations
 
 import json
+import tempfile
 from collections.abc import Callable
 from dataclasses import asdict
 from pathlib import Path
@@ -59,7 +60,12 @@ def publish_build(
     on_stage: Callable[[str], None] | None = None,
     on_verification: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
-    """Render both variants, write their report, and publish them together."""
+    """Render both variants and their catalog, gate them, and publish together."""
+    readme_path = root / "README.md"
+    try:
+        readme_before = readme_path.read_bytes()
+    except OSError:
+        readme_before = None
     if on_stage is not None:
         on_stage("rendering")
     before = previous_ids(root)
@@ -79,6 +85,9 @@ def publish_build(
         "config/composition.json",
     )
     snapshots = [(root / path).read_bytes() for path in config_paths]
+    consumed_policy = (
+        composition_bytes if composition_bytes is not None else snapshots[3]
+    )
     result = validate_offline(
         OfflineInputs(
             rendered[Variant.SINGLE],
@@ -87,85 +96,120 @@ def publish_build(
             snapshots[1],
             snapshots[2],
             (root / "config/settings.json").read_bytes(),
-            composition_bytes if composition_bytes is not None else snapshots[3],
+            consumed_policy,
         )
     )
     findings = [
         {key: value for key, value in asdict(item).items() if value is not None}
         for item in result.findings
     ]
+    from omnipack.catalog import generate_catalog, replace_catalog
+    from omnipack.composition_policy import load_composition_policy
+
+    readme_rendered = None
+    if not findings:
+        try:
+            if readme_before is None:
+                raise ValueError("README input is missing or unreadable")
+            catalog = generate_catalog(
+                rendered[Variant.SINGLE],
+                rendered[Variant.DUAL],
+                load_composition_policy(consumed_policy),
+            )
+            readme_rendered = replace_catalog(readme_before, catalog)
+        except ValueError as error:
+            findings.append(
+                {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
+            )
     verdict = {"status": "failed" if findings else "success", "findings": findings}
     if on_verification is not None:
         on_verification(verdict)
     if findings:
         raise OfflineVerificationError(findings)
 
-    def require_current_policy() -> None:
-        if (
-            composition_bytes is None
-            or (root / "config/composition.json").read_bytes() == composition_bytes
+    def require_current_inputs() -> None:
+        changed = []
+        for path, snapshot, label in (
+            (root / "config/composition.json", consumed_policy, "composition policy"),
+            (readme_path, readme_before, "README"),
         ):
-            return
-        changed = [
-            {
-                "stage": "input",
-                "code": "input_changed",
-                "message": "composition policy changed during the build",
-            }
-        ]
-        if on_verification is not None:
-            on_verification({"status": "failed", "findings": changed})
-        raise OfflineVerificationError(changed)
+            try:
+                current = path.read_bytes()
+            except OSError:
+                current = None
+            if current != snapshot:
+                changed.append(
+                    {
+                        "stage": "input",
+                        "code": "input_changed",
+                        "message": f"{label} changed during the build",
+                    }
+                )
+        if changed:
+            if on_verification is not None:
+                on_verification({"status": "failed", "findings": changed})
+            raise OfflineVerificationError(changed)
 
-    require_current_policy()
+    require_current_inputs()
 
     if on_stage is not None:
         on_stage("report writing")
-    from omnipack.composition_policy import load_composition_policy
-
     write_report(
         root,
         before,
         composition,
         ingestion,
         offline_verification=verdict,
-        policy=load_composition_policy(
-            composition_bytes if composition_bytes is not None else snapshots[3]
-        ),
+        policy=load_composition_policy(consumed_policy),
     )
     if on_stage is not None:
         on_stage("publication")
-    require_current_policy()
-    _replace_pair(root / "dist", rendered)
+    require_current_inputs()
+    assert readme_rendered is not None
+    _replace_outputs(
+        {
+            **{
+                root / "dist" / OUTPUTS[variant]: value
+                for variant, value in rendered.items()
+            },
+            readme_path: readme_rendered,
+        }
+    )
 
 
-def _replace_pair(dist: Path, rendered: dict[Variant, bytes]) -> None:
-    paths = {variant: dist / name for variant, name in OUTPUTS.items()}
+def _replace_outputs(rendered: dict[Path, bytes]) -> None:
+    """Recover prior bytes or absence on handled staging/replacement failures."""
     snapshots = {
-        variant: path.read_bytes() if path.exists() else None
-        for variant, path in paths.items()
+        path: path.read_bytes() if path.exists() else None for path in rendered
     }
-    dist.mkdir(parents=True, exist_ok=True)
-    temporary: dict[Variant, Path] = {}
-    for variant, path in paths.items():
-        temp = path.with_suffix(path.suffix + ".tmp")
-        temp.write_bytes(rendered[variant])
-        temporary[variant] = temp
-    replaced: list[Variant] = []
+    temporary: list[Path] = []
+    staged: dict[Path, Path] = {}
+    replaced: list[Path] = []
+
+    def stage(path: Path, content: bytes) -> Path:
+        path.parent.mkdir(parents=True, exist_ok=True)
+        with tempfile.NamedTemporaryFile(
+            prefix=f".{path.name}.", suffix=".tmp", dir=path.parent, delete=False
+        ) as handle:
+            temp = Path(handle.name)
+        temporary.append(temp)
+        temp.write_bytes(content)
+        return temp
+
     try:
-        for variant in Variant:
-            temporary[variant].replace(paths[variant])
-            replaced.append(variant)
+        for path, content in rendered.items():
+            staged[path] = stage(path, content)
+        for path, temp in staged.items():
+            temp.replace(path)
+            replaced.append(path)
     except Exception:
-        for variant in replaced:
-            snapshot = snapshots[variant]
+        for path in reversed(replaced):
+            snapshot = snapshots[path]
             if snapshot is None:
-                paths[variant].unlink(missing_ok=True)
+                path.unlink(missing_ok=True)
             else:
-                backup = paths[variant].with_suffix(paths[variant].suffix + ".rollback")
-                backup.write_bytes(snapshot)
-                backup.replace(paths[variant])
+                stage(path, snapshot).replace(path)
         raise
     finally:
-        for path in temporary.values():
-            path.unlink(missing_ok=True)
+        for temp in temporary:
+            temp.unlink(missing_ok=True)

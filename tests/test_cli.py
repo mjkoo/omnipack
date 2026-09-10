@@ -87,6 +87,9 @@ def test_verify_missing_inputs_fails_and_report_displays_failure(
 def test_live_verification_stops_before_network_when_offline_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
@@ -112,6 +115,9 @@ def test_live_verification_stops_before_network_when_offline_fails(
 def test_build_writes_both_variants_and_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     (tmp_path / "config").mkdir()
     (tmp_path / "config/settings.json").write_text("{}", encoding="utf-8")
     for name, value in (
@@ -198,6 +204,9 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
 def test_cached_resolution_survives_a_later_render_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
@@ -248,6 +257,9 @@ def test_cached_resolution_survives_a_later_render_failure(
 def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, invalid_gate: bool
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     source_config = {
@@ -429,6 +441,9 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
 def test_failed_build_reports_exact_stage_and_preserves_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str, existing: bool
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     policy_document = {
@@ -578,6 +593,9 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
 def test_composition_failure_preserves_collected_diagnostics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
@@ -661,6 +679,9 @@ def test_composition_failure_preserves_collected_diagnostics(
 def test_offline_gate_preserves_pair_and_standalone_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     for name, value in (
@@ -719,6 +740,9 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
 def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     original = b'{"schemaVersion":1,"candidates":[],"pins":[]}'
@@ -758,6 +782,9 @@ def test_winning_tie_reports_original_selectors(
     capsys: pytest.CaptureFixture[str],
     reverse: bool,
 ) -> None:
+    (tmp_path / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     config = tmp_path / "config"
     config.mkdir()
     for name in ("deny.json", "overlay.json", "overlay.dual.json"):

@@ -55,6 +55,9 @@ def write_previous(root: Path, single: object | None, dual: object | None) -> No
 
 
 def write_config(root: Path) -> None:
+    (root / "README.md").write_bytes(
+        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
+    )
     (root / "config").mkdir(exist_ok=True)
     for name, value in (
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
