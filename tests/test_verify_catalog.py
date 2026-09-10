@@ -12,12 +12,10 @@ from tests.test_verify import copy_inputs
 
 
 @pytest.mark.parametrize("defect", ["missing", "unreadable", "malformed", "stale"])
-@pytest.mark.parametrize("live", [False, True])
 def test_catalog_errors_fail_without_live_calls_or_input_writes(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     defect: str,
-    live: bool,
 ) -> None:
     copy_inputs(tmp_path)
     readme = tmp_path / "README.md"
@@ -32,10 +30,7 @@ def test_catalog_errors_fail_without_live_calls_or_input_writes(
             else b"<!-- omnipack:catalog:start -->\nwrong\n<!-- omnipack:catalog:end -->\n"
         )
     before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
-    monkeypatch.setattr(
-        "omnipack.live.verify_live", lambda *a, **k: pytest.fail("live request")
-    )
-    result = verify.run_verification(tmp_path, live=live)
+    result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"
     assert any(error["stage"] == "catalog" for error in result["errors"])
     assert all(path.read_bytes() == value for path, value in before.items())
@@ -74,7 +69,7 @@ def test_readme_mutation_during_verification_prevents_success(
 
 
 @pytest.mark.parametrize("old_count", [7, 8])
-def test_historical_reports_are_readable_but_cannot_authorize_publication(
+def test_historical_reports_require_regeneration_and_cannot_authorize_publication(
     tmp_path: Path, old_count: int
 ) -> None:
     copy_inputs(tmp_path)
@@ -84,8 +79,10 @@ def test_historical_reports_are_readable_but_cannot_authorize_publication(
     if old_count == 7:
         result["inputs"].pop("composition")
     result["verifier"]["version"] = "0.3.0" if old_count == 7 else "0.4.0"
+    result["schemaVersion"] = 1
     result["mode"] = "live"
     (tmp_path / verify.VERIFY_PATH).write_text(json.dumps(result))
-    assert "Evidence: stale" in format_reports(tmp_path)
-    with pytest.raises(CandidateError, match="stale"):
+    with pytest.raises(ValueError, match="regenerate with `pack verify`"):
+        format_reports(tmp_path)
+    with pytest.raises(CandidateError, match="regenerate with `pack verify`"):
         _validate_live_evidence(tmp_path)

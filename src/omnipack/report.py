@@ -217,7 +217,6 @@ def format_reports(root: Path) -> str:
             f"Complete: {'yes' if verify['complete'] else 'no'}",
         ]
         lines.extend(_format_findings(verify.get("errors", []), "Error"))
-        lines.extend(_format_findings(verify.get("warnings", []), "Warning"))
         sections.append("\n".join(lines))
     else:
         sections.append("Verification report\nNo standalone verification recorded")
@@ -247,14 +246,7 @@ def _format_candidate(item: dict[str, Any]) -> str:
 
 
 def _format_verification_mode(value: dict[str, Any]) -> str:
-    from omnipack.verify import verifier_identity
-
-    mode = value["mode"]
-    if mode == "live-probe":
-        return "Mode: live-probe (asset probing requested)"
-    if mode == "live" and value.get("verifier") == verifier_identity():
-        return "Mode: live (metadata only; assets not probed)"
-    return f"Mode: {mode}"
+    return f"Mode: {value['mode']} (structural checks only)"
 
 
 def _read_document(path: Path, label: str) -> dict[str, Any]:
@@ -298,57 +290,46 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
 
 def _validate_verification_report(value: dict[str, Any]) -> None:
     schema = value.get("schemaVersion")
-    if type(schema) is not int or schema != 1:
-        raise ReportFormatError(f"unsupported verification report schema {schema!r}")
+    if type(schema) is not int or schema != 2:
+        raise ReportFormatError(
+            f"unsupported verification report schema {schema!r}; regenerate with `pack verify`"
+        )
     verifier = value.get("verifier")
     inputs = value.get("inputs")
     if (
         value.get("status") not in ("running", "success", "failed")
         or not isinstance(value.get("complete"), bool)
-        or value.get("mode") not in ("offline", "live", "live-probe")
+        or value.get("mode") != "offline"
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
-        or not all(
-            isinstance(verifier.get(key), str) for key in ("version", "obtainium")
-        )
+        or not all(isinstance(verifier.get(key), str) for key in ("version", "scope"))
+        or set(verifier) != {"version", "scope"}
+        or verifier.get("scope") != "structural"
         or not isinstance(inputs, dict)
         or set(inputs)
-        not in (
-            {
-                "single",
-                "dual",
-                "deny",
-                "common_overlay",
-                "dual_overlay",
-                "settings",
-                "http",
-            },
-            {
-                "single",
-                "dual",
-                "deny",
-                "common_overlay",
-                "dual_overlay",
-                "settings",
-                "http",
-                "composition",
-            },
-            {
-                "single",
-                "dual",
-                "deny",
-                "common_overlay",
-                "dual_overlay",
-                "settings",
-                "http",
-                "composition",
-                "readme",
-            },
-        )
-        or any(
-            not isinstance(value.get(key), list)
-            for key in ("errors", "warnings", "entries")
-        )
+        != {
+            "single",
+            "dual",
+            "deny",
+            "common_overlay",
+            "dual_overlay",
+            "settings",
+            "composition",
+            "readme",
+        }
+        or set(value)
+        != {
+            "schemaVersion",
+            "verifier",
+            "mode",
+            "startedAt",
+            "completedAt",
+            "complete",
+            "status",
+            "inputs",
+            "errors",
+        }
+        or not isinstance(value.get("errors"), list)
     ):
         raise ReportFormatError("malformed verification report")
 
@@ -361,8 +342,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
         or (value["status"] == "success" and bool(value["errors"]))
         or (value["status"] == "failed" and not value["errors"])
         or not all(_fingerprint(item) for item in inputs.values())
-        or not all(_valid_finding(item) for item in value["errors"] + value["warnings"])
-        or not all(_valid_entry(item) for item in value["entries"])
+        or not all(_valid_finding(item) for item in value["errors"])
     ):
         raise ReportFormatError("malformed verification report records")
 
@@ -403,70 +383,6 @@ def _valid_finding(value: object) -> bool:
             for key in ("variant", "entry_id", "field")
         )
         and (value.get("index") is None or type(value["index"]) is int)
-    )
-
-
-def _valid_entry(value: object) -> bool:
-    if not isinstance(value, dict):
-        return False
-    from omnipack.live import VersionClass
-
-    if (
-        not all(
-            isinstance(value.get(key), str) for key in ("variant", "entry_id", "source")
-        )
-        or type(value.get("index")) is not int
-        or value.get("version_class")
-        not in (None, *(item.value for item in VersionClass))
-        or not all(
-            isinstance(value.get(key), list) for key in ("errors", "warnings", "probes")
-        )
-        or not all(_valid_finding(item) for item in value["errors"] + value["warnings"])
-        or not all(_valid_probe(item) for item in value["probes"])
-        or not {"resolution", "version_class"} <= value.keys()
-    ):
-        return False
-    resolution = value["resolution"]
-    if resolution is None:
-        return True
-    return (
-        isinstance(resolution, dict)
-        and {"selected", "inspected_count", "window_limit"} <= resolution.keys()
-        and all(
-            isinstance(resolution.get(key), str)
-            for key in ("raw_version", "effective_version", "version_origin")
-        )
-        and isinstance(resolution.get("candidates"), list)
-        and all(_candidate(item) for item in resolution["candidates"])
-        and (
-            resolution.get("selected") is None
-            or isinstance(resolution["selected"], dict)
-        )
-        and all(
-            resolution.get(key) is None or type(resolution[key]) is int
-            for key in ("inspected_count", "window_limit")
-        )
-    )
-
-
-def _candidate(value: object) -> bool:
-    return isinstance(value, dict) and all(
-        isinstance(value.get(key), str) for key in ("name", "url")
-    )
-
-
-def _valid_probe(value: object) -> bool:
-    return (
-        _candidate(value)
-        and isinstance(value, dict)
-        and {"response_url", "status"} <= value.keys()
-        and type(value.get("success")) is bool
-        and type(value.get("bytes_read")) is int
-        and (value.get("status") is None or type(value["status"]) is int)
-        and all(
-            value.get(key) is None or isinstance(value[key], str)
-            for key in ("response_url", "failure_reason")
-        )
     )
 
 

@@ -71,17 +71,15 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schemaVersion": 1,
+                "schemaVersion": 2,
                 "verifier": verifier_identity(),
-                "mode": "live",
+                "mode": "offline",
                 "startedAt": "2026-09-01T00:00:00+00:00",
                 "completedAt": None,
                 "complete": False,
                 "status": "running",
                 "inputs": {name: {"state": "missing"} for name in INPUT_PATHS},
                 "errors": [],
-                "warnings": [],
-                "entries": [],
             }
         )
     )
@@ -91,20 +89,11 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
     assert "Observed: 2026-09-01T00:00:00+00:00" in output
 
 
-def test_asset_checked_mode_is_distinct_from_metadata_only(tmp_path: Path) -> None:
+def test_structural_mode_is_explicit(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
-    report["mode"] = "live-probe"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
-    assert "Mode: live-probe (asset probing requested)" in format_reports(tmp_path)
-
-
-def test_current_metadata_only_mode_says_assets_were_not_probed(tmp_path: Path) -> None:
-    copy_inputs(tmp_path)
-    report = run_verification(tmp_path)
-    report["mode"] = "live"
-    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
-    assert "Mode: live (metadata only; assets not probed)" in format_reports(tmp_path)
+    assert "Mode: offline (structural checks only)" in format_reports(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -128,9 +117,8 @@ def test_current_metadata_only_mode_says_assets_were_not_probed(tmp_path: Path) 
         {"status": "running"},
         {"status": "failed"},
         {"errors": [{"stage": "probe", "code": "oops"}]},
-        {"warnings": [False]},
-        {"entries": [{}]},
-        {"entries": ["bad"]},
+        {"warnings": []},
+        {"entries": []},
         {"schemaVersion": True},
     ],
 )
@@ -149,7 +137,7 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    assert report["schemaVersion"] == 1
+    assert report["schemaVersion"] == 2
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
@@ -223,26 +211,12 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
         {"version_class": []},
     ],
 )
-def test_malformed_nested_live_entry_is_rejected(
-    tmp_path: Path, mutation: dict
-) -> None:
+def test_live_shaped_fields_are_rejected(tmp_path: Path, mutation: dict) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
-    entry = {
-        "variant": "single",
-        "entry_id": "app.example",
-        "source": "GitHub",
-        "index": 0,
-        "version_class": "numeric",
-        "resolution": None,
-        "probes": [],
-        "errors": [],
-        "warnings": [],
-    }
-    entry.update(mutation)
-    report["entries"] = [entry]
+    report["entries"] = [mutation]
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="malformed verification report"):
         format_reports(tmp_path)
 
 
@@ -295,16 +269,6 @@ def test_findings_display_location_field_and_effective_version(
             "field": "url",
         }
     ]
-    report["warnings"] = [
-        {
-            "stage": "version-lint",
-            "code": "github-version-format",
-            "message": "bad version",
-            "variant": "single",
-            "entry_id": "org.example",
-            "effective_version": "rolling",
-        }
-    ]
     report["status"] = "failed"
     path = tmp_path / ".build/verify.json"
     path.write_text(json.dumps(report))
@@ -318,7 +282,6 @@ def test_findings_display_location_field_and_effective_version(
     assert main(["report"]) == 0
     output = capsys.readouterr().out
     assert "dual" in output and "index 4" in output and "url" in output
-    assert "single" in output and "org.example" in output and "rolling" in output
     assert path.read_bytes() == before
 
 

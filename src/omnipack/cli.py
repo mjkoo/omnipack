@@ -123,11 +123,9 @@ def _object_list(path: Path, source: str) -> list[dict[str, str]]:
     return value
 
 
-def verify(args: argparse.Namespace) -> int:
+def verify(_args: argparse.Namespace) -> int:
     try:
-        result = run_verification(
-            Path.cwd(), live=args.live, probe_assets=args.probe_assets
-        )
+        result = run_verification(Path.cwd())
     except VerificationReportError as error:
         print(f"verify failed: {error}", file=sys.stderr)
         return 1
@@ -154,15 +152,7 @@ def _parser() -> argparse.ArgumentParser:
     build_parser.set_defaults(func=build)
 
     verify_parser = subparsers.add_parser(
-        "verify", help="run offline (and, with --live, live) checks"
-    )
-    verify_parser.add_argument(
-        "--live", action="store_true", help="also resolve live source metadata"
-    )
-    verify_parser.add_argument(
-        "--probe-assets",
-        action="store_true",
-        help="with --live, also check selected asset reachability",
+        "verify", help="run structural checks offline"
     )
     verify_parser.set_defaults(func=verify)
 
@@ -175,8 +165,6 @@ def _parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = _parser()
     args = parser.parse_args(argv)
-    if getattr(args, "probe_assets", False) and not args.live:
-        parser.error("--probe-assets requires --live")
     return args.func(args)
 
 

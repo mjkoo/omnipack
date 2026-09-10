@@ -73,7 +73,7 @@ def test_probe_assets_without_live_is_rejected(
     with pytest.raises(SystemExit) as raised:
         main(["verify", "--probe-assets"])
     assert raised.value.code == 2
-    assert "--probe-assets requires --live" in capsys.readouterr().err
+    assert "unrecognized arguments: --probe-assets" in capsys.readouterr().err
 
 
 def test_verify_missing_inputs_fails_and_report_displays_failure(
@@ -84,7 +84,7 @@ def test_verify_missing_inputs_fails_and_report_displays_failure(
     assert main(["report"]) == 0
 
 
-def test_live_verification_stops_before_network_when_offline_fails(
+def test_retired_live_flag_is_rejected_before_verification(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (tmp_path / "README.md").write_bytes(
@@ -104,12 +104,14 @@ def test_live_verification_stops_before_network_when_offline_fails(
     (tmp_path / "dist").mkdir()
     (tmp_path / "dist/single-screen.json").write_text("not json")
     (tmp_path / "dist/dual-screen.json").write_text("not json")
-    monkeypatch.setattr(
-        "omnipack.live.verify_live",
-        lambda *_: pytest.fail("live verification must not run"),
-    )
+    evidence = tmp_path / ".build/verify.json"
+    evidence.parent.mkdir()
+    evidence.write_bytes(b'{"prior":"evidence"}')
     monkeypatch.chdir(tmp_path)
-    assert main(["verify", "--live"]) == 1
+    with pytest.raises(SystemExit) as raised:
+        main(["verify", "--live"])
+    assert raised.value.code == 2
+    assert evidence.read_bytes() == b'{"prior":"evidence"}'
 
 
 def test_build_writes_both_variants_and_report(

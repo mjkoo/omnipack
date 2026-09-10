@@ -68,36 +68,9 @@ def test_running_record_precedes_offline_validation(
 
     monkeypatch.setattr(verify, "validate_offline", interrupted)
     with pytest.raises(KeyboardInterrupt):
-        verify.run_verification(tmp_path, live=True)
+        verify.run_verification(tmp_path)
     stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())
     assert stored["complete"] is False
-
-
-def test_secret_and_url_values_are_redacted_from_upstream_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    copy_inputs(tmp_path)
-    token = "top-secret-token"
-    monkeypatch.setenv("PACK_TEST_TOKEN", token)
-    (tmp_path / "config/http.json").write_text(
-        json.dumps({"credentials": {"example.test": "PACK_TEST_TOKEN"}})
-    )
-
-    class Failure(RuntimeError):
-        code = "upstream"
-
-    monkeypatch.setattr(
-        "omnipack.live.verify_live",
-        lambda *_, **__: (_ for _ in ()).throw(
-            Failure(f"https://user:{token}@example.test/file?token={token} {token}")
-        ),
-    )
-    result = verify.run_verification(tmp_path, live=True)
-    serialized = (tmp_path / verify.VERIFY_PATH).read_text()
-    assert token not in serialized
-    assert "user:" not in serialized
-    assert "token=REDACTED" in serialized
-    assert result["status"] == "failed"
 
 
 def test_changed_input_prevents_success(
@@ -140,82 +113,34 @@ def test_initial_report_write_error_is_wrapped(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "url",
-    [
-        "https://example.test/?token=nested-token",
-        "https://[malformed/?token=nested-token",
-    ],
-)
-def test_serialized_nested_live_evidence_redacts_secrets_and_malformed_urls(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, url: str
-) -> None:
-    from omnipack.live import LiveEntryResult, LiveResult, ProbeEvidence
-    from omnipack.offline import Finding
-
-    copy_inputs(tmp_path)
-    monkeypatch.setenv("PACK_TEST_TOKEN", "nested-token")
-    (tmp_path / "config/http.json").write_text(
-        '{"credentials":{"example.test":"PACK_TEST_TOKEN"}}'
-    )
-    finding = Finding("probe", "candidate-probes-failed", f"failed {url}")
-    entry = LiveEntryResult(
-        "single",
-        "app.example",
-        0,
-        "GitHub",
-        None,
-        (
-            ProbeEvidence(
-                "nested-token",
-                "https://example.test/file?token=nested-token",
-                False,
-                failure_reason="nested-token",
-            ),
-        ),
-        None,
-        (finding,),
-        (),
-    )
-    monkeypatch.setattr(
-        "omnipack.live.verify_live",
-        lambda *_, **__: LiveResult((entry,), (finding,), ()),
-    )
-    result = verify.run_verification(tmp_path, live=True)
-    serialized = (tmp_path / verify.VERIFY_PATH).read_text()
-    assert "nested-token" not in serialized
-    assert result["entries"][0]["probes"][0]["name"] == "REDACTED"
-    if "[malformed" in url:
-        assert "<invalid-url>" in serialized
-
-
-def test_probe_assets_requires_live_mode(tmp_path: Path) -> None:
-    with pytest.raises(ValueError, match="require live"):
-        verify.run_verification(tmp_path, probe_assets=True)
-
-
-@pytest.mark.parametrize(
     "credentials", [{"example.test": 1}, {"example.test": None}, [], None]
 )
-@pytest.mark.parametrize("live", [False, True])
-def test_malformed_http_config_replaces_evidence_without_network(
-    tmp_path, monkeypatch, capsys, credentials, live
+def test_http_config_is_not_read_or_fingerprinted(
+    tmp_path, monkeypatch, credentials
 ) -> None:
-    from omnipack.cli import main
-
     copy_inputs(tmp_path)
-    verify.run_verification(tmp_path)
     (tmp_path / "config/http.json").write_text(json.dumps({"credentials": credentials}))
+    read_bytes = Path.read_bytes
+    monkeypatch.setattr(
+        Path,
+        "read_bytes",
+        lambda self: (
+            pytest.fail("unexpected read")
+            if self.name == "http.json"
+            else read_bytes(self)
+        ),
+    )
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "success"
+    assert "http" not in result["inputs"]
 
-    def forbidden(*args, **kwargs):
-        pytest.fail("malformed HTTP configuration reached network")
 
-    monkeypatch.setattr("omnipack.live.verify_live", forbidden)
-    monkeypatch.chdir(tmp_path)
-    assert main(["verify", *(["--live"] if live else [])]) == 1
-    stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())
-    assert stored["status"] == "failed" and stored["complete"] is True
-    assert any(item["code"] == "http-config-invalid" for item in stored["errors"])
-    assert "Traceback" not in capsys.readouterr().err
+def test_missing_http_config_does_not_affect_verification(tmp_path: Path) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / "config/http.json").unlink(missing_ok=True)
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "success"
+    assert "http" not in result["inputs"]
 
 
 @pytest.mark.parametrize("entry", [[], None])
