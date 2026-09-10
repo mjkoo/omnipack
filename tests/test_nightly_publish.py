@@ -4,10 +4,15 @@ import json
 import subprocess
 from collections.abc import Callable, Sequence
 from datetime import UTC, datetime
+from email.message import Message
 from pathlib import Path
+from unittest.mock import patch
+from urllib.request import Request
 
 import pytest
 
+from omnipack import cli
+from omnipack.http import HttpClient, HttpError, HttpResponse
 from scripts.nightly_publish import (
     ALLOWED_PATHS,
     CandidateError,
@@ -253,50 +258,206 @@ def test_bad_structural_evidence_rejects_candidate(tmp_path: Path, defect: str) 
     assert result.candidate is None
 
 
+class BuildProcess(ControlledProcess):
+    """Run the real pack commands; substitute only unrelated environment checks."""
+
+    def __init__(
+        self,
+        root: Path,
+        monkeypatch: pytest.MonkeyPatch,
+        *,
+        fallback: bool = True,
+        corrupt_candidate: bool = False,
+    ) -> None:
+        super().__init__(root)
+        self.corrupt_candidate = corrupt_candidate
+        self.after_build = False
+        self.postbuild_requests: list[str] = []
+        self.built_bytes: dict[str, bytes] = {}
+        records = [
+            {
+                "id": f"app.{kind}",
+                "url": f"https://github.com/fixture/{kind}",
+                "name": kind,
+                "overrideSource": "GitHub",
+                "meta": {"includeInStandard": kind == "standard"},
+                "additionalSettings": {"fallbackToOlderReleases": fallback},
+            }
+            for kind in ("standard", "preferred")
+        ]
+        files: dict[str, object] = {
+            "sources.json": {
+                "rjny": {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
+                "bboi": {
+                    "codeberg_repo": "fixture/bboi",
+                    "single_asset_pattern": "single.json",
+                    "dual_asset_pattern": "dual.json",
+                },
+                "codm": {"readme_url": "https://fixture.test/readme"},
+            },
+            "http.json": {"credentials": {}},
+            "extras.json": [],
+            "composition.json": {
+                "schemaVersion": 1,
+                "candidates": [
+                    {
+                        "match": {
+                            "source": "rjny",
+                            "origin": "rjny-catalog",
+                            "id": record["id"],
+                            "url": record["url"],
+                        },
+                        "family": "app:shared",
+                        "rationale": "Standard and preferred builds of one application",
+                    }
+                    for record in records
+                ],
+                "pins": [],
+            },
+            "package-ids.json": {},
+            "deny.json": [],
+            "overlay.json": [],
+            "overlay.dual.json": [],
+            "settings.json": {},
+        }
+        for name, document in files.items():
+            (root / "config" / name).write_text(json.dumps(document))
+        responses = {
+            "https://codeberg.org/api/v1/repos/fixture/bboi/releases/latest": json.dumps(
+                {
+                    "assets": [
+                        {
+                            "name": f"{kind}.json",
+                            "browser_download_url": f"https://fixture.test/{kind}",
+                        }
+                        for kind in ("single", "dual")
+                    ]
+                }
+            ),
+            "https://fixture.test/single": '{"apps":[]}',
+            "https://fixture.test/dual": '{"apps":[]}',
+            "https://fixture.test/readme": "| Project |\n| --- |\n",
+        }
+
+        def transport(
+            _client: HttpClient,
+            request: Request,
+            _timeout: float,
+            _max_bytes: int | None,
+        ) -> HttpResponse:
+            if self.after_build:
+                self.postbuild_requests.append(request.full_url)
+                raise HttpError("upstream app release metadata unavailable")
+            if request.full_url == (
+                "https://raw.githubusercontent.com/fixture/rjny/main/apps.json"
+            ):
+                body = json.dumps({"apps": records})
+            else:
+                body = responses[request.full_url]
+            return HttpResponse(request.full_url, 200, Message(), body.encode())
+
+        monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+        monkeypatch.chdir(root)
+        assert cli.main(["build"]) == 0
+        _git(root, "add", "config", "dist", "README.md")
+        _git(root, "commit", "-qm", "fixture baseline")
+        records[1]["name"] = "Updated preferred build"
+
+    def run(self, command: Sequence[str], cwd: Path) -> CommandResult:
+        if "pack" not in command:
+            return super().run(command, cwd)
+        assert cwd == self.root
+        self.commands.append(tuple(command))
+        arguments = list(command[command.index("pack") + 1 :])
+        status = cli.main(arguments)
+        if arguments == ["build"] and status == 0:
+            self.after_build = True
+            report = json.loads((self.root / ".build/report.json").read_text())
+            assert report["status"] == "success"
+            [dual] = [
+                item for item in report["selections"] if item["variant"] == "dual"
+            ]
+            assert dual["effective_id"] == "app.preferred"
+            assert dual["reason"] == "dual-preferred"
+            assert [item["effective_id"] for item in dual["alternatives"]] == [
+                "app.standard"
+            ]
+            if self.corrupt_candidate:
+                selected = self.root / "dist/dual-screen.json"
+                document = json.loads(selected.read_text())
+                del document["apps"][0]["name"]
+                selected.write_text(json.dumps(document))
+            self.built_bytes = {
+                relative: (self.root / relative).read_bytes()
+                for relative in ALLOWED_PATHS
+            }
+        return CommandResult(status, "", "pack command failed" if status else "")
+
+
 def test_selected_dual_structural_failure_blocks_without_standard_reselection(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _repo(tmp_path)
-    process = ControlledProcess(root, fail_at=9)
-    selected = root / ALLOWED_PATHS[1]
+    process = BuildProcess(root, monkeypatch, corrupt_candidate=True)
+    published = {
+        relative: _git(root, "show", f"HEAD:{relative}") for relative in ALLOWED_PATHS
+    }
 
-    def build_selected_preferred() -> None:
-        selected.write_text("selected preferred dual; standard alternative available\n")
+    with patch("omnipack.cli.compose", wraps=cli.compose) as selection:
+        result = RefreshOrchestrator(process).run(root, "abc123")
 
-    process.on_command[8] = build_selected_preferred
-    process.on_command[9] = lambda: _evidence(root)
-
-    result = RefreshOrchestrator(process).run(root, "abc123")
-
+    assert selection.call_count == 1
     assert result.status == "failed"
     assert result.stages[-1].stage == "candidate-verify"
     assert result.candidate is None
-    assert selected.read_text().startswith("selected preferred dual")
+    assert json.loads((root / "dist/dual-screen.json").read_text())["apps"][0][
+        "id"
+    ] == ("app.preferred")
+    report = json.loads((root / ".build/verify.json").read_text())
+    assert report["status"] == "failed"
+    assert any(
+        error["code"] == "missing_field"
+        and error.get("entry_id") == "app.preferred"
+        and error.get("field") == "name"
+        for error in report["errors"]
+    )
+    assert process.postbuild_requests == []
     assert sum(command[-2:] == ("pack", "build") for command in process.commands) == 1
+    assert not _git(root, "diff", "--cached", "--name-only")
+    assert {
+        relative: _git(root, "show", f"HEAD:{relative}") for relative in ALLOWED_PATHS
+    } == published
 
 
+@pytest.mark.parametrize("fallback", [False, True])
 def test_unavailable_app_metadata_is_not_a_postbuild_gate_or_reselection(
-    tmp_path: Path,
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, fallback: bool
 ) -> None:
     root = _repo(tmp_path)
-    process = ControlledProcess(root)
-    selected = root / ALLOWED_PATHS[1]
+    process = BuildProcess(root, monkeypatch, fallback=fallback)
 
-    def build_without_release_metadata() -> None:
-        selected.write_text("selected preferred dual; metadata unavailable\n")
+    with patch("omnipack.cli.compose", wraps=cli.compose) as selection:
+        result = RefreshOrchestrator(process).run(root, "abc123")
 
-    process.on_command[8] = build_without_release_metadata
-    process.on_command[9] = lambda: _evidence(root)
-
-    result = RefreshOrchestrator(process).run(root, "abc123")
-
+    assert selection.call_count == 1
     assert result.status == "publishable"
     assert result.candidate is not None
-    assert result.candidate.snapshots[ALLOWED_PATHS[1]] == selected.read_bytes()
-    assert all(
-        not ({"--live", "--probe-assets", "metadata"} & set(command))
-        for command in process.commands
-    )
+    assert dict(result.candidate.snapshots) == process.built_bytes
+    for filename, package_id in (
+        ("single-screen.json", "app.standard"),
+        ("dual-screen.json", "app.preferred"),
+    ):
+        [app] = json.loads(process.built_bytes[f"dist/{filename}"])["apps"]
+        assert app["id"] == package_id
+        assert (
+            app["url"]
+            == f"https://github.com/fixture/{package_id.removeprefix('app.')}"
+        )
+        assert (
+            json.loads(app["additionalSettings"])["fallbackToOlderReleases"] is fallback
+        )
+    assert process.after_build
+    assert process.postbuild_requests == []
     assert sum(command[-2:] == ("pack", "build") for command in process.commands) == 1
 
 
