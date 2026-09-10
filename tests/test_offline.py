@@ -91,6 +91,7 @@ def test_valid_entries_retain_raw_objects_and_decoded_settings() -> None:
     raw["futureField"] = {"retained": True}
     additional = json.loads(raw["additionalSettings"])
     additional["futureSetting"] = {"retained": True}
+    additional["versionExtractionRegEx"] = "["
     raw["additionalSettings"] = json.dumps(additional)
     result = validate_offline(inputs([raw]))
 
@@ -99,6 +100,7 @@ def test_valid_entries_retain_raw_objects_and_decoded_settings() -> None:
     assert entry.raw is raw or entry.raw == raw
     assert entry.raw["futureField"] == {"retained": True}
     assert entry.settings["futureSetting"] == {"retained": True}
+    assert entry.settings["versionExtractionRegEx"] == "["
 
 
 @pytest.mark.parametrize(

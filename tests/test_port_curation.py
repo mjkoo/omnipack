@@ -8,19 +8,13 @@ import pytest
 
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import parse_composition_policy
-from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
-from omnipack.resolution.github import resolve_github
-from omnipack.resolution.gitlab import resolve_gitlab
-from omnipack.resolution.types import ResolutionError
 from omnipack.sources import IngestionReport, codm
 from omnipack.sources.extras import fetch
 from tests.test_composition_baseline import CapturedPackageResolver
-from tests.test_resolution_github import GitHubTransport
-from tests.test_resolution_gitlab import FakeHttp as GitLabHttp
 from tests.test_sources import FakeHttp as SourceHttp
 
 ROOT = Path(__file__).parents[1]
@@ -64,6 +58,25 @@ def test_curated_ports_are_present_once_with_maintained_policy(variant):
         by_id["com.karin.idTech4Amm"].additional_settings["versionDetection"] is False
     )
     assert by_id["is.xyz.vcmi"].additional_settings["autoApkFilterByArch"] is True
+    xash = by_id["su.xash.engine.test"].additional_settings
+    assert (
+        xash["filterReleaseTitlesByRegEx"] == r"^Xash3D FWGS Continuous master Build$"
+    )
+    assert xash["apkFilterRegEx"] == r"^xash3d-fwgs-android\.apk$"
+    assert xash["useLatestAssetDateAsReleaseDate"] is True
+    assert xash["releaseDateAsVersion"] is True
+    assert xash["includePrereleases"] is True
+    assert xash["verifyLatestTag"] is False
+    assert xash["fallbackToOlderReleases"] is True
+    aurora = by_id["com.aurora.store"].additional_settings
+    assert aurora["versionDetection"] is True
+    assert aurora["autoApkFilterByArch"] is False
+    julius = by_id["com.github.bvschaik.julius"].additional_settings
+    assert julius["apkFilterRegEx"] == r"^julius-.*-android\.apk$"
+    assert julius["includePrereleases"] is False
+    vcmi = by_id["is.xyz.vcmi"].additional_settings
+    assert vcmi["apkFilterRegEx"] == r"^VCMI-Android-.*\.apk$"
+    assert vcmi["includePrereleases"] is False
 
 
 def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
@@ -122,51 +135,6 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             assert app.data["additionalSettings"] == expected[app.data["id"]]
 
 
-def _resolve_xash(releases):
-    app = next(app for app in extras() if app.id == "su.xash.engine.test")
-    data = deepcopy(app.raw)
-    data.update(url=app.url, additionalSettings=app.additional_settings)
-    api = "https://api.github.com/repos/FWGS/xash3d-fwgs"
-    http = HttpClient(
-        HttpConfig({}),
-        retries=0,
-        transport=GitHubTransport({api + "/releases?per_page=100": releases}),
-    )
-    return resolve_github(data, http)
-
-
-def test_xash_uses_only_continuous_android_asset_timestamp():
-    base = {
-        "tag_name": "continuous",
-        "name": "Xash3D FWGS Continuous master Build",
-        "draft": False,
-        "prerelease": True,
-        "published_at": "2026-09-09T16:21:08Z",
-        "assets": [
-            {
-                "name": "xash3d-fwgs-android.apk",
-                "browser_download_url": "https://example.test/android.apk",
-                "updated_at": "2026-09-09T16:21:02Z",
-            },
-            {
-                "name": "xash3d-fwgs-linux-amd64.tar.gz",
-                "browser_download_url": "https://example.test/linux",
-                "updated_at": "2099-01-01T00:00:00Z",
-            },
-        ],
-    }
-    first = _resolve_xash([base])
-    changed = deepcopy(base)
-    changed_assets = changed["assets"]
-    assert isinstance(changed_assets, list)
-    assert isinstance(changed_assets[0], dict)
-    changed_assets[0]["updated_at"] = "2026-09-10T16:21:02Z"
-    second = _resolve_xash([changed])
-    assert first.raw_version == second.raw_version == "continuous"
-    assert first.effective_version < second.effective_version
-    assert [item.name for item in first.candidates] == ["xash3d-fwgs-android.apk"]
-
-
 @pytest.mark.parametrize(
     "package_id,url,name,limitation",
     [
@@ -213,100 +181,6 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
     )
     assert name.encode() in catalog
     assert b"PC Ports" in catalog
-
-
-@pytest.mark.parametrize("package_id", sorted(PORT_IDS))
-def test_captured_release_filters_select_manifest_inspected_assets(package_id):
-    app = next(app for app in extras() if app.id == package_id)
-    captures = read(FIXTURE.with_name("port-releases.json"))["entries"]
-    capture = next(item for item in captures if item["sourceUrl"] == app.url)
-    release = capture["release"]
-    data = {**app.raw, "url": app.url, "additionalSettings": app.additional_settings}
-    if app.source_type.value == "GitLab":
-        api = "https://gitlab.com/api/v4/projects/AuroraOSS%2FAuroraStore"
-        assert release["assets"]["links"] == []
-        assert "AuroraStore-hw-4.8.4.apk" in release["description"]
-        assert "AuroraStore-preload-4.8.4.apk" in release["description"]
-        result = resolve_gitlab(
-            data,
-            GitLabHttp(
-                {
-                    api: {"id": capture["projectId"]},
-                    api + "/releases?per_page=100": [release],
-                }
-            ),
-        )
-    else:
-        api = app.url.replace("https://github.com/", "https://api.github.com/repos/")
-        responses = {
-            api + "/releases?per_page=100": [release],
-            api + "/releases/latest": release,
-        }
-        result = resolve_github(
-            data,
-            HttpClient(HttpConfig({}), retries=0, transport=GitHubTransport(responses)),
-        )
-    manifests = [
-        item for item in read(FIXTURE)["entries"] if item["sourceUrl"] == app.url
-    ]
-    assert {candidate.name for candidate in result.candidates} == {
-        item["asset"] for item in manifests
-    }
-    assert {item["packageId"] for item in manifests} == {app.id}
-    assert {item["release"] for item in manifests} == {result.raw_version}
-    if package_id == "is.xyz.vcmi":
-        # The resolver returns all eligible ABIs; Obtainium chooses on-device.
-        selected_names = {candidate.name for candidate in result.candidates}
-        assert {
-            tuple(item["abis"]) for item in manifests if item["asset"] in selected_names
-        } == {("arm64-v8a",), ("armeabi-v7a",), ("x86_64",)}
-        assert app.additional_settings["autoApkFilterByArch"] is True
-    if package_id == "com.karin.idTech4Amm":
-        names = {asset["name"] for asset in release["assets"]}
-        assert any("_arm64" in name for name in names)
-        assert any("_armv7" in name for name in names)
-        assert result.effective_version == "v1.1.0harmattan72"
-        assert manifests[0]["versionName"] == "1.1.0harmattan72lindaiyu"
-
-
-def test_xash_scans_past_unrelated_channels_without_cross_channel_fallback():
-    capture = next(
-        item
-        for item in read(FIXTURE.with_name("port-releases.json"))["entries"]
-        if item["sourceUrl"] == "https://github.com/FWGS/xash3d-fwgs"
-    )
-    master = capture["release"]
-    other = deepcopy(master)
-    other.update(
-        tag_name="continuous-freevgui", name="Xash3D FWGS Continuous freevgui Build"
-    )
-    for asset in other["assets"]:
-        asset["updated_at"] = "2099-01-01T00:00:00Z"
-    baseline = _resolve_xash([master])
-    assert (
-        _resolve_xash([other, master]).effective_version == baseline.effective_version
-    )
-    app = next(app for app in extras() if app.id == "su.xash.engine.test")
-    assert app.additional_settings["fallbackToOlderReleases"] is True
-    for releases in ([other], []):
-        with pytest.raises(ResolutionError):
-            _resolve_xash(releases)
-    missing_apk = deepcopy(master)
-    missing_apk["assets"] = [
-        asset
-        for asset in master["assets"]
-        if asset["name"] != "xash3d-fwgs-android.apk"
-    ]
-    with pytest.raises(ResolutionError):
-        _resolve_xash([other, missing_apk])
-    changed_platform = deepcopy(master)
-    for asset in changed_platform["assets"]:
-        if asset["name"] != "xash3d-fwgs-android.apk":
-            asset["updated_at"] = "2099-01-01T00:00:00Z"
-    assert (
-        _resolve_xash([other, changed_platform]).effective_version
-        == baseline.effective_version
-    )
 
 
 def test_hollow_knight_source_composition_preserves_dual_only_catalog():

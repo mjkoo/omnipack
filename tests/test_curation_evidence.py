@@ -2,68 +2,56 @@ from __future__ import annotations
 
 import pytest
 
-from tests.test_curation import FIXTURES, curated, effective_id, read, resolve
+from tests.test_curation import FIXTURES, curated, effective_id, read
 
 
-def test_selected_candidates_have_manifest_evidence_and_known_identity_mismatches():
+def test_manifest_evidence_records_known_identity_relationships() -> None:
     manifests = read(FIXTURES / "manifests.json")["assets"]
     by_url = {manifest["url"]: manifest for manifest in manifests}
     assert len(by_url) == len(manifests)
     baseline = read(FIXTURES / "baseline-apps.json")
-    mismatches = set()
-    selected_urls = set()
-    for variant, apps in curated().items():
-        originals = {app["url"].lower(): app for app in baseline[variant]}
-        for app in apps:
-            original = originals.get(app["url"].lower())
-            if original is not None:
-                assert app["id"] == effective_id(original)
-            for candidate in resolve(app).candidates:
-                manifest = by_url[candidate.url]
-                selected_urls.add(candidate.url)
-                assert manifest["id"] == (
-                    original["id"] if original is not None else app["id"]
-                )
-                if manifest["package"] != app["id"]:
-                    mismatches.add((app["id"], manifest["package"]))
-    assert mismatches == {
+    configured = {app["url"]: app for apps in curated().values() for app in apps}
+    for variant, originals in baseline.items():
+        actual = {app["url"].lower(): app for app in curated()[variant]}
+        for original in originals:
+            assert actual[original["url"].lower()]["id"] == effective_id(original)
+    assert {
+        (record["id"], record["package"])
+        for record in manifests
+        if record["package"] != record["id"]
+    } == {
+        ("com.sergiomanzur.sotnrecomp", "com.blacklabelhq.sotn"),
+        ("com.simon358.ctrnative", "com.ctrnative"),
+        ("com.waterdish.shipwright", "com.dishii.soh"),
         ("com.winlator.ludashi", "com.winlator.vanilla"),
     }
-    xendroid_urls = {m["url"] for m in manifests if m["id"] == "xendroid.compose"}
-    assert set(by_url) == selected_urls | xendroid_urls
+    ludashi = next(
+        app for app in configured.values() if app["id"] == "com.winlator.ludashi"
+    )
+    assert ludashi["allowIdChange"] is True
 
 
 @pytest.mark.parametrize("version", ["0b11201", "c4f6863"])
-def test_xendroid_observations_match_release_assets_and_hash_versions(version):
+def test_xendroid_dated_observations_preserve_hash_versions(version: str) -> None:
     app = next(a for a in curated()["single"] if a["id"] == "xendroid.compose")
-    records = read(FIXTURES / "releases.json")["sources"][app["url"]]
-    release = next(r for r in records if r["tag_name"] == f"XenDroid-{version}")
-    result = resolve(app, [release])
-    assert result.effective_version == f"XenDroid-{version}"
-    assert len(result.candidates) == 1
     manifests = read(FIXTURES / "manifests.json")["assets"]
-    observed = [m for m in manifests if m["url"] == result.candidates[0].url]
+    observed = [
+        item
+        for item in manifests
+        if item["id"] == app["id"] and item["versionName"] == version
+    ]
     assert len(observed) == 1
-    manifest = observed[0]
-    assert (manifest["id"], manifest["package"], manifest["versionName"]) == (
-        app["id"],
-        app["id"],
-        version,
-    )
-    assert manifest["effective"] == result.effective_version
-    assert manifest["versionCode"] == 1
+    assert observed[0]["package"] == app["id"]
+    assert observed[0]["effective"] == f"XenDroid-{version}"
+    assert observed[0]["versionCode"] == 1
 
 
 @pytest.mark.parametrize("variant", ["single", "dual"])
-def test_cinderbox_selected_apk_has_expected_package_and_version(variant):
+def test_cinderbox_dated_observation_matches_curated_identity(variant: str) -> None:
     app = next(a for a in curated()[variant] if a["id"] == "com.game.cinderbox")
-    result = resolve(app)
-    assert len(result.candidates) == 1
     manifests = read(FIXTURES / "manifests.json")["assets"]
-    observed = [m for m in manifests if m["url"] == result.candidates[0].url]
-    assert len(observed) == 1
-    manifest = observed[0]
-    assert manifest["package"] == app["id"] == "com.game.cinderbox"
-    assert manifest["versionName"] == result.effective_version == "0.8.1"
-    assert manifest["effective"] == result.effective_version
-    assert manifest["versionCode"] == 113
+    [observed] = [item for item in manifests if item["id"] == app["id"]]
+    assert observed["package"] == app["id"]
+    assert observed["versionName"] == "0.8.1"
+    assert observed["effective"] == "0.8.1"
+    assert observed["versionCode"] == 113

@@ -16,8 +16,6 @@ from pathlib import Path
 from typing import IO, Any, Protocol
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-METADATA_MAX_BYTES = 10 * 1024 * 1024
-PROBE_BYTES = 1024
 MAX_REDIRECTS = 10
 _FORBIDDEN_CALLER_HEADERS = frozenset({"authorization", "cookie"})
 
@@ -145,9 +143,6 @@ class HttpClient:
         backoff: float = 0.5,
         sleep: Callable[[float], None] = time.sleep,
         transport: Transport | None = None,
-        request_gate: Callable[[str], None] | None = None,
-        returned_http_statuses: frozenset[int] = frozenset(),
-        response_hook: Callable[[HttpResponse], None] | None = None,
     ) -> None:
         if retries < 0 or backoff < 0:
             raise ValueError("retries and backoff must be nonnegative")
@@ -158,9 +153,6 @@ class HttpClient:
         self.backoff = backoff
         self.sleep = sleep
         self.transport = transport or self._urllib_transport
-        self.request_gate = request_gate
-        self.returned_http_statuses = returned_http_statuses
-        self.response_hook = response_hook
 
     def get(
         self,
@@ -175,41 +167,6 @@ class HttpClient:
             raise ValueError("max_bytes must be nonnegative")
         return self._request(url, headers=headers, max_bytes=max_bytes, method=method)
 
-    def get_metadata(
-        self, url: str, *, headers: Mapping[str, str] | None = None
-    ) -> HttpResponse:
-        """Fetch metadata and reject responses larger than the live policy limit."""
-        return self.get(url, headers=headers, max_bytes=METADATA_MAX_BYTES)
-
-    def probe(
-        self, url: str, *, headers: Mapping[str, str] | None = None
-    ) -> HttpResponse:
-        """Read a nonempty response prefix without downloading the whole resource."""
-        probe_headers = dict(headers or {})
-        probe_headers["Range"] = f"bytes=0-{PROBE_BYTES - 1}"
-        if self.transport == self._urllib_transport:
-            response = self._request(
-                url, headers=probe_headers, max_bytes=PROBE_BYTES, prefix=True
-            )
-        else:
-            response = self._request(url, headers=probe_headers, max_bytes=PROBE_BYTES)
-            if len(response.body) > PROBE_BYTES:
-                response = HttpResponse(
-                    response.url,
-                    response.status,
-                    response.headers,
-                    response.body[:PROBE_BYTES],
-                )
-        if response.status not in {200, 206}:
-            raise HttpError(
-                f"probe of {redact_url(response.url)} returned status {response.status}"
-            )
-        if not response.body:
-            raise HttpError(
-                f"probe of {redact_url(response.url)} returned an empty response"
-            )
-        return response
-
     def _request(
         self,
         url: str,
@@ -217,22 +174,12 @@ class HttpClient:
         headers: Mapping[str, str] | None = None,
         max_bytes: int | None = None,
         method: str = "GET",
-        prefix: bool = False,
     ) -> HttpResponse:
         attempts = self.retries + 1
         for attempt in range(attempts):
             request = self.build_request(url, headers=headers, method=method)
             try:
-                self.gate_request(request.full_url)
-                if prefix:
-                    response = self._urllib_transport(
-                        request, self.timeout, max_bytes, prefix=True
-                    )
-                else:
-                    response = self.transport(request, self.timeout, max_bytes)
-                if self.response_hook is not None:
-                    self.response_hook(response)
-                return response
+                return self.transport(request, self.timeout, max_bytes)
             except (OSError, HTTPException) as error:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
@@ -245,11 +192,6 @@ class HttpClient:
                     ) from error
                 self.sleep(self.backoff * (2**attempt))
         raise AssertionError("request loop did not return or raise")
-
-    def gate_request(self, url: str) -> None:
-        """Apply an optional policy immediately before a real request."""
-        if self.request_gate is not None:
-            self.request_gate(url)
 
     def build_request(
         self,
@@ -293,7 +235,6 @@ class HttpClient:
             new_url, headers=headers, method=request.method
         )
         self._set_authorization(redirected)
-        self.gate_request(redirected.full_url)
         return redirected
 
     def _set_authorization(self, request: urllib.request.Request) -> None:
@@ -308,26 +249,13 @@ class HttpClient:
         request: urllib.request.Request,
         timeout: float,
         max_bytes: int | None,
-        *,
-        prefix: bool = False,
     ) -> HttpResponse:
         opener = urllib.request.build_opener(_CredentialRedirectHandler(self))
         stream: Any
-        try:
-            stream = opener.open(request, timeout=timeout)
-        except urllib.error.HTTPError as error:
-            if error.code not in self.returned_http_statuses:
-                raise
-            stream = error
+        stream = opener.open(request, timeout=timeout)
         with stream:
-            if prefix:
-                assert max_bytes is not None
-                body = stream.read(max_bytes)
-            else:
-                body = (
-                    stream.read() if max_bytes is None else stream.read(max_bytes + 1)
-                )
-            if not prefix and max_bytes is not None and len(body) > max_bytes:
+            body = stream.read() if max_bytes is None else stream.read(max_bytes + 1)
+            if max_bytes is not None and len(body) > max_bytes:
                 raise HttpError(
                     f"response from {redact_url(stream.url)} exceeds {max_bytes} bytes"
                 )

@@ -1,23 +1,16 @@
 from __future__ import annotations
 
+import hashlib
 import json
-import re
-from copy import deepcopy
 from pathlib import Path
 
-import pytest
-
 from omnipack.composition_policy import parse_composition_policy
-from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.render import render
-from omnipack.resolution.github import resolve_github
-from omnipack.resolution.types import ResolutionError
 from omnipack.sources import IngestionReport, bboi, codm, rjny
 from omnipack.sources.extras import fetch as fetch_extras
 from tests.test_composition_baseline import CapturedPackageResolver
-from tests.test_resolution_github import GitHubTransport
 from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
@@ -122,28 +115,6 @@ def candidates(refresh: int):
     return [*higher, *extras, *generated]
 
 
-def test_ghostship_captured_release_selects_configured_outer_and_member():
-    evidence = read(FIXTURE)["ghostship"]
-    app = next(
-        item
-        for item in read(ROOT / "config/extras.json")
-        if item["id"] == "dev.net64.ghostship"
-    )
-    [release] = read(SNAPSHOTS / "ghostship-releases.json")
-    api = "https://api.github.com/repos/HarbourMasters/Ghostship"
-    transport = GitHubTransport({api + "/releases?per_page=100": [release]})
-    result = resolve_github(
-        {**app, "additionalSettings": app["additionalSettings"]},
-        HttpClient(HttpConfig({}), retries=0, transport=transport),
-    )
-    assert [candidate.name for candidate in result.candidates] == [evidence["asset"]]
-    selected = result.candidates[0]
-    assert selected.url == evidence["asset_url"]
-    assert re.fullmatch(
-        app["additionalSettings"]["zippedApkFilterRegEx"], evidence["member"]
-    )
-
-
 def test_full_reconciliation_survives_repeated_catalog_refresh():
     policy = parse_composition_policy(read(ROOT / "config/composition.json"))
     deny = read(ROOT / "config/deny.json")
@@ -186,10 +157,21 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
                     )
                     == "extras"
                 )
-                settings = metroid[0].data["additionalSettings"]
+                [rendered_metroid] = json.loads(render([metroid[0]], {}))["apps"]
+                settings = json.loads(rendered_metroid["additionalSettings"])
                 assert settings["versionDetection"] is False
                 assert settings["trackOnly"] is False
                 assert settings["autoApkFilterByArch"] is False
+                assert (
+                    settings["apkFilterRegEx"]
+                    == r"^MetroidArch-v[0-9]+(?:\.[0-9]+)+\.apk$"
+                )
+                assert settings["fallbackToOlderReleases"] is False
+                assert settings["includePrereleases"] is False
+                assert settings["includeZips"] is False
+                assert settings["releaseTitleAsVersion"] is False
+                assert settings["releaseDateAsVersion"] is False
+                assert settings["versionExtractionRegEx"] == ""
             required = expected - (
                 {"org.openmw.ds", "dev.twilitrealm.dusk"}
                 if variant is Variant.SINGLE
@@ -233,88 +215,12 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             assert settings["exemptFromBackgroundUpdates"] is False
             assert settings["skipUpdateNotifications"] is False
 
-
-@pytest.mark.parametrize("variant", list(Variant))
-def test_ctr_variants_preserve_complete_captured_source_versions(variant: Variant):
-    result = compose(
-        candidates(0),
-        read(ROOT / "config/deny.json"),
-        read(ROOT / "config/overlay.json"),
-        read(ROOT / "config/overlay.dual.json"),
-        policy=parse_composition_policy(read(ROOT / "config/composition.json")),
-    )
-    app = next(item for item in result.apps[variant] if item.family == "app:ctr")
-    evidence = read(CTR_EVIDENCE)["variants"][variant.value]
-    api = app.url.replace("https://github.com/", "https://api.github.com/repos/")
-    release = evidence["release"]
-    transport = GitHubTransport(
-        {
-            api + "/releases?per_page=100": [release],
-            api + "/releases/latest": release,
-        }
-    )
-
-    resolved = resolve_github(
-        app.data, HttpClient(HttpConfig({}), retries=0, transport=transport)
-    )
-
-    assert resolved.effective_version == evidence["source_version"]
-    assert resolved.effective_version != evidence["manifest"]["versionName"]
-    assert [candidate.url for candidate in resolved.candidates] == [
-        release["assets"][0]["browser_download_url"]
-    ]
-
-
-@pytest.mark.parametrize("release_index", [0, 1])
-def test_metroidarch_captured_releases_track_tags_and_only_matching_apks(release_index):
-    evidence = read(ROOT / "tests/fixtures/curation/metroidarch.json")
-    app = next(
-        item
-        for item in read(ROOT / "config/extras.json")
-        if item["id"] == evidence["package"]
-    )
-    releases = deepcopy(evidence["releases"][release_index:])
-    selected = releases[0]
-    expected_asset = selected["assets"][0]
-    for name in ("RetroArch.apk", "MetroidArch-v1.0.1.zip", "MetroidArch-debug.apk"):
-        selected["assets"].append({**expected_asset, "name": name})
-    prerelease = deepcopy(selected)
-    prerelease.update(
-        tag_name="v99.0.0", prerelease=True, published_at="2099-01-01T00:00:00Z"
-    )
-    prerelease["assets"] = [{**expected_asset, "name": "MetroidArch-v99.0.0.apk"}]
-    transport = GitHubTransport(
-        {
-            "https://api.github.com/repos/Raekwon1603/RetroArch/releases?per_page=100": [
-                prerelease,
-                *releases,
-            ]
-        }
-    )
-    result = resolve_github(
-        app, HttpClient(HttpConfig({}), retries=0, transport=transport)
-    )
-    assert result.effective_version == selected["tag_name"]
-    assert result.effective_version != evidence["version_name"]
-    assert [(item.name, item.url) for item in result.candidates] == [
-        (expected_asset["name"], expected_asset["browser_download_url"])
-    ]
-
-
-def test_metroidarch_latest_asset_mismatch_does_not_select_older_release():
-    evidence = read(ROOT / "tests/fixtures/curation/metroidarch.json")
-    app = next(
-        item
-        for item in read(ROOT / "config/extras.json")
-        if item["id"] == evidence["package"]
-    )
-    releases = deepcopy(evidence["releases"])
-    releases[0]["assets"][0]["name"] = "RetroArch.apk"
-    transport = GitHubTransport(
-        {
-            "https://api.github.com/repos/Raekwon1603/RetroArch/releases?per_page=100": releases
-        }
-    )
-    with pytest.raises(ResolutionError) as raised:
-        resolve_github(app, HttpClient(HttpConfig({}), retries=0, transport=transport))
-    assert raised.value.code == "github-no-release"
+        # These digests freeze the complete rendered fixture composition.
+        if refresh == 0:
+            expected_hashes = {
+                Variant.SINGLE: "ce4eeadf096a09996811d359c7cce555bab6c94315e129a81dc84b9019e50c69",
+                Variant.DUAL: "8b821d8478896f8ea54296bb0187146d45b7bac136b46144e2c2a4f4f857696f",
+            }
+            for variant in Variant:
+                rendered = render(result.apps[variant], {}).encode()
+                assert hashlib.sha256(rendered).hexdigest() == expected_hashes[variant]

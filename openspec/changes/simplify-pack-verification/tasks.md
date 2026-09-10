@@ -6,10 +6,10 @@
 
 ## 2. Publication consumers
 
-- [ ] 2.1 Replace the post-build live command and evidence checks with fresh structural verification in each selected revision's runtime; verify obsolete, missing, incomplete, stale and changed-byte candidates are rejected and valid candidates retain publication/no-op behavior.
-- [ ] 2.2 Preserve the tracker bootstrap prerequisite with existing release discovery before main publication, separate from pack verification; verify missing or unowned seed prevents main/release writes, offline verification does not query releases, and synchronization retains its ownership/digest checks.
-- [ ] 2.3 Update summaries and fallback reporting to distinguish pre-build checks from candidate structural evidence; verify handled failures, uncertainty, cleanup, issue and artifact outcomes remain accurate without retired live fields.
-- [ ] 2.4 Verify selected-build structural failure blocks publication without reselection, while unavailable app release metadata after successful ingestion and building neither blocks an otherwise eligible candidate nor selects a standard alternative; retain coverage for source-fetch failure, deliberate ordinary fallback, pin constraints and configured release fallback within a selected project.
+- [x] 2.1 Replace the post-build live command and evidence checks with fresh structural verification in each selected revision's runtime; verify obsolete, missing, incomplete, stale and changed-byte candidates are rejected and valid candidates retain publication/no-op behavior.
+- [x] 2.2 Preserve the tracker bootstrap prerequisite with existing release discovery before main publication, separate from pack verification; verify missing or unowned seed prevents main/release writes, offline verification does not query releases, and synchronization retains its ownership/digest checks.
+- [x] 2.3 Update summaries and fallback reporting to distinguish pre-build checks from candidate structural evidence; verify handled failures, uncertainty, cleanup, issue and artifact outcomes remain accurate without retired live fields.
+- [x] 2.4 Verify selected-build structural failure blocks publication without reselection, while unavailable app release metadata after successful ingestion and building neither blocks an otherwise eligible candidate nor selects a standard alternative; retain coverage for source-fetch failure, deliberate ordinary fallback, pin constraints and configured release fallback within a selected project.
 
 ## 3. Remove compatibility implementation and preserve curation
 
