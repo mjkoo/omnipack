@@ -6,15 +6,20 @@ from pathlib import Path
 
 import pytest
 
+from omnipack.catalog import generate_catalog
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.live import VersionClass, classify_version
+from omnipack.merge import compose
 from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.resolution.github import resolve_github
 from omnipack.resolution.types import ResolutionError
+from omnipack.sources import rjny
 from omnipack.sources.extras import fetch
 from tests.test_resolution_github import GitHubTransport
+from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "fixtures/curation"
@@ -33,6 +38,30 @@ NUMERIC_IDS = {"com.aure.banjorecomp", "com.sergiomanzur.sotnrecomp"}
 
 def read(path):
     return json.loads(path.read_text())
+
+
+def test_upstream_pack_tracker_stays_excluded_after_refresh():
+    source = read(ROOT / "config/sources.json")["rjny"]
+    url = f"https://raw.githubusercontent.com/{source['repo']}/{source['branch']}/{source['path']}"
+    records = read(ROOT / "tests/fixtures/rjny-applications.json")["apps"]
+    selected = [r for r in records if r["id"] in {"904332840", "aenu.aps3e"}]
+    assert len(selected) == 2
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": [], "pins": []}
+    )
+    exclusions = read(ROOT / "config/deny.json")
+    for refresh in range(2):
+        upstream = deepcopy(selected)
+        upstream[0]["name"] += f" refresh {refresh}"
+        apps = rjny.fetch(FakeHttp({url: json.dumps({"apps": upstream})}), source)
+        assert {a.id for a in apps} == {"904332840", "aenu.aps3e"}
+        result = compose(apps, exclusions, [], [], policy=policy)
+        packs = {v: render(result.apps[v], {}).encode() for v in Variant}
+        for pack in packs.values():
+            assert [a["id"] for a in json.loads(pack)["apps"]] == ["aenu.aps3e"]
+        catalog = generate_catalog(packs[Variant.SINGLE], packs[Variant.DUAL], policy)
+        assert b"aPS3e" in catalog
+        assert b"Obtainium-Emulation-Pack" not in catalog
 
 
 def curated():

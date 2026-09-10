@@ -2,7 +2,8 @@ name: Nightly publishing
 
 on:
   schedule:
-    - cron: "23 6 * * *"
+    - cron: "0 3 * * *"
+      timezone: "America/New_York"
   workflow_dispatch:
 
 permissions: {}

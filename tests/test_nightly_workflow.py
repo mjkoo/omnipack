@@ -90,7 +90,7 @@ def _result(status: str) -> PublicationResult:
 def test_workflow_has_guarded_serialized_publisher_and_pinned_actions() -> None:
     workflow = WORKFLOW.read_text()
 
-    assert 'cron: "23 6 * * *"' in workflow
+    assert 'cron: "0 3 * * *"\n      timezone: "America/New_York"' in workflow
     assert "workflow_dispatch:" in workflow
     assert "github.repository == 'mjkoo/omnipack'" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow

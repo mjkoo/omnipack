@@ -1,6 +1,7 @@
 # Nightly publishing
 
-The **Nightly publishing** workflow runs daily at **06:23 UTC** and offers
+The **Nightly publishing** workflow is scheduled daily at **3:00 AM Eastern**
+(`America/New_York`), following daylight saving time, and offers
 manual dispatch without inputs. Both paths run only in
 `mjkoo/omnipack` on `main`. Dispatches from another ref and
 fork copies skip the write-capable job. One shared publisher concurrency group

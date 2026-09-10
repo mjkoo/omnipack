@@ -1,8 +1,8 @@
 ## 1. Consumer documentation
 
-- [ ] 1.1 Reorder README with device-labeled raw downloads directly below the title and prominent numbered installation steps; verify instructions against supported Obtainium UI/source and inspect rendered Markdown, including the distinction between import and installation.
-- [ ] 1.2 Convert credits into bullets preserving all source links; move development/build/verification guidance to `docs/development.md`, add `docs/README.md`, and replace root development content with a brief Contributing link; verify relative links and that all moved guidance remains accessible.
-- [ ] 1.3 Document manual removal of the previously imported RJNY tracker and the investigated self-tracking follow-up in curation docs, updating project context as needed; verify claims match cited Obtainium source and do not imply automatic re-import or completed device validation.
+- [x] 1.1 Reorder README with device-labeled raw downloads directly below the title and prominent numbered installation steps; verify instructions against supported Obtainium UI/source and inspect rendered Markdown, including the distinction between import and installation.
+- [x] 1.2 Convert credits into bullets preserving all source links; move development/build/verification guidance to `docs/development.md`, add `docs/README.md`, and replace root development content with a brief Contributing link; verify relative links and that all moved guidance remains accessible.
+- [x] 1.3 Document manual removal of the previously imported RJNY tracker and the investigated self-tracking follow-up in curation docs, updating project context as needed; verify claims match cited Obtainium source and do not imply automatic re-import or completed device validation.
 
 ## 2. Schedule and curation
 
