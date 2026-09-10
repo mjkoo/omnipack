@@ -1,9 +1,11 @@
 # Pack verification
 
-Pack verification uses Obtainium v1.6.14 as its compatibility baseline. The
-behavioral references are the source files at that immutable tag:
+Pack verification retains Obtainium v1.6.14 for GitHub and HTML, and supports
+a bounded subset of the native GitLab adapter from v1.6.15. The behavioral
+references are the source files at those immutable tags:
 
 - [GitHub source](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/github.dart)
+- [GitLab source](https://github.com/ImranR98/Obtainium/blob/v1.6.15/lib/app_sources/gitlab.dart)
 - [HTML source](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/app_sources/html.dart)
 - [shared version handling](https://github.com/ImranR98/Obtainium/blob/v1.6.14/lib/providers/source_provider.dart)
 
@@ -90,7 +92,11 @@ knowing its semantics.
 | --- | --- | --- |
 | GitHub `releaseDateAsVersion` | Implemented | Requires a usable release date |
 | HTML `releaseDateAsVersion` | Inactive when false; live error when true | No usable release date; rejected before HTTP |
-| `trackOnly`, `versionExtractionRegEx`, `matchGroupToUse`, `versionDetection`, `apkFilterRegEx`, `invertAPKFilter` | Implemented | Applied during version and candidate selection |
+| `versionExtractionRegEx`, `matchGroupToUse`, `apkFilterRegEx` | Implemented | Applied during version and candidate selection |
+| GitHub/HTML `trackOnly`, `versionDetection`, `invertAPKFilter` | Implemented | Applied within each source's supported selection behavior |
+| GitLab `fallbackToOlderReleases` | Implemented | Scan for a matching APK in API order, or fail on the first release when disabled |
+| GitLab `trackOnly`, `releaseDateAsVersion`, `invertAPKFilter` | Inactive unsupported or live error | Only false is accepted |
+| GitLab `versionDetection` | Inactive unsupported or live error | Only true is accepted within the supported release-tag boundary |
 | GitHub release eligibility, title and notes filters, older-release fallback, `date` or `none` sorting, asset-date selection, and release-title versions | Implemented | Applied to the first 100 list records and any supplemental latest record |
 | GitHub `verifyLatestTag` | Implemented | Fetch latest metadata and prioritize its exact identity after configured sorting |
 | HTML intermediate links, link and text filters, outside-anchor matching, sorting controls, whole-page extraction, and non-secret request headers | Implemented | Applied to each configured page in order |
@@ -117,6 +123,21 @@ mode proves that the configured APK member exists. The same release ordering,
 filters, date handling, and fallback rules apply to APK and enabled ZIP assets.
 Official Ghostship uses this path; its captured member inspection is separate
 [curation evidence](source-reconciliation.md), not a runtime verifier guarantee.
+
+Native GitLab support covers explicit installable public `gitlab.com` projects,
+including case-sensitive subgroup paths with at most 21 components. Resolution
+looks up the encoded project path, then inspects at most 100 releases in API
+order. It combines named asset links and APK upload links in release descriptions;
+relative uploads use the numeric project route. Versions come from release tags,
+with optional extraction. Aurora's filename filter excludes hw and preload APKs.
+Malformed metadata, failed requests and missing qualifying APKs remain failures.
+Unsupported active settings fail before HTTP; this is not full GitLab adapter parity.
+
+Public GitLab resolution needs no token and does not relax the GitHub credential
+requirement. Shared HTTP bounds, exact-host credentials and optional bounded probes
+apply to GitLab too. GitHub credentials are never forwarded to GitLab. Shared
+metadata and probe requests retain separate results for each variant; GitLab
+source settings and verifier identity participate in evidence invalidation.
 
 GitHub selection inspects at most the first 100 release-list records. With
 `verifyLatestTag` true, it first fetches `/releases/latest`, retaining the list

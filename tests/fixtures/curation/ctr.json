@@ -1,0 +1,63 @@
+{
+  "observed_at": "2026-09-10",
+  "variants": {
+    "single": {
+      "source": "https://github.com/Simon358/ctr-native-android",
+      "original_id": "com.simon358.ctrnative",
+      "effective_id": "com.ctrnative",
+      "source_version": "Android-Build4",
+      "release": {
+        "tag_name": "Android-Build4",
+        "name": "CTR-native-android (26/07/2026)",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-07-26T15:23:06Z",
+        "html_url": "https://github.com/Simon358/ctr-native-android/releases/tag/Android-Build4",
+        "assets": [
+          {
+            "name": "CTR-native-android.26.07.2026.apk",
+            "size": 6912189,
+            "created_at": "2026-07-26T15:22:18Z",
+            "updated_at": "2026-07-26T15:22:32Z",
+            "browser_download_url": "https://github.com/Simon358/ctr-native-android/releases/download/Android-Build4/CTR-native-android.26.07.2026.apk"
+          }
+        ]
+      },
+      "manifest": {
+        "package": "com.ctrnative",
+        "versionCode": 1,
+        "versionName": "1.0",
+        "sha256": "a14cb6fc5d39bedeff2c1c5479a50aeba6ade022428d5ac9196dcd50cc79ca38"
+      }
+    },
+    "dual": {
+      "source": "https://github.com/igawa6/ctr-native-android",
+      "original_id": "com.ctrnative",
+      "effective_id": "com.ctrnative",
+      "source_version": "v0.1.0",
+      "release": {
+        "tag_name": "v0.1.0",
+        "name": "CTR-DS 0.1.0",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-30T16:56:41Z",
+        "html_url": "https://github.com/igawa6/ctr-native-android/releases/tag/v0.1.0",
+        "assets": [
+          {
+            "name": "ctrds-0.1.0-release.apk",
+            "size": 8003024,
+            "created_at": "2026-08-30T16:56:29Z",
+            "updated_at": "2026-08-30T16:56:37Z",
+            "browser_download_url": "https://github.com/igawa6/ctr-native-android/releases/download/v0.1.0/ctrds-0.1.0-release.apk"
+          }
+        ]
+      },
+      "manifest": {
+        "package": "com.ctrnative",
+        "versionCode": 1,
+        "versionName": "0.1.0",
+        "sha256": "e8ba77a2f0ef0a3ac464c02d734b7d1bad856fa13098a7a97a13cabd80ebb7df"
+      }
+    }
+  }
+}

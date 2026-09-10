@@ -11,6 +11,7 @@ from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import compose
 from omnipack.model import Variant
+from omnipack.render import render
 from omnipack.resolution.github import resolve_github
 from omnipack.resolution.types import ResolutionError
 from omnipack.sources import IngestionReport, bboi, codm, rjny
@@ -22,6 +23,7 @@ from tests.test_sources import FakeHttp
 ROOT = Path(__file__).parents[1]
 FIXTURE = ROOT / "tests/fixtures/curation/reconciliation.json"
 OBSERVATIONS = ROOT / "tests/fixtures/reconciliation/selected-observations.json"
+CTR_EVIDENCE = ROOT / "tests/fixtures/curation/ctr.json"
 SNAPSHOTS = ROOT / "tests/fixtures/reconciliation"
 
 
@@ -32,6 +34,7 @@ def read(path: Path):
 def test_reconciliation_evidence_is_real_and_configuration_is_complete():
     evidence = read(FIXTURE)
     observations = read(OBSERVATIONS)
+    ctr = read(CTR_EVIDENCE)
     document = read(ROOT / "config/composition.json")
     rules = document["candidates"]
 
@@ -40,6 +43,13 @@ def test_reconciliation_evidence_is_real_and_configuration_is_complete():
         for record in observations
         for item in record["observations"]
     }
+    expected.add(
+        (
+            ctr["variants"]["single"]["original_id"],
+            ctr["variants"]["single"]["effective_id"],
+            ctr["variants"]["single"]["source"],
+        )
+    )
     assert set(map(tuple, evidence["identity_corrections"])) == expected
     for original, effective, url in expected:
         matches = [
@@ -57,6 +67,14 @@ def test_reconciliation_evidence_is_real_and_configuration_is_complete():
     ghost = evidence["ghostship"]
     assert len(ghost["asset_sha256"]) == len(ghost["member_sha256"]) == 64
     assert ghost["package"] == "dev.net64.ghostship"
+    assert ctr["observed_at"] == evidence["observed_at"] == "2026-09-10"
+    assert set(ctr["variants"]) == {"single", "dual"}
+    for item in ctr["variants"].values():
+        [asset] = item["release"]["assets"]
+        assert item["manifest"]["package"] == item["effective_id"] == "com.ctrnative"
+        assert len(item["manifest"]["sha256"]) == 64
+        assert asset["browser_download_url"].startswith(item["source"] + "/releases/")
+        assert item["release"]["tag_name"] == item["source_version"]
 
 
 def candidates(refresh: int):
@@ -197,10 +215,54 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             (Variant.SINGLE, "bboi"),
             (Variant.DUAL, "codm2000"),
         }
-        dual_ctr = next(
-            app for app in result.apps[Variant.DUAL] if app.family == "app:ctr"
-        )
-        assert dual_ctr.data["additionalSettings"]["versionDetection"] is False
+        expected_ctr = read(CTR_EVIDENCE)["variants"]
+        for variant in Variant:
+            ctr_app = next(
+                app for app in result.apps[variant] if app.family == "app:ctr"
+            )
+            observation = expected_ctr[variant.value]
+            assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
+            assert ctr_app.original_id == observation["original_id"]
+            assert ctr_app.url == observation["source"]
+            [rendered_ctr] = json.loads(render([ctr_app], {}))["apps"]
+            settings = json.loads(rendered_ctr["additionalSettings"])
+            assert settings["versionDetection"] is False
+            assert settings["versionExtractionRegEx"] == ""
+            assert settings["releaseDateAsVersion"] is False
+            assert settings["trackOnly"] is False
+            assert settings["exemptFromBackgroundUpdates"] is False
+            assert settings["skipUpdateNotifications"] is False
+
+
+@pytest.mark.parametrize("variant", list(Variant))
+def test_ctr_variants_preserve_complete_captured_source_versions(variant: Variant):
+    result = compose(
+        candidates(0),
+        read(ROOT / "config/deny.json"),
+        read(ROOT / "config/overlay.json"),
+        read(ROOT / "config/overlay.dual.json"),
+        policy=parse_composition_policy(read(ROOT / "config/composition.json")),
+    )
+    app = next(item for item in result.apps[variant] if item.family == "app:ctr")
+    evidence = read(CTR_EVIDENCE)["variants"][variant.value]
+    api = app.url.replace("https://github.com/", "https://api.github.com/repos/")
+    release = evidence["release"]
+    transport = GitHubTransport(
+        {
+            api + "/releases?per_page=100": [release],
+            api + "/releases/latest": release,
+        }
+    )
+
+    resolved = resolve_github(
+        app.data, HttpClient(HttpConfig({}), retries=0, transport=transport)
+    )
+
+    assert resolved.effective_version == evidence["source_version"]
+    assert resolved.effective_version != evidence["manifest"]["versionName"]
+    assert [candidate.url for candidate in resolved.candidates] == [
+        release["assets"][0]["browser_download_url"]
+    ]
 
 
 @pytest.mark.parametrize("release_index", [0, 1])

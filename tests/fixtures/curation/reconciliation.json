@@ -15,7 +15,8 @@
     ["com.igawa6.dusklight", "dev.twilitrealm.dusk", "https://github.com/igawa6/dusklight"],
     ["com.igawa6.harvestmoon64", "io.github.hm64recomp", "https://github.com/igawa6/HarvestMoon64Recomp"],
     ["com.matteo842.crashbandicoot", "io.github.matteo842.crashlauncher.runtime", "https://github.com/Matteo842/CrashBandicoot-Launcher"],
-    ["com.joshdaniels.openmwds", "org.openmw.ds", "https://github.com/Josh-Daniels/OpenMW-DS"]
+    ["com.joshdaniels.openmwds", "org.openmw.ds", "https://github.com/Josh-Daniels/OpenMW-DS"],
+    ["com.simon358.ctrnative", "com.ctrnative", "https://github.com/Simon358/ctr-native-android"]
   ],
   "ghostship": {
     "release": "3.0.0",

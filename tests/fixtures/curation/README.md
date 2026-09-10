@@ -6,10 +6,18 @@ per repository, with each release's primary URL. `manifests.json` records
 range-retrieved AndroidManifest.xml package, versionName and versionCode for
 each selected asset, identified by its primary download URL.
 `baseline-apps.json` captures the affected entries from the pre-curation packs.
+`ctr.json` records two independent 2026-09-10 CTR release and APK observations.
+Each variant retains its repository, original and effective identity, full source
+tag, selected asset metadata, decoded manifest values, byte size and SHA-256.
+The APK identities were decoded from separately downloaded binaries, and each
+download byte-matched its corresponding prior capture. The hashes identify dated
+evidence and are not runtime pins or reproducible-build requirements.
 
-The configured Symphony, CTR, Shipwright and Ludashi identities disagree with
-the manifests: respectively `com.blacklabelhq.sotn`, `com.ctrnative`,
-`com.dishii.soh` and `com.winlator.vanilla`. These remain unresolved.
+The historical configured Symphony, Simon CTR, Shipwright and Ludashi identities
+disagree with the manifests: respectively `com.blacklabelhq.sotn`,
+`com.ctrnative`, `com.dishii.soh` and `com.winlator.vanilla`. The reconciliation
+fixtures cover the maintained identity corrections; Ludashi remains outside that
+scope.
 Ludashi's unchanged APK filter selects `bionic-vanilla.apk` from `v3.1.h`;
 the newer `v4.0` release uses different names and is skipped.
 

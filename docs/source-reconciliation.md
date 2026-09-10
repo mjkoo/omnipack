@@ -43,7 +43,9 @@ unknown-code or future publisher-compromise risk.
 - **CTR keeps its variant choices.** Single-screen uses Simon358; dual-screen uses
   igawa6. The installed Simon build and selected igawa6 build share package ID
   `com.ctrnative` but use different signing keys without a rotation lineage.
-  Switching that device to the dual choice requires a fresh installation.
+  Switching that device to the dual choice requires a fresh installation. Both
+  entries disable APK version detection and retain their complete source versions:
+  Simon `Android-Build4` and igawa6 `v0.1.0`.
 - **MetroidArch replaces the retired Super Metroid port in dual.** The successor
   provides a real second-screen companion interface and passes the accepted
   reputation/basic-vetting standard. Normal RetroArch remains in both packs.
@@ -105,6 +107,34 @@ reports. Package/family uniqueness is enforced after correction.
 | Harvest Moon 64 Recomp | `com.igawa6.harvestmoon64` | `io.github.hm64recomp` |
 | Crash Bandicoot | `com.matteo842.crashbandicoot` | `io.github.matteo842.crashlauncher.runtime` |
 | Elder Scrolls 3 Morrowind (OpenMW-DS) | `com.joshdaniels.openmwds` | `org.openmw.ds` |
+| Crash Team Racing (Simon single-screen) | `com.simon358.ctrnative` | `com.ctrnative` |
+
+## CTR release and manifest evidence
+
+The two CTR identities were checked from separate APKs on 2026-09-10 UTC. The
+Simon `Android-Build4` release, published 2026-07-26, selected
+`CTR-native-android.26.07.2026.apk` from
+<https://github.com/Simon358/ctr-native-android/releases/download/Android-Build4/CTR-native-android.26.07.2026.apk>.
+Its 6,912,189 bytes have SHA-256
+`a14cb6fc5d39bedeff2c1c5479a50aeba6ade022428d5ac9196dcd50cc79ca38`.
+The manifest declares package `com.ctrnative`, versionName `1.0`, and versionCode
+`1`. The downloaded release asset is byte-identical to the captured installed APK.
+
+The igawa6 `v0.1.0` release, published 2026-08-30, selected
+`ctrds-0.1.0-release.apk` from
+<https://github.com/igawa6/ctr-native-android/releases/download/v0.1.0/ctrds-0.1.0-release.apk>.
+Its 8,003,024 bytes have SHA-256
+`e8ba77a2f0ef0a3ac464c02d734b7d1bad856fa13098a7a97a13cabd80ebb7df`.
+Its independently decoded manifest also declares package `com.ctrnative`, with
+versionName `0.1.0` and versionCode `1`. The downloaded release is byte-identical
+to the separately captured igawa6 APK.
+
+These hashes record the inspected releases; they do not pin future releases.
+Metadata resolution does not substitute for APK inspection, and neither check
+establishes installation, update, save migration, or controller behavior on a
+device. Source-version tracking preserves the full tags while leaving update
+checks and notifications enabled. It cannot rule out a one-time update prompt
+after re-import or detect an asset replacement whose source tag stays unchanged.
 
 Ghostship is a separate replacement: the retired catalog ID
 `com.izzy2lost.ghostship` referred to installed package `com.ghostship.android`.
