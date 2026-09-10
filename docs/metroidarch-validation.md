@@ -48,6 +48,27 @@ successful signature observations agreed. Both v1.0.1 patched cores matched the
 committed release assets. All 16 configuration keys in the guide were checked
 against release source. These checks do not establish reproducible builds.
 
+## Implementation reconciliation
+
+A subsequent September 10, 2026 check rebuilt from the same captured catalogs
+and confirmed both output hashes above remained unchanged. Offline verification
+passed with no errors or warnings. The two CTR sources were independently checked
+from their APKs and are preserved alongside MetroidArch, including original
+catalog provenance and disabled APK version detection; see the dated
+[CTR evidence](source-reconciliation.md#ctr-release-and-manifest-evidence).
+
+A fresh MetroidArch metadata check again selected tag `v1.0.1` and
+`MetroidArch-v1.0.1.apk`; the bounded probe returned HTTP 206 and read 1,024 bytes,
+with no errors or warnings. Both captured MetroidArch APKs were rechecked against
+the committed release fixture for hashes, sizes, package/version and signature
+observations. Both bundled cores matched the release source assets, and all 16
+settings keys in the guide remained present in the release source.
+
+The ADB guide now requires discovery of the installed app's current UID, checks
+of file/sibling/parent metadata, preservation of UID, GID, mode and SELinux context,
+and confirmation that an in-app save persists after relaunch. These are setup
+instructions; no device configuration or permission repair was performed.
+
 ## Remaining acceptance
 
 No publication or device changes were performed. On-device acceptance still needs

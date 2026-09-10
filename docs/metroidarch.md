@@ -70,70 +70,113 @@ them away from their package-specific defaults.
 
 ## ADB method
 
-ADB can transfer and edit the same configuration file without root when the
-selected file is accessible. These instructions are source-backed, not an
-on-device validation record. They assume one connected owner-user device; with
-multiple devices, add `-s <serial>` to each `adb` command.
+Prefer the app's Directory settings when practical; saving there writes as the
+app. ADB can edit the same configuration when access and file metadata have been
+verified on the actual device. These instructions are source-backed, not an
+on-device validation record. Confirm the device and Android user first. The
+example paths assume owner user 0; with multiple devices, add `-s <serial>` to
+every `adb` command.
 
-1. Install and open MetroidArch once, without loading a game. Save its current
-   configuration and note the path shown by the app. Quit normally to flush it.
-2. Stop the app before editing so its running settings cannot overwrite the file:
+1. Open MetroidArch once without loading a game, save its current configuration,
+   and note the path shown by the app. Quit normally to flush it. Keep local
+   pre-test copies of normal RetroArch's relevant config, remaps and overrides
+   for the later no-change comparison.
+2. Stop MetroidArch before editing, then resolve the installed app's current UID:
 
    ```sh
    adb shell am force-stop com.metroidarch.app.aarch64
+   adb shell pm list packages -U com.metroidarch.app.aarch64
+   adb shell dumpsys package com.metroidarch.app.aarch64
    ```
 
-3. Locate the actual file. The preferred default is
+   Match the exact package and confirmed Android user. Repeat this discovery
+   after a reinstall; a previously recorded UID may belong to a different app.
+3. Locate the actual loaded config. The preferred default is
    `/storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files/retroarch.cfg`;
-   the fallback is `files/retroarch.cfg` inside the private application directory.
+   the fallback is `files/retroarch.cfg` in the private application directory.
    A launcher can supply a different `CONFIGFILE`, so verify the loaded path.
-   If the external file is accessible, back it up locally:
+   Record the file's numeric owner UID, group GID, permission mode and SELinux
+   context, plus those of its containing directory and an app-created sibling.
+   For an accessible external config, inspect the directory and its entries:
+
+   ```sh
+   adb shell ls -ldnZ /storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files
+   adb shell ls -lnZ /storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files
+   ```
+
+   Retain this metadata locally with the backup. Check it against the current
+   app UID and the app-created sibling rather than preserving an already broken
+   shell-owned file. An app-private file and an external app-data file can have
+   different groups, modes and labels. Prior external app-data repairs on an
+   AYN Thor used the app UID, group `ext_data_rw` (1078), and mode `660`; those
+   historical values are not defaults for this app or another device. Confirm
+   the actual expected metadata before any write.
+4. If the actual external file is accessible, back it up locally:
 
    ```sh
    adb pull /storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files/retroarch.cfg metroidarch.before.cfg
    ```
 
-   Keep that backup unchanged. Make an edited copy named `metroidarch.after.cfg`,
-   changing only the intended settings and ensuring each key occurs once.
-   Create the selected directories on the device before relaunching.
-4. For the verified external path, stage the edited file, then replace the config:
-
-   ```sh
-   adb push metroidarch.after.cfg /storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files/retroarch.cfg.new
-   adb shell mv /storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files/retroarch.cfg.new /storage/emulated/0/Android/data/com.metroidarch.app.aarch64/files/retroarch.cfg
-   ```
-
-   Stop if transfer fails; do not delete the original as a workaround. Pull the
-   result back and compare it with the edited copy before launching the app.
-5. If the **actual loaded file is private**, this debuggable release supports
-   Android's `run-as` mechanism on compatible devices. Check access first:
+   Check successful exit and valid backup contents. Keep the backup unchanged
+   and edit a separate `metroidarch.after.cfg`, replacing only intended settings
+   and ensuring each key occurs once. Create the selected directories with
+   access the app can use. Choose an app-owned or appropriately privileged write
+   route that preserves the verified UID, GID, mode and SELinux context. A blind
+   `adb push` to a temporary file followed by rename can replace the app's file
+   with a shell-owned file; a successful transfer or byte comparison does not
+   establish that the app can save. If no metadata-preserving route is available,
+   use the app's Directory settings and Save Current Configuration instead.
+5. If the **actual loaded file is private**, the inspected debuggable release
+   supports `run-as` on compatible devices. Check access before relying on it:
 
    ```sh
    adb shell run-as com.metroidarch.app.aarch64 pwd
+   adb shell run-as com.metroidarch.app.aarch64 ls -ldnZ files
+   adb shell run-as com.metroidarch.app.aarch64 ls -lnZ files
    adb exec-out run-as com.metroidarch.app.aarch64 cat files/retroarch.cfg > metroidarch.before.cfg
    ```
 
-   After editing a separate local copy, write as the app user, preserving ownership:
+   Check the backup and record file, sibling and parent metadata as above. Use
+   an app-user write route that preserves the existing file's verified metadata.
+   Writing a new temporary file as the app user alone does not guarantee the
+   original group, mode or SELinux context survives replacement. Inspect all
+   four fields after any write or rename. Creating a private config will not
+   supersede an existing preferred external config. Some devices disable
+   `run-as`, and future non-debuggable releases reject it; use the app menu when
+   this access is unavailable. Broad storage permission is not root access.
+6. Check every write's exit status, read the result back through the same access
+   route, and compare it with the edited local copy before relaunch. Verify the
+   resulting UID, GID, mode and SELinux context against the recorded expected
+   values, including the sibling and parent comparison. If metadata changed,
+   restore the verified ownership, permissions and context through an available
+   app-appropriate privileged route and check again. Keep any repair scoped to
+   the intended file; do not use broadly writable permissions or recursive
+   ownership changes. Stop on failure instead of deleting the original or
+   treating correct contents as sufficient. If the route cannot preserve or
+   restore metadata, use app-menu configuration.
+7. Relaunch MetroidArch, inspect Directory settings, and save a deliberate
+   configuration change through the app. Quit normally, stop it again, and read
+   back the actual config and metadata. Verify that the app persisted that
+   change; relaunch once more to confirm it is loaded. During game testing,
+   confirm actual save/state/remap/override destinations below the chosen
+   MetroidArch root. Compare normal RetroArch's relevant files with their
+   pre-test copies. Test save/relaunch and both screens before treating isolation
+   as validated.
 
-   ```sh
-   adb shell 'run-as com.metroidarch.app.aarch64 sh -c "cat > files/retroarch.cfg.new"' < metroidarch.after.cfg
-   adb shell run-as com.metroidarch.app.aarch64 mv files/retroarch.cfg.new files/retroarch.cfg
-   ```
+On an AYN Thor, failure of `su` or `run-as` does not establish that the
+manufacturer's privileged root-script facility is unavailable. Its menu executes
+each submitted line separately; any separately prepared, narrowly scoped repair
+needs a one-line launcher invoking `/system/bin/sh` on the script. That service
+may reach `/data/media/0` backing files when ordinary ADB cannot. Confirm the
+active file, current UID and expected metadata before considering that route;
+this guide supplies no device repair script. Remove temporary device scripts and
+logs after a repair has been verified.
 
-   Use this route instead of the external-path write only when the private file
-   is the active configuration. Creating a private file will not override an
-   existing preferred external config. Check every command's exit status and
-   round-trip the resulting file before launch. `run-as` can be disabled by a
-   device, and a future non-debuggable release will reject it. In that case use
-   the app's Directory settings; broad storage permission is not root access.
-6. Relaunch MetroidArch, inspect its Directory settings, and confirm that saves,
-   remaps and overrides are written below the chosen MetroidArch root. Quit and
-   re-read the config to check persistence. Compare normal RetroArch's relevant
-   configuration/remap files against their pre-test copies. Test save/relaunch
-   and both screens before treating isolation as validated.
-
-Use the same stopped-app procedure to restore the backup if needed. These steps
-edit paths; they do not migrate existing saves or tune controller mappings.
+Rollback uses the unchanged backup while the app is stopped, with the same
+content, ownership, group, mode, SELinux and post-relaunch saving checks. These
+steps edit paths; they do not migrate saves or tune controller mappings. No
+installation, configuration write, metadata repair or gameplay check is claimed
+as performed by this guide.
 
 ## First-run content and updater
 
