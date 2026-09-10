@@ -5,8 +5,8 @@
 
 ## 2. Build and verification integration
 
-- [ ] 2.1 Generate and gate the catalog in pack build and recoverably replace README with both exports; verify failure before publication, concurrent README edits, replacement failures, first-build rollback and temporary-file cleanup with injected failures.
-- [ ] 2.2 Extend standalone verification and report compatibility with README consistency and fingerprints; verify stale/missing/malformed catalogs fail without writes or live requests, concurrent mutations fail, handwritten edits permit fresh verification and historical evidence remains readable but stale.
+- [x] 2.1 Generate and gate the catalog in pack build and recoverably replace README with both exports; verify failure before publication, concurrent README edits, replacement failures, first-build rollback and temporary-file cleanup with injected failures.
+- [x] 2.2 Extend standalone verification and report compatibility with README consistency and fingerprints; verify stale/missing/malformed catalogs fail without writes or live requests, concurrent mutations fail, handwritten edits permit fresh verification and historical evidence remains readable but stale.
 
 ## 3. Publication and delivery
 
