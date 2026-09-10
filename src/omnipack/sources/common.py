@@ -136,7 +136,7 @@ def normalize_record(
     declared_type = record.get("overrideSource")
     kind = (
         derived_source_type(url)
-        if derive_type and declared_type is None
+        if derive_type and "overrideSource" not in record
         else source_type(declared_type, source=source, entry=str(label))
     )
     if kind is SourceType.GITLAB:

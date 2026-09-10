@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable, Mapping
+from http.client import IncompleteRead
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import quote, urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
 from scripts.nightly_release import RELEASE_PATH, ReleaseAsset, ReleaseError
+
+
+class AmbiguousMutationError(OSError):
+    """A write may have committed and requires owned-state readback."""
+
 
 MAX_RELEASE_BYTES = 1_000_000
 MAX_ASSET_BYTES = 10_000_000
@@ -168,23 +174,40 @@ class GitHubReleaseRemote:
             request = Request(url, data=data, headers=headers, method=method)
             try:
                 with self.trusted_opener(request, timeout=self.timeout) as response:
+                    status = response.getcode()
+                    if method != "GET" and status >= 500:
+                        raise AmbiguousMutationError(
+                            f"GitHub mutation returned status {status}"
+                        )
                     return (
-                        response.getcode(),
+                        status,
                         dict(response.headers),
                         _bounded_read(response, max_bytes),
                     )
             except HTTPError as error:
-                body = _bounded_read(error, max_bytes)
-                if (
-                    retry
-                    and error.code in {500, 502, 503, 504}
-                    and attempt + 1 < attempts
-                ):
-                    continue
-                return error.code, dict(error.headers or {}), body
-            except URLError as error:
+                with error:
+                    if method != "GET" and error.code >= 500:
+                        raise AmbiguousMutationError(
+                            f"GitHub mutation returned status {error.code}"
+                        ) from error
+                    # A definitive refusal remains definitive even if its error body is truncated.
+                    if method != "GET":
+                        return error.code, dict(error.headers or {}), b""
+                    body = _bounded_read(error, max_bytes)
+                    if (
+                        retry
+                        and error.code in {500, 502, 503, 504}
+                        and attempt + 1 < attempts
+                    ):
+                        continue
+                    return error.code, dict(error.headers or {}), body
+            except (URLError, IncompleteRead) as error:
                 if retry and attempt + 1 < attempts:
                     continue
+                if method != "GET":
+                    raise AmbiguousMutationError(
+                        "GitHub mutation response was lost"
+                    ) from error
                 raise OSError("GitHub release request failed") from error
         raise AssertionError("unreachable")
 
@@ -197,7 +220,7 @@ class GitHubReleaseRemote:
                         f"redirected asset download failed with status {response.getcode()}"
                     )
                 return _bounded_read(response, MAX_ASSET_BYTES)
-        except (HTTPError, URLError) as error:
+        except (HTTPError, URLError, IncompleteRead) as error:
             raise OSError("redirected asset download failed") from error
 
 

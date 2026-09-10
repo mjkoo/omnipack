@@ -52,21 +52,16 @@ def resolve_gitlab(app: Mapping[str, object], http: MetadataGetter) -> Resolutio
     selected: dict[str, Any] | None = None
     candidates: tuple[Candidate, ...] = ()
     for raw in releases:
-        if not isinstance(raw, dict):
-            if not fallback:
-                break
-            continue
-        version = raw.get("tag_name") or raw.get("name")
-        if isinstance(version, str) and version:
-            possible = _candidates(raw, project["id"], pattern)
-            if possible:
-                selected, candidates = raw, possible
-                break
+        _validate_release(raw)
+        possible = _candidates(raw, project["id"], pattern)
+        if possible:
+            selected, candidates = raw, possible
+            break
         if not fallback:
             break
     if selected is None:
         raise ResolutionError("gitlab-no-apk", "no release supplies a qualifying APK")
-    raw_version = selected.get("tag_name") or selected.get("name")
+    raw_version = selected["tag_name"]
     assert isinstance(raw_version, str)
     effective = raw_version
     origin = "tag"
@@ -138,6 +133,58 @@ def _request(http: MetadataGetter, url: str, endpoint: str) -> object:
 
 def _optional_regex(value: object):
     return compile_compatible_regex(value) if isinstance(value, str) and value else None
+
+
+def _validate_release(release: object) -> None:
+    if not isinstance(release, dict):
+        raise ResolutionError(
+            "gitlab-invalid-response", "GitLab release must be an object"
+        )
+    tag = release.get("tag_name")
+    if not isinstance(tag, str) or not tag.strip():
+        raise ResolutionError(
+            "gitlab-invalid-response", "GitLab release tag must be a nonempty string"
+        )
+    assets = release.get("assets")
+    if not isinstance(assets, dict) or not isinstance(assets.get("links"), list):
+        raise ResolutionError(
+            "gitlab-invalid-response", "GitLab release assets.links must be a list"
+        )
+    if (
+        "description" in release
+        and release["description"] is not None
+        and not isinstance(release["description"], str)
+    ):
+        raise ResolutionError(
+            "gitlab-invalid-response", "GitLab release description must be text or null"
+        )
+    for link in assets["links"]:
+        if not isinstance(link, dict):
+            raise ResolutionError(
+                "gitlab-invalid-response", "GitLab asset link must be an object"
+            )
+        url = link.get("direct_asset_url") or link.get("url")
+        name = link.get("name")
+        if (
+            not isinstance(name, str)
+            or not name.strip()
+            or not isinstance(url, str)
+            or not url.strip()
+        ):
+            raise ResolutionError(
+                "gitlab-invalid-response",
+                "GitLab asset link name and URL must be nonempty strings",
+            )
+        try:
+            parsed = urlsplit(url)
+            valid = parsed.scheme in {"http", "https"} and bool(parsed.hostname)
+        except ValueError:
+            valid = False
+        if not valid:
+            raise ResolutionError(
+                "gitlab-invalid-response",
+                "GitLab asset link URL must be absolute HTTP(S)",
+            )
 
 
 def _candidates(

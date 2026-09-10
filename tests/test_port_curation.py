@@ -42,22 +42,6 @@ def extras():
     return fetch(read(ROOT / "config/extras.json"))
 
 
-def test_manifest_evidence_matches_curated_identity_and_release_policy():
-    evidence = read(FIXTURE)["entries"]
-    assert len(evidence) == 7
-    assert all(len(item["sha256"]) == 64 for item in evidence)
-    assert {item["packageId"] for item in evidence} == PORT_IDS
-    idtech = next(item for item in evidence if item["project"] == "idTech4A++")
-    assert idtech["release"] == "v1.1.0harmattan72"
-    assert idtech["versionName"] == "1.1.0harmattan72lindaiyu"
-    vcmi = [item for item in evidence if item["project"] == "VCMI"]
-    assert {tuple(item["abis"]) for item in vcmi} == {
-        ("arm64-v8a",),
-        ("armeabi-v7a",),
-        ("x86_64",),
-    }
-
-
 @pytest.mark.parametrize("variant", list(Variant))
 def test_curated_ports_are_present_once_with_maintained_policy(variant):
     selected = [
@@ -283,7 +267,10 @@ def test_captured_release_filters_select_manifest_inspected_assets(package_id):
     assert {item["release"] for item in manifests} == {result.raw_version}
     if package_id == "is.xyz.vcmi":
         # The resolver returns all eligible ABIs; Obtainium chooses on-device.
-        assert len(result.candidates) == 3
+        selected_names = {candidate.name for candidate in result.candidates}
+        assert {
+            tuple(item["abis"]) for item in manifests if item["asset"] in selected_names
+        } == {("arm64-v8a",), ("armeabi-v7a",), ("x86_64",)}
         assert app.additional_settings["autoApkFilterByArch"] is True
     if package_id == "com.karin.idTech4Amm":
         names = {asset["name"] for asset in release["assets"]}

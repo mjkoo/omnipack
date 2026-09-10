@@ -555,17 +555,29 @@ def test_state_parser_rejects_unknown_invalid_duplicate_and_trailing_state(
 
 
 @pytest.mark.parametrize(
-    "assets",
+    "assets, message",
     [
-        [None],
-        [{}],
-        [{"name": "single-screen.json"}, {"name": "single-screen.json"}],
+        ([None], "malformed"),
+        ([{}], "malformed"),
+        ([{"name": "single-screen.json"}], "malformed"),
+        (
+            [
+                {
+                    "id": i,
+                    "name": "single-screen.json",
+                    "url": f"https://api.github.com/assets/{i}",
+                }
+                for i in (1, 2)
+            ],
+            "duplicate release asset: single-screen.json",
+        ),
     ],
 )
 def test_malformed_and_duplicate_asset_metadata_is_a_conflict(
     assets: list[object],
+    message: str,
 ) -> None:
-    with pytest.raises(BootstrapConflict):
+    with pytest.raises(BootstrapConflict, match=message):
         bootstrap_release(ControlledApi([response(200, release(assets=assets))]))
 
 
@@ -597,3 +609,121 @@ def test_explicit_cli_rejects_noncanonical_repository_before_api(
     )
 
     assert scripts.nightly.main(["bootstrap-release"]) == 1
+
+
+@pytest.mark.parametrize("denied_upload", [False, True])
+def test_unreadable_unchanged_asset_never_authorizes_replacement(denied_upload):
+    from urllib.error import URLError
+
+    document = completed_release(b"single", b"dual")
+    requests = []
+
+    def opener(request, *, timeout):
+        method = request.get_method()
+        requests.append(method)
+        if method == "GET" and request.full_url.endswith(RELEASE_PATH):
+            return Opened(200, json.dumps(document).encode())
+        if method == "GET":
+            raise URLError("download interrupted")
+        if method == "DELETE":
+            document["assets"] = []
+            return Opened(204, b"")
+        return Opened(403 if denied_upload else 201, b"{}")
+
+    remote = GitHubReleaseRemote("secret", retries=2, trusted_opener=opener)
+    before = json.dumps(document)
+    with pytest.raises(SyncFailure, match="download"):
+        synchronize_release(remote, b"single", b"dual", "b" * 40)
+    assert json.dumps(document) == before
+    assert set(requests) == {"GET"}
+    assert len(requests) == 5
+
+
+@pytest.mark.parametrize("failure", ["502", "truncated", "403"])
+@pytest.mark.parametrize("corrupt_readback", [False, True])
+def test_transport_promotion_failure_reconciles_state_and_both_bytes(
+    failure, corrupt_readback
+):
+    from email.message import Message
+    from http.client import IncompleteRead
+    from io import BytesIO
+    from urllib.error import HTTPError
+    from urllib.parse import parse_qs, urlsplit
+
+    server = ControlledReleaseRemote(
+        completed_release(b"old", b"dual"),
+        {"single-screen.json": b"old", "dual-screen.json": b"dual"},
+    )
+    requests = []
+    promoted = False
+
+    class Truncated(Opened):
+        def read(self, size=-1):
+            raise IncompleteRead(b'{"id":', 20)
+
+    def opener(request, *, timeout):
+        nonlocal promoted
+        method = request.get_method()
+        path = urlsplit(request.full_url).path
+        requests.append((method, path))
+        if method == "GET" and path.endswith("/tags/continuous"):
+            return Opened(200, json.dumps(server.document).encode())
+        if method == "GET":
+            asset = next(
+                a
+                for a in server.document["assets"]
+                if a["id"] == int(path.rsplit("/", 1)[1])
+            )
+            content = server.blobs[asset["name"]]
+            if promoted and corrupt_readback and asset["name"] == "dual-screen.json":
+                content = b"corrupt"
+            return Opened(200, content)
+        if method == "PATCH":
+            payload = json.loads(request.data)
+            final = payload["name"] == "omnipack revision 4"
+            if not final or failure != "403":
+                server.document.update(payload)
+            if final:
+                promoted = failure != "403"
+                if failure == "truncated":
+                    return Truncated(200, b"")
+                raise HTTPError(
+                    request.full_url,
+                    int(failure),
+                    "failure",
+                    Message(),
+                    BytesIO(b"error"),
+                )
+            return Opened(200, b"{}")
+        if method == "DELETE":
+            asset = next(
+                a
+                for a in server.document["assets"]
+                if a["id"] == int(path.rsplit("/", 1)[1])
+            )
+            server.delete_asset(ReleaseAsset(asset["id"], asset["name"], asset["url"]))
+            return Opened(204, b"")
+        assert method == "POST"
+        name = parse_qs(urlsplit(request.full_url).query)["name"][0]
+        server.upload_asset(123, name, request.data)
+        return Opened(201, b"{}")
+
+    remote = GitHubReleaseRemote("secret", retries=2, trusted_opener=opener)
+    if failure == "403" or corrupt_readback:
+        with pytest.raises(SyncFailure, match="403" if failure == "403" else "digest"):
+            synchronize_release(remote, b"new", b"dual", "b" * 40)
+    else:
+        assert synchronize_release(remote, b"new", b"dual", "b" * 40) == SyncResult(
+            4, True, False
+        )
+        assert parse_state(server.document["body"]).completed.revision == 4
+    assert sum(method == "PATCH" for method, _ in requests) == 2
+    assert len(requests) <= 20
+    assert sum(method == "DELETE" for method, _ in requests) == 1
+    assert sum(method == "POST" for method, _ in requests) == 1
+    if failure != "403":
+        if corrupt_readback:
+            assert requests[-1] == ("GET", RELEASE_PATH)
+        else:
+            assert requests[-2][1].endswith("/assets/10")
+            assert requests[-1][1].endswith("/assets/2")

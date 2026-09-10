@@ -781,3 +781,17 @@ def test_codm_skips_github_site_routes_in_project_table() -> None:
     assert [item["url"] for item in report.skipped] == [
         "https://github.com/settings/profile"
     ]
+
+
+def test_explicit_null_extra_source_is_not_inferred():
+    with pytest.raises(SourceError, match="Example.*None"):
+        extras.fetch(
+            [
+                {
+                    "id": "com.example.app",
+                    "name": "Example",
+                    "url": "https://github.com/a/b",
+                    "overrideSource": None,
+                }
+            ]
+        )

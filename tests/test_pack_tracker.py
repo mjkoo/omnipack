@@ -35,10 +35,11 @@ def _release(revision: int, *, title: str | None = None) -> dict[str, object]:
     }
 
 
-def _resolve(releases: list[dict[str, object]]):
-    tracker = _tracker()
-    app = deepcopy(tracker.raw)
-    app.update(url=tracker.url, additionalSettings=tracker.additional_settings)
+def _resolve(releases: list[dict[str, object]], app: dict[str, object] | None = None):
+    if app is None:
+        tracker = _tracker()
+        app = deepcopy(tracker.raw)
+        app.update(url=tracker.url, additionalSettings=tracker.additional_settings)
     url = "https://api.github.com/repos/mjkoo/omnipack/releases?per_page=100"
     return resolve_github(
         app,
@@ -106,8 +107,28 @@ def test_tracker_rejects_unrelated_release_titles() -> None:
 
 
 def test_observed_revision_is_not_rendered_state() -> None:
-    before = {variant: _render_tracker(variant) for variant in Variant}
-    assert _resolve([_release(1)]).effective_version == "1"
-    assert _resolve([_release(2)]).effective_version == "2"
-    after = {variant: _render_tracker(variant) for variant in Variant}
+    tracker = _tracker()
+    data = dict(tracker.raw)
+    data.update(
+        id=tracker.id,
+        url=tracker.url,
+        name=tracker.name,
+        categories=list(tracker.categories),
+        overrideSource=tracker.source_type.value,
+        additionalSettings=tracker.additional_settings,
+    )
+    original = deepcopy(data)
+    records = {
+        variant: ComposedApp(variant, tracker.provenance, data) for variant in Variant
+    }
+    before = {variant: render([record], {}) for variant, record in records.items()}
+    assert _resolve([_release(1)], data).effective_version == "1"
+    assert _resolve([_release(2)], data).effective_version == "2"
+    after = {variant: render([record], {}) for variant, record in records.items()}
+    assert data == original
+    assert data["additionalSettings"] is tracker.additional_settings
     assert before == after
+    for document in after.values():
+        [entry] = json.loads(document)["apps"]
+        assert "installedVersion" not in entry
+        assert "latestVersion" not in entry

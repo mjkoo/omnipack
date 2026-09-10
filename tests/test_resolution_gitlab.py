@@ -183,3 +183,37 @@ def test_gitlab_project_depth_boundary(segments: int) -> None:
     else:
         assert resolve_gitlab(value, http).raw_version == "4.8.4"
         assert [url for url, _ in http.calls] == [project, releases]
+
+
+@pytest.mark.parametrize("fallback", [False, True])
+@pytest.mark.parametrize(
+    "malformed",
+    [
+        None,
+        {},
+        {"assets": None},
+        {"assets": {"links": None}},
+        {"assets": {"links": [None]}},
+        {"assets": {"links": [{"name": "bad.apk", "url": 42}]}},
+        {"description": 42},
+        {"tag_name": None},
+        {"tag_name": ""},
+        {"tag_name": 42},
+    ],
+)
+def test_malformed_inspected_release_never_falls_back(malformed, fallback):
+    project_url, releases_url = urls()
+    first = None if malformed is None else {**release(), **malformed}
+    if malformed == {}:
+        first = {
+            "name": "presentation",
+            "description": "[x](/uploads/h/AuroraStore-4.8.4.apk)",
+            "assets": {"links": []},
+        }
+    older = release("4.8.3", "[x](/uploads/h/AuroraStore-4.8.3.apk)")
+    with pytest.raises(ResolutionError) as caught:
+        resolve_gitlab(
+            app(settings={"fallbackToOlderReleases": fallback}),
+            FakeHttp({project_url: {"id": 9}, releases_url: [first, older]}),
+        )
+    assert caught.value.code == "gitlab-invalid-response"

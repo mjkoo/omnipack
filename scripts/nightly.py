@@ -265,14 +265,16 @@ def _publisher(source: Path, token: str) -> Publisher:
         RefreshOrchestrator,
         SubprocessBoundary,
     )
-    from scripts.nightly_release_sync import synchronize_release
+    from scripts.nightly_release_sync import SyncResult, synchronize_release
     from scripts.nightly_release_transport import GitHubReleaseRemote
 
     class ReleaseSynchronizer:
         def __init__(self, remote: GitHubReleaseRemote) -> None:
             self.remote = remote
 
-        def synchronize(self, single: bytes, dual: bytes, source_commit: str) -> object:
+        def synchronize(
+            self, single: bytes, dual: bytes, source_commit: str
+        ) -> SyncResult:
             return synchronize_release(self.remote, single, dual, source_commit)
 
     return PublicationCoordinator(

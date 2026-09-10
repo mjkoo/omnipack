@@ -1,7 +1,7 @@
 # Ports and tracker integration validation
 
 Validation date: 2026-09-10 UTC. The checks ran on macOS aarch64 with Python
-3.14.7, uv 0.12.5, verifier 0.5.0, report schema 1, and Obtainium compatibility
+3.14.7, uv 0.12.5, verifier 0.6.0, report schema 1, and Obtainium compatibility
 baselines 1.6.14 for GitHub/HTML and 1.6.15 for the bounded GitLab adapter.
 
 This record covers generated output, offline verification, and controlled
@@ -48,7 +48,7 @@ catalog replacement path.
 | Command | Result |
 | --- | --- |
 | `UV_CACHE_DIR=/private/tmp/omnipack-uv-cache uv run --no-sync pack verify` | Complete offline success with zero errors and warnings |
-| Focused offline, tracker, release, nightly Git, reporting, and workflow tests | 178 passed in 19.72 seconds |
+| Focused GitLab, ingestion, tracker, curation, and release tests | 161 passed in 1.68 seconds |
 | `UV_CACHE_DIR=/private/tmp/omnipack-uv-cache just check-all` | Passed |
 | `git diff --check` | Passed |
 
@@ -56,13 +56,14 @@ The focused command was:
 
 ```sh
 UV_CACHE_DIR=/private/tmp/omnipack-uv-cache uv run --no-sync pytest -q \
-  tests/test_offline.py tests/test_pack_tracker.py \
-  tests/test_nightly_release.py tests/test_nightly_git.py \
-  tests/test_nightly_reporting.py tests/test_nightly_workflow.py
+  tests/test_resolution_gitlab.py tests/test_sources.py \
+  tests/test_nightly_release.py tests/test_pack_tracker.py \
+  tests/test_port_curation.py
 ```
 
-The full check ran lock, format, lint, type, dependency audit, Python package
-build, all 927 tests with 92% package coverage, offline pack verification,
+The original integration check passed 927 tests. After the review fixes, the
+final full check ran lock, format, lint, type, dependency audit, Python package
+build, all 956 tests with 92% package coverage, offline pack verification,
 actionlint, zizmor, Nix formatting, and native flake checks. All passed. The
 audit found no known vulnerabilities or adverse statuses in ten packages.
 Zizmor ran in its default offline mode with one suppressed finding and no
@@ -70,8 +71,8 @@ reported findings. Nix reported the dirty working tree and omitted incompatible
 non-host systems.
 
 The final offline report ran from
-`2026-09-10T07:54:04.352977+00:00` to
-`2026-09-10T07:54:04.385259+00:00`. It was complete, successful, and covered the
+`2026-09-10T08:09:37.128926+00:00` to
+`2026-09-10T08:09:37.159590+00:00`. It was complete, successful, and covered the
 full current pair, including tracker `809443320`; it did not omit the tracker to
 avoid its live dependency. Its input hashes matched both output hashes above and
 README hash `6a478bc60224656380f33b12b1cd44f3fe056f4e3f6160b86d7c9f65b8fd22d2`.

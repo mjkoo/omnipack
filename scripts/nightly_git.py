@@ -23,6 +23,7 @@ from scripts.nightly_publish import (
     _git_bytes,
     _git_paths,
 )
+from scripts.nightly_release_sync import SyncResult
 
 
 class RefreshBoundary(Protocol):
@@ -38,7 +39,9 @@ class RemoteBoundary(Protocol):
 
 
 class ReleaseBoundary(Protocol):
-    def synchronize(self, single: bytes, dual: bytes, source_commit: str) -> object: ...
+    def synchronize(
+        self, single: bytes, dual: bytes, source_commit: str
+    ) -> SyncResult: ...
 
 
 class GitProcessBoundary(Protocol):
@@ -221,8 +224,8 @@ class PublicationCoordinator:
         return replace(
             result,
             release_status="success",
-            release_revision=getattr(synchronized, "revision", None),
-            pending_revision=getattr(synchronized, "pending_revision", None),
+            release_revision=synchronized.revision,
+            pending_revision=synchronized.pending_revision,
             pack_snapshots=None,
         )
 

@@ -180,8 +180,10 @@ def _ensure_asset(
         try:
             if sha256(remote.download_asset(existing)).hexdigest() == digest:
                 return release, False
-        except OSError:
-            pass
+        except OSError as error:
+            raise ReleaseError(
+                f"{name} download failed; replacement is not authorized"
+            ) from error
         try:
             remote.delete_asset(existing)
         except OSError:
