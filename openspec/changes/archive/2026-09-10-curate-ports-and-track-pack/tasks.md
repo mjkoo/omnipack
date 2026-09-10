@@ -34,3 +34,11 @@
 - [x] 6.2 Rebuild both exports and catalog, run required offline checks and controlled publisher tests, and record an integration validation report identifying exact outputs and remaining operational checks; verify normal verification remains complete rather than omitting the tracker.
 - [x] 6.3 After explicit maintainer authorization, establish the real seed and run fresh live metadata verification of the complete pair; record release identity, verifier evidence and any blockers without claiming mocked bootstrap as real acceptance.
 - [ ] 6.4 Perform separately authorized publication and device acceptance on the relevant device: check both JSON downloads, initial import, unchanged checks, changed shared-revision notification, acknowledgement and re-import; record observed outcomes and leave unavailable acceptance checks explicitly incomplete.
+
+## Archive acceptance decision
+
+On September 10, 2026, the maintainer authorized spec synchronization and archival
+after implementation reconciliation, while deferring remaining operational and
+on-device acceptance until the branch has completely settled. Findings from that
+acceptance will be handled in follow-up work. This decision does not claim those
+checks passed; existing incomplete acceptance checkboxes remain unchecked.

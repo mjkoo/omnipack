@@ -172,9 +172,7 @@ creation attempt.
 
 The issue SHALL identify the failing stage, run URL, attempted base revision,
 publication outcome including uncertainty, and available diagnostics. Repeated
-failures SHALL update its body without adding repeated comments. Confirmed
-publication or a verified no-op SHALL update and close existing open owned
-issues with recovery evidence. Success SHALL NOT create a new issue.
+failures SHALL update its body without adding repeated comments. Confirmed main publication or a verified main no-op SHALL authorize issue recovery only after rolling-release synchronization succeeds. Release failures SHALL update the owned issue and preserve the confirmed main outcome without rollback. Successful combined publication SHALL update and close existing open owned issues with recovery evidence. Success SHALL NOT create a new issue.
 
 #### Scenario: First and recurring failure
 
@@ -190,7 +188,7 @@ issues with recovery evidence. Success SHALL NOT create a new issue.
 
 #### Scenario: Recovery without new output
 
-- **WHEN** a run produces a verified no-op and an owned failure issue is open
+- **WHEN** a run produces a verified main no-op, release synchronization succeeds and an owned failure issue is open
 - **THEN** the issue records recovery and closes
 
 #### Scenario: Issue update fails after publication
@@ -232,7 +230,7 @@ direct-push prerequisites without automatically changing repository settings.
 - **WHEN** removing a disposable checkout fails after a confirmed push
 - **THEN** the workflow fails with cleanup failure and confirmed publication
   separately visible in diagnostics
-- **AND** confirmed publication still authorizes issue recovery
+- **AND** confirmed publication authorizes issue recovery only when release synchronization is also confirmed
 - **AND** the published SHA and captured attempt reports remain available
 
 #### Scenario: Diagnostic upload fails
@@ -244,3 +242,17 @@ direct-push prerequisites without automatically changing repository settings.
 
 - **WHEN** upstream diagnostics contain shell syntax or credential values
 - **THEN** publication/reporting does not execute that text or expose credentials
+
+### Requirement: Nightly completion includes rolling release synchronization
+
+After confirmed main publication or a verified main no-op, the publisher SHALL synchronize the owned rolling release from that attempt's exact verified JSON pair. Existing main verification, allowlist, concurrency and retry policies SHALL remain intact. Summaries and diagnostic records SHALL distinguish main publication, release synchronization, pending release revision, issue maintenance and cleanup outcomes. Release failure SHALL fail the workflow without undoing a confirmed main push. Cleanup or diagnostic failures SHALL NOT erase confirmed main or release outcomes. Issue recovery after a confirmed main push, including cleanup failure, SHALL additionally require confirmed release synchronization.
+
+#### Scenario: Main push succeeds and release write fails
+
+- **WHEN** release synchronization fails after confirmed main publication
+- **THEN** the workflow fails with the main SHA preserved and release failure reported separately, and the owned issue remains open
+
+#### Scenario: Main outcome is uncertain
+
+- **WHEN** the publisher cannot establish whether its main push succeeded
+- **THEN** it records uncertainty and performs no release writes

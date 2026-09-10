@@ -77,3 +77,11 @@ ROM loading, second-screen behavior, controller setup, save/relaunch and Obtaini
 update tracking. Start with vanilla Super Metroid and bundled Snes9x; evaluate
 bsnes-hd/Redux separately. Do not treat the documented ADB procedure as an executed
 or device-verified setup.
+
+## Acceptance deferral
+
+On September 10, 2026, the maintainer authorized archival of the implemented
+changes while deferring the remaining operational and on-device acceptance
+until the branch has completely settled. The unperformed checks listed above
+remain follow-up work; any findings will be addressed in that follow-up.
+Archival does not turn the recorded implementation checks into device acceptance.

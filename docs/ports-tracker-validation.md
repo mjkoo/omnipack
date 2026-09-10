@@ -168,3 +168,11 @@ unchanged checks, a changed shared-revision notification, acknowledgement,
 download and manual re-import, app setup, and installed behavior all remain
 explicitly incomplete. Source metadata and APK manifest evidence do not satisfy
 these device checks.
+
+## Acceptance deferral
+
+On September 10, 2026, the maintainer authorized archival of the implemented
+changes while deferring the remaining operational and on-device acceptance
+until the branch has completely settled. The unperformed checks listed above
+remain follow-up work; any findings will be addressed in that follow-up.
+Archival does not turn the recorded implementation checks into device acceptance.
