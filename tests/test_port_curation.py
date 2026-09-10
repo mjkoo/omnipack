@@ -14,9 +14,14 @@ from omnipack.model import App, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.resolution.github import resolve_github
+from omnipack.resolution.gitlab import resolve_gitlab
 from omnipack.resolution.types import ResolutionError
+from omnipack.sources import IngestionReport, codm
 from omnipack.sources.extras import fetch
+from tests.test_composition_baseline import CapturedPackageResolver
 from tests.test_resolution_github import GitHubTransport
+from tests.test_resolution_gitlab import FakeHttp as GitLabHttp
+from tests.test_sources import FakeHttp as SourceHttp
 
 ROOT = Path(__file__).parents[1]
 FIXTURE = ROOT / "tests/fixtures/curation/port-manifests.json"
@@ -235,3 +240,166 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
     )
     assert name.encode() in catalog
     assert b"PC Ports" in catalog
+
+
+@pytest.mark.parametrize("package_id", sorted(PORT_IDS))
+def test_captured_release_filters_select_manifest_inspected_assets(package_id):
+    app = next(app for app in extras() if app.id == package_id)
+    captures = read(FIXTURE.with_name("port-releases.json"))["entries"]
+    capture = next(item for item in captures if item["sourceUrl"] == app.url)
+    release = capture["release"]
+    data = {**app.raw, "url": app.url, "additionalSettings": app.additional_settings}
+    if app.source_type.value == "GitLab":
+        api = "https://gitlab.com/api/v4/projects/AuroraOSS%2FAuroraStore"
+        assert release["assets"]["links"] == []
+        assert "AuroraStore-hw-4.8.4.apk" in release["description"]
+        assert "AuroraStore-preload-4.8.4.apk" in release["description"]
+        result = resolve_gitlab(
+            data,
+            GitLabHttp(
+                {
+                    api: {"id": capture["projectId"]},
+                    api + "/releases?per_page=100": [release],
+                }
+            ),
+        )
+    else:
+        api = app.url.replace("https://github.com/", "https://api.github.com/repos/")
+        responses = {
+            api + "/releases?per_page=100": [release],
+            api + "/releases/latest": release,
+        }
+        result = resolve_github(
+            data,
+            HttpClient(HttpConfig({}), retries=0, transport=GitHubTransport(responses)),
+        )
+    manifests = [
+        item for item in read(FIXTURE)["entries"] if item["sourceUrl"] == app.url
+    ]
+    assert {candidate.name for candidate in result.candidates} == {
+        item["asset"] for item in manifests
+    }
+    assert {item["packageId"] for item in manifests} == {app.id}
+    assert {item["release"] for item in manifests} == {result.raw_version}
+    if package_id == "is.xyz.vcmi":
+        # The resolver returns all eligible ABIs; Obtainium chooses on-device.
+        assert len(result.candidates) == 3
+        assert app.additional_settings["autoApkFilterByArch"] is True
+    if package_id == "com.karin.idTech4Amm":
+        names = {asset["name"] for asset in release["assets"]}
+        assert any("_arm64" in name for name in names)
+        assert any("_armv7" in name for name in names)
+        assert result.effective_version == "v1.1.0harmattan72"
+        assert manifests[0]["versionName"] == "1.1.0harmattan72lindaiyu"
+
+
+def test_xash_scans_past_unrelated_channels_without_cross_channel_fallback():
+    capture = next(
+        item
+        for item in read(FIXTURE.with_name("port-releases.json"))["entries"]
+        if item["sourceUrl"] == "https://github.com/FWGS/xash3d-fwgs"
+    )
+    master = capture["release"]
+    other = deepcopy(master)
+    other.update(
+        tag_name="continuous-freevgui", name="Xash3D FWGS Continuous freevgui Build"
+    )
+    for asset in other["assets"]:
+        asset["updated_at"] = "2099-01-01T00:00:00Z"
+    baseline = _resolve_xash([master])
+    assert (
+        _resolve_xash([other, master]).effective_version == baseline.effective_version
+    )
+    app = next(app for app in extras() if app.id == "su.xash.engine.test")
+    assert app.additional_settings["fallbackToOlderReleases"] is True
+    for releases in ([other], []):
+        with pytest.raises(ResolutionError):
+            _resolve_xash(releases)
+    missing_apk = deepcopy(master)
+    missing_apk["assets"] = [
+        asset
+        for asset in master["assets"]
+        if asset["name"] != "xash3d-fwgs-android.apk"
+    ]
+    with pytest.raises(ResolutionError):
+        _resolve_xash([other, missing_apk])
+    changed_platform = deepcopy(master)
+    for asset in changed_platform["assets"]:
+        if asset["name"] != "xash3d-fwgs-android.apk":
+            asset["updated_at"] = "2099-01-01T00:00:00Z"
+    assert (
+        _resolve_xash([other, changed_platform]).effective_version
+        == baseline.effective_version
+    )
+
+
+def test_hollow_knight_source_composition_preserves_dual_only_catalog():
+    config = read(ROOT / "config/sources.json")["codm"]
+    source = (ROOT / "tests/fixtures/codm-readme.md").read_text()
+    source = "\n".join(
+        line
+        for line in source.splitlines()
+        if any(
+            marker in line
+            for marker in (
+                "| Project",
+                "|---",
+                "| ---",
+                "github.com/igawa6/dualsouls",
+                "github.com/jakobkhansen/SilksongAndroid",
+            )
+        )
+    )
+    report = IngestionReport()
+    candidates = codm.fetch(
+        SourceHttp({config["readme_url"]: source}),
+        config,
+        CapturedPackageResolver(),
+        [],
+        report,
+    )
+    ids = {"igawa6.dualsouls", "com.jakobkhansen.silksong"}
+    selected = [app for app in candidates if app.id in ids]
+    assert {app.id for app in selected} == ids
+    assert all(app.eligibility == frozenset({Variant.DUAL}) for app in selected)
+    policy_document = read(ROOT / "config/composition.json")
+    policy_document["candidates"] = [
+        rule for rule in policy_document["candidates"] if rule["match"]["id"] in ids
+    ]
+    policy_document["pins"] = [
+        rule for rule in policy_document["pins"] if rule["match"]["id"] in ids
+    ]
+    policy = parse_composition_policy(policy_document)
+    overlays = [
+        rule for rule in read(ROOT / "config/overlay.json") if rule["id"] in ids
+    ]
+    result = compose(selected, [], overlays, [], policy=policy)
+    assert result.apps[Variant.SINGLE] == []
+    assert len(result.apps[Variant.DUAL]) == 2
+    expected = {
+        "igawa6.dualsouls": (
+            "https://github.com/igawa6/dualsouls",
+            "Hollow Knight: Dual Souls",
+        ),
+        "com.jakobkhansen.silksong": (
+            "https://github.com/jakobkhansen/SilksongAndroid",
+            "Hollow Knight: Silksong",
+        ),
+    }
+    for app in result.apps[Variant.DUAL]:
+        assert (app.data["url"], app.data["name"]) == expected[app.data["id"]]
+        assert app.data["categories"] == ["PC Ports"]
+        if app.data["id"] == "com.jakobkhansen.silksong":
+            assert "Android 13 only" in app.data["additionalSettings"]["about"]
+            assert (
+                "Android 15 is unsupported" in app.data["additionalSettings"]["about"]
+            )
+    catalog = generate_catalog(
+        render(result.apps[Variant.SINGLE], {}).encode(),
+        render(result.apps[Variant.DUAL], {}).encode(),
+        policy,
+    ).decode()
+    for _, name in expected.values():
+        rows = [line for line in catalog.splitlines() if name in line]
+        assert len(rows) == 1
+        assert rows[0].startswith(f"| {name} | - | <a href=")

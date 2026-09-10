@@ -127,7 +127,7 @@
       "name": "Hollow Knight: Silksong",
       "categories": ["PC Ports"],
       "additionalSettings": {
-        "about": "Requires user-supplied Linux game files and compiles the port on-device. The upstream setup currently documents Android 13 only and uses the second screen for inventory and maps."
+        "about": "Requires user-supplied Linux game files and compiles the port on-device. The upstream setup currently documents Android 13 only; Android 15 is unsupported. Uses the second screen for inventory and maps."
       }
     }
   }

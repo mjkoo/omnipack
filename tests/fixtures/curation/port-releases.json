@@ -1,0 +1,360 @@
+{
+  "observedDate": "2026-09-10",
+  "entries": [
+    {
+      "sourceUrl": "https://gitlab.com/AuroraOSS/AuroraStore",
+      "metadataUrl": "https://gitlab.com/api/v4/projects/6922885/releases/4.8.4",
+      "originalMetadataSha256": "a8bb35796a9f902bcac2541141dbcc1ad01688dea1340ef0695c7ebb1cc4958d",
+      "release": {
+        "tag_name": "4.8.4",
+        "name": "4.8.4",
+        "released_at": "2026-07-27T17:54:54.560Z",
+        "description": "Changelog : v4.8.4 (76)\\\n\u2022 Rebuilt the interface with modern Jetpack Compose\\\n\u2022 Support for multiple Google accounts\\\n\u2022 User reviews on the app details screen\\\n\u2022 Optional app lock via biometrics or device credentials\\\n\u2022 One-click install for favourites and a buy flow for paid apps\\\n\u2022 Reworked notifications with grouped summaries and settings\\\n\u2022 Revamped updates screen; self-updates now shown in the list\\\n\u2022 More reliable downloads/installs and microG installer support\\\n\u2022 Bug fixes and translation updates\n\n[AuroraStore-4.8.4.apk](/uploads/245eec8867a47057cbc54535f73b32ee/AuroraStore-4.8.4.apk)\n\n[AuroraStore-hw-4.8.4.apk](/uploads/ceb55e58163cf9e2d3f23478f3cf787d/AuroraStore-hw-4.8.4.apk)\n\n[AuroraStore-preload-4.8.4.apk](/uploads/3376fef895820893ddeb7154b056a07e/AuroraStore-preload-4.8.4.apk)",
+        "assets": {
+          "links": []
+        }
+      },
+      "projectId": 6922885
+    },
+    {
+      "sourceUrl": "https://github.com/glKarin/com.n0n3m4.diii4a",
+      "metadataUrl": "https://api.github.com/repos/glKarin/com.n0n3m4.diii4a/releases/latest",
+      "originalMetadataSha256": "45431a41dfadc66bef5a5c05152888d15a5398b5a96597dc3d19939201dc3bd6",
+      "release": {
+        "tag_name": "v1.1.0harmattan72",
+        "name": "Quadrilateral Cowboy/Icarus idTech4 games support",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-03-12T05:58:21Z",
+        "html_url": "https://github.com/glKarin/com.n0n3m4.diii4a/releases/tag/v1.1.0harmattan72",
+        "assets": [
+          {
+            "name": "idTech4A++_1.1.0harmattan72.apk",
+            "browser_download_url": "https://github.com/glKarin/com.n0n3m4.diii4a/releases/download/v1.1.0harmattan72/idTech4A%2B%2B_1.1.0harmattan72.apk",
+            "updated_at": "2026-03-12T05:55:10Z"
+          },
+          {
+            "name": "idTech4A++_1.1.0harmattan72_arm64.apk",
+            "browser_download_url": "https://github.com/glKarin/com.n0n3m4.diii4a/releases/download/v1.1.0harmattan72/idTech4A%2B%2B_1.1.0harmattan72_arm64.apk",
+            "updated_at": "2026-03-12T05:56:55Z"
+          },
+          {
+            "name": "idTech4A++_1.1.0harmattan72_armv7.apk",
+            "browser_download_url": "https://github.com/glKarin/com.n0n3m4.diii4a/releases/download/v1.1.0harmattan72/idTech4A%2B%2B_1.1.0harmattan72_armv7.apk",
+            "updated_at": "2026-03-12T05:58:13Z"
+          }
+        ]
+      }
+    },
+    {
+      "sourceUrl": "https://github.com/vcmi/vcmi",
+      "metadataUrl": "https://api.github.com/repos/vcmi/vcmi/releases/latest",
+      "originalMetadataSha256": "00b9c15a3d7a6c71e278feaea8ec6590238cf12d784dbe45f8cf73332ee01343",
+      "release": {
+        "tag_name": "1.7.5",
+        "name": "VCMI 1.7.5",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2026-08-15T12:02:44Z",
+        "html_url": "https://github.com/vcmi/vcmi/releases/tag/1.7.5",
+        "assets": [
+          {
+            "name": "pdb-arm64.zip",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/pdb-arm64.zip",
+            "updated_at": "2026-08-15T16:49:33Z"
+          },
+          {
+            "name": "pdb-x64.zip",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/pdb-x64.zip",
+            "updated_at": "2026-08-15T16:56:22Z"
+          },
+          {
+            "name": "pdb-x86.zip",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/pdb-x86.zip",
+            "updated_at": "2026-08-15T16:53:21Z"
+          },
+          {
+            "name": "VCMI-Android-arm64-v8a.apk",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Android-arm64-v8a.apk",
+            "updated_at": "2026-08-14T19:26:00Z"
+          },
+          {
+            "name": "VCMI-Android-armeabi-v7a.apk",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Android-armeabi-v7a.apk",
+            "updated_at": "2026-08-14T19:27:04Z"
+          },
+          {
+            "name": "VCMI-Android-x86_64.apk",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Android-x86_64.apk",
+            "updated_at": "2026-08-14T19:28:20Z"
+          },
+          {
+            "name": "VCMI-iOS.ipa",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-iOS.ipa",
+            "updated_at": "2026-08-14T19:23:39Z"
+          },
+          {
+            "name": "VCMI-Linux-arm64.AppImage",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Linux-arm64.AppImage",
+            "updated_at": "2026-08-14T19:31:48Z"
+          },
+          {
+            "name": "VCMI-Linux-x64.AppImage",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Linux-x64.AppImage",
+            "updated_at": "2026-08-14T19:33:25Z"
+          },
+          {
+            "name": "VCMI-macOS-arm.dmg",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-macOS-arm.dmg",
+            "updated_at": "2026-08-14T19:29:21Z"
+          },
+          {
+            "name": "VCMI-macOS-intel.dmg",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-macOS-intel.dmg",
+            "updated_at": "2026-08-14T19:30:23Z"
+          },
+          {
+            "name": "VCMI-Sources.tar.gz",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Sources.tar.gz",
+            "updated_at": "2026-08-14T19:21:50Z"
+          },
+          {
+            "name": "VCMI-Windows-arm64.exe",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Windows-arm64.exe",
+            "updated_at": "2026-08-14T19:34:47Z"
+          },
+          {
+            "name": "VCMI-Windows-x64.exe",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Windows-x64.exe",
+            "updated_at": "2026-08-14T19:35:47Z"
+          },
+          {
+            "name": "VCMI-Windows-x86.exe",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Windows-x86.exe",
+            "updated_at": "2026-08-14T19:36:37Z"
+          },
+          {
+            "name": "VCMI-Windows.zip",
+            "browser_download_url": "https://github.com/vcmi/vcmi/releases/download/1.7.5/VCMI-Windows.zip",
+            "updated_at": "2026-08-14T19:25:02Z"
+          }
+        ]
+      }
+    },
+    {
+      "sourceUrl": "https://github.com/bvschaik/julius",
+      "metadataUrl": "https://api.github.com/repos/bvschaik/julius/releases/latest",
+      "originalMetadataSha256": "ae9f76b28f13d1079d4950aab95e8bcfc0c08c9fb745478ba085bb172d01a7c4",
+      "release": {
+        "tag_name": "v1.8.0",
+        "name": "Julius 1.8.0",
+        "draft": false,
+        "prerelease": false,
+        "published_at": "2025-07-31T17:46:57Z",
+        "html_url": "https://github.com/bvschaik/julius/releases/tag/v1.8.0",
+        "assets": [
+          {
+            "name": "julius-1.8.0-android.apk",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-android.apk",
+            "updated_at": "2025-07-31T17:37:48Z"
+          },
+          {
+            "name": "julius-1.8.0-emscripten.zip",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-emscripten.zip",
+            "updated_at": "2025-07-31T17:37:49Z"
+          },
+          {
+            "name": "julius-1.8.0-linux-x86_64.zip",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-linux-x86_64.zip",
+            "updated_at": "2025-07-31T17:37:49Z"
+          },
+          {
+            "name": "julius-1.8.0-linux.AppImage",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-linux.AppImage",
+            "updated_at": "2025-07-31T17:37:50Z"
+          },
+          {
+            "name": "julius-1.8.0-linux.flatpak",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-linux.flatpak",
+            "updated_at": "2025-07-31T17:37:51Z"
+          },
+          {
+            "name": "julius-1.8.0-mac.dmg",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-mac.dmg",
+            "updated_at": "2025-07-31T17:37:51Z"
+          },
+          {
+            "name": "julius-1.8.0-source.tar.gz",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-source.tar.gz",
+            "updated_at": "2025-07-31T17:47:52Z"
+          },
+          {
+            "name": "julius-1.8.0-source.zip",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-source.zip",
+            "updated_at": "2025-07-31T17:47:53Z"
+          },
+          {
+            "name": "julius-1.8.0-switch.zip",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-switch.zip",
+            "updated_at": "2025-07-31T17:37:52Z"
+          },
+          {
+            "name": "julius-1.8.0-vita.vpk",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-vita.vpk",
+            "updated_at": "2025-07-31T17:37:53Z"
+          },
+          {
+            "name": "julius-1.8.0-windows.zip",
+            "browser_download_url": "https://github.com/bvschaik/julius/releases/download/v1.8.0/julius-1.8.0-windows.zip",
+            "updated_at": "2025-07-31T17:37:53Z"
+          }
+        ]
+      }
+    },
+    {
+      "sourceUrl": "https://github.com/FWGS/xash3d-fwgs",
+      "metadataUrl": "https://api.github.com/repos/FWGS/xash3d-fwgs/releases/tags/continuous",
+      "originalMetadataSha256": "930503864ddd731cf57bd6f1ef618fb71b83c32dda16f0aae379e00327bc41a3",
+      "release": {
+        "tag_name": "continuous",
+        "name": "Xash3D FWGS Continuous master Build",
+        "draft": false,
+        "prerelease": true,
+        "published_at": "2026-09-09T16:21:08Z",
+        "html_url": "https://github.com/FWGS/xash3d-fwgs/releases/tag/continuous",
+        "assets": [
+          {
+            "name": "su.xash.Engine.Compat.i386.flatpak",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/su.xash.Engine.Compat.i386.flatpak",
+            "updated_at": "2026-09-09T16:21:02Z"
+          },
+          {
+            "name": "xash3d-fwgs-amd64.AppImage",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-amd64.AppImage",
+            "updated_at": "2026-09-09T16:21:03Z"
+          },
+          {
+            "name": "xash3d-fwgs-android-mappings.tar.zst",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-android-mappings.tar.zst",
+            "updated_at": "2026-09-09T16:21:01Z"
+          },
+          {
+            "name": "xash3d-fwgs-android.apk",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-android.apk",
+            "updated_at": "2026-09-09T16:21:02Z"
+          },
+          {
+            "name": "xash3d-fwgs-apple-amd64.tar.xz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-apple-amd64.tar.xz",
+            "updated_at": "2026-09-09T16:21:01Z"
+          },
+          {
+            "name": "xash3d-fwgs-apple-arm64.tar.xz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-apple-arm64.tar.xz",
+            "updated_at": "2026-09-09T16:21:02Z"
+          },
+          {
+            "name": "xash3d-fwgs-arm64.AppImage",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-arm64.AppImage",
+            "updated_at": "2026-09-09T16:21:03Z"
+          },
+          {
+            "name": "xash3d-fwgs-armhf.AppImage",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-armhf.AppImage",
+            "updated_at": "2026-09-09T16:21:03Z"
+          },
+          {
+            "name": "xash3d-fwgs-i386.AppImage",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-i386.AppImage",
+            "updated_at": "2026-09-09T16:21:04Z"
+          },
+          {
+            "name": "xash3d-fwgs-ios-arm64.ipa",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-ios-arm64.ipa",
+            "updated_at": "2026-09-09T16:21:03Z"
+          },
+          {
+            "name": "xash3d-fwgs-linux-amd64.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-linux-amd64.tar.gz",
+            "updated_at": "2026-09-09T16:21:05Z"
+          },
+          {
+            "name": "xash3d-fwgs-linux-arm64.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-linux-arm64.tar.gz",
+            "updated_at": "2026-09-09T16:21:05Z"
+          },
+          {
+            "name": "xash3d-fwgs-linux-armhf.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-linux-armhf.tar.gz",
+            "updated_at": "2026-09-09T16:21:05Z"
+          },
+          {
+            "name": "xash3d-fwgs-linux-i386.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-linux-i386.tar.gz",
+            "updated_at": "2026-09-09T16:21:05Z"
+          },
+          {
+            "name": "xash3d-fwgs-linux-ppc64el.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-linux-ppc64el.tar.gz",
+            "updated_at": "2026-09-09T16:21:06Z"
+          },
+          {
+            "name": "xash3d-fwgs-linux-riscv64.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-linux-riscv64.tar.gz",
+            "updated_at": "2026-09-09T16:21:06Z"
+          },
+          {
+            "name": "xash3d-fwgs-nswitch.7z",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-nswitch.7z",
+            "updated_at": "2026-09-09T16:21:06Z"
+          },
+          {
+            "name": "xash3d-fwgs-psvita.7z",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-psvita.7z",
+            "updated_at": "2026-09-09T16:21:06Z"
+          },
+          {
+            "name": "xash3d-fwgs-win32-amd64.7z",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-win32-amd64.7z",
+            "updated_at": "2026-09-09T16:21:06Z"
+          },
+          {
+            "name": "xash3d-fwgs-win32-i386.7z",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xash3d-fwgs-win32-i386.7z",
+            "updated_at": "2026-09-09T16:21:07Z"
+          },
+          {
+            "name": "xashds-linux-amd64.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xashds-linux-amd64.tar.gz",
+            "updated_at": "2026-09-09T16:21:07Z"
+          },
+          {
+            "name": "xashds-linux-arm64.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xashds-linux-arm64.tar.gz",
+            "updated_at": "2026-09-09T16:21:07Z"
+          },
+          {
+            "name": "xashds-linux-armhf.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xashds-linux-armhf.tar.gz",
+            "updated_at": "2026-09-09T16:21:07Z"
+          },
+          {
+            "name": "xashds-linux-i386.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xashds-linux-i386.tar.gz",
+            "updated_at": "2026-09-09T16:21:07Z"
+          },
+          {
+            "name": "xashds-linux-ppc64el.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xashds-linux-ppc64el.tar.gz",
+            "updated_at": "2026-09-09T16:21:07Z"
+          },
+          {
+            "name": "xashds-linux-riscv64.tar.gz",
+            "browser_download_url": "https://github.com/FWGS/xash3d-fwgs/releases/download/continuous/xashds-linux-riscv64.tar.gz",
+            "updated_at": "2026-09-09T16:21:07Z"
+          }
+        ]
+      }
+    }
+  ]
+}

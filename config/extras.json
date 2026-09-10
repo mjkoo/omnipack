@@ -27,7 +27,6 @@
     "variants": ["single", "dual"],
     "overrideSource": "GitLab",
     "additionalSettings": {
-      "includePrereleases": false,
       "apkFilterRegEx": "^AuroraStore-[0-9]+(?:\\.[0-9]+)+\\.apk$",
       "autoApkFilterByArch": false,
       "versionDetection": true,
@@ -91,7 +90,7 @@
     "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": true,
-      "fallbackToOlderReleases": false,
+      "fallbackToOlderReleases": true,
       "filterReleaseTitlesByRegEx": "^Xash3D FWGS Continuous master Build$",
       "verifyLatestTag": false,
       "useLatestAssetDateAsReleaseDate": true,
