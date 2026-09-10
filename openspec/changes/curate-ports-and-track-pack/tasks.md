@@ -7,10 +7,10 @@
 
 ## 2. App curation and rolling Xash3D
 
-- [ ] 2.1 Inspect current Aurora, idTech4A++, VCMI, Julius and Xash3D release APK manifests and selection behavior; deliver durable fixture evidence of package ids, versions and selected asset names before writing final extras.
-- [ ] 2.2 Add the five extras and architecture/version policies in both variants; verify fixture builds contain each exactly once, correct categories and source URLs, exclude Aurora hw/preload variants, and preserve maintained choices after duplicate upstream candidates appear.
-- [ ] 2.3 Configure Xash3D's continuous-master title and Android asset filters with asset-date versioning; verify successive same-tag APK timestamps advance the numeric version, other platform/channel changes do not, and temporary absence fails rather than selecting a different channel.
-- [ ] 2.4 Overlay recognizable Hollow Knight names, PC Ports categories and setup notes while retaining existing ids and dual-only eligibility; verify generated catalog placement and unchanged source identity, and record current Silksong OS limitations without claiming device testing.
+- [x] 2.1 Inspect current Aurora, idTech4A++, VCMI, Julius and Xash3D release APK manifests and selection behavior; deliver durable fixture evidence of package ids, versions and selected asset names before writing final extras.
+- [x] 2.2 Add the five extras and architecture/version policies in both variants; verify fixture builds contain each exactly once, correct categories and source URLs, exclude Aurora hw/preload variants, and preserve maintained choices after duplicate upstream candidates appear.
+- [x] 2.3 Configure Xash3D's continuous-master title and Android asset filters with asset-date versioning; verify successive same-tag APK timestamps advance the numeric version, other platform/channel changes do not, and temporary absence fails rather than selecting a different channel.
+- [x] 2.4 Overlay recognizable Hollow Knight names, PC Ports categories and setup notes while retaining existing ids and dual-only eligibility; verify generated catalog placement and unchanged source identity, and record current Silksong OS limitations without claiming device testing.
 
 ## 3. Pack tracker and bootstrap
 
