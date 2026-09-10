@@ -73,3 +73,11 @@ acceptance of the relocation requires verifying the receiving main specs,
 retiring the empty capability with explicit metadata, and strict validation of
 the resulting nine-capability inventory. Operational and device acceptance
 remain deferred.
+
+Final synchronization on September 10, 2026 verified every delta against its
+receiving main spec. Both moved blocks and all retained summary scenarios match
+the reviewed text. The empty provider capability and its Purpose were retired
+using the CLI-prescribed `retire_capabilities: true` marker after its safety
+check refused retirement without that marker. All nine main capabilities passed
+strict validation, retaining 81 requirements. Both maintenance changes are
+archived; operational and device acceptance remain deferred.

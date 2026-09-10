@@ -506,13 +506,10 @@ the build with an error naming the entry and offending value for any other
 source type, including a malformed explicit declaration rather than silently
 falling back to URL inference.
 
-A GitLab entry SHALL use a public HTTPS gitlab.com project URL with a namespace
-and project, optionally including subgroups (at most 21 path components in total). The system SHALL reject GitLab
-entries with another host, scheme or missing project path, preserve the full
-case-sensitive project path, and hydrate committed GitLab settings defaults
-when rendering. Explicit settings SHALL override defaults. Native GitLab
-selection SHALL NOT route through HTML defaults or expand generated GitHub
-package-id discovery to other hosts.
+Native GitLab entries SHALL follow the URL, identity and discovery boundary in
+"Public GitLab entries retain native source identity". Explicit per-app settings
+SHALL override hydrated defaults. Native GitLab selection SHALL NOT route through
+HTML defaults.
 
 #### Scenario: Upstream record declares a source type
 
@@ -557,3 +554,12 @@ compares and patches them uniformly.
 
 - **WHEN** an upstream entry's per-app settings string cannot be decoded
 - **THEN** the build fails with an error naming that entry
+
+### Requirement: Public GitLab entries retain native source identity
+
+The system SHALL accept explicit extras with source type `GitLab` and public HTTPS gitlab.com project URLs, preserve the full case-sensitive project path including subgroups (at most 21 path components in total), hydrate supported GitLab defaults, and render `overrideSource: GitLab`. Existing non-GitHub URL comparison semantics SHALL remain unchanged. Package ids for these explicit extras SHALL be supplied and backed by manifest evidence; adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
+
+#### Scenario: Aurora extra reaches both exports
+
+- **WHEN** an explicit Aurora Store extra uses its canonical GitLab URL and both variants
+- **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
