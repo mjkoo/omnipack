@@ -133,11 +133,24 @@ def test_malformed_and_failed_requests(responses: dict[str, object], code: str) 
     assert caught.value.code == code
 
 
-def test_unsupported_active_setting_fails_before_http() -> None:
+@pytest.mark.parametrize(
+    "setting,value",
+    [
+        ("includeZips", True),
+        ("trackOnly", True),
+        ("versionDetection", False),
+        ("releaseDateAsVersion", True),
+        ("invertAPKFilter", True),
+    ],
+)
+def test_unsupported_active_setting_fails_before_http(
+    setting: str, value: bool
+) -> None:
     http = FakeHttp({})
     with pytest.raises(ResolutionError) as caught:
-        resolve_gitlab(app(settings={"includeZips": True}), http)
+        resolve_gitlab(app(settings={setting: value}), http)
     assert caught.value.code == "unsupported-setting"
+    assert setting in str(caught.value)
     assert http.calls == []
 
 
@@ -148,3 +161,25 @@ def test_release_window_is_bounded_to_first_hundred_records() -> None:
     with pytest.raises(ResolutionError) as caught:
         resolve_gitlab(app(), FakeHttp({project_url: {"id": 1}, releases_url: records}))
     assert caught.value.code == "gitlab-no-apk"
+
+
+@pytest.mark.parametrize("segments", [21, 22])
+def test_gitlab_project_depth_boundary(segments: int) -> None:
+    path = "/".join(f"Group{i}" for i in range(segments))
+    project = "https://gitlab.com/api/v4/projects/" + path.replace("/", "%2F")
+    releases = project + "/releases?per_page=100"
+    http = FakeHttp(
+        {
+            project: {"id": 1},
+            releases: [release(description="[apk](/uploads/h/AuroraStore-4.8.4.apk)")],
+        }
+    )
+    value = app(url="https://gitlab.com/" + path)
+    if segments == 22:
+        with pytest.raises(ResolutionError) as caught:
+            resolve_gitlab(value, http)
+        assert caught.value.code == "gitlab-url-invalid"
+        assert http.calls == []
+    else:
+        assert resolve_gitlab(value, http).raw_version == "4.8.4"
+        assert [url for url, _ in http.calls] == [project, releases]

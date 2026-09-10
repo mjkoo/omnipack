@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from omnipack.http import HttpResponse
 from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.urls import gitlab_project_path
 
 
 class HttpGetter(Protocol):
@@ -179,19 +180,8 @@ def normalize_record(
 
 def _validate_gitlab_url(url: str, *, source: str, entry: str) -> None:
     try:
-        parsed = urlsplit(url)
+        gitlab_project_path(url)
     except ValueError as error:
-        raise SourceError(source, f"entry {entry!r} has invalid GitLab URL") from error
-    parts = [part for part in parsed.path.split("/") if part]
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != "gitlab.com"
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.port is not None
-        or len(parts) < 2
-        or "-" in parts
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise SourceError(source, f"entry {entry!r} has invalid GitLab URL {url!r}")
+        raise SourceError(
+            source, f"entry {entry!r} has invalid GitLab URL {url!r}"
+        ) from error

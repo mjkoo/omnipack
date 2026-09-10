@@ -10,6 +10,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.urls import gitlab_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -325,21 +326,10 @@ def _validate_entry(
 
 def _valid_gitlab_url(url: str) -> bool:
     try:
-        parsed = urlsplit(url)
+        gitlab_project_path(url)
     except ValueError:
         return False
-    parts = [part for part in parsed.path.split("/") if part]
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname == "gitlab.com"
-        and parsed.username is None
-        and parsed.password is None
-        and parsed.port is None
-        and len(parts) >= 2
-        and "-" not in parts
-        and not parsed.query
-        and not parsed.fragment
-    )
+    return True
 
 
 def _decode_additional(

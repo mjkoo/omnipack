@@ -11,6 +11,7 @@ from urllib.request import Request
 import pytest
 
 from omnipack.http import (
+    METADATA_MAX_BYTES,
     PROBE_BYTES,
     HttpClient,
     HttpConfig,
@@ -157,12 +158,17 @@ def gitlab_entry(variant: str = "single") -> ValidatedEntry:
     return ValidatedEntry(variant, 0, "gitlab.app", "GitLab", raw, settings)
 
 
-def test_gitlab_live_dispatch_deduplicates_metadata_but_keeps_variant_results() -> None:
+@pytest.mark.parametrize("with_token", [False, True])
+def test_gitlab_live_dispatch_deduplicates_metadata_but_keeps_variant_results(
+    monkeypatch: pytest.MonkeyPatch, with_token: bool
+) -> None:
     encoded = "Group%2FSubgroup%2FApp"
     project = f"https://gitlab.com/api/v4/projects/{encoded}"
     releases = f"{project}/releases?per_page=100"
-    http, transport = client(
+    asset = "https://gitlab.com/-/project/42/uploads/x/app.apk"
+    transport = RoutingTransport(
         {
+            asset: [response(asset, b"apk", 206)],
             project: [response(project, json.dumps({"id": 42}).encode())],
             releases: [
                 response(
@@ -180,15 +186,39 @@ def test_gitlab_live_dispatch_deduplicates_metadata_but_keeps_variant_results() 
             ],
         }
     )
+    if with_token:
+        monkeypatch.setenv("GITLAB_TEST_GITHUB_TOKEN", "github-only-secret")
+    else:
+        monkeypatch.delenv("GITLAB_TEST_GITHUB_TOKEN", raising=False)
+    http = HttpClient(
+        HttpConfig({"api.github.com": "GITLAB_TEST_GITHUB_TOKEN"}),
+        retries=0,
+        transport=transport,
+    )
+    assert http.build_request("https://api.github.com/user").get_header(
+        "Authorization"
+    ) == ("Bearer github-only-secret" if with_token else None)
     result = verify_live(
-        {"single": (gitlab_entry(),), "dual": (gitlab_entry("dual"),)}, http
+        {"single": (gitlab_entry(),), "dual": (gitlab_entry("dual"),)},
+        http,
+        probe_assets=True,
     )
     assert result.ok
     assert [(item.variant, item.source) for item in result.entries] == [
         ("single", "GitLab"),
         ("dual", "GitLab"),
     ]
-    assert len(transport.requests) == 2
+    assert [request.full_url for request in transport.requests] == [
+        project,
+        releases,
+        asset,
+    ]
+    assert transport.max_bytes == [METADATA_MAX_BYTES, METADATA_MAX_BYTES, PROBE_BYTES]
+    assert transport.requests[-1].get_header("Range") == f"bytes=0-{PROBE_BYTES - 1}"
+    assert transport.requests[-1].get_header("Referer") == "https://gitlab.com"
+    assert all(
+        len(item.probes) == 1 and item.probes[0].success for item in result.entries
+    )
     assert all(
         request.get_header("Authorization") is None for request in transport.requests
     )

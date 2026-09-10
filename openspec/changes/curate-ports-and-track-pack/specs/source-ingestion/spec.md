@@ -15,7 +15,7 @@ source type, including a malformed explicit declaration rather than silently
 falling back to URL inference.
 
 A GitLab entry SHALL use a public HTTPS gitlab.com project URL with a namespace
-and project, optionally including subgroups. The system SHALL reject GitLab
+and project, optionally including subgroups (at most 21 path components in total). The system SHALL reject GitLab
 entries with another host, scheme or missing project path, preserve the full
 case-sensitive project path, and hydrate committed GitLab settings defaults
 when rendering. Explicit settings SHALL override defaults. Native GitLab

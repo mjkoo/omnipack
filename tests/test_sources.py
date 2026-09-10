@@ -106,20 +106,25 @@ def test_rjny_rejects_empty_location_and_unsupported_source() -> None:
         )
 
 
-def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups() -> None:
+@pytest.mark.parametrize(
+    "path", ["Case/Parent/Project", "/".join(f"Group{i}" for i in range(21))]
+)
+def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
+    path: str,
+) -> None:
     [app] = extras.fetch(
         [
             {
                 "id": "com.example.app",
                 "name": "Example",
-                "url": "https://gitlab.com/Case/Parent/Project",
+                "url": f"https://gitlab.com/{path}",
                 "overrideSource": "GitLab",
                 "additionalSettings": {"apkFilterRegEx": "ordinary\\.apk$"},
             }
         ]
     )
     assert app.source_type is SourceType.GITLAB
-    assert app.url == "https://gitlab.com/Case/Parent/Project"
+    assert app.url == f"https://gitlab.com/{path}"
 
 
 def test_undeclared_extra_keeps_existing_url_inference() -> None:
@@ -140,6 +145,8 @@ def test_undeclared_extra_keeps_existing_url_inference() -> None:
         "https://example.com/a/b",
         "https://gitlab.com/one",
         "https://user@gitlab.com/a/b",
+        "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22)),
+        "https://gitlab.com:invalid/a/b",
     ],
 )
 def test_explicit_gitlab_extra_rejects_urls_outside_public_boundary(url: str) -> None:

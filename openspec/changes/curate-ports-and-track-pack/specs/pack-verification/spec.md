@@ -10,7 +10,7 @@ and unsupported source types. Each app SHALL have nonempty string `id`, `name`
 and absolute HTTP(S) `url`, string `author`, string-list `categories`, and
 `overrideSource` equal to GitHub, HTML or GitLab. GitLab entries SHALL use
 public HTTPS gitlab.com project URLs with a namespace and project, optionally
-including subgroups, with the full case-sensitive project path preserved. Track-only ids SHALL NOT be required
+including subgroups (at most 21 path components in total), with the full case-sensitive project path preserved. Track-only ids SHALL NOT be required
 to follow Android package-name syntax.
 
 `additionalSettings` SHALL be a string decoding to an object with every key

@@ -274,7 +274,13 @@ def test_complete_native_gitlab_entry_passes_offline_validation() -> None:
 
 @pytest.mark.parametrize(
     "url",
-    ["http://gitlab.com/a/b", "https://other.test/a/b", "https://gitlab.com/one"],
+    [
+        "http://gitlab.com/a/b",
+        "https://other.test/a/b",
+        "https://gitlab.com/one",
+        "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22)),
+        "https://gitlab.com:invalid/a/b",
+    ],
 )
 def test_native_gitlab_url_boundary_is_checked_offline(url: str) -> None:
     value = app(source="GitLab")
@@ -590,3 +596,43 @@ def test_request_header_unknown_fields_are_preserved() -> None:
     result = validate_offline(inputs([raw]))
     assert result.ok
     assert result.entries["single"][0].settings["requestHeader"][0]["future"] is True
+
+
+@pytest.mark.parametrize(
+    "field,value,code",
+    [
+        ("fallbackToOlderReleases", None, "missing_setting_default"),
+        ("fallbackToOlderReleases", 1, "wrong_setting_type"),
+        ("apkFilterRegEx", False, "wrong_setting_type"),
+    ],
+)
+def test_native_gitlab_defaults_rejected_without_repair(
+    field: str, value: object, code: str
+) -> None:
+    raw = app("aurora", source="GitLab")
+    raw["url"] = "https://gitlab.com/AuroraOSS/AuroraStore"
+    settings = json.loads(raw["additionalSettings"])
+    if value is None:
+        del settings[field]
+    else:
+        settings[field] = value
+    raw["additionalSettings"] = json.dumps(settings)
+    snapshots = inputs([raw])
+    before = deepcopy(snapshots)
+    result = validate_offline(snapshots)
+    assert not result.ok
+    assert {
+        (finding.variant, finding.entry_id, finding.field, finding.code)
+        for finding in result.findings
+    } == {(variant, "aurora", field, code) for variant in ("single", "dual")}
+    assert snapshots == before
+
+
+def test_native_gitlab_maximum_subgroups_preserved_offline() -> None:
+    raw = app(source="GitLab")
+    raw["url"] = "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(21))
+    result = validate_offline(inputs([raw]))
+    assert result.ok
+    assert all(
+        entries[0].raw["url"] == raw["url"] for entries in result.entries.values()
+    )

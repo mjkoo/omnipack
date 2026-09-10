@@ -9,6 +9,7 @@ from typing import Any, Protocol
 from urllib.parse import quote, urlsplit
 
 from omnipack.http import HttpError, HttpResponse
+from omnipack.urls import gitlab_project_path
 
 from .support import SupportClass, classify_settings
 from .types import Candidate, ResolutionError, ResolutionResult
@@ -116,28 +117,11 @@ def _validate_support(settings: dict[str, Any]) -> None:
 
 def _project_path(url: str) -> str:
     try:
-        parsed = urlsplit(url)
+        return gitlab_project_path(url)
     except ValueError as error:
         raise ResolutionError(
-            "gitlab-url-invalid", "GitLab project URL is malformed"
-        ) from error
-    parts = [part for part in parsed.path.split("/") if part]
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != "gitlab.com"
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.port is not None
-        or len(parts) < 2
-        or len(parts) > 21
-        or "-" in parts
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise ResolutionError(
             "gitlab-url-invalid", "URL must identify one public gitlab.com project"
-        )
-    return "/".join(parts)
+        ) from error
 
 
 def _request(http: MetadataGetter, url: str, endpoint: str) -> object:
