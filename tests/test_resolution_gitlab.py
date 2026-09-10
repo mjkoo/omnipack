@@ -217,3 +217,44 @@ def test_malformed_inspected_release_never_falls_back(malformed, fallback):
             FakeHttp({project_url: {"id": 9}, releases_url: [first, older]}),
         )
     assert caught.value.code == "gitlab-invalid-response"
+
+
+def test_package_containers_qualify_by_name_or_url_but_filter_by_name() -> None:
+    project_url, releases_url = urls()
+    item = release()
+    links = [
+        {"name": "keep.apk", "url": "https://cdn.test/download"},
+        {"name": "keep.XAPK", "url": "https://cdn.test/download-two"},
+        {"name": "keep-label", "url": "https://cdn.test/app.apkm?download=1"},
+        {"name": "keep.apks", "url": "https://cdn.test/download-three"},
+        {"name": "drop", "url": "https://cdn.test/keep.apk"},
+        {"name": "keep.zip", "url": "https://cdn.test/keep.zip"},
+        {"name": "keep-query", "url": "https://cdn.test/download?format=.apk"},
+    ]
+    item["assets"] = {"links": links}
+    result = resolve_gitlab(
+        app(settings={"apkFilterRegEx": "^keep", "includeZips": False}),
+        FakeHttp({project_url: {"id": 4}, releases_url: [item]}),
+    )
+    assert [(c.name, c.url) for c in result.candidates] == [
+        (link["name"], link["url"]) for link in links[:4]
+    ]
+
+
+def test_description_package_containers_use_numeric_project_and_filename_filter() -> (
+    None
+):
+    project_url, releases_url = urls()
+    names = ["keep.apk", "keep.XAPK", "keep.apkm", "keep.apks"]
+    description = "\n".join(
+        f"[label](/uploads/hash/{name})" for name in [*names, "drop.apkm", "keep.zip"]
+    )
+    result = resolve_gitlab(
+        app(settings={"apkFilterRegEx": "^keep", "includeZips": False}),
+        FakeHttp(
+            {project_url: {"id": 42}, releases_url: [release(description=description)]}
+        ),
+    )
+    assert [(c.name, c.url) for c in result.candidates] == [
+        (name, f"https://gitlab.com/-/project/42/uploads/hash/{name}") for name in names
+    ]

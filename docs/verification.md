@@ -109,6 +109,32 @@ knowing its semantics.
 | Authorization or Cookie request headers and device-dependent filtering on nonempty intermediate steps | Live error | Rejected before a request is made |
 | Any unknown additional setting | Live error | Requires an intentional compatibility decision |
 
+Package recognition and generic ZIP selection are separate. GitHub recognizes
+`.apk`, `.xapk`, `.apkm` and `.apks` by asset-name suffix, case-insensitively;
+its APK regex and inversion also apply to the asset name. GitLab recognizes
+those suffixes in either the named link or its URL path, then applies the APK
+regex to the name. Relative Markdown description uploads use the same suffixes
+and filename filtering, with URLs resolved through the numeric project ID.
+Recognized package containers do not require `includeZips`. Generic `.zip`
+assets require that setting on GitHub and do not qualify as GitLab packages.
+
+HTML uses its own link-selection rules. Without a nonempty custom-link filter,
+it chooses the URL or link text, percent-decodes that string, parses it as a URL,
+and checks the path for the same four package suffixes. Thus link text
+`release.apkm?download=1` qualifies, while `release?format=.apkm` does not.
+A nonempty custom-link filter replaces this default extension filter; the final
+APK regex still filters URLs. A custom filter may admit an extensionless URL,
+which does not imply support for extracting an archive from its response.
+Active HTML and GitLab archive-selection settings remain unsupported.
+
+Metadata resolution and optional probes inspect no members of package containers.
+They do not prove extraction, package identity, signatures or installability.
+The existing `archive-members-unverified` warning is emitted for GitHub ZIP
+candidates; absence of that warning for another container is not evidence of
+member inspection. Generated package-ID discovery remains a separate operation:
+it reads manifests only from release assets whose names end in `.apk`,
+case-insensitively, and does not discover IDs from these other container formats.
+
 The ordinary live check establishes source metadata resolution and version
 extraction, including eligible candidates for installable entries. It does not
 request selected downloads or claim they are reachable. The explicit asset

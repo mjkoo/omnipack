@@ -490,3 +490,59 @@ def test_active_zip_setting_fails_before_http() -> None:
     assert raised.value.code == "unsupported-setting"
     assert "includeZips" in str(raised.value)
     assert transport.requests == []
+
+
+@pytest.mark.parametrize("suffix", ["apk", "XAPK", "apkm", "apks"])
+def test_default_html_filter_recognizes_package_containers(suffix: str) -> None:
+    result, _ = resolve(
+        f'<a href="v1.2.{suffix}">package</a><a href="v9.9.zip">archive</a>',
+        {"versionExtractionRegEx": r"v([0-9]+\.[0-9]+)", "matchGroupToUse": "$1"},
+    )
+    assert result.effective_version == "1.2"
+    assert result.candidates[0].name == f"v1.2.{suffix}"
+
+
+@pytest.mark.parametrize("custom,accepted", [("", False), ("download", True)])
+def test_custom_html_filter_replaces_default_extension_gate(
+    custom: str, accepted: bool
+) -> None:
+    settings = {
+        "customLinkFilterRegex": custom,
+        "versionExtractionRegEx": r"v([0-9]+\.[0-9]+)",
+        "matchGroupToUse": "$1",
+        "apkFilterRegEx": "download",
+    }
+    body = '<a href="download/v1.2">download</a>'
+    if accepted:
+        result, _ = resolve(body, settings)
+        assert result.candidates[0].url == "https://example.com/releases/download/v1.2"
+        assert result.effective_version == "1.2"
+    else:
+        with pytest.raises(ResolutionError, match="final page selected no download"):
+            resolve(body, settings)
+
+
+@pytest.mark.parametrize(
+    "label,accepted",
+    [
+        ("release%2Eapkm?download=1", True),
+        ("release.apks#download", True),
+        ("release?format=.apkm", False),
+    ],
+)
+def test_default_html_text_filter_checks_decoded_url_path(
+    label: str, accepted: bool
+) -> None:
+    settings = {
+        "filterByLinkText": True,
+        "versionExtractionRegEx": r"v([0-9]+\.[0-9]+)",
+        "matchGroupToUse": "$1",
+    }
+    body = f'<a href="download/v1.2">{label}</a>'
+    if accepted:
+        result, _ = resolve(body, settings)
+        assert result.effective_version == "1.2"
+        assert result.candidates[0].url.endswith("download/v1.2")
+    else:
+        with pytest.raises(ResolutionError, match="final page selected no download"):
+            resolve(body, settings)

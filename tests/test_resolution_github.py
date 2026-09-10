@@ -870,3 +870,38 @@ def test_nonstring_zip_member_regex_fails_by_name_before_http() -> None:
     assert raised.value.code == "settings-invalid"
     assert "zippedApkFilterRegEx" in str(raised.value)
     assert transport.requests == []
+
+
+def test_package_containers_use_asset_names_without_enabling_generic_zips() -> None:
+    names = ["one.apk", "two.XAPK", "three.apkm", "four.apks"]
+    misleading = asset("download")
+    misleading["browser_download_url"] = "https://downloads.example/hidden.apk"
+    result, _ = resolver(
+        [
+            release(
+                "v1.0",
+                assets=[
+                    *(asset(name) for name in names),
+                    asset("other.zip"),
+                    misleading,
+                ],
+            )
+        ],
+        {"includeZips": False},
+    )
+    assert [item.name for item in result.candidates] == names
+
+
+@pytest.mark.parametrize(
+    "invert,expected", [(False, ["keep.xapk"]), (True, ["drop.apks"])]
+)
+def test_package_container_filter_and_inversion_use_asset_name(
+    invert: bool, expected: list[str]
+) -> None:
+    keep = asset("keep.xapk")
+    keep["browser_download_url"] = "https://downloads.example/drop.apks"
+    result, _ = resolver(
+        [release("v1.0", assets=[keep, asset("drop.apks")])],
+        {"apkFilterRegEx": "^keep", "invertAPKFilter": invert, "includeZips": False},
+    )
+    assert [item.name for item in result.candidates] == expected
