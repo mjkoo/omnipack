@@ -15,10 +15,22 @@ from omnipack.model import App, Variant
 from omnipack.overlay import parse_overlay
 from omnipack.package_id import PackageIdCache, ResolutionResult, ResolutionStatus
 from omnipack.sources import IngestionReport, bboi, codm
+from omnipack.sources.extras import fetch as fetch_extras
 from tests.test_sources import FakeHttp
 
 FIXTURES = Path(__file__).parent / "fixtures/composition-baseline"
 ROOT = Path(__file__).parents[1]
+
+
+def historical_policy_document() -> dict:
+    document = json.loads((ROOT / "config/composition.json").read_text())
+    document["candidates"] = [
+        rule for rule in document["candidates"] if rule["match"]["source"] != "extras"
+    ]
+    document["pins"] = [
+        pin for pin in document["pins"] if pin["match"]["source"] != "extras"
+    ]
+    return document
 
 
 @pytest.mark.parametrize(
@@ -127,9 +139,9 @@ def test_ctr_origin_matches_captured_standard_asset_record() -> None:
 def test_maintained_policy_and_overlays_cover_the_migrated_selection() -> None:
     document = json.loads((ROOT / "config/composition.json").read_text())
     policy = parse_composition_policy(document)
-    assert len(policy.candidate_rules) == 8
+    assert len(policy.candidate_rules) == 13
     assert len(policy.history) == 113
-    assert not policy.pins
+    assert len(policy.pins) == 10
 
     rules = {(rule.match.id, rule.match.url): rule for rule in policy.candidate_rules}
     standard_ctr = rules[
@@ -145,7 +157,7 @@ def test_maintained_policy_and_overlays_cover_the_migrated_selection() -> None:
     dual = parse_overlay(
         json.loads((ROOT / "config/overlay.dual.json").read_text()), "dual overlay"
     )
-    assert len(common) == 12
+    assert len(common) == 14
     assert not dual
     assert {item.url for item in common if item.package_id == "info.cemu.cemu"} == {
         "github.com/ssimco/cemu",
@@ -194,9 +206,7 @@ def replacement_candidates() -> list[App]:
         }
     )
     candidates = bboi.fetch(http, sources["bboi"])
-    policy = parse_composition_policy(
-        json.loads((ROOT / "config/composition.json").read_text())
-    )
+    policy = parse_composition_policy(historical_policy_document())
     higher = apply_composition_policy(policy, candidates, require_all=False)
     report = IngestionReport()
     generated = codm.fetch(
@@ -210,7 +220,8 @@ def replacement_candidates() -> list[App]:
         dual_url,
         sources["codm"]["readme_url"],
     }
-    return candidates + generated
+    extras = fetch_extras(json.loads((ROOT / "config/extras.json").read_text()))
+    return candidates + generated + extras
 
 
 @pytest.mark.parametrize("variant", list(Variant))
@@ -242,8 +253,17 @@ def test_maintained_policy_composes_captured_replacement_families(
             "additionalSettings": "{}",
         }
     )
-    assert set(selected) == set(expected)
-    assert len(result.apps[variant]) == len(expected)
+    curated_ids = {
+        "com.game.cinderbox",
+        "com.aurora.store",
+        "com.karin.idTech4Amm",
+        "is.xyz.vcmi",
+        "com.github.bvschaik.julius",
+        "su.xash.engine.test",
+    }
+    assert set(expected) <= set(selected)
+    assert {app.data["id"] for app in result.apps[variant]} >= curated_ids
+    assert len(result.apps[variant]) == len(expected) + len(curated_ids)
     for family, record in expected.items():
         winner = selected[family]
         data = {

@@ -81,9 +81,40 @@
       },
       "family": "app:ctr",
       "rationale": "The configured dual catalog identifies this repository as CTR-DS with dual-screen support."
+    },
+    {
+      "match": {"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},
+      "rationale": "The curated GitLab entry carries the verified ordinary Aurora Store APK policy."
+    },
+    {
+      "match": {"source":"extras","origin":"extras","id":"com.karin.idTech4Amm","url":"https://github.com/glKarin/com.n0n3m4.diii4a"},
+      "rationale": "The curated entry carries the verified universal idTech4A++ APK policy."
+    },
+    {
+      "match": {"source":"extras","origin":"extras","id":"is.xyz.vcmi","url":"https://github.com/vcmi/vcmi"},
+      "rationale": "The curated entry carries the verified architecture-aware VCMI APK policy."
+    },
+    {
+      "match": {"source":"extras","origin":"extras","id":"com.github.bvschaik.julius","url":"https://github.com/bvschaik/julius"},
+      "rationale": "The curated entry carries the verified Julius Android APK policy."
+    },
+    {
+      "match": {"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},
+      "rationale": "The curated entry carries the rolling Xash3D Android APK policy."
     }
   ],
-  "pins": [],
+  "pins": [
+    {"family":"package:com.aurora.store","variant":"single","match":{"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},"rationale":"Keep the maintained Aurora Store selection policy."},
+    {"family":"package:com.aurora.store","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},"rationale":"Keep the maintained Aurora Store selection policy."},
+    {"family":"package:com.karin.idTech4Amm","variant":"single","match":{"source":"extras","origin":"extras","id":"com.karin.idTech4Amm","url":"https://github.com/glKarin/com.n0n3m4.diii4a"},"rationale":"Keep the maintained idTech4A++ selection policy."},
+    {"family":"package:com.karin.idTech4Amm","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.karin.idTech4Amm","url":"https://github.com/glKarin/com.n0n3m4.diii4a"},"rationale":"Keep the maintained idTech4A++ selection policy."},
+    {"family":"package:is.xyz.vcmi","variant":"single","match":{"source":"extras","origin":"extras","id":"is.xyz.vcmi","url":"https://github.com/vcmi/vcmi"},"rationale":"Keep the maintained VCMI selection policy."},
+    {"family":"package:is.xyz.vcmi","variant":"dual","match":{"source":"extras","origin":"extras","id":"is.xyz.vcmi","url":"https://github.com/vcmi/vcmi"},"rationale":"Keep the maintained VCMI selection policy."},
+    {"family":"package:com.github.bvschaik.julius","variant":"single","match":{"source":"extras","origin":"extras","id":"com.github.bvschaik.julius","url":"https://github.com/bvschaik/julius"},"rationale":"Keep the maintained Julius selection policy."},
+    {"family":"package:com.github.bvschaik.julius","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.github.bvschaik.julius","url":"https://github.com/bvschaik/julius"},"rationale":"Keep the maintained Julius selection policy."},
+    {"family":"package:su.xash.engine.test","variant":"single","match":{"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},"rationale":"Keep the maintained rolling Xash3D selection policy."},
+    {"family":"package:su.xash.engine.test","variant":"dual","match":{"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},"rationale":"Keep the maintained rolling Xash3D selection policy."}
+  ],
   "history": [
     {
       "id": "476086958",

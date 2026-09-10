@@ -108,5 +108,27 @@
         "versionDetection": false
       }
     }
+  },
+  {
+    "id": "igawa6.dualsouls",
+    "url": "https://github.com/igawa6/dualsouls",
+    "patch": {
+      "name": "Hollow Knight: Dual Souls",
+      "categories": ["PC Ports"],
+      "additionalSettings": {
+        "about": "Requires user-supplied Hollow Knight game files. Uses the second screen for maps, inventory and game information."
+      }
+    }
+  },
+  {
+    "id": "com.jakobkhansen.silksong",
+    "url": "https://github.com/jakobkhansen/SilksongAndroid",
+    "patch": {
+      "name": "Hollow Knight: Silksong",
+      "categories": ["PC Ports"],
+      "additionalSettings": {
+        "about": "Requires user-supplied Linux game files and compiles the port on-device. The upstream setup currently documents Android 13 only and uses the second screen for inventory and maps."
+      }
+    }
   }
 ]

@@ -8,6 +8,7 @@ import pytest
 
 from omnipack.report import format_reports
 from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
+from tests.test_verify import historical_composition
 
 
 def copy_inputs(root: Path) -> None:
@@ -16,6 +17,8 @@ def copy_inputs(root: Path) -> None:
         target.parent.mkdir(parents=True, exist_ok=True)
         if relative.name in {"overlay.json", "overlay.dual.json"}:
             target.write_text("[]")
+        elif relative.name == "composition.json" and relative.exists():
+            target.write_text(historical_composition())
         elif relative.exists():
             shutil.copyfile(relative, target)
         elif relative.name == "composition.json":

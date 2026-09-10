@@ -81,7 +81,12 @@ def curated():
                     data,
                 )
             )
-    for app in fetch(read(ROOT / "config/extras.json")):
+    historical_extras = [
+        entry
+        for entry in read(ROOT / "config/extras.json")
+        if entry["id"] == "com.game.cinderbox"
+    ]
+    for app in fetch(historical_extras):
         data = deepcopy(app.raw)
         data.update(
             id=app.id,
