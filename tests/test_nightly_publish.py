@@ -34,10 +34,10 @@ class ControlledProcess:
         if callback is not None:
             callback()
         if "--validate-evidence" in command:
-            from scripts.nightly_publish import _validate_live_evidence
+            from scripts.nightly_publish import _validate_structural_evidence
 
             try:
-                _validate_live_evidence(cwd, datetime.fromisoformat(command[-1]))
+                _validate_structural_evidence(cwd, datetime.fromisoformat(command[-1]))
             except CandidateError as error:
                 return CommandResult(1, "", str(error))
         return CommandResult(1 if index == self.fail_at else 0, "", "failed")
@@ -71,9 +71,7 @@ def _repo(tmp_path: Path) -> Path:
     return root
 
 
-def _evidence(
-    root: Path, *, warnings: bool = False, observed: str | None = None
-) -> None:
+def _evidence(root: Path, *, observed: str | None = None) -> None:
     from omnipack.verify import SCHEMA_VERSION, capture_inputs, verifier_identity
 
     _, inputs = capture_inputs(root)
@@ -81,26 +79,20 @@ def _evidence(
     report = {
         "schemaVersion": SCHEMA_VERSION,
         "verifier": verifier_identity(),
-        "mode": "live",
+        "mode": "offline",
         "startedAt": observed,
         "completedAt": observed,
         "complete": True,
         "status": "success",
         "inputs": inputs,
         "errors": [],
-        "warnings": (
-            [{"stage": "live", "code": "warning", "message": "temporary"}]
-            if warnings
-            else []
-        ),
-        "entries": [],
     }
     path = root / ".build/verify.json"
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(report))
 
 
-def test_refresh_orders_checks_build_and_metadata_only_verification(
+def test_refresh_orders_prebuild_checks_build_and_candidate_structural_verification(
     tmp_path: Path,
 ) -> None:
     root = _repo(tmp_path)
@@ -111,7 +103,7 @@ def test_refresh_orders_checks_build_and_metadata_only_verification(
 
     def replace_evidence() -> None:
         assert not old_evidence.exists()
-        _evidence(root, warnings=True)
+        _evidence(root)
 
     process.on_command[9] = replace_evidence
 
@@ -127,12 +119,12 @@ def test_refresh_orders_checks_build_and_metadata_only_verification(
         "tests",
         "offline-verify",
         "build",
-        "live-verify",
+        "candidate-verify",
         "candidate",
     ]
     assert process.commands[-3:-1] == [
         ("uv", "run", "--no-sync", "pack", "build"),
-        ("uv", "run", "--no-sync", "pack", "verify", "--live"),
+        ("uv", "run", "--no-sync", "pack", "verify"),
     ]
     assert all("--probe-assets" not in command for command in process.commands)
     assert "config/composition.json" not in ALLOWED_PATHS
@@ -182,7 +174,7 @@ def test_command_launch_error_is_an_explicit_stage_failure(tmp_path: Path) -> No
     assert result.stages[0].status == "failed"
 
 
-def test_missing_file_before_live_verification_is_an_explicit_failure(
+def test_missing_file_before_candidate_verification_is_an_explicit_failure(
     tmp_path: Path,
 ) -> None:
     root = _repo(tmp_path)
@@ -196,11 +188,36 @@ def test_missing_file_before_live_verification_is_an_explicit_failure(
     assert len(process.commands) == 8
 
 
+def test_candidate_report_cleanup_failure_retains_prebuild_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    process = ControlledProcess(root)
+    evidence = root / ".build/verify.json"
+    process.on_command[7] = lambda: _evidence(root)
+    original_unlink = Path.unlink
+
+    def fail_candidate_cleanup(path: Path, *, missing_ok: bool = False) -> None:
+        if path == evidence:
+            raise OSError("cannot remove pre-build evidence")
+        original_unlink(path, missing_ok=missing_ok)
+
+    monkeypatch.setattr(Path, "unlink", fail_candidate_cleanup)
+
+    result = RefreshOrchestrator(process).run(root, "abc123")
+
+    assert result.status == "failed"
+    assert result.stages[-1].stage == "candidate-verify"
+    assert "cannot remove pre-build evidence" in result.stages[-1].detail
+    assert json.loads(evidence.read_text())["mode"] == "offline"
+    assert len(process.commands) == 8
+
+
 @pytest.mark.parametrize(
     "defect",
     ["absent", "stale", "incomplete", "verifier", "mode", "schema", "old"],
 )
-def test_bad_live_evidence_rejects_candidate(tmp_path: Path, defect: str) -> None:
+def test_bad_structural_evidence_rejects_candidate(tmp_path: Path, defect: str) -> None:
     root = _repo(tmp_path)
     process = ControlledProcess(root)
 
@@ -223,7 +240,7 @@ def test_bad_live_evidence_rejects_candidate(tmp_path: Path, defect: str) -> Non
             elif defect == "verifier":
                 report["verifier"]["version"] = "other"
             elif defect == "mode":
-                report["mode"] = "offline"
+                report["mode"] = "live"
             elif defect == "schema":
                 report["schemaVersion"] = 999
         report_path.write_text(json.dumps(report))

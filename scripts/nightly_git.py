@@ -39,6 +39,8 @@ class RemoteBoundary(Protocol):
 
 
 class ReleaseBoundary(Protocol):
+    def preflight(self) -> None: ...
+
     def synchronize(
         self, single: bytes, dual: bytes, source_commit: str
     ) -> SyncResult: ...
@@ -289,6 +291,27 @@ class PublicationCoordinator:
                         None,
                         stage,
                         "refresh failed",
+                    )
+
+                if self.release is None:
+                    return PublicationResult(
+                        "failed",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "release-preflight",
+                        "owned rolling release seed is unavailable; run bootstrap-release",
+                    )
+                try:
+                    self.release.preflight()
+                except Exception as error:  # noqa: BLE001 - release is external
+                    return PublicationResult(
+                        "failed",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "release-preflight",
+                        f"owned rolling release seed is unavailable: {error}; run bootstrap-release",
                     )
 
                 try:

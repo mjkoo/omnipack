@@ -76,7 +76,7 @@ class PublicationCandidate:
     def capture(
         cls, root: Path, *, validate_evidence: Callable[[Path], None] | None = None
     ) -> PublicationCandidate:
-        (validate_evidence or _validate_live_evidence)(root)
+        (validate_evidence or _validate_structural_evidence)(root)
         snapshots = _snapshot_allowed(root)
         _reject_unexpected_tracked_changes(root)
         _validate_readme_change(root, snapshots["README.md"])
@@ -132,7 +132,7 @@ class Check:
     command: tuple[str, ...]
 
 
-CHECKS = (
+PRE_BUILD_CHECKS = (
     Check("sync", ("uv", "sync", "--locked")),
     Check("format-check", ("uv", "run", "--no-sync", "ruff", "format", "--check")),
     Check("lint-check", ("uv", "run", "--no-sync", "ruff", "check")),
@@ -145,8 +145,8 @@ CHECKS = (
     Check("offline-verify", ("uv", "run", "--no-sync", "pack", "verify")),
     Check("build", ("uv", "run", "--no-sync", "pack", "build")),
 )
-LIVE_VERIFY = Check(
-    "live-verify", ("uv", "run", "--no-sync", "pack", "verify", "--live")
+STRUCTURAL_VERIFY = Check(
+    "candidate-verify", ("uv", "run", "--no-sync", "pack", "verify")
 )
 
 
@@ -156,7 +156,7 @@ class RefreshOrchestrator:
 
     def run(self, root: Path, base_sha: str) -> RefreshResult:
         outcomes: list[StageOutcome] = []
-        for check in CHECKS:
+        for check in PRE_BUILD_CHECKS:
             if failure := self._run(check, root):
                 outcomes.append(failure)
                 return RefreshResult("failed", base_sha, tuple(outcomes))
@@ -171,13 +171,13 @@ class RefreshOrchestrator:
         try:
             evidence.unlink(missing_ok=True)
         except OSError as error:
-            outcomes.append(StageOutcome("live-verify", "failed", str(error)))
+            outcomes.append(StageOutcome("candidate-verify", "failed", str(error)))
             return RefreshResult("failed", base_sha, tuple(outcomes))
         invoked_at = datetime.now(UTC)
-        if failure := self._run(LIVE_VERIFY, root):
+        if failure := self._run(STRUCTURAL_VERIFY, root):
             outcomes.append(failure)
             return RefreshResult("failed", base_sha, tuple(outcomes))
-        outcomes.append(StageOutcome("live-verify", "success"))
+        outcomes.append(StageOutcome("candidate-verify", "success"))
 
         try:
             if _snapshot_allowed(root) != before_verify:
@@ -267,18 +267,20 @@ def validate_candidate(root: Path) -> PublicationCandidate:
     return candidate
 
 
-def _validate_live_evidence(root: Path, invoked_at: datetime | None = None) -> None:
+def _validate_structural_evidence(
+    root: Path, invoked_at: datetime | None = None
+) -> None:
     path = root / VERIFY_PATH
     try:
         report = json.loads(path.read_bytes())
         if not isinstance(report, dict):
-            raise CandidateError("live verification evidence is malformed")
+            raise CandidateError("candidate structural evidence is malformed")
         _validate_verification_report(report)
     except FileNotFoundError as error:
-        raise CandidateError("live verification evidence is absent") from error
+        raise CandidateError("candidate structural evidence is absent") from error
     except (OSError, ValueError, ReportFormatError) as error:
         raise CandidateError(
-            f"live verification evidence is malformed: {error}"
+            f"candidate structural evidence is malformed: {error}"
         ) from error
     _, current = capture_inputs(root)
     try:
@@ -287,9 +289,9 @@ def _validate_live_evidence(root: Path, invoked_at: datetime | None = None) -> N
         if started.tzinfo is None or completed.tzinfo is None:
             raise ValueError("timestamps must include timezone offsets")
     except (KeyError, TypeError, ValueError) as error:
-        raise CandidateError("live verification timestamps are invalid") from error
+        raise CandidateError("candidate structural timestamps are invalid") from error
     if (
-        report["mode"] != "live"
+        report["mode"] != "offline"
         or report["status"] != "success"
         or not report["complete"]
         or report["errors"]
@@ -298,7 +300,7 @@ def _validate_live_evidence(root: Path, invoked_at: datetime | None = None) -> N
         or (invoked_at is not None and started < invoked_at)
         or completed < started
     ):
-        raise CandidateError("live verification evidence is stale or incomplete")
+        raise CandidateError("candidate structural evidence is stale or incomplete")
 
 
 def _base_mode(root: Path, relative: str) -> bytes:
@@ -380,6 +382,6 @@ if __name__ == "__main__":
     )
     arguments = parser.parse_args()
     try:
-        _validate_live_evidence(Path.cwd(), arguments.validate_evidence)
+        _validate_structural_evidence(Path.cwd(), arguments.validate_evidence)
     except CandidateError as error:
         raise SystemExit(str(error)) from error

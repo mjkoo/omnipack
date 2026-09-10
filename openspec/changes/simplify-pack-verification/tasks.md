@@ -1,8 +1,8 @@
 ## 1. Structural verification and evidence
 
-- [ ] 1.1 Retain pure serialized-pair, local composition, settings and catalog validation while removing live dispatch and both retired CLI flags; verify valid outputs pass with network access forbidden, missing HTTP config is irrelevant, and retired flags fail before report writes.
-- [ ] 1.2 Implement structural schema 2, updated verifier identity and fingerprints limited to structural inputs; verify exact-input freshness, independent errors, interrupted records, atomic completion and report-write failure behavior.
-- [ ] 1.3 Adapt report parsing and formatting to structural evidence and explicit old-schema regeneration diagnostics; verify stale supported reports, unsupported historical verification reports, missing reports and recorded failures while preserving build-report behavior.
+- [x] 1.1 Retain pure serialized-pair, local composition, settings and catalog validation while removing live dispatch and both retired CLI flags; verify valid outputs pass with network access forbidden, missing HTTP config is irrelevant, and retired flags fail before report writes.
+- [x] 1.2 Implement structural schema 2, updated verifier identity and fingerprints limited to structural inputs; verify exact-input freshness, independent errors, interrupted records, atomic completion and report-write failure behavior.
+- [x] 1.3 Adapt report parsing and formatting to structural evidence and explicit old-schema regeneration diagnostics; verify stale supported reports, unsupported historical verification reports, missing reports and recorded failures while preserving build-report behavior.
 
 ## 2. Publication consumers
 

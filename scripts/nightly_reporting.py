@@ -240,6 +240,7 @@ def redact(value: object, secrets: Sequence[str] = ()) -> object:
 
 def _attempt_summary(attempt: object) -> dict[str, object]:
     mode = _verification_mode(attempt)
+    phase = _verification_phase(attempt)
     stages = []
     for stage in _field(attempt, "stages", ()):
         stages.append(
@@ -262,15 +263,32 @@ def _attempt_summary(attempt: object) -> dict[str, object]:
         if _field(attempt, "verify_report", None) is not None
         else "unavailable",
         "verify_mode": mode,
-        "live_verify_report": "available" if mode == "live" else "unavailable",
+        "verify_phase": phase,
+        "candidate_structural_report": (
+            "available" if phase == "candidate" and mode == "offline" else "unavailable"
+        ),
         "stages": stages,
     }
 
 
 def _verification_mode(attempt: object) -> str:
     report = _report_document("verify", _field(attempt, "verify_report", None))
-    if isinstance(report, dict) and report.get("mode") in ("offline", "live"):
+    if isinstance(report, dict) and report.get("mode") == "offline":
         return str(report["mode"])
+    return "unknown"
+
+
+def _verification_phase(attempt: object) -> str:
+    stages = tuple(_field(attempt, "stages", ()))
+    candidate_verified = any(
+        _field(stage, "stage", "") == "candidate-verify"
+        and _field(stage, "status", "") == "success"
+        for stage in stages
+    )
+    if candidate_verified:
+        return "candidate"
+    if any(_field(stage, "stage", "") == "offline-verify" for stage in stages):
+        return "pre-build"
     return "unknown"
 
 
@@ -362,12 +380,17 @@ def _summary(
             "available" if _field(attempt, "verify_report", None) else "unavailable"
         )
         mode = _verification_mode(attempt)
-        label = f"{mode} verification" if mode != "unknown" else "verification"
+        phase = _verification_phase(attempt)
+        label = (
+            "candidate structural/offline verification"
+            if phase == "candidate" and mode == "offline"
+            else "pre-build offline verification"
+            if phase == "pre-build" and mode == "offline"
+            else "candidate verification"
+        )
         lines.append(
             f"- Attempt {number}: build report {build}; {label} report {verify}"
         )
-        if mode != "live":
-            lines.append(f"- Attempt {number}: live verification report unavailable")
     if not attempts:
         lines.append(
             "- Attempts: unavailable; failure occurred before an attempt completed"

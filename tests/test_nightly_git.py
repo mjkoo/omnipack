@@ -11,6 +11,7 @@ from collections.abc import Callable, Iterator, Mapping, Sequence
 from contextlib import contextmanager
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import cast
 
 import pytest
 
@@ -34,9 +35,21 @@ from tests.test_nightly_publish import _evidence, _git, _repo
 
 
 class RecordingRelease:
-    def __init__(self, failure: BaseException | None = None) -> None:
+    def __init__(
+        self,
+        failure: BaseException | None = None,
+        *,
+        preflight_failure: BaseException | None = None,
+    ) -> None:
         self.failure = failure
+        self.preflight_failure = preflight_failure
         self.calls: list[tuple[bytes, bytes, str]] = []
+        self.preflight_calls = 0
+
+    def preflight(self) -> None:
+        self.preflight_calls += 1
+        if self.preflight_failure is not None:
+            raise self.preflight_failure
 
     def synchronize(self, single: bytes, dual: bytes, source_commit: str):
         self.calls.append((single, dual, source_commit))
@@ -102,17 +115,25 @@ class RecordingGit:
         return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
+_DEFAULT_RELEASE = object()
+
+
 def _coordinator(
     source: Path,
     remote: RemoteBoundary,
     refresh: ChangingRefresh,
-    release: ReleaseBoundary | None = None,
+    release: ReleaseBoundary | None | object = _DEFAULT_RELEASE,
 ) -> PublicationCoordinator:
+    selected_release = (
+        RecordingRelease()
+        if release is _DEFAULT_RELEASE
+        else cast(ReleaseBoundary | None, release)
+    )
     return PublicationCoordinator(
         LocalAttemptFactory(source),
         refresh,
         remote,
-        release,
+        selected_release,
         now=lambda: datetime(2026, 9, 8, 12, tzinfo=UTC),
     )
 
@@ -126,18 +147,39 @@ def test_missing_release_boundary_preserves_main_without_claiming_completion(
 
     source, bare, base = _remote(tmp_path)
     refresh = ChangingRefresh(change=change)
-    result = _coordinator(source, GitRemote(source), refresh).run("run", "token")
+    result = _coordinator(source, GitRemote(source), refresh, None).run("run", "token")
 
-    assert result.status == ("published" if change else "no-op")
+    assert result.status == "failed"
     assert result.base_sha == base
-    assert result.published_sha == (_git(bare, "rev-parse", "main") if change else None)
+    assert result.published_sha is None
+    assert _git(bare, "rev-parse", "main") == base
     assert result.release_status == "not-run"
+    assert result.stage == "release-preflight"
     assert result.pack_snapshots is None
     assert all(not root.exists() for root in refresh.roots)
     issues = RecordingIssues()
     finalized = finalize_publication(result, issues, tmp_path / "diagnostics", "run")
     assert finalized.workflow_status == "failed"
     assert issues.failure_bodies and not issues.recovery_bodies
+
+
+@pytest.mark.parametrize("reason", ["seed missing", "ownership marker absent"])
+def test_missing_or_unowned_seed_blocks_main_and_release_writes(
+    tmp_path: Path, reason: str
+) -> None:
+    source, bare, base = _remote(tmp_path)
+    release = RecordingRelease(preflight_failure=RuntimeError(reason))
+
+    result = _coordinator(source, GitRemote(source), ChangingRefresh(), release).run(
+        "run", "token"
+    )
+
+    assert result.status == "failed"
+    assert result.stage == "release-preflight"
+    assert "bootstrap-release" in result.detail
+    assert _git(bare, "rev-parse", "main") == base
+    assert release.preflight_calls == 1
+    assert release.calls == []
 
 
 def test_release_uses_verified_bytes_after_successful_checkout_is_removed(
@@ -194,6 +236,11 @@ def test_verified_noop_repairs_release_assets_through_real_synchronizer(
     remote = ControlledReleaseRemote(document)
 
     class RealRelease:
+        def preflight(self) -> None:
+            from scripts.nightly_release import parse_owned_release
+
+            parse_owned_release(remote.discover())
+
         def synchronize(self, single: bytes, dual: bytes, source_commit: str):
             return synchronize_release(remote, single, dual, source_commit)
 
@@ -478,6 +525,7 @@ def test_retry_setup_failure_preserves_first_attempt_diagnostics(
         FailingSecondAttempt(source),
         ChangingRefresh(),
         remote,
+        RecordingRelease(),
         now=lambda: datetime(2026, 9, 8, tzinfo=UTC),
     )
 
@@ -692,12 +740,12 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
                 f'VERIFIER_VERSION = "{VERIFIER_VERSION}"',
                 f'VERIFIER_VERSION = "{next_version}"',
             )
-            .replace("SCHEMA_VERSION = 1", "SCHEMA_VERSION = 2")
+            .replace("SCHEMA_VERSION = 2", "SCHEMA_VERSION = 3")
             .replace('Path("config/settings.json")', 'Path("config/new-settings.json")')
         )
         (source / "config/new-settings.json").write_text("new verifier input\n")
         report = source / "src/omnipack/report.py"
-        report.write_text(report.read_text().replace("schema != 1:", "schema != 2:"))
+        report.write_text(report.read_text().replace("schema != 2:", "schema != 3:"))
         _git(source, "add", "src", "config/new-settings.json")
         _git(source, "commit", "-qm", "update verification contract")
         _git(source, "push", "-q", str(bare), "HEAD:main")
@@ -711,7 +759,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
             self.commands.append(tuple(command))
             if tuple(command[-2:]) == ("pack", "build"):
                 (cwd / ALLOWED_PATHS[0]).write_text("candidate\n")
-            if command[-1] == "--live":
+            if tuple(command[-2:]) == ("pack", "verify"):
                 code = (
                     "import json\nfrom pathlib import Path\n"
                     "from datetime import UTC, datetime\n"
@@ -752,6 +800,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
         LocalAttemptFactory(source),
         RefreshOrchestrator(process),
         AdvancingRemote(GitRemote(source), advance),
+        RecordingRelease(),
     )
     result = coordinator.run("run", "token")
 
@@ -764,7 +813,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
     assert reports[0]["verifier"]["version"] == VERIFIER_VERSION
     if defect is None:
         assert reports[1]["verifier"]["version"] == next_version
-        assert reports[1]["schemaVersion"] == 2
+        assert reports[1]["schemaVersion"] == 3
         assert reports[1]["inputs"]["settings"]["state"] == "present"
     else:
         assert result.published_sha is None

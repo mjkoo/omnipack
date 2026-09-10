@@ -246,25 +246,59 @@ def test_setup_failure_entrypoint_needs_no_project_runtime(tmp_path: Path) -> No
         ast.parse(Path(module).read_text(), feature_version=(3, 10))
 
 
-def test_offline_report_is_retained_without_claiming_live_evidence(
+def test_candidate_structural_report_is_labeled_without_live_claims(
     tmp_path: Path,
 ) -> None:
     outcome = _publication()
     offline = b'{"mode":"offline","status":"success","complete":true}'
     outcome = replace(
-        outcome, attempts=(replace(outcome.attempts[0], verify_report=offline),)
+        outcome,
+        attempts=(
+            replace(
+                outcome.attempts[0],
+                stages=(Stage("candidate-verify", "success"),),
+                verify_report=offline,
+            ),
+        ),
     )
 
     result = finalize_publication(outcome, RecordingIssues(), tmp_path, "run")
 
     document = json.loads((tmp_path / "orchestration-result.json").read_text())
     assert document["attempts"][0]["verify_mode"] == "offline"
-    assert document["attempts"][0]["live_verify_report"] == "unavailable"
-    assert "offline verification report available" in result.summary
-    assert "live verification report unavailable" in result.summary
+    assert document["attempts"][0]["verify_phase"] == "candidate"
+    assert document["attempts"][0]["candidate_structural_report"] == "available"
+    assert (
+        "candidate structural/offline verification report available" in result.summary
+    )
+    assert "live verification" not in result.summary
     assert json.loads((tmp_path / "attempt-1-verify.json").read_text()) == json.loads(
         offline
     )
+
+
+def test_retained_prebuild_evidence_is_not_labeled_as_candidate_evidence(
+    tmp_path: Path,
+) -> None:
+    offline = b'{"mode":"offline","status":"success","complete":true}'
+    outcome = _publication()
+    outcome = replace(
+        outcome,
+        attempts=(
+            replace(
+                outcome.attempts[0],
+                stages=(Stage("offline-verify", "success"), Stage("build", "failed")),
+                verify_report=offline,
+            ),
+        ),
+    )
+
+    result = finalize_publication(outcome, RecordingIssues(), tmp_path, "run")
+
+    document = json.loads((tmp_path / "orchestration-result.json").read_text())
+    assert document["attempts"][0]["verify_phase"] == "pre-build"
+    assert document["attempts"][0]["candidate_structural_report"] == "unavailable"
+    assert "pre-build offline verification report available" in result.summary
 
 
 @pytest.mark.parametrize("status", ["published", "no-op"])

@@ -471,7 +471,10 @@ def test_fallback_preserves_missing_report_markers(tmp_path: Path) -> None:
     persisted = json.loads((diagnostics / RESULT_NAME).read_text())
     assert persisted["attempts"][0]["build_report"] == "unavailable"
     assert persisted["attempts"][0]["verify_report"] == "unavailable"
-    assert "build report unavailable; verification report unavailable" in result.summary
+    assert (
+        "build report unavailable; candidate verification report unavailable"
+        in result.summary
+    )
     for name in ("build", "verify"):
         report = json.loads((diagnostics / f"attempt-1-{name}.json").read_text())
         assert report["available"] is False
