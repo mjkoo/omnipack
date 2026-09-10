@@ -44,8 +44,11 @@ They SHALL retain Symphony from sergiomanzur, OpenMW-DS from Josh-Daniels, igawa
 CTR for dual and Simon CTR for single. Gen1Recomp SHALL use its canonical
 bryanthaboi/gen1recomp repository. Both packs SHALL select HarbourMasters/Ghostship
 as dev.net64.ghostship from its Android ZIP, exclude legacy izzy2lost Ghostship,
-and exclude releases from the retired Super Metroid Android repository. The dual-screen
+and deny the reviewed retired Super Metroid catalog IDs
+`com.raekwon1603.supermetroid` and `com.raekwon1603.supermetroidds`. The dual-screen
 pack SHALL include MetroidArch as specified below; the single-screen pack SHALL omit it.
+Future changed or additional retired IDs SHALL require curation review rather than
+automatic repository-wide exclusion.
 
 Curation acceptance SHALL use documented source reputation and basic source/APK
 vetting; independent binary reproduction SHALL NOT be required. Documentation
@@ -58,7 +61,7 @@ and removal changes. It SHALL NOT claim device installation or save migration.
   legacy Ghostship, and both standard and dual retired Super Metroid entries
 - **THEN** maintained corrections yield verified identities with at most one winner
   per family and package in each target
-- **AND** official Ghostship wins in both targets and the retired Super Metroid source is absent
+- **AND** official Ghostship wins in both targets and the two reviewed retired Super Metroid catalog IDs are absent
 - **AND** Symphony and OpenMW-DS remain available despite non-reproducible binaries
 
 #### Scenario: Existing installation differs from the curated choice
@@ -76,14 +79,20 @@ The dual-screen pack SHALL include exactly one MetroidArch entry from
 `https://github.com/Raekwon1603/RetroArch` with package `com.metroidarch.app.aarch64`
 and stable APK release selection. The single-screen pack SHALL omit MetroidArch.
 Both packs SHALL retain ordinary RetroArch and exclude the retired
-`Raekwon1603/super_metroid-android` repository, including after repeated upstream refreshes.
+catalog IDs `com.raekwon1603.supermetroid` and `com.raekwon1603.supermetroidds`,
+including after repeated upstream refreshes. This exclusion SHALL use existing
+catalog-ID deny configuration and SHALL NOT add URL-deny behavior. Future changed
+or additional retired IDs SHALL require curation review.
 The source SHALL be classified as the Super Metroid family, not ordinary RetroArch.
 
 MetroidArch SHALL track complete GitHub release tags with APK version detection
 disabled, because the reviewed releases share the APK version name `1.22.2_GIT`.
 Update checks SHALL remain enabled. Selection SHALL match only versioned
 `MetroidArch-v<dotted numeric version>.apk` assets, exclude prereleases and ZIPs,
-and not depend on architecture text in the filename.
+and not depend on architecture text in the filename. It SHALL set
+`fallbackToOlderReleases=false` and select the newest eligible stable release. If
+that release has no matching versioned APK, resolution SHALL fail without selecting
+an older release.
 
 Documentation SHALL record the dated source/reputation and APK evidence,
 ARM64 core limitation, debuggable build, inherited HTTP updater defaults, and
@@ -97,13 +106,19 @@ without claiming that Obtainium imports configure those directories automaticall
 
 - **WHEN** catalogs are composed and refreshed repeatedly with the retired source and MetroidArch candidates
 - **THEN** only dual exports MetroidArch with the verified package and intended source
-- **AND** ordinary RetroArch remains in both targets, retired-source entries remain absent, and no duplicate family or package is exported
+- **AND** ordinary RetroArch remains in both targets, the two reviewed retired catalog IDs remain absent, and no duplicate family or package is exported
 
 #### Scenario: Release and APK versions disagree
 
 - **WHEN** the source publishes stable tags `v1.0.0` and `v1.0.1`, both with APK versionName `1.22.2_GIT`
 - **THEN** their source versions remain distinct and the current matching APK is selected
 - **AND** unrelated APK names, ZIP assets, and prereleases are not selected
+
+#### Scenario: Newest stable release lacks a matching versioned APK
+
+- **WHEN** the newest eligible stable release has no asset matching `MetroidArch-v<dotted numeric version>.apk`
+- **THEN** resolution fails for that release
+- **AND** no APK from an older release is selected
 
 #### Scenario: A user imports the pack on a device with RetroArch
 
