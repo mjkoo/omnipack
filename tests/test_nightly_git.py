@@ -17,6 +17,7 @@ import pytest
 from scripts.nightly_git import (
     GitRemote,
     PublicationCoordinator,
+    ReleaseBoundary,
     RemoteBoundary,
 )
 from scripts.nightly_publish import (
@@ -30,6 +31,18 @@ from scripts.nightly_publish import (
     validate_candidate,
 )
 from tests.test_nightly_publish import _evidence, _git, _repo
+
+
+class RecordingRelease:
+    def __init__(self, failure: BaseException | None = None) -> None:
+        self.failure = failure
+        self.calls: list[tuple[bytes, bytes, str]] = []
+
+    def synchronize(self, single: bytes, dual: bytes, source_commit: str):
+        self.calls.append((single, dual, source_commit))
+        if self.failure is not None:
+            raise self.failure
+        return type("Sync", (), {"revision": 7, "pending_revision": None})()
 
 
 def _remote(tmp_path: Path) -> tuple[Path, Path, str]:
@@ -90,14 +103,142 @@ class RecordingGit:
 
 
 def _coordinator(
-    source: Path, remote: RemoteBoundary, refresh: ChangingRefresh
+    source: Path,
+    remote: RemoteBoundary,
+    refresh: ChangingRefresh,
+    release: ReleaseBoundary | None = None,
 ) -> PublicationCoordinator:
     return PublicationCoordinator(
         LocalAttemptFactory(source),
         refresh,
         remote,
+        release,
         now=lambda: datetime(2026, 9, 8, 12, tzinfo=UTC),
     )
+
+
+def test_release_uses_verified_bytes_after_successful_checkout_is_removed(
+    tmp_path: Path,
+) -> None:
+    source, _, _ = _remote(tmp_path)
+    refresh = ChangingRefresh()
+    release = RecordingRelease()
+
+    result = _coordinator(source, GitRemote(source), refresh, release).run(
+        "run", "token"
+    )
+
+    assert result.status == "published"
+    assert result.release_status == "success"
+    assert result.release_revision == 7
+    assert all(not root.exists() for root in refresh.roots)
+    single, dual, source_commit = release.calls[0]
+    assert result.base_sha is not None
+    assert single == b"candidate:" + result.base_sha.encode() + b"\n"
+    assert dual == b"base:dist/dual-screen.json\n"
+    assert source_commit == result.published_sha
+
+
+def test_noop_still_synchronizes_exact_verified_pair(tmp_path: Path) -> None:
+    source, _, base = _remote(tmp_path)
+    release = RecordingRelease()
+
+    result = _coordinator(
+        source, GitRemote(source), ChangingRefresh(change=None), release
+    ).run("run", "token")
+
+    assert result.status == "no-op"
+    assert release.calls == [
+        (
+            b"base:dist/single-screen.json\n",
+            b"base:dist/dual-screen.json\n",
+            base,
+        )
+    ]
+
+
+def test_verified_noop_repairs_release_assets_through_real_synchronizer(
+    tmp_path: Path,
+) -> None:
+    from scripts.nightly_release_sync import synchronize_release
+    from tests.test_nightly_release import ControlledReleaseRemote, completed_release
+
+    source, _, base = _remote(tmp_path)
+    single = b"base:dist/single-screen.json\n"
+    dual = b"base:dist/dual-screen.json\n"
+    document = completed_release(single, dual)
+    document["assets"] = []
+    remote = ControlledReleaseRemote(document)
+
+    class RealRelease:
+        def synchronize(self, single: bytes, dual: bytes, source_commit: str):
+            return synchronize_release(remote, single, dual, source_commit)
+
+    result = _coordinator(
+        source, GitRemote(source), ChangingRefresh(change=None), RealRelease()
+    ).run("run", "token")
+
+    assert result.status == "no-op"
+    assert result.release_status == "success"
+    assert result.release_revision == 3
+    assert remote.blobs == {
+        "single-screen.json": single,
+        "dual-screen.json": dual,
+    }
+    assert [call[0] for call in remote.calls].count("upload") == 2
+    assert result.base_sha == base
+
+
+def test_release_failure_preserves_confirmed_main_sha(tmp_path: Path) -> None:
+    from scripts.nightly_release_sync import SyncFailure
+
+    source, bare, _ = _remote(tmp_path)
+    release = RecordingRelease(SyncFailure("upload failed", 8))
+
+    result = _coordinator(source, GitRemote(source), ChangingRefresh(), release).run(
+        "run", "token"
+    )
+
+    assert result.status == "published"
+    assert result.published_sha == _git(bare, "rev-parse", "main")
+    assert result.release_status == "failed"
+    assert result.pending_revision == 8
+    assert result.stage == "release"
+
+
+def test_failed_refresh_never_calls_release(tmp_path: Path) -> None:
+    source, _, _ = _remote(tmp_path)
+    release = RecordingRelease()
+
+    class FailedRefresh(ChangingRefresh):
+        def run(self, root: Path, base_sha: str) -> RefreshResult:
+            return RefreshResult(
+                "failed",
+                base_sha,
+                (StageOutcome("verify", "failed", "verification failed"),),
+            )
+
+    result = _coordinator(source, GitRemote(source), FailedRefresh(), release).run(
+        "run", "token"
+    )
+
+    assert result.status == "failed"
+    assert release.calls == []
+
+
+def test_uncertain_push_never_calls_release(tmp_path: Path) -> None:
+    source, _, _ = _remote(tmp_path)
+    release = RecordingRelease()
+
+    result = _coordinator(
+        source,
+        PushOutcomeRemote(GitRemote(source), unreadable=True),
+        ChangingRefresh(),
+        release,
+    ).run("run", "token")
+
+    assert result.status == "uncertain"
+    assert release.calls == []
 
 
 def test_publishes_one_allowlisted_commit_with_metadata(tmp_path: Path) -> None:
@@ -213,6 +354,26 @@ def test_main_advancement_discards_candidate_and_runs_fresh_attempt(
     assert result.attempts[0].build_report is not None
     assert result.attempts[0].verify_report is not None
     assert all(not root.exists() for root in refresh.roots)
+
+
+def test_release_uses_only_successful_retry_pair(tmp_path: Path) -> None:
+    source, bare, base = _remote(tmp_path)
+    newer: list[str] = []
+    release = RecordingRelease()
+    remote = AdvancingRemote(
+        GitRemote(source), lambda: newer.append(_advance(source, bare, "newer"))
+    )
+
+    result = _coordinator(source, remote, ChangingRefresh(), release).run(
+        "run", "token"
+    )
+
+    assert base != newer[0]
+    assert len(release.calls) == 1
+    single, dual, source_commit = release.calls[0]
+    assert single == f"candidate:{newer[0]}\n".encode()
+    assert dual == b"base:dist/dual-screen.json\n"
+    assert source_commit == result.published_sha
 
 
 def test_fresh_attempt_preserves_new_base_readme_around_generated_catalog(

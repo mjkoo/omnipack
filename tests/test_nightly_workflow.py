@@ -11,6 +11,7 @@ from typing import Any, Self
 
 import pytest
 
+import scripts.nightly
 from scripts.nightly import (
     ApiResponse,
     UrllibGitHubApi,
@@ -84,6 +85,7 @@ def _result(status: str) -> PublicationResult:
         "published-sha" if status == "published" else None,
         "complete" if status in ("published", "no-op") else "push",
         "",
+        release_status="success",
     )
 
 
@@ -257,6 +259,56 @@ def test_helper_fallback_reloads_confirmed_outcome_instead_of_resetting_it(
     persisted = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
     assert persisted["status"] == "published"
     assert persisted["published_sha"] == "published-sha"
+
+
+def test_helper_fallback_preserves_separate_release_failure(tmp_path: Path) -> None:
+    environment = _environment(tmp_path)
+    outcome = replace(
+        _result("published"),
+        stage="release",
+        detail="upload failed",
+        release_status="failed",
+        pending_revision=6,
+    )
+    diagnostics = tmp_path / "nightly-diagnostics"
+    write_diagnostics(diagnostics, outcome, "run")
+
+    result = run_setup_failure(
+        environment,
+        "helper",
+        "publisher exited after release failure",
+        api=FakeApi(
+            [
+                _response(200, []),
+                _response(
+                    201,
+                    {
+                        "number": 7,
+                        "state": "open",
+                        "body": "<!-- obtainium-pack:nightly-publishing -->",
+                        "user": {"login": "github-actions[bot]"},
+                    },
+                ),
+            ]
+        ),
+    )
+
+    assert result is not None
+    assert result.publication_status == "published"
+    assert result.release_status == "failed"
+    assert result.pending_revision == 6
+    persisted = json.loads((diagnostics / RESULT_NAME).read_text())
+    assert persisted["published_sha"] == "published-sha"
+    assert persisted["release_status"] == "failed"
+    assert persisted["pending_revision"] == 6
+
+
+def test_default_publisher_wires_release_synchronizer() -> None:
+    publisher = scripts.nightly._publisher(Path.cwd(), "workflow-secret")
+
+    release = getattr(publisher, "release", None)
+    assert release is not None
+    assert release.remote.token == "workflow-secret"
 
 
 def test_upload_outcome_updates_persistent_result_and_summary(tmp_path: Path) -> None:

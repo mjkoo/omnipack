@@ -134,9 +134,9 @@ def run_publication(
         return None
     output_dir = _output_dir(environ)
     selected_api = api or _api(environ)
-    selected_publisher = publisher or _publisher(Path.cwd())
     run_url = _run_url(environ)
     token = environ.get("GITHUB_TOKEN", "")
+    selected_publisher = publisher or _publisher(Path.cwd(), token)
     try:
         outcome = selected_publisher.run(run_url, token)
     except Exception as error:  # noqa: BLE001 - preserve diagnostics at the CLI boundary
@@ -256,7 +256,7 @@ def main(argv: list[str] | None = None) -> int:
     return 0 if record_upload(environ, status) == "success" else 1
 
 
-def _publisher(source: Path) -> Publisher:
+def _publisher(source: Path, token: str) -> Publisher:
     # The project runtime is imported only after setup succeeds and publish starts.
     from scripts.nightly_git import GitRemote, PublicationCoordinator
     from scripts.nightly_publish import (
@@ -264,11 +264,21 @@ def _publisher(source: Path) -> Publisher:
         RefreshOrchestrator,
         SubprocessBoundary,
     )
+    from scripts.nightly_release_sync import synchronize_release
+    from scripts.nightly_release_transport import GitHubReleaseRemote
+
+    class ReleaseSynchronizer:
+        def __init__(self, remote: GitHubReleaseRemote) -> None:
+            self.remote = remote
+
+        def synchronize(self, single: bytes, dual: bytes, source_commit: str) -> object:
+            return synchronize_release(self.remote, single, dual, source_commit)
 
     return PublicationCoordinator(
         LocalAttemptFactory(source),
         RefreshOrchestrator(SubprocessBoundary()),
         GitRemote(source),
+        ReleaseSynchronizer(GitHubReleaseRemote(token)),
     )
 
 
@@ -352,6 +362,11 @@ def _existing_finalization(output_dir: Path) -> FinalizationResult:
         str(document.get("issue_status", "failed")),
         "",
         (output_dir / RESULT_NAME,),
+        str(document.get("release_status", "failed")),
+        document.get("pending_revision")
+        if isinstance(document.get("pending_revision"), int)
+        and not isinstance(document.get("pending_revision"), bool)
+        else None,
     )
 
 

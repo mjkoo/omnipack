@@ -42,6 +42,9 @@ class Publication:
     published_sha: str | None
     stage: str
     detail: str = ""
+    release_status: str = "success"
+    release_revision: int | None = 4
+    pending_revision: int | None = None
 
 
 class RecordingIssues:
@@ -184,6 +187,34 @@ def test_no_op_closes_recovery_without_failure_creation(tmp_path: Path) -> None:
     assert result.workflow_status == "success"
     assert issues.recovery_bodies
     assert not issues.failure_bodies
+
+
+def test_release_failure_keeps_published_sha_and_owned_issue_open(
+    tmp_path: Path,
+) -> None:
+    issues = RecordingIssues(IssueResult("updated", 4))
+    outcome = replace(
+        _publication("published"),
+        stage="release",
+        detail="asset upload failed",
+        release_status="failed",
+        release_revision=None,
+        pending_revision=5,
+    )
+
+    result = finalize_publication(outcome, issues, tmp_path, "run")
+
+    assert result.workflow_status == "failed"
+    assert result.publication_status == "published"
+    assert result.release_status == "failed"
+    assert result.pending_revision == 5
+    assert issues.failure_bodies and not issues.recovery_bodies
+    assert "Published SHA: published-sha" in issues.failure_bodies[0]
+    assert "Release synchronization: failed" in issues.failure_bodies[0]
+    persisted = json.loads((tmp_path / "orchestration-result.json").read_text())
+    assert persisted["published_sha"] == "published-sha"
+    assert persisted["release_status"] == "failed"
+    assert persisted["pending_revision"] == 5
 
 
 def test_setup_failure_entrypoint_needs_no_project_runtime(tmp_path: Path) -> None:

@@ -37,6 +37,10 @@ class RemoteBoundary(Protocol):
     def main_contains(self, root: Path, sha: str) -> bool: ...
 
 
+class ReleaseBoundary(Protocol):
+    def synchronize(self, single: bytes, dual: bytes, source_commit: str) -> object: ...
+
+
 class GitProcessBoundary(Protocol):
     def run(
         self,
@@ -155,6 +159,10 @@ class PublicationResult:
     stage: str
     detail: str = ""
     cleanup_errors: tuple[str, ...] = ()
+    release_status: str = "not-run"
+    release_revision: int | None = None
+    pending_revision: int | None = None
+    pack_snapshots: Mapping[str, bytes] | None = None
 
 
 class PublicationCoordinator:
@@ -163,19 +171,54 @@ class PublicationCoordinator:
         attempts: LocalAttemptFactory,
         refresh: RefreshBoundary,
         remote: RemoteBoundary,
+        release: ReleaseBoundary | None = None,
         *,
         now: Callable[[], datetime] | None = None,
     ) -> None:
         self.attempts = attempts
         self.refresh = refresh
         self.remote = remote
+        self.release = release
         self.now = now or (lambda: datetime.now(UTC))
 
     def run(self, run_url: str, token: str) -> PublicationResult:
         cleanup_start = len(self.attempts.cleanup_errors)
         result = self._run(run_url, token)
-        return replace(
+        result = replace(
             result, cleanup_errors=tuple(self.attempts.cleanup_errors[cleanup_start:])
+        )
+        if (
+            self.release is None
+            or result.status not in ("published", "no-op")
+            or result.pack_snapshots is None
+        ):
+            if self.release is None and result.status in ("published", "no-op"):
+                return replace(result, release_status="success", pack_snapshots=None)
+            return result
+        source_commit = result.published_sha or result.base_sha
+        if source_commit is None:
+            return result
+        try:
+            synchronized = self.release.synchronize(
+                result.pack_snapshots["dist/single-screen.json"],
+                result.pack_snapshots["dist/dual-screen.json"],
+                source_commit,
+            )
+        except Exception as error:  # noqa: BLE001 - release is an external boundary
+            return replace(
+                result,
+                stage="release",
+                detail=str(error),
+                release_status="failed",
+                pending_revision=getattr(error, "pending_revision", None),
+                pack_snapshots=None,
+            )
+        return replace(
+            result,
+            release_status="success",
+            release_revision=getattr(synchronized, "revision", None),
+            pending_revision=getattr(synchronized, "pending_revision", None),
+            pack_snapshots=None,
         )
 
     def _run(self, run_url: str, token: str) -> PublicationResult:
@@ -266,7 +309,12 @@ class PublicationCoordinator:
 
                 if refreshed.status == "no-op":
                     return PublicationResult(
-                        "no-op", tuple(records), base_sha, None, "complete"
+                        "no-op",
+                        tuple(records),
+                        base_sha,
+                        None,
+                        "complete",
+                        pack_snapshots=_pack_snapshots(refreshed.candidate),
                     )
 
                 try:
@@ -294,6 +342,7 @@ class PublicationCoordinator:
                         base_sha,
                         commit_sha,
                         "complete",
+                        pack_snapshots=_pack_snapshots(refreshed.candidate),
                     )
                 try:
                     if self.remote.main_contains(root, commit_sha):
@@ -303,6 +352,7 @@ class PublicationCoordinator:
                             base_sha,
                             commit_sha,
                             "complete",
+                            pack_snapshots=_pack_snapshots(refreshed.candidate),
                         )
                     current = self.remote.fetch_main()
                 except OSError:
@@ -369,6 +419,13 @@ def _create_candidate_commit(
         ):
             raise CandidateError(f"commit content does not match {relative}")
     return sha
+
+
+def _pack_snapshots(candidate: PublicationCandidate) -> Mapping[str, bytes]:
+    return {
+        name: candidate.snapshots[name]
+        for name in ("dist/single-screen.json", "dist/dual-screen.json")
+    }
 
 
 def _read_optional(path: Path) -> bytes | None:

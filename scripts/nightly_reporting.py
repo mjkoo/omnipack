@@ -40,6 +40,8 @@ class FinalizationResult:
     issue_status: str
     summary: str
     artifacts: tuple[Path, ...]
+    release_status: str = "failed"
+    pending_revision: int | None = None
 
 
 @dataclass(frozen=True)
@@ -70,6 +72,9 @@ def write_diagnostics(
         "run_url": run_url,
         "base_sha": _field(outcome, "base_sha", None),
         "published_sha": _field(outcome, "published_sha", None),
+        "release_status": _field(outcome, "release_status", "failed"),
+        "release_revision": _field(outcome, "release_revision", None),
+        "pending_revision": _field(outcome, "pending_revision", None),
         "generated_at": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
         "attempts": [_attempt_summary(attempt) for attempt in attempts],
     }
@@ -134,13 +139,15 @@ def finalize_publication(
     publication_status = str(_field(outcome, "status", "failed"))
     issue_body = _issue_body(outcome, run_url, diagnostic_url, secrets)
     cleanup_failed = bool(_field(outcome, "cleanup_errors", ()))
-    if publication_status in ("published", "no-op"):
+    release_status = str(_field(outcome, "release_status", "success"))
+    if publication_status in ("published", "no-op") and release_status == "success":
         issue = _safe_issue_call(issues.report_recovery, issue_body, secrets)
     else:
         issue = _safe_issue_call(issues.report_failure, issue_body, secrets)
     workflow_status = (
         "success"
         if publication_status in ("published", "no-op")
+        and release_status == "success"
         and issue.status != "failed"
         and not cleanup_failed
         and not prior_failure
@@ -161,6 +168,8 @@ def finalize_publication(
         issue.status,
         summary,
         artifacts,
+        release_status,
+        _field(outcome, "pending_revision", None),
     )
     _record_finalization(output_dir, finalization)
     return finalization
@@ -309,6 +318,9 @@ def _issue_body(
         f"- Base SHA: {base_sha or 'unavailable'}",
         f"- Publication: {status}",
         f"- Published SHA: {_field(outcome, 'published_sha', None) or 'unavailable'}",
+        f"- Release synchronization: {_field(outcome, 'release_status', 'failed')}",
+        f"- Release revision: {_field(outcome, 'release_revision', None) or 'unavailable'}",
+        f"- Pending release revision: {_field(outcome, 'pending_revision', None) or 'unavailable'}",
         f"- Diagnostics: {diagnostic_url or 'available in the workflow run'}",
     ]
     for error in _field(outcome, "cleanup_errors", ()):
@@ -332,6 +344,9 @@ def _summary(
         f"- Run: {run_url}",
         f"- Base SHA: {_field(outcome, 'base_sha', None) or 'unavailable'}",
         f"- Published SHA: {_field(outcome, 'published_sha', None) or 'unavailable'}",
+        f"- Release synchronization: {_field(outcome, 'release_status', 'failed')}",
+        f"- Release revision: {_field(outcome, 'release_revision', None) or 'unavailable'}",
+        f"- Pending release revision: {_field(outcome, 'pending_revision', None) or 'unavailable'}",
         f"- Issue maintenance: {issue.status}",
     ]
     cleanup_errors = _field(outcome, "cleanup_errors", ())
