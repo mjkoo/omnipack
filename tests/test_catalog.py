@@ -113,7 +113,7 @@ def test_catalog_handles_dual_only_ordering_and_escapes_source_text() -> None:
     exact = app("a.id", "Alpha", "https://example.test/a", categories=["Beta"])
     unsafe = app(
         "unsafe.id",
-        "[unsafe] | <b>line\nbreak</b> *x*",
+        "[unsafe] | <b>line\nbreak</b> *x* ~~deleted~~",
         "https://example.test/path?a=1&b=2",
     )
     catalog = generate_catalog(
@@ -131,6 +131,7 @@ def test_catalog_handles_dual_only_ordering_and_escapes_source_text() -> None:
     assert "| alpha |" in catalog
     assert "| - |" in catalog
     assert "\\[unsafe\\] \\| &lt;b&gt;line break&lt;/b&gt; \\*x\\*" in catalog
+    assert r"\~\~deleted\~\~" in catalog
     assert "<b>" not in catalog
     assert '>GitHub</a> · <a href="' in catalog
 
@@ -154,7 +155,7 @@ def test_source_label_and_category_render_as_text_without_changing_payload() -> 
         "Safe name",
         "https://example.test/app",
         categories=["<script>bad</script> | *category*\nnext"],
-        source="A|B *bold* <img>\nnext",
+        source="A|B *bold* ~~deleted~~ <img>\nnext",
         unknown={"preserved": True},
     )
 
@@ -165,7 +166,10 @@ def test_source_label_and_category_render_as_text_without_changing_payload() -> 
         "<summary>&lt;script&gt;bad&lt;/script&gt; &#124; &#42;category&#42; next</summary>"
         in text
     )
-    assert ">A&#124;B &#42;bold&#42; &lt;img&gt; next</a>" in text
+    assert (
+        ">A&#124;B &#42;bold&#42; &#126;&#126;deleted&#126;&#126; &lt;img&gt; next</a>"
+        in text
+    )
     assert "<script>" not in text
     assert "<img>" not in text
     assert decoded_apps(catalog) == [hostile]

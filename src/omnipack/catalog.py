@@ -151,12 +151,12 @@ def _html_text(value: str) -> str:
 
 def _markdown_text(value: str) -> str:
     escaped = _html_text(value)
-    return re.sub(r"([\\`*{}\[\]()#+.!|_-])", r"\\\1", escaped)
+    return re.sub(r"([\\`*{}\[\]()#+.!|_~-])", r"\\\1", escaped)
 
 
 def _inline_html_text(value: str) -> str:
     collapsed = re.sub(r"\s+", " ", value).strip()
-    markdown = frozenset(r"\`*{}[]()#+.!|_-")
+    markdown = frozenset(r"\`*{}[]()#+.!|_~-")
     return "".join(
         f"&#{ord(character)};"
         if character in markdown
