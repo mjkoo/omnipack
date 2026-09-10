@@ -6,6 +6,8 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from scripts.nightly_issues import MARKER, IssueResult
 from scripts.nightly_reporting import (
     artifact_paths,
@@ -42,8 +44,8 @@ class Publication:
     published_sha: str | None
     stage: str
     detail: str = ""
-    release_status: str = "success"
-    release_revision: int | None = 4
+    release_status: str = "not-run"
+    release_revision: int | None = None
     pending_revision: int | None = None
 
 
@@ -62,7 +64,9 @@ class RecordingIssues:
         return self.result
 
 
-def _publication(status: str = "failed") -> Publication:
+def _publication(
+    status: str = "failed", *, release_status: str = "not-run"
+) -> Publication:
     attempt = Attempt(
         1,
         "base-secret",
@@ -81,6 +85,7 @@ def _publication(status: str = "failed") -> Publication:
         "published-sha" if status == "published" else None,
         "build" if status == "failed" else "complete",
         "exception contained secret-value",
+        release_status=release_status,
     )
 
 
@@ -157,7 +162,7 @@ def test_failure_body_and_summary_are_bounded_and_treat_source_text_as_data(
 def test_published_result_survives_issue_failure_and_later_success_retries_closure(
     tmp_path: Path,
 ) -> None:
-    publication = _publication("published")
+    publication = _publication("published", release_status="success")
     failed_issues = RecordingIssues(IssueResult("failed", detail="API unavailable"))
 
     failed = finalize_publication(
@@ -181,7 +186,11 @@ def test_no_op_closes_recovery_without_failure_creation(tmp_path: Path) -> None:
     issues = RecordingIssues(IssueResult("closed", 4))
 
     result = finalize_publication(
-        _publication("no-op"), issues, tmp_path, "run", secrets=("secret-value",)
+        _publication("no-op", release_status="success"),
+        issues,
+        tmp_path,
+        "run",
+        secrets=("secret-value",),
     )
 
     assert result.workflow_status == "success"
@@ -256,3 +265,27 @@ def test_offline_report_is_retained_without_claiming_live_evidence(
     assert json.loads((tmp_path / "attempt-1-verify.json").read_text()) == json.loads(
         offline
     )
+
+
+@pytest.mark.parametrize("status", ["published", "no-op"])
+def test_missing_release_status_cannot_authorize_recovery(
+    tmp_path: Path, status: str
+) -> None:
+    outcome = {
+        "status": status,
+        "published_sha": "published-sha" if status == "published" else None,
+        "base_sha": "base-sha",
+    }
+    issues = RecordingIssues()
+
+    result = finalize_publication(outcome, issues, tmp_path, "run")
+
+    assert result.workflow_status == "failed"
+    assert result.publication_status == status
+    assert result.release_status == "failed"
+    assert issues.failure_bodies and not issues.recovery_bodies
+    assert "Release synchronization: failed" in result.summary
+    assert "Release synchronization: failed" in issues.failure_bodies[0]
+    persisted = json.loads((tmp_path / "orchestration-result.json").read_text())
+    assert persisted["release_status"] == result.release_status
+    assert persisted["published_sha"] == outcome["published_sha"]

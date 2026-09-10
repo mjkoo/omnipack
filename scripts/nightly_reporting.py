@@ -139,7 +139,7 @@ def finalize_publication(
     publication_status = str(_field(outcome, "status", "failed"))
     issue_body = _issue_body(outcome, run_url, diagnostic_url, secrets)
     cleanup_failed = bool(_field(outcome, "cleanup_errors", ()))
-    release_status = str(_field(outcome, "release_status", "success"))
+    release_status = str(_field(outcome, "release_status", "failed"))
     if publication_status in ("published", "no-op") and release_status == "success":
         issue = _safe_issue_call(issues.report_recovery, issue_body, secrets)
     else:

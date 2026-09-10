@@ -67,7 +67,7 @@ def _environment(tmp_path: Path) -> dict[str, str]:
     }
 
 
-def _result(status: str) -> PublicationResult:
+def _result(status: str, *, release_status: str = "not-run") -> PublicationResult:
     attempt = AttemptRecord(
         1,
         "base-sha",
@@ -85,7 +85,7 @@ def _result(status: str) -> PublicationResult:
         "published-sha" if status == "published" else None,
         "complete" if status in ("published", "no-op") else "push",
         "",
-        release_status="success",
+        release_status=release_status,
     )
 
 
@@ -135,7 +135,7 @@ def test_workflow_uses_runtime_independent_fallback_and_explicit_artifacts() -> 
 def test_cli_guard_blocks_ineligible_repository_and_ref(tmp_path: Path) -> None:
     environment = _environment(tmp_path)
     environment["GITHUB_REPOSITORY"] = "fork/repo"
-    publisher = FakePublisher(_result("published"))
+    publisher = FakePublisher(_result("published", release_status="success"))
 
     result = run_publication(environment, publisher=publisher, api=FakeApi([]))
 
@@ -177,7 +177,7 @@ def test_confirmed_publication_is_preserved_when_issue_maintenance_fails(
     tmp_path: Path,
 ) -> None:
     environment = _environment(tmp_path)
-    publisher = FakePublisher(_result("published"))
+    publisher = FakePublisher(_result("published", release_status="success"))
     api = FakeApi([_response(500, {"message": "unavailable"})])
 
     result = run_publication(environment, publisher=publisher, api=api)
@@ -222,7 +222,7 @@ def test_publication_outcomes_remain_distinct_in_persistent_result(
 
     result = run_publication(
         _environment(tmp_path),
-        publisher=FakePublisher(_result(status)),
+        publisher=FakePublisher(_result(status, release_status="success")),
         api=FakeApi(responses),
     )
 
@@ -241,7 +241,7 @@ def test_helper_fallback_reloads_confirmed_outcome_instead_of_resetting_it(
     environment = _environment(tmp_path)
     first = run_publication(
         environment,
-        publisher=FakePublisher(_result("published")),
+        publisher=FakePublisher(_result("published", release_status="success")),
         api=FakeApi([_response(200, [])]),
     )
     assert first is not None
@@ -264,7 +264,7 @@ def test_helper_fallback_reloads_confirmed_outcome_instead_of_resetting_it(
 def test_helper_fallback_preserves_separate_release_failure(tmp_path: Path) -> None:
     environment = _environment(tmp_path)
     outcome = replace(
-        _result("published"),
+        _result("published", release_status="success"),
         stage="release",
         detail="upload failed",
         release_status="failed",
@@ -315,7 +315,7 @@ def test_upload_outcome_updates_persistent_result_and_summary(tmp_path: Path) ->
     environment = _environment(tmp_path)
     run_publication(
         environment,
-        publisher=FakePublisher(_result("published")),
+        publisher=FakePublisher(_result("published", release_status="success")),
         api=FakeApi([_response(200, [])]),
     )
 
@@ -424,7 +424,7 @@ def test_interrupted_finalization_write_preserves_publication_for_fallback(
         with pytest.raises(OSError, match="interrupted write"):
             run_publication(
                 environment,
-                publisher=FakePublisher(_result("published")),
+                publisher=FakePublisher(_result("published", release_status="success")),
                 api=FakeApi([_response(200, [])]),
             )
 
@@ -475,3 +475,62 @@ def test_fallback_preserves_missing_report_markers(tmp_path: Path) -> None:
     for name in ("build", "verify"):
         report = json.loads((diagnostics / f"attempt-1-{name}.json").read_text())
         assert report["available"] is False
+
+
+@pytest.mark.parametrize("status", ["published", "no-op"])
+def test_helper_fallback_missing_release_status_keeps_owned_issue_open(
+    tmp_path: Path, status: str
+) -> None:
+    diagnostics = tmp_path / "nightly-diagnostics"
+    write_diagnostics(diagnostics, _result(status, release_status="success"), "run")
+    path = diagnostics / RESULT_NAME
+    document = json.loads(path.read_text())
+    del document["release_status"]
+    path.write_text(json.dumps(document))
+    owned = {
+        "number": 7,
+        "state": "open",
+        "body": "<!-- obtainium-pack:nightly-publishing -->",
+        "user": {"login": "github-actions[bot]"},
+    }
+    api = FakeApi([_response(200, [owned]), _response(200, owned)])
+
+    result = run_setup_failure(
+        _environment(tmp_path), "helper", "helper interrupted", api=api
+    )
+
+    assert result is not None
+    assert result.workflow_status == "failed"
+    assert result.publication_status == status
+    assert result.release_status == "failed"
+    mutations = [body for method, _, body in api.requests if method == "PATCH"]
+    assert len(mutations) == 1
+    assert mutations[0] is not None
+    assert mutations[0].get("state") != "closed"
+    assert "Release synchronization: failed" in str(mutations[0]["body"])
+    persisted = json.loads(path.read_text())
+    assert persisted["published_sha"] == document["published_sha"]
+    assert persisted["release_status"] == "failed"
+
+
+@pytest.mark.parametrize("status", ["published", "no-op"])
+def test_completed_fallback_missing_release_status_cannot_claim_success(
+    tmp_path: Path, status: str
+) -> None:
+    environment = _environment(tmp_path)
+    run_publication(
+        environment,
+        publisher=FakePublisher(_result(status, release_status="success")),
+        api=FakeApi([_response(200, [])]),
+    )
+    path = tmp_path / "nightly-diagnostics" / RESULT_NAME
+    document = json.loads(path.read_text())
+    del document["release_status"]
+    path.write_text(json.dumps(document))
+
+    result = run_setup_failure(environment, "helper", "interrupted", api=FakeApi([]))
+
+    assert result is not None
+    assert result.workflow_status == "failed"
+    assert result.release_status == "failed"
+    assert result.publication_status == status

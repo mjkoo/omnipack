@@ -193,7 +193,12 @@ class PublicationCoordinator:
             or result.pack_snapshots is None
         ):
             if self.release is None and result.status in ("published", "no-op"):
-                return replace(result, release_status="success", pack_snapshots=None)
+                return replace(
+                    result,
+                    stage="release",
+                    detail="release synchronization boundary is unavailable",
+                    pack_snapshots=None,
+                )
             return result
         source_commit = result.published_sha or result.base_sha
         if source_commit is None:

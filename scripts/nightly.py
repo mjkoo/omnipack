@@ -357,7 +357,9 @@ def _existing_finalization(output_dir: Path) -> FinalizationResult:
     if not isinstance(document, dict):
         raise OSError("orchestration result is not an object")
     return FinalizationResult(
-        str(document.get("workflow_status", "failed")),
+        str(document.get("workflow_status", "failed"))
+        if document.get("release_status") == "success"
+        else "failed",
         str(document.get("publication_status", document.get("status", "failed"))),
         str(document.get("issue_status", "failed")),
         "",

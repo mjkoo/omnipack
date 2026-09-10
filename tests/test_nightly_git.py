@@ -117,6 +117,29 @@ def _coordinator(
     )
 
 
+@pytest.mark.parametrize("change", [ALLOWED_PATHS[0], None])
+def test_missing_release_boundary_preserves_main_without_claiming_completion(
+    tmp_path: Path, change: str | None
+) -> None:
+    from scripts.nightly_reporting import finalize_publication
+    from tests.test_nightly_reporting import RecordingIssues
+
+    source, bare, base = _remote(tmp_path)
+    refresh = ChangingRefresh(change=change)
+    result = _coordinator(source, GitRemote(source), refresh).run("run", "token")
+
+    assert result.status == ("published" if change else "no-op")
+    assert result.base_sha == base
+    assert result.published_sha == (_git(bare, "rev-parse", "main") if change else None)
+    assert result.release_status == "not-run"
+    assert result.pack_snapshots is None
+    assert all(not root.exists() for root in refresh.roots)
+    issues = RecordingIssues()
+    finalized = finalize_publication(result, issues, tmp_path / "diagnostics", "run")
+    assert finalized.workflow_status == "failed"
+    assert issues.failure_bodies and not issues.recovery_bodies
+
+
 def test_release_uses_verified_bytes_after_successful_checkout_is_removed(
     tmp_path: Path,
 ) -> None:
@@ -613,7 +636,7 @@ def test_cleanup_failure_preserves_confirmed_publication_and_fails_workflow(
     api = FakeApi([_response(200, [])])
     finalized = run_publication(
         environment,
-        publisher=_coordinator(source, GitRemote(source), refresh),
+        publisher=_coordinator(source, GitRemote(source), refresh, RecordingRelease()),
         api=api,
     )
     output = tmp_path / "nightly-diagnostics"
@@ -622,6 +645,7 @@ def test_cleanup_failure_preserves_confirmed_publication_and_fails_workflow(
 
     assert finalized.workflow_status == "failed"
     assert finalized.publication_status == "published"
+    assert finalized.release_status == "success"
     document = json.loads((output / "orchestration-result.json").read_text())
     assert document["published_sha"] == _git(bare, "rev-parse", "main")
     assert document["workflow_status"] == "failed"
