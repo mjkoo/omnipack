@@ -343,13 +343,38 @@ def test_captured_release_and_manifest_observations_support_reviewed_rules() -> 
     heimdall = observations["projects"][
         "github.com/mastercook777/heimdall-ayn-thor-assistant"
     ]
-    assert heimdall["excludedRelease"]["tag"] == "debug-latest"
+    showdown_url = "github.com/castdrian/showdown-ds"
+    showdown = observations["projects"][showdown_url]
+    showdown_settings = policy[showdown_url]["additionalSettings"]
+    assert re.fullmatch(showdown_settings["apkFilterRegEx"], showdown["asset"]["name"])
+    showdown_version = re.fullmatch(
+        showdown_settings["versionExtractionRegEx"], showdown["release"]["tag"]
+    )
+    assert showdown_version is not None
+    assert (
+        showdown_version.group(int(showdown_settings["matchGroupToUse"]))
+        == showdown["manifest"]["versionName"]
+    )
+
+    heimdall_url = "github.com/mastercook777/heimdall-ayn-thor-assistant"
+    heimdall_settings = policy[heimdall_url]["additionalSettings"]
+    assert re.fullmatch(
+        heimdall_settings["filterReleaseTitlesByRegEx"], heimdall["release"]["title"]
+    )
+    assert re.fullmatch(heimdall_settings["apkFilterRegEx"], heimdall["asset"]["name"])
+    heimdall_version = re.fullmatch(
+        heimdall_settings["versionExtractionRegEx"], heimdall["release"]["tag"]
+    )
+    assert heimdall_version is not None
+    assert (
+        heimdall_version.group(int(heimdall_settings["matchGroupToUse"]))
+        == heimdall["manifest"]["versionName"]
+    )
+    assert heimdall["excludedRelease"]["title"] == "debug-latest"
     assert (
         re.fullmatch(
-            policy["github.com/mastercook777/heimdall-ayn-thor-assistant"][
-                "additionalSettings"
-            ]["filterReleaseTitlesByRegEx"],
-            heimdall["excludedRelease"]["tag"],
+            heimdall_settings["filterReleaseTitlesByRegEx"],
+            heimdall["excludedRelease"]["title"],
         )
         is None
     )
@@ -363,7 +388,12 @@ def test_captured_release_and_manifest_observations_support_reviewed_rules() -> 
         kanto["installation"]["hostUrl"] == "https://github.com/bryanthaboi/gen1recomp"
     )
     assert kanto["installation"]["methods"] == ["official-mod-index", "zip-import"]
-    assert kanto_policy["trackerId"].isdigit()
+    assert kanto_policy["kind"] == "track-only"
+    assert kanto_policy["trackerId"] == "1845280017"
+    assert kanto_policy["installation"] == (
+        "Install or update through official Gen1Recomp at "
+        "https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import."
+    )
     assert kanto_policy["trackerId"] not in apk_ids
 
 
@@ -381,9 +411,32 @@ def test_expected_additions_are_separate_from_the_frozen_baseline() -> None:
         "dual": 109,
     }
     assert additions["single"] == []
-    assert [(item["kind"], item["id"]) for item in additions["dual"]] == [
-        ("apk", "dev.adrian.showdown"),
-        ("apk", "com.mastercook777.heimdall"),
-        ("track-only", "1845280017"),
+    assert [(item["kind"], item["id"], item["url"]) for item in additions["dual"]] == [
+        ("apk", "dev.adrian.showdown", "github.com/castdrian/showdown-ds"),
+        (
+            "apk",
+            "com.mastercook777.heimdall",
+            "github.com/mastercook777/heimdall-ayn-thor-assistant",
+        ),
+        (
+            "track-only",
+            "1845280017",
+            "github.com/averageconsumer/kanto-gear",
+        ),
     ]
     assert additions["expectedCounts"] == {"single": 92, "dual": 112}
+    assert additions["preserveExistingEntriesExactly"] is True
+    assert additions["preserveFamilyWinners"] is True
+    assert additions["emulnkExpectedWinner"] == {
+        "source": "rjny",
+        "id": "com.emulnk",
+        "url": "github.com/emulnk/emulnk",
+        "includePrereleases": True,
+    }
+    kanto_addition = next(
+        item for item in additions["dual"] if item["kind"] == "track-only"
+    )
+    kanto_policy = load_json(EVIDENCE / "project-policy.json")["projects"][
+        kanto_addition["url"]
+    ]
+    assert kanto_addition["id"] == kanto_policy["trackerId"]

@@ -77,7 +77,7 @@
         "badgingFile": "manifests/heimdall.txt"
       },
       "excludedRelease": {
-        "tag": "debug-latest",
+        "title": "debug-latest",
         "basis": "does-not-match-reviewed-release-title-filter"
       }
     },
