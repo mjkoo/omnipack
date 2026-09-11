@@ -275,7 +275,10 @@ def test_unchanged_gate_validates_policy_then_makes_zero_release_requests(
     assert second["status"] == "unchanged"
     assert second_http.urls == [source_url]
     assert not (output / "catalog.json").exists()
-    assert {path.name for path in output.iterdir()} == {"report.json"}
+    assert {path.name for path in output.iterdir()} == {
+        "report.json",
+        "readme-input.bin",
+    }
 
 
 def test_failed_invocation_rejects_stale_candidates_and_preserves_tracked_inputs(

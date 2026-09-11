@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from omnipack.http import HttpClient, HttpConfig, HttpError
 from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
-from omnipack.package_id import PackageIdCache, PackageIdResolver
+from omnipack.package_id import PackageIdCache, PackageIdResolver, _is_valid_package_id
 from omnipack.project_policy import (
     ProjectRule,
     default_apk_rule,
@@ -258,6 +258,11 @@ def generate_codm(
         client = http or HttpClient(HttpConfig.from_path(root / "config/http.json"))
         readme = client.get(source_url).body
         parsed = parse_project_table(readme)
+        report["inputs"] = {
+            "sourceUrl": source_url,
+            "readmeSha256": _sha(readme),
+            "projectPolicySha256": _sha(policy_bytes),
+        }
         report["unsupportedLinks"] = list(parsed.unsupported)
         report["inactiveRules"] = sorted(set(policy.projects) - set(parsed.projects))
         metadata_file = root / metadata_path
@@ -295,6 +300,7 @@ def generate_codm(
             and accepted_metadata.get("projectPolicySha256") == _sha(policy_bytes)
         )
         if input_match and not force:
+            (output / "readme-input.bin").write_bytes(readme)
             report["status"] = "unchanged"
             _write_report(output, report)
             return report
@@ -381,6 +387,7 @@ def generate_codm(
             "projectPolicySha256": _sha(policy_bytes),
             "catalogSha256": _sha(catalog_bytes),
         }
+        (output / "readme-input.bin").write_bytes(readme)
         (output / "catalog.json").write_bytes(catalog_bytes)
         (output / "source.json").write_bytes(_canonical_json(metadata))
         (output / "resolution-state.json").write_bytes(
@@ -626,3 +633,136 @@ def _validate_ids(entries: list[dict[str, Any]]) -> None:
 
 def _write_report(output: Path, report: dict[str, Any]) -> None:
     (output / "report.json").write_bytes(_canonical_json(report))
+
+
+def validate_generation_output(root: Path, output: Path) -> dict[str, Any]:
+    """Validate the generated document against the exact discovery inputs."""
+    sources = load_json(root / "config/sources.json", "sources")
+    if not isinstance(sources, dict) or not isinstance(sources.get("codm"), dict):
+        raise TypeError("codm source configuration must be an object")
+    config = sources["codm"]
+    if (
+        config.get("project_policy", "config/codm-projects.json")
+        != "config/codm-projects.json"
+        or config.get("catalog") != "config/catalogs/codm.json"
+        or config.get("source_metadata", "config/catalogs/codm.source.json")
+        != "config/catalogs/codm.source.json"
+    ):
+        raise ValueError(
+            "source publication paths differ from configured generation inputs"
+        )
+    policy_bytes = (root / "config/codm-projects.json").read_bytes()
+    policy = parse_project_policy(policy_bytes)
+    readme = (output / "readme-input.bin").read_bytes()
+    parsed = parse_project_table(readme)
+    report = load_json(output / "report.json", "generation report")
+    if not isinstance(report, dict):
+        raise TypeError("generation report must be an object")
+    inputs = {
+        "sourceUrl": config["readme_url"],
+        "readmeSha256": _sha(readme),
+        "projectPolicySha256": _sha(policy_bytes),
+    }
+    if report.get("inputs") != inputs or report.get("status") not in {
+        "success",
+        "unchanged",
+    }:
+        raise ValueError("generation report does not bind current discovery inputs")
+    unchanged = report["status"] == "unchanged"
+    catalog_path = (
+        root / "config/catalogs/codm.json" if unchanged else output / "catalog.json"
+    )
+    metadata_path = (
+        root / "config/catalogs/codm.source.json"
+        if unchanged
+        else output / "source.json"
+    )
+    state_path = (
+        root / "config/package-ids.json"
+        if unchanged
+        else output / "resolution-state.json"
+    )
+    metadata = load_json(metadata_path, "source metadata")
+    _validate_metadata(metadata, catalog_path)
+    assert isinstance(metadata, dict)
+    if any(metadata[key] != value for key, value in inputs.items()):
+        raise ValueError("source metadata differs from current discovery inputs")
+    entries = _load_catalog(catalog_path)
+    _validate_ids(entries)
+    state = _load_state(state_path)
+    by_url = {normalize_project_url(entry["url"]): entry for entry in entries}
+    if set(by_url) != set(parsed.projects):
+        raise ValueError("catalog membership differs from discovery inputs")
+    _validate_accepted(by_url, state, set())
+    expected_state = {
+        project
+        for project in parsed.projects
+        if policy.projects.get(project, default_apk_rule()).kind == "apk"
+    }
+    if set(state) != expected_state:
+        raise ValueError("resolution-state membership differs from project policy")
+    effective = {}
+    for project, entry in by_url.items():
+        rule = policy.projects.get(project, default_apk_rule())
+        effective[project] = {**rule.canonical(), "fingerprint": rule.fingerprint}
+        expected = json.loads(
+            _render_catalog(
+                [
+                    _entry(
+                        parsed.source_urls[project],
+                        rule,
+                        (rule.tracker_id or "")
+                        if rule.kind == "track-only"
+                        else entry["id"],
+                    )
+                ]
+            )
+        )["apps"][0]
+        if rule.kind == "apk" and not _is_valid_package_id(entry["id"]):
+            raise ValueError("catalog APK identity is invalid")
+        retained = False
+        if entry != expected:
+            accepted = {
+                normalize_project_url(item["url"]): item
+                for item in _load_catalog(root / "config/catalogs/codm.json")
+            }
+            accepted_state = _load_state(root / "config/package-ids.json")
+            retained = (
+                entry == accepted.get(project)
+                and state.get(project) == accepted_state.get(project)
+                and _fallback_compatible(entry, state.get(project), rule)
+                and (
+                    unchanged
+                    or any(
+                        item.get("url") == project and item.get("status") == "retained"
+                        for item in report.get("warnings", [])
+                    )
+                )
+            )
+        if (entry != expected and not retained) or (
+            rule.kind == "apk"
+            and state[project]["policyFingerprint"] != rule.fingerprint
+        ):
+            raise ValueError("catalog or state differs from effective project policy")
+    if (
+        catalog_path.read_bytes() != _render_catalog(entries)
+        or metadata_path.read_bytes() != _canonical_json(metadata)
+        or state_path.read_bytes() != _canonical_json(state)
+    ):
+        raise ValueError("generation output is not deterministic canonical data")
+    if not unchanged and report.get("effectivePolicy") != effective:
+        raise ValueError("generation report differs from effective project policy")
+    return {
+        **inputs,
+        "catalogSha256": metadata["catalogSha256"],
+        "effectivePolicy": effective,
+        "changes": report.get("changes", {}),
+        "generation": report["status"],
+        "skippedLinks": report.get("unsupportedLinks", []),
+        "resolutionResults": report.get("apk", []),
+        "trackingResults": report.get("tracking", []),
+        "retainedFailures": [
+            {"url": item.get("url"), "status": item.get("status")}
+            for item in report.get("warnings", [])
+        ],
+    }
