@@ -122,8 +122,19 @@ same incompatible systems were omitted.
 
 The new `just check-all` attempt stopped at the OSV audit because sandbox DNS
 could not resolve `api.osv.dev`. All later checks were run separately. The
-previous successful audit above remains the evidence for the unchanged ten
-dependencies; this correction changed neither dependency declarations nor the
-lock file. No live source generation, downloads, device checks or real remote
-writes were repeated. The earlier baseline and device measurements remain
-unchanged.
+dependency audit subsequently passed with network access, reporting no known
+vulnerabilities or adverse project statuses in the same ten packages. This
+correction changed neither dependency declarations nor the lock file. No live
+source generation, downloads, device checks or real remote writes were repeated.
+The earlier baseline and device measurements remain unchanged.
+
+## Review and specification closure
+
+Four review lenses covered behavior, publication races and failure handling,
+idiomatic structure, and test proportionality. One combined correction pass
+addressed the findings, and one scoped re-review closed all five important
+findings and the documentation clarification. No findings remain from that
+review. The strict change check and all ten main-spec checks passed. The four
+affected main specifications match their reviewed deltas, including preserved
+unmentioned requirements and surviving scenarios. The change artifacts were
+archived on 2026-09-11; the final task-evidence audit follows that archival step.
