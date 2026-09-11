@@ -7,9 +7,9 @@ establish live GitHub publication or Obtainium device acceptance.
 ## Results
 
 After review fixes, `just check-all` passed: lock validation, Ruff formatting and
-lint, Ty, dependency audit, Python sdist/wheel builds, all 597 tests, structural pack
+lint, Ty, dependency audit, Python sdist/wheel builds, all 602 tests, structural pack
 verification,
-workflow lint, Nix formatting and native flake checks. The suite took 24.34 seconds
+workflow lint, Nix formatting and native flake checks. The suite took 23.98 seconds
 with 92% package coverage. The dependency audit found no known vulnerabilities or
 adverse project statuses in 10 packages.
 
@@ -51,6 +51,15 @@ artifact helper/test and stale curation guidance. One combined fix round address
 all four; its scoped re-review reported no remaining findings. The index and
 summary regressions failed before the fixes and passed afterward.
 
+A subsequent review found prior-run reports could appear as current evidence
+when a reused checkout failed before verification. The publisher now removes old
+build and verification reports before refresh, and reporting clears its three
+allowlisted output files before writing the current result. Regressions cover
+failed builds with and without a fresh build report, blocked report removal and
+reused diagnostic directories. Workflow assertions again cover main checkout,
+disabled credential persistence and the 60-minute timeout. The stale-report
+regressions failed before the fix and passed afterward.
+
 ## Preservation and reduction
 
 All 717 captured baseline files matched their SHA-256 hashes after implementation.
@@ -58,9 +67,9 @@ This includes exports, curation configuration, fixtures, existing archived plans
 dated validation evidence and protected review records. New review records are
 retained separately. No fixture exports or curation policy changed.
 
-Python physical lines changed from 7,467 to 6,771 across `src/` and `scripts/`, and
-from 10,836 to 9,993 under `tests/`: reductions of 696 implementation lines and
-843 test lines. The suite changed from 628 to 597 tests as retired issue,
+Python physical lines changed from 7,467 to 6,786 across `src/` and `scripts/`, and
+from 10,836 to 10,058 under `tests/`: reductions of 681 implementation lines and
+778 test lines. The suite changed from 628 to 602 tests as retired issue,
 retry and fallback guarantees were removed and related tests consolidated.
 These are measured reductions, not a quota.
 
