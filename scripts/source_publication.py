@@ -414,6 +414,9 @@ class SourcePublicationCoordinator:
         current_main, current_branch = self.remote.snapshot()
         if (current_main, current_branch) != (main, branch):
             raise PublicationError("remote main or source branch advanced")
+        if not candidate.changed_paths:
+            candidate.validate_bytes()
+            return SourcePublicationResult("no-op", "complete", selected_base, branch)
         if same:
             candidate.validate_bytes()
             try:

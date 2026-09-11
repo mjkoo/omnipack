@@ -21,10 +21,10 @@
 
 ## 4. Add checked catalog-update automation
 
-- [ ] 4.1 Implement one candidate-check operation using the selected main base, source and policy checks, composed pack build and structural verification; verify stale selectors, APK/tracker collisions, failed builds and changed checked source or policy bytes block publication, and only catalog/metadata/state enter the source commit while policy remains read-only and pack changes remain diagnostics.
-- [ ] 4.2 Implement the dedicated owned branch/PR lifecycle with source-only writes and one attempt; verify with controlled git/remote transports initial creation, same-content no-op, updated content, main/branch races, foreign changes, previous merged/closed PRs and ambiguous-write discovery on a later run without duplicate creation.
-- [ ] 4.3 Wire daily and manual forced runs, serialized execution, canonical-main gating, locked setup and scoped token permissions; verify workflow boundary tests and action linting cover fork/ref restrictions, explicit checks before PR writes, no main/release/issue operations and no implicit dependence on PR-triggered CI.
-- [ ] 4.4 Add current-run summaries and 14-day diagnostic artifacts; verify generation, validation, PR and early setup failures remain visible without stale success, leaked credentials, executed source text or archived APK/HTTP bodies.
+- [x] 4.1 Implement one candidate-check operation using the selected main base, source and policy checks, composed pack build and structural verification; verify stale selectors, APK/tracker collisions, failed builds and changed checked source or policy bytes block publication, and only catalog/metadata/state enter the source commit while policy remains read-only and pack changes remain diagnostics.
+- [x] 4.2 Implement the dedicated owned branch/PR lifecycle with source-only writes and one attempt; verify with controlled git/remote transports initial creation, same-content no-op, updated content, main/branch races, foreign changes, previous merged/closed PRs and ambiguous-write discovery on a later run without duplicate creation.
+- [x] 4.3 Wire daily and manual forced runs, serialized execution, canonical-main gating, locked setup and scoped token permissions; verify workflow boundary tests and action linting cover fork/ref restrictions, explicit checks before PR writes, no main/release/issue operations and no implicit dependence on PR-triggered CI.
+- [x] 4.4 Add current-run summaries and 14-day diagnostic artifacts; verify generation, validation, PR and early setup failures remain visible without stale success, leaked credentials, executed source text or archived APK/HTTP bodies.
 
 ## 5. Documentation and integrated verification
 

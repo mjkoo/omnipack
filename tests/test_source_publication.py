@@ -307,6 +307,49 @@ def test_first_proposal_pushes_once_and_creates_owned_pr(tmp_path: Path) -> None
     assert remote.created == 1
 
 
+@pytest.mark.parametrize("retained_merged_branch", [False, True])
+def test_successful_refresh_matching_main_performs_no_writes(
+    tmp_path: Path, retained_merged_branch: bool
+) -> None:
+    root = _repo(tmp_path)
+    accepted = _checked(root).create_commit()
+    candidate = _checked(root)
+    assert candidate.changed_paths == ()
+    assert (
+        json.loads((root / ".build/source-generation/codm/report.json").read_text())[
+            "status"
+        ]
+        == "success"
+    )
+    history = (
+        (
+            PullRequest(
+                4,
+                "closed",
+                "2026-09-10T00:00:00Z",
+                "mjkoo/omnipack",
+                "mjkoo",
+                "automation/codm-catalog",
+                "main",
+                MARKER,
+                head_sha=accepted,
+            ),
+        )
+        if retained_merged_branch
+        else ()
+    )
+    remote = FakeRemote(accepted, accepted if retained_merged_branch else None, history)
+
+    result = SourcePublicationCoordinator(root, remote).publish(candidate, "secret")
+
+    assert result.status == "no-op"
+    assert result.base_sha == accepted
+    assert not remote.pushes
+    assert remote.created == 0
+    assert _git(root, "rev-parse", "HEAD") == accepted
+    assert _git(root, "diff", "--name-only", "HEAD") == ""
+
+
 def test_open_same_content_is_noop_even_if_main_advanced(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     candidate = _checked(root)
