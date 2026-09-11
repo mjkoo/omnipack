@@ -14,6 +14,7 @@ from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.package_id import PackageIdCache, PackageIdResolver
 from omnipack.report import format_reports, write_report
+from omnipack.source_generation import generate_codm
 from omnipack.sources import (
     IngestionReport,
     IngestionResult,
@@ -144,6 +145,15 @@ def report(_args: argparse.Namespace) -> int:
     return 0
 
 
+def generate_source(args: argparse.Namespace) -> int:
+    result = generate_codm(Path.cwd(), force=args.force)
+    if result["status"] == "failed":
+        detail = result.get("error") or result.get("unresolved") or "generation failed"
+        print(f"source generation failed: {detail}", file=sys.stderr)
+        return 1
+    return 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pack")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -158,6 +168,14 @@ def _parser() -> argparse.ArgumentParser:
 
     report_parser = subparsers.add_parser("report", help="print the last build report")
     report_parser.set_defaults(func=report)
+
+    generate_parser = subparsers.add_parser(
+        "generate-source", help="generate a reviewed source catalog candidate"
+    )
+    source_parsers = generate_parser.add_subparsers(dest="source", required=True)
+    codm_parser = source_parsers.add_parser("codm", help="generate codm source")
+    codm_parser.add_argument("--force", action="store_true")
+    codm_parser.set_defaults(func=generate_source)
 
     return parser
 

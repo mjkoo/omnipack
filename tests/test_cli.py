@@ -67,6 +67,23 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
+@pytest.mark.parametrize(
+    ("status", "expected"), [("success", 0), ("unchanged", 0), ("failed", 1)]
+)
+def test_generate_source_codm_exit_status(
+    monkeypatch: pytest.MonkeyPatch, status: str, expected: int
+) -> None:
+    calls: list[tuple[Path, bool]] = []
+
+    def generate(root: Path, *, force: bool = False) -> dict[str, object]:
+        calls.append((root, force))
+        return {"status": status}
+
+    monkeypatch.setattr(cli, "generate_codm", generate)
+    assert main(["generate-source", "codm", "--force"]) == expected
+    assert calls == [(Path.cwd(), True)]
+
+
 def test_verify_missing_inputs_fails_and_report_displays_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

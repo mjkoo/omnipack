@@ -162,18 +162,36 @@ class PackageIdResolver:
         return document
 
     def _resolve_release_assets(self, release: dict[str, Any]) -> str:
+        return self.resolve_release_assets(release)
+
+    def resolve_release_assets(
+        self,
+        release: dict[str, Any],
+        filename_pattern: str = "",
+        report: dict[str, Any] | None = None,
+        project_url: str | None = None,
+    ) -> str:
         assets = release.get("assets")
         if not isinstance(assets, list):
             raise TypeError("latest release has no asset list")
+        pattern = re.compile(filename_pattern) if filename_pattern else None
         eligible: list[tuple[str, str]] = []
+        filtered: list[str] = []
         for asset in assets:
             if not isinstance(asset, dict):
                 continue
             name, url = asset.get("name"), asset.get("browser_download_url")
             if isinstance(name, str) and name.lower().endswith(".apk"):
+                if pattern is not None and pattern.search(name) is None:
+                    filtered.append(name)
+                    continue
                 if not isinstance(url, str) or not url:
                     raise ValueError(f"eligible APK {name!r} has no download URL")
                 eligible.append((name, url))
+        if report is not None and filtered:
+            report.setdefault("filteredAssets", []).append(
+                {"url": project_url, "names": sorted(filtered)}
+            )
         if not eligible:
             raise ValueError("latest release has no eligible APK assets")
         resolved: list[str] = []
