@@ -22,6 +22,7 @@ from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "fixtures/source-generation/codm"
+EVIDENCE = FIXTURES / "reviewed-evidence"
 CAPTURED = ROOT / "tests/fixtures/reconciliation"
 
 
@@ -277,3 +278,112 @@ def test_generation_cases_encode_complete_input_and_expected_relationships() -> 
         conflict["expectedConflictPackageId"]
     }
     assert conflict["expectedOutcome"] == "validation-failure"
+
+
+def test_reviewed_project_policy_is_hash_bound_to_captured_evidence() -> None:
+    evidence = load_json(EVIDENCE / "index.json")
+    policy_bytes = (EVIDENCE / "project-policy.json").read_bytes()
+    policy = json.loads(policy_bytes)
+
+    assert hashlib.sha256(policy_bytes).hexdigest() == evidence["policySha256"]
+    assert all(
+        hashlib.sha256((EVIDENCE / name).read_bytes()).hexdigest() == digest
+        for name, digest in evidence["artifactSha256"].items()
+    )
+    assert set(policy["projects"]) == {
+        "github.com/emulnk/emulnk",
+        "github.com/castdrian/showdown-ds",
+        "github.com/mastercook777/heimdall-ayn-thor-assistant",
+        "github.com/averageconsumer/kanto-gear",
+    }
+    assert all(
+        hashlib.sha256(
+            json.dumps(rule, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+        == evidence["reviewedRuleSha256"][url]
+        for url, rule in policy["projects"].items()
+    )
+
+
+def test_captured_release_and_manifest_observations_support_reviewed_rules() -> None:
+    observations = load_json(EVIDENCE / "observations.json")
+    policy = load_json(EVIDENCE / "project-policy.json")["projects"]
+    apk_ids: set[str] = set()
+
+    for url in (
+        "github.com/emulnk/emulnk",
+        "github.com/castdrian/showdown-ds",
+        "github.com/mastercook777/heimdall-ayn-thor-assistant",
+    ):
+        observation = observations["projects"][url]
+        assert observation["release"]["prerelease"] is True
+        assert observation["release"]["draft"] is False
+        assert observation["asset"]["name"].lower().endswith(".apk")
+        assert re.fullmatch(r"[0-9a-f]{64}", observation["asset"]["sha256"])
+        assert re.fullmatch(r"[0-9a-f]{64}", observation["manifest"]["sha256"])
+        badging = (EVIDENCE / observation["manifest"]["badgingFile"]).read_text()
+        package = re.search(
+            r"package: name='([^']+)' versionCode='([^']+)' versionName='([^']+)'",
+            badging,
+        )
+        assert package is not None
+        assert package.groups() == (
+            observation["manifest"]["packageId"],
+            observation["manifest"]["versionCode"],
+            observation["manifest"]["versionName"],
+        )
+        assert policy[url]["additionalSettings"]["includePrereleases"] is True
+        apk_ids.add(observation["manifest"]["packageId"])
+
+    assert apk_ids == {
+        "com.emulnk",
+        "dev.adrian.showdown",
+        "com.mastercook777.heimdall",
+    }
+    heimdall = observations["projects"][
+        "github.com/mastercook777/heimdall-ayn-thor-assistant"
+    ]
+    assert heimdall["excludedRelease"]["tag"] == "debug-latest"
+    assert (
+        re.fullmatch(
+            policy["github.com/mastercook777/heimdall-ayn-thor-assistant"][
+                "additionalSettings"
+            ]["filterReleaseTitlesByRegEx"],
+            heimdall["excludedRelease"]["tag"],
+        )
+        is None
+    )
+
+    kanto_url = "github.com/averageconsumer/kanto-gear"
+    kanto = observations["projects"][kanto_url]
+    kanto_policy = policy[kanto_url]
+    assert kanto["asset"]["name"].endswith(".zip")
+    assert kanto["archiveContainsApk"] is False
+    assert (
+        kanto["installation"]["hostUrl"] == "https://github.com/bryanthaboi/gen1recomp"
+    )
+    assert kanto["installation"]["methods"] == ["official-mod-index", "zip-import"]
+    assert kanto_policy["trackerId"].isdigit()
+    assert kanto_policy["trackerId"] not in apk_ids
+
+
+def test_expected_additions_are_separate_from_the_frozen_baseline() -> None:
+    additions = load_json(EVIDENCE / "expected-additions.json")
+    baseline_path = ROOT / additions["baseline"]["file"]
+    baseline = load_json(baseline_path)
+
+    assert (
+        hashlib.sha256(baseline_path.read_bytes()).hexdigest()
+        == additions["baseline"]["sha256"]
+    )
+    assert {item["variant"]: item["appCount"] for item in baseline["outputs"]} == {
+        "single": 92,
+        "dual": 109,
+    }
+    assert additions["single"] == []
+    assert [(item["kind"], item["id"]) for item in additions["dual"]] == [
+        ("apk", "dev.adrian.showdown"),
+        ("apk", "com.mastercook777.heimdall"),
+        ("track-only", "1845280017"),
+    ]
+    assert additions["expectedCounts"] == {"single": 92, "dual": 112}

@@ -1,0 +1,1 @@
+package: name='dev.adrian.showdown' versionCode='12025' versionName='0.1.2-alpha.25' platformBuildVersionName='16' platformBuildVersionCode='36' compileSdkVersion='36' compileSdkVersionCodename='16'

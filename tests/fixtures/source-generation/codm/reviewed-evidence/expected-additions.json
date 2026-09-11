@@ -1,0 +1,36 @@
+{
+  "baseline": {
+    "file": "tests/fixtures/source-generation/codm/baseline/index.json",
+    "sha256": "baef3e80ed9a92668f3dd4ae956596129d0a5cebfc4d2b1a365aab14d3c252ce"
+  },
+  "single": [],
+  "dual": [
+    {
+      "kind": "apk",
+      "id": "dev.adrian.showdown",
+      "url": "github.com/castdrian/showdown-ds"
+    },
+    {
+      "kind": "apk",
+      "id": "com.mastercook777.heimdall",
+      "url": "github.com/mastercook777/heimdall-ayn-thor-assistant"
+    },
+    {
+      "kind": "track-only",
+      "id": "1845280017",
+      "url": "github.com/averageconsumer/kanto-gear"
+    }
+  ],
+  "expectedCounts": {
+    "single": 92,
+    "dual": 112
+  },
+  "preserveExistingEntriesExactly": true,
+  "preserveFamilyWinners": true,
+  "emulnkExpectedWinner": {
+    "source": "rjny",
+    "id": "com.emulnk",
+    "url": "github.com/emulnk/emulnk",
+    "includePrereleases": true
+  }
+}
