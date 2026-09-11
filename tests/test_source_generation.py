@@ -203,7 +203,7 @@ def tracking_root(tmp_path: Path) -> tuple[str, str]:
                         "trackerId": "12345",
                         "name": "Tracker",
                         "rationale": "A non-APK resource.",
-                        "installation": "Install with https://github.com/example/host.",
+                        "installation": "Install Host with https://github.com/example/host.",
                     }
                 },
             }

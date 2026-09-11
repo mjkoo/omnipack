@@ -696,3 +696,27 @@ def test_both_kind_transitions_require_fresh_destination_validation(tmp_path):
     assert result["status"] == "success"
     assert ASSET in http.urls
     assert result["apk"][0]["status"] == "resolved"
+
+
+@pytest.mark.parametrize(
+    "instruction",
+    [
+        "Install Host from https://example.org/host",
+        "Install Host from https://github.com/Example/Host",
+    ],
+)
+def test_tracker_instruction_supports_canonical_host_urls(instruction):
+    policy = parse_project_policy(
+        {
+            "schemaVersion": 1,
+            "projects": {
+                PROJECT: {
+                    "kind": "track-only",
+                    "trackerId": "123",
+                    "rationale": "mod",
+                    "installation": instruction,
+                }
+            },
+        }
+    )
+    assert policy.projects[PROJECT].installation == instruction

@@ -198,16 +198,50 @@ def _parse_rule(url: str, value: dict[str, Any]) -> ProjectRule:
     for link in links:
         link = link.rstrip(".,;)")
         try:
-            normalized = repository_url(link)
+            host = urlsplit(link)
+            if (
+                host.scheme != "https"
+                or not host.hostname
+                or "." not in host.hostname
+                or host.username is not None
+                or host.port is not None
+                or host.query
+                or host.fragment
+            ):
+                continue
+            if host.hostname.removeprefix("www.") == "github.com":
+                repository_url(link)
         except ValueError:
             continue
-        if link == f"https://{normalized}" and re.search(
-            r"[A-Za-z]{2,}", installation.replace(link, "")
-        ):
+        prose = installation.replace(link, "")
+        words = set(re.findall(r"[A-Za-z][A-Za-z0-9-]*", prose.lower()))
+        boilerplate = {
+            "install",
+            "installation",
+            "update",
+            "with",
+            "from",
+            "at",
+            "using",
+            "through",
+            "official",
+            "the",
+            "a",
+            "an",
+            "it",
+            "manually",
+            "or",
+            "and",
+            "via",
+            "download",
+            "this",
+            "here",
+        }
+        if words - boilerplate:
             valid_host = True
     if not valid_host:
         raise PolicyError(
-            f"{url}: installation must name its host and canonical HTTPS repository URL"
+            f"{url}: installation must name its host and canonical HTTPS URL"
         )
     forbidden = set(settings) & {
         "apkFilterRegEx",
