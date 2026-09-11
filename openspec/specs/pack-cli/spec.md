@@ -15,8 +15,9 @@ and renders both variants, generates the README catalog, verifies the rendered
 pair and catalog offline, and publishes all three files only after verification
 succeeds. Handwritten README content SHALL be preserved byte-for-byte. Missing
 or malformed catalog markers SHALL fail the build. The
-build SHALL NOT perform live verification. Existing ingestion network requests
-and generated package-id discovery SHALL remain part of building.
+build SHALL NOT perform live verification. Network requests for upstream JSON catalogs SHALL remain part of building.
+The codm2000 source SHALL be read from committed JSON; README scraping, APK
+discovery and resolution-state mutation SHALL NOT occur during building.
 
 #### Scenario: Successful build
 
@@ -30,196 +31,6 @@ and generated package-id discovery SHALL remain part of building.
 - **WHEN** either newly rendered variant fails offline verification
 - **THEN** neither distribution file nor the README is replaced, the command exits nonzero,
   and the build report identifies the offline verification stage and findings
-
-### Requirement: A failed build leaves previous output intact
-
-Automation commits whatever the distribution directory holds, so a partially
-written pack would be published. The system SHALL leave the existing output
-files unchanged when a build fails at any stage, and SHALL exit with a
-non-zero status. The two import files and README SHALL be published as a recoverable unit.
-A handled failure during replacement SHALL restore every replaced file to its
-previous bytes or absence. Successful replacement and recovery SHALL preserve
-existing file permission modes; new outputs SHALL use normal file creation
-permissions subject to the process umask. Before publication, a README changed
-since capture SHALL cause failure without overwriting that edit. Recovery covers handled
-exceptions, not process termination, runner loss or rollback storage failure. The resolved package id cache is exempt: a newly
-resolved id SHALL be written to the cache as soon as it resolves, so that a
-build failing later keeps the resolution work it already paid for.
-
-#### Scenario: Build fails after some output was rendered
-
-- **WHEN** rendering succeeds for one variant and the build then fails
-- **THEN** neither output file is modified and the command exits non-zero
-
-#### Scenario: Build fails on the first run
-
-- **WHEN** the build fails and no output files exist yet
-- **THEN** no output files are created
-
-#### Scenario: Build fails between replacing the two output files
-
-- **WHEN** one import file has been replaced with its newly rendered contents
-  and the build then fails before the other is replaced
-- **THEN** both import files hold the contents they had before the build, and
-  neither is present if the distribution directory held no output before it
-
-#### Scenario: Build fails after resolving a new package id
-
-- **WHEN** a build resolves a package id that was not previously cached and
-  then fails before the output is written
-- **THEN** the import files are unchanged and the cache retains the newly
-  resolved id
-
-#### Scenario: README replacement fails
-
-- **WHEN** the JSON replacements succeed but replacing README fails
-- **THEN** both JSON files are restored and README retains its previous bytes
-
-#### Scenario: README is edited during building
-
-- **WHEN** README differs from the bytes captured for catalog generation
-- **THEN** publication fails before replacing outputs and preserves the edit
-
-### Requirement: The build writes a report of what it did
-
-The scheduled rebuild needs to explain a change or a failure without rerunning
-the build. The system SHALL write a build report recording the apps added and
-removed since the previous output, the families and package ids where candidates were displaced by
-pins, device preference or source precedence, the candidate exclusions, and the
-denylist entries that matched no candidate in scope and are therefore stale exclusions, the source rows that
-were skipped or left unresolved, and every project that produced a generated
-entry together with its resolved or reused package id. The report SHALL also
-record each failed resolution attempt that retained a cached id. Listing a resolved
-generated project is what lets a maintainer write a denylist entry for it,
-since a project link names no package id of its own and a project that resolved
-and was already in the previous output appears in none of the other lists.
-
-The report SHALL additionally record each family's per-target winner and
-alternatives, source/origin, original and effective identity, eligibility,
-preference tier, fallback and selection reason. It SHALL distinguish family
-coverage from package coverage, and family additions/removals from project or
-package replacements. Conflicts and stale policy selectors SHALL be actionable.
-
-Previous-output family classification SHALL use only committed historical
-effective-id-and-normalized-URL mappings, without requiring a prior build report
-or retaining obsolete active candidate rules. Current family membership SHALL
-come from composition. A known previous family present in the current target
-SHALL be retained, with package/project changes reported as transitions; a known
-previous family absent now SHALL be removed. An unmapped previous entry SHALL
-have unknown family history and SHALL NOT be assigned an inferred package family
-or reported as a family removal. If any previous entries in a target are unmapped,
-current families without a known previous match SHALL have unknown addition
-status rather than definite additions or replacements. The report SHALL identify
-unmapped keys and the missing-history reason while preserving known matches and
-raw app/package diffs. Missing previous output SHALL mean all current families
-are additions. Missing history SHALL NOT fail otherwise valid composition.
-
-The report SHALL be written on a successful build and on a failed one alike,
-and a failed build's report SHALL record the stage that was running and the
-error that stopped it. If composition has not completed, the report SHALL set
-`changes` to null because no complete candidate output exists to compare;
-this SHALL NOT be interpreted as an empty pack. The report SHALL preserve
-precedence displacements, denylist removals, and stale exclusions collected
-before a composition failure. Once composition completes, the report SHALL
-compare its candidate apps with the previous output even if a later stage fails.
-The previous output a report compares against is the
-contents of the import files as they stood before the build, so the system
-SHALL read them before it replaces either import file; when a variant's import
-file does not yet exist, every app in that variant SHALL be reported as added.
-The report SHALL be written as a machine-readable JSON document to
-`.build/report.json`, a path outside the distribution directory that is not
-committed, so that a report differing between runs never makes an otherwise
-unchanged rebuild look like a change.
-
-#### Scenario: An app appears for the first time
-
-- **WHEN** a build adds an app that the previous output did not contain
-- **THEN** the report lists that app as added
-
-#### Scenario: A generated project resolved its package id
-
-- **WHEN** a build generates an entry for a project link and the project's
-  package id resolves
-- **THEN** the report lists that project together with the package id resolved
-  for it, whether or not the previous output already contained that app
-
-#### Scenario: A generated entry could not be resolved
-
-- **WHEN** a project's package id could not be determined and no id is cached
-- **THEN** the report lists that project as unresolved
-
-#### Scenario: A failed resolution retains a cached generated entry
-
-- **WHEN** a project's resolution attempt fails and a cached id is available
-- **THEN** the report records the failure and lists the generated project with
-  its retained cached package id
-
-#### Scenario: The build fails before it writes output
-
-- **WHEN** a build aborts because an upstream is unreachable
-- **THEN** the report is still written and names the stage that was running and
-  the error that stopped the build
-
-#### Scenario: An early failure cannot compute output changes
-
-- **WHEN** a build fails before composition completes and previous import files exist
-- **THEN** the report sets `changes` to null instead of listing existing apps as removed
-- **AND** the previous import files remain unchanged
-
-#### Scenario: Composition diagnostics survive invalid overlays
-
-- **WHEN** precedence and denylist processing collect diagnostics and an overlay
-  subsequently fails validation
-- **THEN** the failed report preserves the collected displacements, denylist removals,
-  and stale exclusions, and sets `changes` to null
-
-#### Scenario: The first build has no previous output
-
-- **WHEN** a build runs and a variant's import file does not yet exist
-- **THEN** the report lists every app in that variant as added and lists none
-  as removed
-
-#### Scenario: Report stays out of the distribution directory
-
-- **WHEN** a build completes
-- **THEN** the report is a JSON document at `.build/report.json` and no report
-  file is written into the distribution directory
-
-#### Scenario: Family stays while the package changes
-
-- **WHEN** the selected build moves to another package in the same declared family
-- **THEN** the report records the package transition and retained family separately
-
-#### Scenario: Old candidate disappears in a fresh scheduled checkout
-
-- **WHEN** previous import files contain an old package, its candidate has disappeared, its obsolete active rule has been removed, a historical mapping retains its family, and no prior build report exists
-- **AND** composition selects a different package in that family for the same target
-- **THEN** the report records a retained family and the old-to-new package transition without requiring the retired candidate or a prior report
-
-#### Scenario: Previous entry has no historical mapping
-
-- **WHEN** a previous entry has no historical mapping and a current family has no known previous match
-- **THEN** the report identifies that entry as unknown family history and the current family as unknown addition status, without asserting a family removal, addition or replacement for them
-- **AND** raw app/package changes remain available and missing history alone does not fail the build
-
-#### Scenario: Family conflict stops composition
-
-- **WHEN** selection fails on tied candidates or a package collision
-- **THEN** the report identifies the family, target and conflicting selectors and preserves prior diagnostics
-
-### Requirement: The build persists newly resolved package ids
-
-The system SHALL write back each package id as it is resolved during a build,
-together with the host-assigned identifier of the release it was resolved from,
-rather than
-only once the build succeeds, so that a later build can reuse it and can tell
-whether the project has published a new release since.
-
-#### Scenario: A new project is resolved
-
-- **WHEN** a build resolves a package id that was not previously cached
-- **THEN** the cache records that id, and the host-assigned identifier of the
-  release it was resolved from, against the project URL after the build
 
 ### Requirement: Build diagnostics include the offline verification verdict
 
@@ -307,3 +118,197 @@ claims. A supported schema with a different verifier identity SHALL be stale.
 
 - **WHEN** config/composition.json changes while both pack files remain identical
 - **THEN** recorded verification is displayed as stale
+
+### Requirement: Build failure preserves published outputs without source mutation
+
+Automation commits whatever the distribution directory holds, so a partially
+written pack would be published. The system SHALL leave the existing output
+files unchanged when a build fails at any stage, and SHALL exit with a
+non-zero status. The two import files and README SHALL be published as a recoverable unit.
+A handled failure during replacement SHALL restore every replaced file to its
+previous bytes or absence. Successful replacement and recovery SHALL preserve
+existing file permission modes; new outputs SHALL use normal file creation
+permissions subject to the process umask. Before publication, a README changed
+since capture SHALL cause failure without overwriting that edit. Recovery covers handled
+exceptions, not process termination, runner loss or rollback storage failure. The build SHALL leave source catalogs and resolution state unchanged on success and failure.
+
+#### Scenario: Build fails after some output was rendered
+
+- **WHEN** rendering succeeds for one variant and the build then fails
+- **THEN** neither output file is modified and the command exits non-zero
+
+#### Scenario: Build fails on the first run
+
+- **WHEN** the build fails and no output files exist yet
+- **THEN** no output files are created
+
+#### Scenario: Build fails between replacing the two output files
+
+- **WHEN** one import file has been replaced with its newly rendered contents
+  and the build then fails before the other is replaced
+- **THEN** both import files hold the contents they had before the build, and
+  neither is present if the distribution directory held no output before it
+
+#### Scenario: README replacement fails
+
+- **WHEN** the JSON replacements succeed but replacing README fails
+- **THEN** both JSON files are restored and README retains its previous bytes
+
+#### Scenario: README is edited during building
+
+- **WHEN** README differs from the bytes captured for catalog generation
+- **THEN** publication fails before replacing outputs and preserves the edit
+
+### Requirement: The build reports composition and committed source outcomes
+
+The scheduled rebuild needs to explain a change or a failure without rerunning
+the build. The system SHALL write a build report recording the apps added and
+removed since the previous output, the families and package ids where candidates were displaced by
+pins, device preference or source precedence, the candidate exclusions, and the
+denylist entries that matched no candidate in scope and are therefore stale exclusions, and source ingestion failures. Resolution-attempt diagnostics SHALL belong to
+source generation, not routine build reports. Build reports SHALL identify
+admitted codm2000 candidates and their committed identities, distinguishing
+APK package IDs from track-only resource IDs, without claiming that they were
+freshly resolved or their releases checked.
+
+The report SHALL additionally record each family's per-target winner and
+alternatives, source/origin, original and effective identity, eligibility,
+preference tier, fallback and selection reason. It SHALL distinguish family
+coverage from package coverage, and family additions/removals from project or
+package replacements. Conflicts and stale policy selectors SHALL be actionable.
+
+Previous-output family classification SHALL use only committed historical
+effective-id-and-normalized-URL mappings, without requiring a prior build report
+or retaining obsolete active candidate rules. Current family membership SHALL
+come from composition. A known previous family present in the current target
+SHALL be retained, with package/project changes reported as transitions; a known
+previous family absent now SHALL be removed. An unmapped previous entry SHALL
+have unknown family history and SHALL NOT be assigned an inferred package family
+or reported as a family removal. If any previous entries in a target are unmapped,
+current families without a known previous match SHALL have unknown addition
+status rather than definite additions or replacements. The report SHALL identify
+unmapped keys and the missing-history reason while preserving known matches and
+raw app/package diffs. Missing previous output SHALL mean all current families
+are additions. Missing history SHALL NOT fail otherwise valid composition.
+
+The report SHALL be written on a successful build and on a failed one alike,
+and a failed build's report SHALL record the stage that was running and the
+error that stopped it. If composition has not completed, the report SHALL set
+`changes` to null because no complete candidate output exists to compare;
+this SHALL NOT be interpreted as an empty pack. The report SHALL preserve
+precedence displacements, denylist removals, and stale exclusions collected
+before a composition failure. Once composition completes, the report SHALL
+compare its candidate apps with the previous output even if a later stage fails.
+The previous output a report compares against is the
+contents of the import files as they stood before the build, so the system
+SHALL read them before it replaces either import file; when a variant's import
+file does not yet exist, every app in that variant SHALL be reported as added.
+The report SHALL be written as a machine-readable JSON document to
+`.build/report.json`, a path outside the distribution directory that is not
+committed, so that a report differing between runs never makes an otherwise
+unchanged rebuild look like a change.
+
+#### Scenario: An app appears for the first time
+
+- **WHEN** a build adds an app that the previous output did not contain
+- **THEN** the report lists that app as added
+
+#### Scenario: Committed generated entry is ingested
+
+- **WHEN** a build admits an entry from the committed codm2000 catalog
+- **THEN** its source, entry kind and committed package or resource ID are available in build diagnostics without a fresh-resolution claim
+
+#### Scenario: The build fails before it writes output
+
+- **WHEN** a build aborts because an upstream is unreachable
+- **THEN** the report is still written and names the stage that was running and
+  the error that stopped the build
+
+#### Scenario: An early failure cannot compute output changes
+
+- **WHEN** a build fails before composition completes and previous import files exist
+- **THEN** the report sets `changes` to null instead of listing existing apps as removed
+- **AND** the previous import files remain unchanged
+
+#### Scenario: Composition diagnostics survive invalid overlays
+
+- **WHEN** precedence and denylist processing collect diagnostics and an overlay
+  subsequently fails validation
+- **THEN** the failed report preserves the collected displacements, denylist removals,
+  and stale exclusions, and sets `changes` to null
+
+#### Scenario: The first build has no previous output
+
+- **WHEN** a build runs and a variant's import file does not yet exist
+- **THEN** the report lists every app in that variant as added and lists none
+  as removed
+
+#### Scenario: Report stays out of the distribution directory
+
+- **WHEN** a build completes
+- **THEN** the report is a JSON document at `.build/report.json` and no report
+  file is written into the distribution directory
+
+#### Scenario: Family stays while the package changes
+
+- **WHEN** the selected build moves to another package in the same declared family
+- **THEN** the report records the package transition and retained family separately
+
+#### Scenario: Old candidate disappears in a fresh scheduled checkout
+
+- **WHEN** previous import files contain an old package, its candidate has disappeared, its obsolete active rule has been removed, a historical mapping retains its family, and no prior build report exists
+- **AND** composition selects a different package in that family for the same target
+- **THEN** the report records a retained family and the old-to-new package transition without requiring the retired candidate or a prior report
+
+#### Scenario: Previous entry has no historical mapping
+
+- **WHEN** a previous entry has no historical mapping and a current family has no known previous match
+- **THEN** the report identifies that entry as unknown family history and the current family as unknown addition status, without asserting a family removal, addition or replacement for them
+- **AND** raw app/package changes remain available and missing history alone does not fail the build
+
+#### Scenario: Family conflict stops composition
+
+- **WHEN** selection fails on tied candidates or a package collision
+- **THEN** the report identifies the family, target and conflicting selectors and preserves prior diagnostics
+
+### Requirement: A separate command generates the README source catalog
+
+The system SHALL provide `pack generate-source codm` and an optional `--force`
+flag. It SHALL compare fetched README bytes, configured URL and validated
+reviewed project-policy bytes to accepted source metadata, skip only when all
+inputs are unchanged unless forced, and produce a complete candidate catalog, source
+metadata, resolution state and diagnostic report under `.build/` on success.
+It SHALL NOT write committed source files, pack outputs, git history or PRs.
+It SHALL exit zero for successful generation or an unchanged-source no-op and
+nonzero for failed generation. The report SHALL distinguish those outcomes and
+identify unsupported links, inactive project rules, effective policy, resolved
+and reused APK IDs, successful track-only resources, retained failures and
+unresolved projects. It SHALL NOT modify the reviewed project policy. A complete
+catalog SHALL account for every eligible project as an APK or an explicitly
+declared tracker; lack of an APK SHALL NOT imply permission to skip or track it.
+Only artifacts produced by the current invocation SHALL be offered as its result.
+
+#### Scenario: Unchanged source
+
+- **WHEN** the configured URL, fetched source hash and valid policy hash match accepted metadata and force is absent
+- **THEN** the command reports a no-op without release or APK requests
+
+#### Scenario: Forced refresh
+
+- **WHEN** force is supplied and README and policy bytes are unchanged
+- **THEN** the command checks releases and generates or reports failure using the normal resolution contract
+
+#### Scenario: Incomplete generation
+
+- **WHEN** a new APK project cannot be resolved or a new declared tracker cannot be validated
+- **THEN** the command fails with current diagnostics and offers no complete candidate for publication
+
+#### Scenario: Policy update needs generation
+
+- **WHEN** project policy changes while README bytes remain identical
+- **THEN** the command generates under the new policy instead of reporting an unchanged-source no-op
+
+#### Scenario: Kanto needs no APK resolution
+
+- **WHEN** Kanto's explicit track-only rule and permitted release validate
+- **THEN** the report records a tracking resource with its synthetic ID, not a resolved Android package

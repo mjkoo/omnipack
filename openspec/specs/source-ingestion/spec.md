@@ -14,7 +14,8 @@ The system SHALL read each upstream from the location recorded in the source
 configuration: the RJNY catalog from the configured path on the configured
 branch, the BBoi34 catalog from the single-screen and dual-screen JSON assets
 of the latest release of the configured repository, and the codm2000 catalog
-from the configured README URL.
+from its configured committed Obtainium JSON file. Routine ingestion SHALL NOT
+fetch the source README, inspect APKs or read or mutate resolution state.
 
 #### Scenario: BBoi34 assets come from the newest release
 
@@ -28,13 +29,24 @@ from the configured README URL.
 - **WHEN** ingestion runs and a source's configured location is empty
 - **THEN** the build fails with an error naming that source
 
+#### Scenario: README or APK hosting is unavailable
+
+- **WHEN** committed codm2000 JSON is valid and other catalog sources are available
+- **THEN** ingestion succeeds without requesting README or APK data
+
+#
+
 ### Requirement: HTTP credentials are optional and scoped to exact hosts
 
 All pipeline HTTP requests SHALL use the shared standard-library HTTP helper,
 including catalog fetches and the vendored package-id resolver's release
-metadata requests, ranged APK reads and full asset downloads. GitHub latest
-release metadata SHALL be requested from
-`https://api.github.com/repos/OWNER/REPO/releases/latest`.
+metadata requests, ranged APK reads and full asset downloads. GitHub default
+stable-release metadata SHALL be requested from
+`https://api.github.com/repos/OWNER/REPO/releases/latest`. Explicit prerelease
+or release-title policy SHALL use
+`https://api.github.com/repos/OWNER/REPO/releases` with bounded listing under
+the source-generation contract. Track-only release checks SHALL use the same
+host-scoped helper without APK requests.
 
 The system SHALL read host-to-environment-variable registrations from the
 `credentials` object in dedicated `config/http.json`, whose committed default
@@ -56,7 +68,7 @@ that destination's exact registration.
 
 - **WHEN** a generated GitHub project has no cached package id, the default
   HTTP configuration is loaded and `GITHUB_TOKEN` is nonempty
-- **THEN** its latest-release metadata request to `api.github.com` carries the
+- **THEN** its policy-selected release metadata request to `api.github.com` carries the
   bearer token through the shared helper, and its ranged APK reads and full
   asset download fallback use that same helper
 - **AND** requests to unregistered `github.com`, `raw.githubusercontent.com`,
@@ -79,6 +91,8 @@ that destination's exact registration.
 - **WHEN** a request bearing the token for `api.github.com` redirects to an
   unregistered host
 - **THEN** the redirected request carries no Authorization header
+
+#
 
 ### Requirement: URLs are compared in a normalized form
 
@@ -123,10 +137,10 @@ contributes a link, and keying the resolved package id cache.
 A pack that is silently missing a whole upstream is worse than no rebuild at
 all, because it would drop every app that upstream contributes. The system
 SHALL abort the build when any source cannot be fetched or parsed, and SHALL
-NOT write either import file in that case. That restriction covers the two
-import files only: the resolved package id cache keeps whatever it resolved
-before the abort, and the build report is still written and records the
-failure.
+NOT write either import file in that case. The build report SHALL still record the failure. The committed codm2000
+catalog is a required local source: missing, malformed or unreadable content
+SHALL fail the build without falling back to README generation. Builds SHALL
+NOT modify that catalog or package-ID resolution state.
 
 #### Scenario: One upstream is unreachable
 
@@ -139,6 +153,11 @@ failure.
 - **WHEN** an upstream is reachable but its content cannot be parsed as the
   expected catalog shape
 - **THEN** the build fails with an error naming that source
+
+#### Scenario: Committed source catalog is missing
+
+- **WHEN** the configured codm2000 JSON file is missing or malformed
+- **THEN** the build fails naming codm2000 and preserves previous outputs
 
 ### Requirement: RJNY export flags select entries per variant
 
@@ -220,232 +239,6 @@ SHALL be able to override normalized eligibility and preference.
 
 - **WHEN** explicit policy makes the dual candidate ineligible for dual
 - **THEN** the retained standard candidate remains available for dual selection
-
-### Requirement: codm2000 entries are generated from GitHub project links
-
-The codm2000 catalog is a README of links rather than a machine-readable
-catalog. The system SHALL extract its project links, SHALL keep only those
-that address a GitHub repository, and SHALL skip the rest. Generated entries
-SHALL be candidates for the dual-screen variant only, so the test for a project
-another source already covers is scoped to that variant after explicit
-eligibility rules have been applied to higher-source candidates: a link SHALL NOT
-produce a generated entry when a higher-precedence source already contributes
-that project as a candidate for the dual-screen variant, compared in the
-pipeline's normalized URL form before exclusions and selection, and SHALL produce one otherwise. A project that
-a higher-precedence source contributes to the single-screen variant alone
-therefore still generates its dual-screen candidate, since nothing else would
-supply that variant.
-
-Generated builds SHALL be dual-preferred within their family unless explicit
-policy overrides that preference. Merely listing a covered project in codm SHALL
-NOT promote a higher-source ordinary build to dual-preferred. Generated rules
-SHALL be applied after package resolution; all active candidate selectors SHALL then be
-validated against the complete candidate set. Historical mappings SHALL be exempt from candidate-presence checks.
-A missing rule or pinned candidate SHALL fail explicitly rather than be treated as an ordinary unresolved skip.
-
-A README link supplies no display name and no grouping of its own, so a
-generated entry SHALL carry as its name the repository name of its project URL,
-and SHALL carry an empty category list. An entry with no category is already
-governed: it sorts as though its primary category were the empty string and it
-contributes nothing to the rendered settings block's category union.
-
-#### Scenario: Generated entry takes its name from the repository
-
-- **WHEN** a README row links to a GitHub repository that no other source
-  contributes and whose package id resolves
-- **THEN** the generated entry's name is that repository's name and its
-  category list is empty
-
-#### Scenario: Link is not a GitHub repository
-
-- **WHEN** a README row links to a host with no APK release feed
-- **THEN** no entry is generated for that row and the row is reported as
-  skipped
-
-#### Scenario: Link already covered as a dual-screen candidate
-
-- **WHEN** a README row links to a repository that a higher-precedence source
-  already contributes as a candidate for the dual-screen variant, spelled
-  differently but equal once normalized
-- **THEN** no entry is generated for that row
-
-#### Scenario: Link covered in the single-screen variant only
-
-- **WHEN** a README row links to a repository that a higher-precedence source
-  contributes as a candidate for the single-screen variant only
-- **THEN** a generated entry is produced for that row as a candidate for the
-  dual-screen variant
-
-#### Scenario: Policy removes higher-source dual eligibility
-
-- **WHEN** a higher-source project would normally cover dual but policy restricts it to single
-- **THEN** its codm link can generate a dual candidate
-
-#### Scenario: Covered ordinary build is also listed by codm
-
-- **WHEN** a higher-source ordinary candidate already covers that project's dual target
-- **THEN** codm generates no duplicate and does not change that candidate's preference
-
-### Requirement: A generated entry carries a real package id
-
-Obtainium renames an app to its real package id on install, so an entry
-carrying a placeholder id is re-added as a duplicate on the next import. The
-system SHALL determine a generated entry's package id by reading the manifest
-of every eligible APK asset of the project's latest release. An eligible APK
-asset is every asset of that release whose filename ends in `.apk`, compared
-without regard to case. When the latest release publishes no eligible APK
-asset, when eligible assets declare different package ids, or when any
-eligible asset cannot be read, including a size bound, fetch failure or
-unreadable manifest, the resolution attempt SHALL fail. The system SHALL NOT
-resolve an id from only the assets it could read, so that an unread asset cannot
-mask a package id disagreement. Each of these failures SHALL use the cached id
-and report the failure when a cached id exists; only a project with no cached
-id SHALL be omitted and reported as unresolved. When every eligible asset
-can be read and declares the same package id, the generated entry SHALL carry
-that id. The system SHALL NOT emit a generated entry with an invented or
-placeholder id. The cache requirement governs when the system reuses an id
-without reading APK assets.
-
-#### Scenario: Package id resolves
-
-- **WHEN** a project's latest release publishes an APK whose manifest declares
-  a package id
-- **THEN** the generated entry carries that package id
-
-#### Scenario: Several APKs declare the same package id
-
-- **WHEN** a project's latest release publishes several eligible APK assets
-  and each of their manifests declares the same package id
-- **THEN** the generated entry carries that package id
-
-#### Scenario: A release publishes no eligible APK asset without a cached id
-
-- **WHEN** the latest release publishes no asset whose filename ends in `.apk`, compared
-  without regard to case
-  and the project has no cached id
-- **THEN** no entry is generated for that project and it is reported as
-  unresolved
-
-#### Scenario: A release publishes no eligible APK asset with a cached id
-
-- **WHEN** the latest release publishes no asset whose filename ends in `.apk`, compared
-  without regard to case
-  and the project has a cached id from a different release
-- **THEN** the generated entry uses the cached id, the failure is reported, and
-  both the cached id and its recorded release identifier remain unchanged
-
-#### Scenario: APKs of one release declare different package ids without a cached id
-
-- **WHEN** the latest release publishes eligible APK assets whose manifests declare
-  different package ids
-  and the project has no cached id
-- **THEN** no entry is generated for that project and it is reported as
-  unresolved
-
-#### Scenario: APKs of one release declare different package ids with a cached id
-
-- **WHEN** the latest release publishes eligible APK assets whose manifests declare
-  different package ids
-  and the project has a cached id from a different release
-- **THEN** the generated entry uses the cached id, the failure is reported, and
-  both the cached id and its recorded release identifier remain unchanged
-
-#### Scenario: An eligible APK asset cannot be read without a cached id
-
-- **WHEN** any eligible APK asset in the latest release cannot be read, including a
-  size bound, fetch failure or unreadable manifest
-  and the project has no cached id
-- **THEN** no entry is generated for that project and it is reported as
-  unresolved
-
-#### Scenario: An eligible APK asset cannot be read with a cached id
-
-- **WHEN** any eligible APK asset in the latest release cannot be read, including a
-  size bound, fetch failure or unreadable manifest
-  and the project has a cached id from a different release
-- **THEN** the generated entry uses the cached id, the failure is reported, and
-  both the cached id and its recorded release identifier remain unchanged
-
-#### Scenario: Package id cannot be determined and no id is cached
-
-- **WHEN** a project's package id cannot be determined and it has no cached id
-- **THEN** no entry is generated for it, and it is reported as unresolved
-
-### Requirement: Resolved package ids are cached across builds
-
-Resolving a package id costs a network round trip against every eligible APK
-asset of a release, and a transient failure must not drop an app from the pack.
-The system SHALL persist each resolved package id keyed by the project's
-normalized URL, and SHALL record alongside each cached id the host-assigned
-identifier of the release that id was resolved from. A release's host-assigned
-identifier is the stable identifier the release host assigns to that release,
-not its tag name, and SHALL be compared verbatim, so that a project publishing
-every build under one rolling tag is still recognized as having released again.
-
-A build SHALL compare a project's latest release identifier with the identifier
-recorded against its cached id: when the two are equal the system SHALL reuse
-the cached id and SHALL NOT read any of the release's APK assets, and when they
-differ the system SHALL resolve the
-package id again and, only on successful resolution, replace both the cached
-id and the recorded identifier with the result. Re-resolving on a new release
-is what keeps a package id that changed upstream from staying frozen at its first resolution and what makes
-that change visible in the cache. When an attempt to resolve a package id again
-fails for a project that has a cached id, the system SHALL use the cached id
-and SHALL report the failure. This includes a latest release with no eligible
-APK, conflicting APK package ids, or any unreadable eligible APK. Any failed
-resolution attempt, including a failure to read the release identifier, SHALL
-leave both the cached id and its recorded release identifier unchanged, so a
-later build retries the release that has not successfully resolved.
-
-Reading a project's latest release identifier is itself a request against the
-release host, so it can fail on its own before any comparison is possible. When
-a project's latest release identifier cannot be read and the project has a
-cached package id, the system SHALL use the cached id and SHALL report the
-failure. When a project's latest release identifier cannot be read and the
-project has no cached package id, the system SHALL NOT generate an entry for
-that project and SHALL report the project as unresolved.
-
-#### Scenario: Cached id is reused for an unchanged release
-
-- **WHEN** a project URL has a cached package id under its normalized form and
-  the project's latest release identifier equals the one recorded with that id
-- **THEN** the build uses the cached id and reads none of the release's APK
-  assets
-
-#### Scenario: A new release re-resolves the package id
-
-- **WHEN** a project URL has a cached package id and the project's latest
-  release identifier differs from the one recorded with that id, and all
-  eligible APKs are readable and declare the same package id
-- **THEN** the build resolves the package id from that release's APK assets and
-  records the resolved id together with the new release identifier
-
-#### Scenario: Re-resolution fails with a cached id available
-
-- **WHEN** a project's release identifier has changed and resolving its package
-  id again fails
-- **THEN** the cached id is used, the failure is reported, and both cached
-  fields remain unchanged
-
-#### Scenario: A failed release is retried on the next build
-
-- **WHEN** resolution of a new release failed and a later build observes that
-  same latest release identifier
-- **THEN** the system retries resolution because the cache still records the
-  identifier of the last successfully resolved release
-
-#### Scenario: The release identifier cannot be read and an id is cached
-
-- **WHEN** a project's latest release identifier cannot be read and the project
-  has a cached package id
-- **THEN** the build uses the cached id and reports the failure
-
-#### Scenario: The release identifier cannot be read and no id is cached
-
-- **WHEN** a project's latest release identifier cannot be read and the project
-  has no cached package id
-- **THEN** no entry is generated for that project and it is reported as
-  unresolved
 
 ### Requirement: Hand-written extras are ingested as complete entries
 
@@ -563,3 +356,61 @@ The system SHALL accept explicit extras with source type `GitLab` and public HTT
 
 - **WHEN** an explicit Aurora Store extra uses its canonical GitLab URL and both variants
 - **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
+
+### Requirement: Committed codm2000 entries retain device-aware source semantics
+
+The system SHALL ingest accepted codm2000 entries from committed Obtainium JSON.
+README parsing and package-ID resolution SHALL occur only in the separate
+source-generation operation. The source catalog SHALL contain generated GitHub
+project entries independently of other upstream coverage, including APKs and
+explicit track-only resources. It SHALL retain discovery settings such as
+prerelease enablement and filename filters, and SHALL NOT reinterpret a
+track-only resource ID as an Android package ID.
+
+During routine ingestion, codm2000 entries SHALL be dual-only and dual-preferred
+unless explicit policy overrides those properties. A normalized project URL
+already supplied by a higher-precedence candidate eligible for dual after
+explicit eligibility policy SHALL suppress the corresponding codm2000 candidate
+before exclusions and selection. Single-only coverage SHALL NOT suppress it.
+Merely appearing in codm2000 SHALL NOT promote an ordinary higher-source build.
+
+Retained entries SHALL preserve codm2000 provenance, generated origin, original
+package identity and source settings so existing family rules and fork-specific
+overlays continue matching. Active candidate selectors SHALL be validated
+against the complete admitted candidate set; historical mappings SHALL remain
+exempt. Missing rules or pinned candidates SHALL fail explicitly.
+
+#### Scenario: Dual coverage suppresses a local catalog candidate
+
+- **WHEN** a higher-source candidate covers dual with a normalized URL equal to a committed codm2000 entry
+- **THEN** the codm2000 candidate is suppressed without promoting the higher-source candidate
+
+#### Scenario: Single-only coverage leaves a dual candidate
+
+- **WHEN** the higher source covers only single, including after explicit eligibility policy
+- **THEN** the committed entry remains a dual-preferred codm2000 candidate
+
+#### Scenario: Existing generated family selector remains valid
+
+- **WHEN** a retained committed entry has an existing generated-origin rule or overlay selector
+- **THEN** its source identity is preserved and the same family and override behavior applies
+
+#### Scenario: A selected project is removed
+
+- **WHEN** an accepted source update removes a candidate required by an active rule or pin
+- **THEN** pack composition fails explicitly rather than silently ignoring the stale selector
+
+#### Scenario: EmuLnk already has correct higher-source settings
+
+- **WHEN** RJNY supplies EmuLnk as dual-eligible with prereleases enabled
+- **THEN** its entry remains the winner with unchanged settings and suppresses the independently generated codm entry
+
+#### Scenario: Newly resolved prerelease apps are admitted
+
+- **WHEN** the committed catalog includes manifest-verified Showdown-DS and Heimdall with explicit prerelease settings and no higher-source coverage
+- **THEN** they enter dual as installable APK entries, retaining those settings and their original identities without entering single
+
+#### Scenario: Kanto is a tracking resource
+
+- **WHEN** the committed catalog includes the explicit Kanto Gear tracker
+- **THEN** dual retains its stable resource identity, track-only flag and manual-installation description, and neither pack's Gen1Recomp host is replaced
