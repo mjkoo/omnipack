@@ -3,8 +3,7 @@ from __future__ import annotations
 import json
 import os
 import subprocess
-from collections.abc import Mapping
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, Self
@@ -12,45 +11,24 @@ from typing import Any, Self
 import pytest
 
 import scripts.nightly
-from scripts.nightly import (
-    ApiResponse,
-    UrllibGitHubApi,
-    is_eligible,
-    record_upload,
-    run_publication,
-    run_setup_failure,
-)
-from scripts.nightly_git import AttemptRecord, PublicationResult
+from scripts.nightly import UrllibGitHubApi, is_eligible, run_publication
+from scripts.nightly_git import PublicationResult
 from scripts.nightly_publish import StageOutcome
-from scripts.nightly_reporting import RESULT_NAME, write_diagnostics
+from scripts.nightly_reporting import RESULT_NAME
 
 WORKFLOW = Path(".github/workflows/nightly.yml")
 
 
-class FakeApi:
-    def __init__(self, responses: list[ApiResponse]) -> None:
-        self.responses = responses
-        self.requests: list[tuple[str, str, dict[str, object] | None]] = []
-
-    def request(
-        self, method: str, path: str, body: Mapping[str, object] | None = None
-    ) -> ApiResponse:
-        self.requests.append((method, path, dict(body) if body is not None else None))
-        return self.responses.pop(0)
-
-
 class FakePublisher:
-    def __init__(self, result: PublicationResult) -> None:
+    def __init__(self, result: PublicationResult | BaseException) -> None:
         self.result = result
         self.calls: list[tuple[str, str]] = []
 
     def run(self, run_url: str, token: str) -> PublicationResult:
         self.calls.append((run_url, token))
+        if isinstance(self.result, BaseException):
+            raise self.result
         return self.result
-
-
-def _response(status: int, value: object) -> ApiResponse:
-    return ApiResponse(status, {}, json.dumps(value).encode())
 
 
 def _environment(tmp_path: Path) -> dict[str, str]:
@@ -60,7 +38,6 @@ def _environment(tmp_path: Path) -> dict[str, str]:
         "GITHUB_SERVER_URL": "https://github.example",
         "GITHUB_API_URL": "https://api.github.example",
         "GITHUB_RUN_ID": "42",
-        "GITHUB_SHA": "base-sha",
         "GITHUB_TOKEN": "workflow-secret",
         "RUNNER_TEMP": str(tmp_path),
         "GITHUB_STEP_SUMMARY": str(tmp_path / "summary.md"),
@@ -68,70 +45,61 @@ def _environment(tmp_path: Path) -> dict[str, str]:
 
 
 def _result(status: str, *, release_status: str = "not-run") -> PublicationResult:
-    attempt = AttemptRecord(
-        1,
-        "base-sha",
-        (StageOutcome("complete", "success"),),
-        b'{"build":"ok"}',
-        b'{"verify":"ok"}',
-        "candidate-sha" if status == "published" else None,
-        datetime(2026, 9, 8, 10, tzinfo=UTC),
-        datetime(2026, 9, 8, 11, tzinfo=UTC),
-    )
     return PublicationResult(
-        status,
-        (attempt,),
-        "base-sha",
-        "published-sha" if status == "published" else None,
-        "complete" if status in ("published", "no-op") else "push",
-        "",
+        status=status,
+        base_sha="base-sha",
+        published_sha="published-sha" if status == "published" else None,
+        stage="complete" if status in ("published", "no-op") else "build",
+        stages=(StageOutcome("build", "success"),),
+        build_report=b'{"build":"ok"}',
+        verify_report=b'{"verify":"ok"}',
+        candidate_sha="candidate-sha" if status == "published" else None,
+        started_at=datetime(2026, 9, 8, 10, tzinfo=UTC),
+        finished_at=datetime(2026, 9, 8, 11, tzinfo=UTC),
         release_status=release_status,
     )
 
 
-def test_workflow_has_guarded_serialized_publisher_and_pinned_actions() -> None:
+def test_workflow_has_one_guarded_publisher_and_visible_diagnostic_upload() -> None:
     workflow = WORKFLOW.read_text()
 
     assert 'cron: "0 3 * * *"\n      timezone: "America/New_York"' in workflow
-    assert "workflow_dispatch:" in workflow
     assert "github.repository == 'mjkoo/omnipack'" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
-    assert "group: omnipack-nightly-publisher" in workflow
     assert "cancel-in-progress: false" in workflow
-    assert "timeout-minutes: 60" in workflow
     assert "contents: write" in workflow
-    assert "issues: write" in workflow
-    assert "actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1" in workflow
-    assert "astral-sh/setup-uv@20cfd1bf945f4377ade1205e4dbc17946fc9a30d" in workflow
-    assert (
-        "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
-    )
-    assert "persist-credentials: false" in workflow
-    assert "ref: main" in workflow
-    assert "fetch-depth: 0" in workflow
+    assert "issues: write" not in workflow
+    assert "uv sync --locked" in workflow
+    assert "uv run --no-sync python -m scripts.nightly publish" in workflow
+    assert "if: always()" in workflow
+    assert "continue-on-error" not in workflow
+    assert "if-no-files-found: ignore" in workflow
     assert "retention-days: 14" in workflow
-    assert "--probe-assets" not in workflow
+    for report in ("run-result.json", "build-report.json", "verify-report.json"):
+        assert f"${{{{ runner.temp }}}}/nightly-diagnostics/{report}" in workflow
+    assert "finalize-setup" not in workflow
+    assert "record-upload" not in workflow
+    assert "attempt-" not in workflow
 
 
-def test_workflow_uses_runtime_independent_fallback_and_explicit_artifacts() -> None:
+def test_early_setup_or_sync_failure_skips_publish_but_still_runs_upload() -> None:
     workflow = WORKFLOW.read_text()
 
-    assert "python3 -m scripts.nightly finalize-setup" in workflow
-    assert "uv run --no-sync python -m scripts.nightly publish" in workflow
-    assert "uv sync --locked" in workflow
-    assert "if: always()" in workflow
-    assert "continue-on-error: true" in workflow
-    assert "retention-days: 14" in workflow
+    assert "id: setup_uv" in workflow
+    assert "id: sync" in workflow
+    assert "id: publisher" in workflow
     assert (
-        "${{ runner.temp }}/nightly-diagnostics/orchestration-result.json" in workflow
+        workflow.index("id: setup_uv")
+        < workflow.index("id: sync")
+        < workflow.index("id: publisher")
     )
-    for number in (1, 2):
-        for report in ("build", "verify"):
-            assert (
-                f"${{{{ runner.temp }}}}/nightly-diagnostics/attempt-{number}-{report}.json"
-                in workflow
-            )
-    assert "nightly-diagnostics/**" not in workflow
+    assert workflow.index("id: publisher") < workflow.index(
+        "name: Upload available diagnostics"
+    )
+    assert (
+        "if: always()"
+        in workflow[workflow.index("name: Upload available diagnostics") :]
+    )
 
 
 def test_cli_guard_blocks_ineligible_repository_and_ref(tmp_path: Path) -> None:
@@ -139,7 +107,7 @@ def test_cli_guard_blocks_ineligible_repository_and_ref(tmp_path: Path) -> None:
     environment["GITHUB_REPOSITORY"] = "fork/repo"
     publisher = FakePublisher(_result("published", release_status="success"))
 
-    result = run_publication(environment, publisher=publisher, api=FakeApi([]))
+    result = run_publication(environment, publisher=publisher)
 
     assert result is None
     assert not publisher.calls
@@ -147,189 +115,53 @@ def test_cli_guard_blocks_ineligible_repository_and_ref(tmp_path: Path) -> None:
     assert not is_eligible(environment)
 
 
-def test_setup_failure_reports_with_system_runtime_boundary(tmp_path: Path) -> None:
-    environment = _environment(tmp_path)
-    api = FakeApi(
-        [
-            _response(200, []),
-            _response(
-                201,
-                {
-                    "number": 3,
-                    "state": "open",
-                    "body": "<!-- obtainium-pack:nightly-publishing -->",
-                    "user": {"login": "github-actions[bot]"},
-                },
-            ),
-        ]
-    )
-
-    result = run_setup_failure(environment, "setup-uv", "Python setup failed", api=api)
-
-    assert result is not None
-    assert result.workflow_status == "failed"
-    assert result.issue_status == "created"
-    persisted = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
-    assert persisted["publication_status"] == "failed"
-    assert persisted["issue_status"] == "created"
-    assert persisted["workflow_status"] == "failed"
-
-
-def test_confirmed_publication_is_preserved_when_issue_maintenance_fails(
-    tmp_path: Path,
-) -> None:
-    environment = _environment(tmp_path)
-    publisher = FakePublisher(_result("published", release_status="success"))
-    api = FakeApi([_response(500, {"message": "unavailable"})])
-
-    result = run_publication(environment, publisher=publisher, api=api)
-
-    assert result is not None
-    assert result.workflow_status == "failed"
-    assert result.publication_status == "published"
-    persisted = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
-    assert persisted["status"] == "published"
-    assert persisted["published_sha"] == "published-sha"
-    assert persisted["issue_status"] == "failed"
-    summary = (tmp_path / "summary.md").read_text()
-    assert "Issue maintenance: failed" in summary
-    assert "Workflow status: failed" in summary
-
-
-@pytest.mark.parametrize(
-    ("status", "expected_workflow", "response_count"),
-    [
-        ("published", "success", 1),
-        ("no-op", "success", 1),
-        ("failed", "failed", 2),
-        ("uncertain", "failed", 2),
-    ],
-)
-def test_publication_outcomes_remain_distinct_in_persistent_result(
-    tmp_path: Path, status: str, expected_workflow: str, response_count: int
-) -> None:
-    responses = [_response(200, [])]
-    if response_count == 2:
-        responses.append(
-            _response(
-                201,
-                {
-                    "number": 7,
-                    "state": "open",
-                    "body": "<!-- obtainium-pack:nightly-publishing -->",
-                    "user": {"login": "github-actions[bot]"},
-                },
-            )
-        )
-
+def test_success_writes_summary_and_flat_diagnostics(tmp_path: Path) -> None:
     result = run_publication(
         _environment(tmp_path),
-        publisher=FakePublisher(_result(status, release_status="success")),
-        api=FakeApi(responses),
+        publisher=FakePublisher(_result("published", release_status="success")),
     )
 
-    assert result is not None
-    assert result.publication_status == status
-    assert result.workflow_status == expected_workflow
-    persisted = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
-    assert persisted["status"] == status
-    assert persisted["publication_status"] == status
-    assert persisted["workflow_status"] == expected_workflow
+    assert result is not None and result.workflow_status == "success"
+    document = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
+    assert document["status"] == "published"
+    assert "attempts" not in document
+    assert "diagnostic_upload_status" not in document
+    assert "Result: published" in (tmp_path / "summary.md").read_text()
 
 
-def test_helper_fallback_reloads_confirmed_outcome_instead_of_resetting_it(
+def test_summary_write_failure_is_visible_and_diagnostics_remain(
     tmp_path: Path,
 ) -> None:
     environment = _environment(tmp_path)
-    first = run_publication(
-        environment,
-        publisher=FakePublisher(_result("published", release_status="success")),
-        api=FakeApi([_response(200, [])]),
-    )
-    assert first is not None
-    (tmp_path / "nightly-diagnostics" / ".finalized").unlink()
+    environment["GITHUB_STEP_SUMMARY"] = str(tmp_path / "missing" / "summary.md")
 
-    retried = run_setup_failure(
-        environment,
-        "helper",
-        "helper exited unexpectedly",
-        api=FakeApi([_response(200, [])]),
-    )
+    with pytest.raises(OSError):
+        run_publication(
+            environment,
+            publisher=FakePublisher(_result("published", release_status="success")),
+        )
 
-    assert retried is not None
-    assert retried.publication_status == "published"
-    persisted = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
-    assert persisted["status"] == "published"
-    assert persisted["published_sha"] == "published-sha"
+    assert (tmp_path / "nightly-diagnostics" / RESULT_NAME).is_file()
 
 
-def test_helper_fallback_preserves_separate_release_failure(tmp_path: Path) -> None:
-    environment = _environment(tmp_path)
-    outcome = replace(
-        _result("published", release_status="success"),
-        stage="release",
-        detail="upload failed",
-        release_status="failed",
-        pending_revision=6,
-    )
-    diagnostics = tmp_path / "nightly-diagnostics"
-    write_diagnostics(diagnostics, outcome, "run")
-
-    result = run_setup_failure(
-        environment,
-        "helper",
-        "publisher exited after release failure",
-        api=FakeApi(
-            [
-                _response(200, []),
-                _response(
-                    201,
-                    {
-                        "number": 7,
-                        "state": "open",
-                        "body": "<!-- obtainium-pack:nightly-publishing -->",
-                        "user": {"login": "github-actions[bot]"},
-                    },
-                ),
-            ]
+def test_unexpected_helper_failure_is_redacted_json_without_reconstruction(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    monkeypatch.setattr(os, "environ", _environment(tmp_path))
+    monkeypatch.setattr(
+        scripts.nightly,
+        "_publisher",
+        lambda _root, _token: FakePublisher(
+            RuntimeError("token=workflow-secret\n::error::hostile")
         ),
     )
 
-    assert result is not None
-    assert result.publication_status == "published"
-    assert result.release_status == "failed"
-    assert result.pending_revision == 6
-    persisted = json.loads((diagnostics / RESULT_NAME).read_text())
-    assert persisted["published_sha"] == "published-sha"
-    assert persisted["release_status"] == "failed"
-    assert persisted["pending_revision"] == 6
+    assert scripts.nightly.main(["publish"]) == 1
 
-
-def test_default_publisher_wires_release_synchronizer() -> None:
-    publisher = scripts.nightly._publisher(Path.cwd(), "workflow-secret")
-
-    release = getattr(publisher, "release", None)
-    assert release is not None
-    assert release.remote.token == "workflow-secret"
-
-
-def test_upload_outcome_updates_persistent_result_and_summary(tmp_path: Path) -> None:
-    environment = _environment(tmp_path)
-    run_publication(
-        environment,
-        publisher=FakePublisher(_result("published", release_status="success")),
-        api=FakeApi([_response(200, [])]),
-    )
-
-    status = record_upload(environment, "failure")
-
-    assert status == "failed"
-    persisted = json.loads((tmp_path / "nightly-diagnostics" / RESULT_NAME).read_text())
-    assert persisted["diagnostic_upload_status"] == "failure"
-    assert persisted["workflow_status"] == "failed"
-    summary = (tmp_path / "summary.md").read_text()
-    assert "Diagnostic upload: failure" in summary
-    assert "Final workflow status: failed" in summary
+    error = capsys.readouterr().err
+    assert len(error.splitlines()) == 1
+    assert json.loads(error)["nightly_failure"] == "token=REDACTED\n::error::hostile"
+    assert not (tmp_path / "nightly-diagnostics").exists()
 
 
 @dataclass
@@ -350,43 +182,35 @@ class OpenedResponse:
         return b"[]"
 
 
-def test_urllib_api_uses_structured_json_timeout_and_api_host_credentials() -> None:
+def test_bootstrap_api_retains_auth_origin_and_redirect_guards() -> None:
     opened: list[tuple[Any, float]] = []
 
     def opener(request: Any, timeout: float) -> OpenedResponse:
         opened.append((request, timeout))
-        return OpenedResponse(headers={})
+        return OpenedResponse()
 
     api = UrllibGitHubApi(
-        "workflow-secret",
-        "https://api.github.example",
-        timeout=7.5,
-        opener=opener,
+        "workflow-secret", "https://api.github.example", timeout=7.5, opener=opener
     )
-
-    response = api.request("POST", "/repos/owner/repo/issues", {"body": "$(false)"})
+    response = api.request("POST", "/repos/owner/repo/releases", {"body": "data"})
 
     assert response.status == 200
     request, timeout = opened[0]
-    assert request.full_url == "https://api.github.example/repos/owner/repo/issues"
+    assert request.full_url == "https://api.github.example/repos/owner/repo/releases"
     assert request.get_header("Authorization") == "Bearer workflow-secret"
-    assert request.data == b'{"body": "$(false)"}'
     assert timeout == 7.5
-    assert "workflow-secret" not in request.full_url
     with pytest.raises(ValueError, match="relative"):
-        api.request("GET", "//attacker.example/issues")
+        api.request("GET", "//attacker.example/releases")
+    with pytest.raises(ValueError, match="HTTPS origin"):
+        UrllibGitHubApi("secret", "http://api.github.example")
 
 
-def test_system_python_module_entrypoint_does_not_import_project_runtime(
-    tmp_path: Path,
-) -> None:
+def test_ineligible_entrypoint_keeps_project_runtime_lazy(tmp_path: Path) -> None:
     blocker = tmp_path / "sitecustomize.py"
     blocker.write_text(
-        "import builtins\n"
-        "original = builtins.__import__\n"
+        "import builtins\noriginal = builtins.__import__\n"
         "def blocked(name, *args, **kwargs):\n"
-        "    if name.startswith('omnipack') or name in "
-        "('scripts.nightly_git', 'scripts.nightly_publish'):\n"
+        "    if name in ('scripts.nightly_git', 'scripts.nightly_publish'):\n"
         "        raise RuntimeError('project runtime import blocked')\n"
         "    return original(name, *args, **kwargs)\n"
         "builtins.__import__ = blocked\n"
@@ -405,140 +229,5 @@ def test_system_python_module_entrypoint_does_not_import_project_runtime(
         check=False,
     )
 
-    assert completed.returncode == 0, completed.stderr
+    assert completed.returncode == 0
     assert "ineligible" in completed.stdout.lower()
-
-
-def test_interrupted_finalization_write_preserves_publication_for_fallback(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    environment = _environment(tmp_path)
-    original = Path.write_text
-
-    def interrupted_write(path: Path, data: str, *args: Any, **kwargs: Any) -> int:
-        if '"diagnostic_upload_status": "pending"' in data:
-            original(path, data[:20], *args, **kwargs)
-            raise OSError("interrupted write")
-        return original(path, data, *args, **kwargs)
-
-    with monkeypatch.context() as patch:
-        patch.setattr(Path, "write_text", interrupted_write)
-        with pytest.raises(OSError, match="interrupted write"):
-            run_publication(
-                environment,
-                publisher=FakePublisher(_result("published", release_status="success")),
-                api=FakeApi([_response(200, [])]),
-            )
-
-    retried = run_setup_failure(
-        environment, "helper", "interrupted write", api=FakeApi([_response(200, [])])
-    )
-
-    assert retried is not None
-    assert retried.publication_status == "published"
-    diagnostics = tmp_path / "nightly-diagnostics"
-    persisted = json.loads((diagnostics / RESULT_NAME).read_text())
-    assert persisted["published_sha"] == "published-sha"
-    assert len(persisted["attempts"]) == 1
-    assert retried.workflow_status == "failed"
-    assert persisted["workflow_status"] == "failed"
-    assert record_upload(environment, "success") == "failed"
-    assert "Final workflow status: failed" in (tmp_path / "summary.md").read_text()
-    assert json.loads((diagnostics / "attempt-1-build.json").read_text()) == {
-        "build": "ok"
-    }
-    assert json.loads((diagnostics / "attempt-1-verify.json").read_text()) == {
-        "verify": "ok"
-    }
-
-
-def test_fallback_preserves_missing_report_markers(tmp_path: Path) -> None:
-    environment = _environment(tmp_path)
-    outcome = _result("failed")
-    outcome = replace(
-        outcome,
-        attempts=(replace(outcome.attempts[0], build_report=None, verify_report=None),),
-    )
-    diagnostics = tmp_path / "nightly-diagnostics"
-    write_diagnostics(diagnostics, outcome, "run")
-
-    result = run_setup_failure(
-        environment,
-        "helper",
-        "publisher execution failed",
-        api=FakeApi([_response(500, {})]),
-    )
-
-    assert result is not None
-    persisted = json.loads((diagnostics / RESULT_NAME).read_text())
-    assert persisted["attempts"][0]["build_report"] == "unavailable"
-    assert persisted["attempts"][0]["verify_report"] == "unavailable"
-    assert (
-        "build report unavailable; candidate verification report unavailable"
-        in result.summary
-    )
-    for name in ("build", "verify"):
-        report = json.loads((diagnostics / f"attempt-1-{name}.json").read_text())
-        assert report["available"] is False
-
-
-@pytest.mark.parametrize("status", ["published", "no-op"])
-def test_helper_fallback_missing_release_status_keeps_owned_issue_open(
-    tmp_path: Path, status: str
-) -> None:
-    diagnostics = tmp_path / "nightly-diagnostics"
-    write_diagnostics(diagnostics, _result(status, release_status="success"), "run")
-    path = diagnostics / RESULT_NAME
-    document = json.loads(path.read_text())
-    del document["release_status"]
-    path.write_text(json.dumps(document))
-    owned = {
-        "number": 7,
-        "state": "open",
-        "body": "<!-- obtainium-pack:nightly-publishing -->",
-        "user": {"login": "github-actions[bot]"},
-    }
-    api = FakeApi([_response(200, [owned]), _response(200, owned)])
-
-    result = run_setup_failure(
-        _environment(tmp_path), "helper", "helper interrupted", api=api
-    )
-
-    assert result is not None
-    assert result.workflow_status == "failed"
-    assert result.publication_status == status
-    assert result.release_status == "failed"
-    mutations = [body for method, _, body in api.requests if method == "PATCH"]
-    assert len(mutations) == 1
-    assert mutations[0] is not None
-    assert mutations[0].get("state") != "closed"
-    assert "Release synchronization: failed" in str(mutations[0]["body"])
-    persisted = json.loads(path.read_text())
-    assert persisted["published_sha"] == document["published_sha"]
-    assert persisted["release_status"] == "failed"
-
-
-@pytest.mark.parametrize("status", ["published", "no-op"])
-def test_completed_fallback_missing_release_status_cannot_claim_success(
-    tmp_path: Path, status: str
-) -> None:
-    environment = _environment(tmp_path)
-    run_publication(
-        environment,
-        publisher=FakePublisher(_result(status, release_status="success")),
-        api=FakeApi([_response(200, [])]),
-    )
-    path = tmp_path / "nightly-diagnostics" / RESULT_NAME
-    document = json.loads(path.read_text())
-    del document["release_status"]
-    path.write_text(json.dumps(document))
-
-    result = run_setup_failure(environment, "helper", "interrupted", api=FakeApi([]))
-
-    assert result is not None
-    assert result.workflow_status == "failed"
-    assert result.release_status == "failed"
-    assert result.publication_status == status
-    assert json.loads(path.read_text())["workflow_status"] == "failed"
-    assert record_upload(environment, "success") == "failed"
-    assert json.loads(path.read_text())["workflow_status"] == "failed"

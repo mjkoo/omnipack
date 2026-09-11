@@ -1,57 +1,53 @@
-"""Runtime-independent diagnostics and finalization for nightly publishing."""
+"""Redacted diagnostics and concise Actions reporting for nightly publishing."""
 
 from __future__ import annotations
 
+import html
 import json
 import re
+import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import asdict, dataclass, is_dataclass
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Protocol
+from typing import Any, TextIO
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-from scripts.nightly_issues import MARKER, IssueResult
-
-ISSUE_BODY_LIMIT = 4_000
+RESULT_NAME = "run-result.json"
+BUILD_REPORT_NAME = "build-report.json"
+VERIFY_REPORT_NAME = "verify-report.json"
 SUMMARY_LIMIT = 16_000
-RESULT_NAME = "orchestration-result.json"
-_REPORT_NAMES = ("build", "verify")
 _URL = re.compile(r"https?://[^\s<>()\[\]\"']+")
 _CREDENTIAL = re.compile(
-    r"(?i)\b(bearer|authorization|password|token|secret)"
-    r"(\s*[:=]\s*|\s+)([^\s,;]+)"
+    r"(?i)\b(bearer|authorization|password|token|secret)(\s*[:=]\s*|\s+)([^\s,;]+)"
 )
 _SENSITIVE_KEY = re.compile(r"(?i)(authorization|credential|password|secret|token)")
 _JSON_ERRORS = (UnicodeDecodeError, json.JSONDecodeError)
-_RESULT_READ_ERRORS = (OSError, UnicodeDecodeError, json.JSONDecodeError)
-
-
-class IssueReporter(Protocol):
-    def report_failure(self, body: str) -> IssueResult: ...
-
-    def report_recovery(self, body: str) -> IssueResult: ...
 
 
 @dataclass(frozen=True)
-class FinalizationResult:
+class PublicationReport:
     workflow_status: str
     publication_status: str
-    issue_status: str
+    release_status: str
     summary: str
     artifacts: tuple[Path, ...]
-    release_status: str = "failed"
     pending_revision: int | None = None
 
 
-@dataclass(frozen=True)
-class _SetupOutcome:
-    status: str
-    attempts: tuple[object, ...]
-    base_sha: str | None
-    published_sha: str | None
-    stage: str
-    detail: str
+def log_main_confirmation(
+    outcome: object,
+    *,
+    secrets: Sequence[str] = (),
+    stream: TextIO | None = None,
+) -> None:
+    """Flush a JSON line confirming main before release synchronization starts."""
+    status = str(_field(outcome, "status", "failed"))
+    if status not in ("published", "no-op"):
+        return
+    sha = _field(outcome, "published_sha", None) or _field(outcome, "base_sha", None)
+    document = redact({"main_publication": status, "sha": sha}, secrets)
+    print(json.dumps(document, sort_keys=True), file=stream or sys.stdout, flush=True)
 
 
 def write_diagnostics(
@@ -61,161 +57,111 @@ def write_diagnostics(
     *,
     secrets: Sequence[str] = (),
 ) -> tuple[Path, ...]:
-    """Write only bounded, redacted JSON selected for workflow artifact upload."""
+    """Write only available, explicitly named, redacted diagnostic reports."""
     output_dir.mkdir(parents=True, exist_ok=True)
-    attempts = tuple(_field(outcome, "attempts", ()))
     result = {
         "status": _field(outcome, "status", "failed"),
         "stage": _field(outcome, "stage", "unknown"),
         "detail": _field(outcome, "detail", ""),
-        "cleanup_errors": _field(outcome, "cleanup_errors", ()),
         "run_url": run_url,
         "base_sha": _field(outcome, "base_sha", None),
+        "candidate_sha": _field(outcome, "candidate_sha", None),
         "published_sha": _field(outcome, "published_sha", None),
-        "release_status": _field(outcome, "release_status", "failed"),
+        "release_status": _field(outcome, "release_status", "not-run"),
         "release_revision": _field(outcome, "release_revision", None),
         "pending_revision": _field(outcome, "pending_revision", None),
+        "started_at": _timestamp(_field(outcome, "started_at", None)),
+        "finished_at": _timestamp(_field(outcome, "finished_at", None)),
+        "stages": [_stage(stage) for stage in _field(outcome, "stages", ())],
         "generated_at": datetime.now(timezone.utc).isoformat(),  # noqa: UP017
-        "attempts": [_attempt_summary(attempt) for attempt in attempts],
     }
     paths = [_write_json(output_dir / RESULT_NAME, result, secrets)]
-    for attempt in attempts:
-        number = _field(attempt, "number", 0)
-        for report in _REPORT_NAMES:
-            value = _field(attempt, f"{report}_report", None)
+    for name, filename in (
+        ("build", BUILD_REPORT_NAME),
+        ("verify", VERIFY_REPORT_NAME),
+    ):
+        value = _field(outcome, f"{name}_report", None)
+        if value is not None:
             paths.append(
                 _write_json(
-                    output_dir / f"attempt-{number}-{report}.json",
-                    _report_document(report, value),
-                    secrets,
+                    output_dir / filename, _report_document(name, value), secrets
                 )
             )
     return tuple(paths)
 
 
 def artifact_paths(output_dir: Path) -> tuple[Path, ...]:
-    """Return regular files named by the orchestration report's explicit allowlist."""
-    result = output_dir / RESULT_NAME
-    if not _regular_file(result):
-        return ()
-    allowed = [result]
-    try:
-        document = json.loads(result.read_bytes())
-    except _RESULT_READ_ERRORS:
-        return tuple(allowed)
-    attempts = document.get("attempts", []) if isinstance(document, dict) else []
-    if not isinstance(attempts, list):
-        return tuple(allowed)
-    numbers = sorted(
-        {
-            attempt.get("number")
-            for attempt in attempts
-            if isinstance(attempt, dict)
-            and isinstance(attempt.get("number"), int)
-            and not isinstance(attempt.get("number"), bool)
-            and attempt.get("number") in (1, 2)
-        }
+    """Return available regular files from the fixed diagnostic allowlist."""
+    return tuple(
+        path
+        for path in (
+            output_dir / RESULT_NAME,
+            output_dir / BUILD_REPORT_NAME,
+            output_dir / VERIFY_REPORT_NAME,
+        )
+        if _regular_file(path)
     )
-    for number in numbers:
-        for report in _REPORT_NAMES:
-            candidate = output_dir / f"attempt-{number}-{report}.json"
-            if _regular_file(candidate):
-                allowed.append(candidate)
-    return tuple(allowed)
 
 
-def finalize_publication(
+def report_publication(
     outcome: object,
-    issues: IssueReporter,
     output_dir: Path,
     run_url: str,
     *,
     secrets: Sequence[str] = (),
-    diagnostic_url: str | None = None,
-    prior_failure: bool = False,
-) -> FinalizationResult:
-    """Persist diagnostics and reconcile issues while preserving publication truth."""
+) -> PublicationReport:
     artifacts = write_diagnostics(output_dir, outcome, run_url, secrets=secrets)
     publication_status = str(_field(outcome, "status", "failed"))
-    issue_body = _issue_body(outcome, run_url, diagnostic_url, secrets)
-    cleanup_failed = bool(_field(outcome, "cleanup_errors", ()))
-    release_status = str(_field(outcome, "release_status", "failed"))
-    if publication_status in ("published", "no-op") and release_status == "success":
-        issue = _safe_issue_call(issues.report_recovery, issue_body, secrets)
-    else:
-        issue = _safe_issue_call(issues.report_failure, issue_body, secrets)
+    release_status = str(_field(outcome, "release_status", "not-run"))
     workflow_status = (
         "success"
-        if publication_status in ("published", "no-op")
-        and release_status == "success"
-        and issue.status != "failed"
-        and not cleanup_failed
-        and not prior_failure
+        if publication_status in ("published", "no-op") and release_status == "success"
         else "failed"
     )
-    summary_suffix = (
-        f"\n- Workflow status: {workflow_status}\n- Diagnostic upload: pending"
-    )
-    summary = (
-        _summary(outcome, run_url, issue, secrets)[
-            : SUMMARY_LIMIT - len(summary_suffix)
-        ]
-        + summary_suffix
-    )
-    finalization = FinalizationResult(
+    return PublicationReport(
         workflow_status,
         publication_status,
-        issue.status,
-        summary,
-        artifacts,
         release_status,
+        publication_summary(outcome, run_url, secrets=secrets),
+        artifacts,
         _field(outcome, "pending_revision", None),
     )
-    _record_finalization(output_dir, finalization)
-    return finalization
 
 
-def record_upload_status(output_dir: Path, status: str) -> str:
-    """Persist the artifact step outcome and return the resulting workflow status."""
-    result = output_dir / RESULT_NAME
-    try:
-        document = json.loads(result.read_bytes())
-    except _RESULT_READ_ERRORS as error:
-        raise OSError("cannot read the orchestration result") from error
-    if not isinstance(document, dict):
-        raise OSError("orchestration result is not an object")
-    document["diagnostic_upload_status"] = status
-    if status != "success":
-        document["workflow_status"] = "failed"
-    _write_json(result, document, ())
-    return str(document.get("workflow_status", "failed"))
-
-
-def finalize_setup_failure(
-    issues: IssueReporter,
-    output_dir: Path,
-    *,
-    run_url: str,
-    stage: str,
-    detail: BaseException | str,
-    base_sha: str | None = None,
-    secrets: Sequence[str] = (),
-    diagnostic_url: str | None = None,
-) -> FinalizationResult:
-    """Finalize setup failures using only Python 3.10 standard-library features."""
-    outcome = _SetupOutcome("failed", (), base_sha, None, stage, str(detail))
-    return finalize_publication(
-        outcome,
-        issues,
-        output_dir,
-        run_url,
-        secrets=secrets,
-        diagnostic_url=diagnostic_url,
+def publication_summary(
+    outcome: object, run_url: str, *, secrets: Sequence[str] = ()
+) -> str:
+    values = {
+        "Result": _field(outcome, "status", "failed"),
+        "Stage": _field(outcome, "stage", "unknown"),
+        "Run": run_url,
+        "Base SHA": _field(outcome, "base_sha", None) or "unavailable",
+        "Published SHA": _field(outcome, "published_sha", None) or "unavailable",
+        "Release synchronization": _field(outcome, "release_status", "not-run"),
+        "Release revision": _field(outcome, "release_revision", None) or "unavailable",
+        "Pending release revision": _field(outcome, "pending_revision", None)
+        or "unavailable",
+        "Build report": "available"
+        if _field(outcome, "build_report", None) is not None
+        else "unavailable",
+        "Candidate structural verification report": "available"
+        if _field(outcome, "verify_report", None) is not None
+        else "unavailable",
+    }
+    detail = _field(outcome, "detail", "")
+    if detail:
+        values["Detail"] = detail
+    safe = redact(values, secrets)
+    assert isinstance(safe, Mapping)
+    lines = ["## Nightly publishing"]
+    lines.extend(
+        f"- {label}: {html.escape(str(value))}" for label, value in safe.items()
     )
+    return "\n".join(lines)[:SUMMARY_LIMIT]
 
 
 def redact(value: object, secrets: Sequence[str] = ()) -> object:
-    """Recursively remove credential values from structured diagnostic data."""
+    """Recursively remove credential values from diagnostic and log data."""
     if is_dataclass(value) and not isinstance(value, type):
         value = asdict(value)
     if isinstance(value, Mapping):
@@ -238,175 +184,25 @@ def redact(value: object, secrets: Sequence[str] = ()) -> object:
     return redact(str(value), secrets)
 
 
-def _attempt_summary(attempt: object) -> dict[str, object]:
-    mode = _verification_mode(attempt)
-    phase = _verification_phase(attempt)
-    stages = []
-    for stage in _field(attempt, "stages", ()):
-        stages.append(
-            {
-                "stage": _field(stage, "stage", "unknown"),
-                "status": _field(stage, "status", "unknown"),
-                "detail": _field(stage, "detail", ""),
-            }
-        )
+def _stage(stage: object) -> dict[str, object]:
     return {
-        "number": _field(attempt, "number", None),
-        "base_sha": _field(attempt, "base_sha", None),
-        "candidate_sha": _field(attempt, "candidate_sha", None),
-        "started_at": _timestamp(_field(attempt, "started_at", None)),
-        "finished_at": _timestamp(_field(attempt, "finished_at", None)),
-        "build_report": "available"
-        if _field(attempt, "build_report", None) is not None
-        else "unavailable",
-        "verify_report": "available"
-        if _field(attempt, "verify_report", None) is not None
-        else "unavailable",
-        "verify_mode": mode,
-        "verify_phase": phase,
-        "candidate_structural_report": (
-            "available" if phase == "candidate" and mode == "offline" else "unavailable"
-        ),
-        "stages": stages,
+        "stage": _field(stage, "stage", "unknown"),
+        "status": _field(stage, "status", "unknown"),
+        "detail": _field(stage, "detail", ""),
     }
 
 
-def _verification_mode(attempt: object) -> str:
-    report = _report_document("verify", _field(attempt, "verify_report", None))
-    if isinstance(report, dict) and report.get("mode") == "offline":
-        return str(report["mode"])
-    return "unknown"
-
-
-def _verification_phase(attempt: object) -> str:
-    stages = tuple(_field(attempt, "stages", ()))
-    if any(_field(stage, "stage", "") == "candidate-verify" for stage in stages):
-        return "candidate"
-    if any(_field(stage, "stage", "") == "offline-verify" for stage in stages):
-        return "pre-build"
-    return "unknown"
-
-
 def _report_document(name: str, value: object) -> object:
-    if value is None:
-        return {
-            "available": False,
-            "report": "verification" if name == "verify" else name,
-        }
     if isinstance(value, bytes):
         try:
             return json.loads(value)
         except _JSON_ERRORS:
             return {
-                "available": True,
                 "report": name,
                 "parse_error": "report is not valid JSON",
                 "text": value.decode("utf-8", errors="replace")[:8_000],
             }
     return value
-
-
-def _issue_body(
-    outcome: object,
-    run_url: str,
-    diagnostic_url: str | None,
-    secrets: Sequence[str],
-) -> str:
-    status = str(_field(outcome, "status", "failed"))
-    attempts = tuple(_field(outcome, "attempts", ()))
-    last_attempt = attempts[-1] if attempts else None
-    base_sha = _field(last_attempt, "base_sha", _field(outcome, "base_sha", None))
-    detail = _field(outcome, "detail", "")
-    stage_detail = ""
-    if last_attempt is not None:
-        stages = tuple(_field(last_attempt, "stages", ()))
-        if stages:
-            stage_detail = str(_field(stages[-1], "detail", ""))
-    lines = [
-        MARKER,
-        "## Nightly publishing status",
-        f"- Stage: {_field(outcome, 'stage', 'unknown')}",
-        f"- Run: {run_url}",
-        f"- Attempt: {_field(last_attempt, 'number', 'unavailable')}",
-        f"- Base SHA: {base_sha or 'unavailable'}",
-        f"- Publication: {status}",
-        f"- Published SHA: {_field(outcome, 'published_sha', None) or 'unavailable'}",
-        f"- Release synchronization: {_field(outcome, 'release_status', 'failed')}",
-        f"- Release revision: {_field(outcome, 'release_revision', None) or 'unavailable'}",
-        f"- Pending release revision: {_field(outcome, 'pending_revision', None) or 'unavailable'}",
-        f"- Diagnostics: {diagnostic_url or 'available in the workflow run'}",
-    ]
-    for error in _field(outcome, "cleanup_errors", ()):
-        lines.append(f"- Cleanup failure: {error}")
-    if stage_detail and stage_detail != detail:
-        lines.extend(("", "### Stage detail", stage_detail))
-    if detail:
-        lines.extend(("", "### Detail", str(detail)))
-    body = str(redact("\n".join(lines), secrets))
-    return _bounded_with_marker(body, ISSUE_BODY_LIMIT)
-
-
-def _summary(
-    outcome: object, run_url: str, issue: IssueResult, secrets: Sequence[str]
-) -> str:
-    attempts = tuple(_field(outcome, "attempts", ()))
-    lines = [
-        "## Nightly publishing",
-        f"- Result: {_field(outcome, 'status', 'failed')}",
-        f"- Stage: {_field(outcome, 'stage', 'unknown')}",
-        f"- Run: {run_url}",
-        f"- Base SHA: {_field(outcome, 'base_sha', None) or 'unavailable'}",
-        f"- Published SHA: {_field(outcome, 'published_sha', None) or 'unavailable'}",
-        f"- Release synchronization: {_field(outcome, 'release_status', 'failed')}",
-        f"- Release revision: {_field(outcome, 'release_revision', None) or 'unavailable'}",
-        f"- Pending release revision: {_field(outcome, 'pending_revision', None) or 'unavailable'}",
-        f"- Issue maintenance: {issue.status}",
-    ]
-    cleanup_errors = _field(outcome, "cleanup_errors", ())
-    lines.append(f"- Cleanup: {'failed' if cleanup_errors else 'success'}")
-    for error in cleanup_errors:
-        lines.append(f"- Cleanup detail: {error}")
-    if issue.detail:
-        lines.append(f"- Issue detail: {issue.detail}")
-    for attempt in attempts:
-        number = _field(attempt, "number", "unknown")
-        build = "available" if _field(attempt, "build_report", None) else "unavailable"
-        verify = (
-            "available" if _field(attempt, "verify_report", None) else "unavailable"
-        )
-        mode = _verification_mode(attempt)
-        phase = _verification_phase(attempt)
-        label = (
-            "candidate structural/offline verification"
-            if phase == "candidate" and mode == "offline"
-            else "pre-build offline verification"
-            if phase == "pre-build" and mode == "offline"
-            else "candidate verification"
-        )
-        lines.append(
-            f"- Attempt {number}: build report {build}; {label} report {verify}"
-        )
-    if not attempts:
-        lines.append(
-            "- Attempts: unavailable; failure occurred before an attempt completed"
-        )
-        lines.append("- Build report: unavailable")
-        lines.append("- Verification report: unavailable")
-    return str(redact("\n".join(lines), secrets))[:SUMMARY_LIMIT]
-
-
-def _safe_issue_call(call: Any, body: str, secrets: Sequence[str]) -> IssueResult:
-    try:
-        result = call(body)
-    except Exception as error:  # noqa: BLE001 - this is the workflow finalization boundary
-        return IssueResult("failed", detail=str(redact(str(error), secrets)))
-    if not isinstance(result, IssueResult):
-        return IssueResult("failed", detail="issue reporter returned an invalid result")
-    return IssueResult(
-        result.status,
-        result.issue_number,
-        str(redact(result.detail, secrets)),
-    )
 
 
 def _write_json(path: Path, value: object, secrets: Sequence[str]) -> Path:
@@ -415,25 +211,6 @@ def _write_json(path: Path, value: object, secrets: Sequence[str]) -> Path:
     temporary.write_text(document, encoding="utf-8")
     temporary.replace(path)
     return path
-
-
-def _record_finalization(output_dir: Path, finalization: FinalizationResult) -> None:
-    result = output_dir / RESULT_NAME
-    try:
-        document = json.loads(result.read_bytes())
-    except _RESULT_READ_ERRORS as error:
-        raise OSError("cannot update the orchestration result") from error
-    if not isinstance(document, dict):
-        raise OSError("orchestration result is not an object")
-    document.update(
-        {
-            "publication_status": finalization.publication_status,
-            "issue_status": finalization.issue_status,
-            "workflow_status": finalization.workflow_status,
-            "diagnostic_upload_status": "pending",
-        }
-    )
-    _write_json(result, document, ())
 
 
 def _redact_url(value: str) -> str:
@@ -453,11 +230,8 @@ def _redact_url(value: str) -> str:
         return _CREDENTIAL.sub(lambda match: f"{match.group(1)}=REDACTED", value)
 
 
-def _bounded_with_marker(body: str, limit: int) -> str:
-    if len(body) <= limit:
-        return body
-    suffix = f"\n\n{MARKER}"
-    return body[: limit - len(suffix)].rstrip() + suffix
+def _regular_file(path: Path) -> bool:
+    return path.is_file() and not path.is_symlink()
 
 
 def _timestamp(value: object) -> str | None:
@@ -467,12 +241,6 @@ def _timestamp(value: object) -> str | None:
 
 
 def _field(value: object, name: str, default: Any) -> Any:
-    if value is None:
-        return default
     if isinstance(value, Mapping):
         return value.get(name, default)
     return getattr(value, name, default)
-
-
-def _regular_file(path: Path) -> bool:
-    return path.is_file() and not path.is_symlink()

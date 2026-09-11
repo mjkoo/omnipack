@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import base64
+import io
 import json
 import os
 import subprocess
@@ -11,6 +12,7 @@ from typing import cast
 
 import pytest
 
+import scripts.nightly_reporting
 from scripts.nightly_git import (
     GitRemote,
     PublicationCoordinator,
@@ -165,8 +167,7 @@ def test_rejects_initial_tracked_changes_before_refresh(
 def test_missing_release_boundary_preserves_main_without_claiming_completion(
     tmp_path: Path, change: str | None
 ) -> None:
-    from scripts.nightly_reporting import finalize_publication
-    from tests.test_nightly_reporting import RecordingIssues
+    from scripts.nightly_reporting import report_publication
 
     source, bare, base = _remote(tmp_path)
     refresh = ChangingRefresh(change=change)
@@ -179,10 +180,8 @@ def test_missing_release_boundary_preserves_main_without_claiming_completion(
     assert result.stage == "release"
     assert result.pack_snapshots is None
     assert refresh.roots == [source]
-    issues = RecordingIssues()
-    finalized = finalize_publication(result, issues, tmp_path / "diagnostics", "run")
-    assert finalized.workflow_status == "failed"
-    assert issues.failure_bodies and not issues.recovery_bodies
+    reported = report_publication(result, tmp_path / "diagnostics", "run")
+    assert reported.workflow_status == "failed"
 
 
 def test_release_failure_does_not_block_main_publication(
@@ -202,6 +201,49 @@ def test_release_failure_does_not_block_main_publication(
     assert _git(bare, "rev-parse", "main") == result.published_sha
     assert _git(bare, "rev-parse", "main") != base
     assert len(release.calls) == 1
+
+
+def test_confirmed_main_log_is_flushed_before_release_and_survives_reporting_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class FlushRecordingStream(io.StringIO):
+        flushed = False
+
+        def flush(self) -> None:
+            self.flushed = True
+            super().flush()
+
+    class ObservingRelease(RecordingRelease):
+        def synchronize(self, single: bytes, dual: bytes, source_commit: str):
+            assert stream.flushed
+            confirmation = json.loads(stream.getvalue())
+            assert confirmation == {
+                "main_publication": "published",
+                "sha": source_commit,
+            }
+            return super().synchronize(single, dual, source_commit)
+
+    source, bare, base = _remote(tmp_path)
+    stream = FlushRecordingStream()
+    monkeypatch.setattr("sys.stdout", stream)
+    result = _coordinator(
+        source, GitRemote(source), ChangingRefresh(), ObservingRelease()
+    ).run("run", "token")
+    assert result.status == "published"
+    assert _git(bare, "rev-parse", "main") != base
+
+    def fail_diagnostics(*_args, **_kwargs):
+        raise OSError("reporting failed")
+
+    monkeypatch.setattr(
+        scripts.nightly_reporting, "write_diagnostics", fail_diagnostics
+    )
+    with pytest.raises(OSError, match="reporting failed"):
+        scripts.nightly_reporting.report_publication(
+            result, tmp_path / "diagnostics", "run"
+        )
+
+    assert json.loads(stream.getvalue())["main_publication"] == "published"
 
 
 @pytest.mark.parametrize(
@@ -526,7 +568,7 @@ def test_main_advancement_fails_without_another_refresh_or_push(
     assert result.status == "failed"
     assert result.stage == "concurrency"
     assert refresh.bases == [base]
-    assert len(result.attempts) == 1
+    assert result.started_at is not None
     assert _git(bare, "rev-parse", "main") == newer[0]
 
 
@@ -560,7 +602,7 @@ def test_noop_rejects_advanced_main_without_another_refresh(tmp_path: Path) -> N
     assert result.status == "failed"
     assert result.stage == "concurrency"
     assert refresh.bases == [base]
-    assert len(result.attempts) == 1
+    assert result.started_at is not None
     assert _git(bare, "rev-parse", "main") == newer[0]
 
 
@@ -652,7 +694,7 @@ def test_unchanged_rejected_push_fails_without_retry(tmp_path: Path) -> None:
     assert result.status == "failed"
     assert result.stage == "push"
     assert result.published_sha is None
-    assert len(result.attempts) == 1
+    assert result.started_at is not None
 
 
 def test_advanced_rejected_push_fails_without_retry(tmp_path: Path) -> None:
@@ -688,7 +730,7 @@ def test_unreadable_remote_after_rejected_push_is_uncertain(tmp_path: Path) -> N
 
     assert result.status == "uncertain"
     assert result.published_sha is None
-    assert result.attempts[-1].candidate_sha is not None
+    assert result.candidate_sha is not None
     assert "secret-token" not in result.detail
 
 

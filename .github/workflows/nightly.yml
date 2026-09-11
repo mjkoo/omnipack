@@ -18,7 +18,6 @@ jobs:
     if: github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
     permissions:
       contents: write # Required for the verified fast-forward push to main.
-      issues: write # Required to maintain the automation-owned failure issue.
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
@@ -44,42 +43,14 @@ jobs:
           GITHUB_TOKEN: ${{ github.token }}
         run: uv run --no-sync python -m scripts.nightly publish
 
-      - name: Report setup failure
-        if: always() && steps.setup_uv.outcome == 'failure'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 -m scripts.nightly finalize-setup --stage setup-uv --detail "uv and Python setup failed"
-
-      - name: Report sync failure
-        if: always() && steps.setup_uv.outcome == 'success' && steps.sync.outcome == 'failure'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 -m scripts.nightly finalize-setup --stage sync --detail "locked environment sync failed"
-
-      - name: Report helper failure
-        if: always() && steps.publisher.outcome == 'failure'
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: python3 -m scripts.nightly finalize-setup --stage helper --detail "publisher execution failed"
-
-      - id: diagnostic_upload
-        name: Upload diagnostics
+      - name: Upload available diagnostics
         if: always()
-        continue-on-error: true
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: nightly-publishing-${{ github.run_id }}
           path: |
-            ${{ runner.temp }}/nightly-diagnostics/orchestration-result.json
-            ${{ runner.temp }}/nightly-diagnostics/attempt-1-build.json
-            ${{ runner.temp }}/nightly-diagnostics/attempt-1-verify.json
-            ${{ runner.temp }}/nightly-diagnostics/attempt-2-build.json
-            ${{ runner.temp }}/nightly-diagnostics/attempt-2-verify.json
-          if-no-files-found: error
+            ${{ runner.temp }}/nightly-diagnostics/run-result.json
+            ${{ runner.temp }}/nightly-diagnostics/build-report.json
+            ${{ runner.temp }}/nightly-diagnostics/verify-report.json
+          if-no-files-found: ignore
           retention-days: 14
-
-      - name: Record final workflow status
-        if: always()
-        env:
-          NIGHTLY_UPLOAD_STATUS: ${{ steps.diagnostic_upload.outcome }}
-        run: python3 -m scripts.nightly record-upload

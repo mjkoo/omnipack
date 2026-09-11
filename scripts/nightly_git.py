@@ -9,7 +9,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import NotRequired, Protocol, TypedDict
 
 from scripts.nightly_publish import (
     CandidateError,
@@ -146,30 +146,31 @@ class GitRemote:
 
 
 @dataclass(frozen=True)
-class AttemptRecord:
-    number: int
-    base_sha: str
-    stages: tuple[StageOutcome, ...]
-    build_report: bytes | None
-    verify_report: bytes | None
-    candidate_sha: str | None = None
-    started_at: datetime | None = None
-    finished_at: datetime | None = None
-
-
-@dataclass(frozen=True)
 class PublicationResult:
     status: str
-    attempts: tuple[AttemptRecord, ...]
     base_sha: str | None
     published_sha: str | None
     stage: str
     detail: str = ""
-    cleanup_errors: tuple[str, ...] = ()
+    stages: tuple[StageOutcome, ...] = ()
+    build_report: bytes | None = None
+    verify_report: bytes | None = None
+    candidate_sha: str | None = None
+    started_at: datetime | None = None
+    finished_at: datetime | None = None
     release_status: str = "not-run"
     release_revision: int | None = None
     pending_revision: int | None = None
     pack_snapshots: Mapping[str, bytes] | None = None
+
+
+class _RunDetails(TypedDict):
+    stages: tuple[StageOutcome, ...]
+    build_report: bytes | None
+    verify_report: bytes | None
+    started_at: datetime
+    finished_at: datetime
+    candidate_sha: NotRequired[str]
 
 
 class PublicationCoordinator:
@@ -190,6 +191,10 @@ class PublicationCoordinator:
 
     def run(self, run_url: str, token: str) -> PublicationResult:
         result = self._run(run_url, token)
+        if result.status in ("published", "no-op"):
+            from scripts.nightly_reporting import log_main_confirmation
+
+            log_main_confirmation(result, secrets=(token,))
         if (
             self.release is None
             or result.status not in ("published", "no-op")
@@ -233,36 +238,30 @@ class PublicationCoordinator:
         )
 
     def _run(self, run_url: str, token: str) -> PublicationResult:
-        records: list[AttemptRecord] = []
         try:
             base_sha = _git_bytes(self.root, "rev-parse", "HEAD").decode().strip()
         except CandidateError as error:
-            return PublicationResult("failed", (), None, None, "workspace", str(error))
+            return PublicationResult("failed", None, None, "workspace", str(error))
         try:
             require_clean_tracked_workspace(self.root)
         except CandidateError as error:
-            return PublicationResult(
-                "failed", (), base_sha, None, "workspace", str(error)
-            )
+            return PublicationResult("failed", base_sha, None, "workspace", str(error))
 
-        number = 1
         started_at = self.now()
         root = self.root
         refreshed = self.refresh.run(root, base_sha)
-        record = AttemptRecord(
-            number,
-            base_sha,
-            refreshed.stages,
-            _read_optional(root / ".build/report.json"),
-            _read_optional(root / ".build/verify.json"),
-            started_at=started_at,
-            finished_at=self.now(),
-        )
-        records.append(record)
+        finished_at = self.now()
+        details: _RunDetails = {
+            "stages": refreshed.stages,
+            "build_report": _read_optional(root / ".build/report.json"),
+            "verify_report": _read_optional(root / ".build/verify.json"),
+            "started_at": started_at,
+            "finished_at": finished_at,
+        }
         if refreshed.status == "failed" or refreshed.candidate is None:
             stage = refreshed.stages[-1].stage if refreshed.stages else "refresh"
             return PublicationResult(
-                "failed", tuple(records), base_sha, None, stage, "refresh failed"
+                "failed", base_sha, None, stage, "refresh failed", **details
             )
 
         try:
@@ -270,29 +269,29 @@ class PublicationCoordinator:
         except OSError:
             return PublicationResult(
                 "failed",
-                tuple(records),
                 base_sha,
                 None,
                 "fetch",
                 "remote main unavailable",
+                **details,
             )
         if current != base_sha:
             return PublicationResult(
                 "failed",
-                tuple(records),
                 base_sha,
                 None,
                 "concurrency",
                 "remote main advanced",
+                **details,
             )
 
         if refreshed.status == "no-op":
             return PublicationResult(
                 "no-op",
-                tuple(records),
                 base_sha,
                 None,
                 "complete",
+                **details,
                 pack_snapshots=_pack_snapshots(refreshed.candidate),
             )
 
@@ -303,13 +302,13 @@ class PublicationCoordinator:
         except CandidateError:
             return PublicationResult(
                 "failed",
-                tuple(records),
                 base_sha,
                 None,
                 "commit",
                 "candidate commit failed",
+                **details,
             )
-        records[-1] = replace(records[-1], candidate_sha=commit_sha)
+        details["candidate_sha"] = commit_sha
         try:
             pushed = self.remote.push(root, token)
         except OSError:
@@ -317,38 +316,38 @@ class PublicationCoordinator:
         if pushed.returncode == 0:
             return PublicationResult(
                 "published",
-                tuple(records),
                 base_sha,
                 commit_sha,
                 "complete",
+                **details,
                 pack_snapshots=_pack_snapshots(refreshed.candidate),
             )
         try:
             if self.remote.main_contains(root, commit_sha):
                 return PublicationResult(
                     "published",
-                    tuple(records),
                     base_sha,
                     commit_sha,
                     "complete",
+                    **details,
                     pack_snapshots=_pack_snapshots(refreshed.candidate),
                 )
         except OSError:
             return PublicationResult(
                 "uncertain",
-                tuple(records),
                 base_sha,
                 None,
                 "push",
                 "remote publication outcome is unreadable",
+                **details,
             )
         return PublicationResult(
             "failed",
-            tuple(records),
             base_sha,
             None,
             "push",
             "push rejected and intended commit is absent from remote main",
+            **details,
         )
 
 
