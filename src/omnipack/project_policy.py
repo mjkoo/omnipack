@@ -51,7 +51,8 @@ def repository_url(raw: str) -> str:
 def _portable_regex(pattern: str) -> None:
     """Allow literals, classes, anchors, groups, alternation and basic quantifiers.
 
-    Shared escapes are punctuation, d/D, s/S, w/W, b/B and n/r/t/f/v.
+    Shared escapes are punctuation and n/r/t/f/v. Character-class shorthands
+    and word boundaries differ between Python and Dart and are unsupported.
     Noncapturing groups and lookahead are supported; flags, lookbehind,
     named groups, backreferences, octal and possessive quantifiers are not.
     """
@@ -63,7 +64,12 @@ def _portable_regex(pattern: str) -> None:
             if index >= len(pattern):
                 raise ValueError("trailing escape")
             escape = pattern[index]
-            if escape.isalnum() and escape not in "dDsSwWbBnrtfv":
+            if escape in "dDsSwWbB":
+                raise ValueError(
+                    "regex shorthand classes and word boundaries differ between "
+                    "Python and Dart; use explicit character classes"
+                )
+            if escape.isalnum() and escape not in "nrtfv":
                 raise ValueError("unsupported regex escape")
         elif pattern.startswith("(?", index) and pattern[index : index + 3] not in {
             "(?:",

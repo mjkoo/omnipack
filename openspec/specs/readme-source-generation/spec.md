@@ -61,6 +61,11 @@ Numeric version-extraction group selectors and `$N` references SHALL name
 existing groups in the configured regex, with group zero denoting the full
 match. Leading and trailing selector whitespace SHALL be ignored for validation.
 
+Reviewed regexes SHALL reject `\d`, `\D`, `\s`, `\S`, `\w`, `\W`, `\b`, and
+`\B`, whose character or boundary semantics differ between Python and Dart.
+Authors SHALL use explicit character classes for the intended matching set.
+Escaped literal backslashes SHALL remain supported.
+
 Only an explicit reviewed rule SHALL enable prereleases or classify a resource
 as track-only. A 404, missing APK, download failure or package-ID conflict SHALL
 NOT cause automatic classification, a fabricated package ID or a silent skip of

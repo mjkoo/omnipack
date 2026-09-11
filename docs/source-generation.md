@@ -31,6 +31,11 @@ release-title and APK filename filters, version extraction, and consumer
 policy cannot supply them. Every eligible APK in the selected release must be
 readable and agree on its package ID.
 
+Regex rules use a restricted shared syntax. Use explicit character classes such
+as `[0-9]` or `[A-Za-z0-9_]`; shorthand classes (`\d`, `\D`, `\s`, `\S`, `\w`,
+`\W`) and word boundaries (`\b`, `\B`) are rejected because their Python and
+Dart matching semantics differ. Existing reviewed rules use explicit classes.
+
 A `track-only` rule instead supplies a stable resource ID, rationale, installation
 instruction, and optional supported settings. It creates an Obtainium release
 tracker without downloading an APK or adding a package-ID record. Failed APK

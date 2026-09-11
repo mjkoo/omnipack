@@ -176,6 +176,36 @@ def test_reject_nonportable_regex(pattern):
         )
 
 
+@pytest.mark.parametrize("escape", list("dDsSwWbB"))
+def test_unicode_sensitive_regex_escapes_fail_before_discovery(tmp_path, escape):
+    source = setup(
+        tmp_path,
+        {
+            "kind": "apk",
+            "additionalSettings": {"apkFilterRegEx": rf"^\{escape}.*\.apk$"},
+        },
+    )
+    result, http = run(tmp_path, source)
+    assert result["status"] == "failed"
+    assert "explicit character classes" in result["error"]
+    assert http.urls == []
+
+
+def test_explicit_regex_classes_and_literal_backslashes_remain_supported():
+    settings = {
+        "apkFilterRegEx": r"^[A-Za-z0-9_]+\.apk$",
+        "filterReleaseTitlesByRegEx": r"^Release [0-9]+$",
+        "versionExtractionRegEx": r"^(\\w+)$",
+    }
+    policy = parse_project_policy(
+        {
+            "schemaVersion": 1,
+            "projects": {PROJECT: {"kind": "apk", "additionalSettings": settings}},
+        }
+    )
+    assert policy.projects[PROJECT].additional_settings == settings
+
+
 @pytest.mark.parametrize(
     "instruction",
     [
