@@ -1,41 +1,68 @@
 {
   "newProject": {
     "url": "github.com/example/new-project",
-    "accepted": false,
-    "resolvedPackageId": "com.example.new"
+    "revisionProjects": [
+      "github.com/example/accepted-fallback",
+      "github.com/example/covered-dual",
+      "github.com/example/removed-project",
+      "github.com/example/new-project"
+    ],
+    "expectedOutcome": "resolve-required"
   },
   "acceptedFallback": {
     "url": "github.com/example/accepted-fallback",
-    "accepted": true,
-    "acceptedPackageId": "com.example.fallback",
-    "acceptedReleaseId": 101,
-    "refreshFailure": "release lookup unavailable"
+    "revisionProjects": ["github.com/example/accepted-fallback"],
+    "resolution": {
+      "status": "unresolved",
+      "failure": "release lookup unavailable"
+    },
+    "expectedCatalogProjects": ["github.com/example/accepted-fallback"],
+    "expectedOutcome": "retain-accepted-entry-with-warning"
   },
   "coveredDualProject": {
     "url": "github.com/example/covered-dual",
-    "accepted": true,
-    "higherSourceEligibility": ["dual"],
-    "expectedInCompleteCatalog": true,
-    "expectedAtIngestion": "suppressed"
+    "revisionProjects": ["github.com/example/covered-dual"],
+    "higherCandidate": {
+      "source": "bboi",
+      "eligibility": ["dual"]
+    },
+    "expectedGeneratedProjects": ["github.com/example/covered-dual"],
+    "expectedIngestedProjects": []
   },
   "singleOnlyCoverage": {
     "url": "github.com/example/single-only",
-    "accepted": false,
-    "higherSourceEligibility": ["single"],
-    "expectedInCompleteCatalog": true,
-    "expectedAtIngestion": "retained-for-dual"
+    "revisionProjects": ["github.com/example/single-only"],
+    "higherCandidate": {
+      "source": "rjny",
+      "eligibility": ["single"]
+    },
+    "expectedGeneratedProjects": ["github.com/example/single-only"],
+    "expectedIngestedProjects": ["github.com/example/single-only"]
   },
   "removal": {
     "url": "github.com/example/removed-project",
-    "accepted": true,
-    "presentInRevision": false,
-    "expectedChange": "deletion"
+    "revisionProjects": [
+      "github.com/example/accepted-fallback",
+      "github.com/example/covered-dual"
+    ],
+    "expectedDeletedProjects": ["github.com/example/removed-project"]
   },
   "conflictingPackageIds": {
-    "projects": [
-      {"url": "github.com/example/conflict-one", "packageId": "com.example.conflict"},
-      {"url": "github.com/example/conflict-two", "packageId": "com.example.conflict"}
+    "revisionProjects": [
+      "github.com/example/conflict-one",
+      "github.com/example/conflict-two"
     ],
+    "resolvedProjects": [
+      {
+        "url": "github.com/example/conflict-one",
+        "packageId": "com.example.conflict"
+      },
+      {
+        "url": "github.com/example/conflict-two",
+        "packageId": "com.example.conflict"
+      }
+    ],
+    "expectedConflictPackageId": "com.example.conflict",
     "expectedOutcome": "validation-failure"
   }
 }

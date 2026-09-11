@@ -3,27 +3,114 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    parse_composition_policy,
+)
+from omnipack.merge import CompositionResult, compose
+from omnipack.model import App, Variant
+from omnipack.package_id import PackageIdCache, ResolutionResult, ResolutionStatus
+from omnipack.render import render
+from omnipack.sources import IngestionReport, bboi, codm, rjny
+from omnipack.sources.extras import fetch as fetch_extras
 from omnipack.urls import normalize_project_url
+from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "fixtures/source-generation/codm"
+CAPTURED = ROOT / "tests/fixtures/reconciliation"
 
 
-def load_fixture(name: str) -> Any:
-    return json.loads((FIXTURES / name).read_text())
+def load_json(path: Path) -> Any:
+    return json.loads(path.read_text())
 
 
-def test_migration_inventory_maps_captured_projects_and_cache_entries() -> None:
-    inventory = load_fixture("migration-inventory.json")
-    captured_cache = json.loads((ROOT / "config/package-ids.json").read_text())
-    projects = inventory["projects"]
+class CapturedResolver:
+    def __init__(self) -> None:
+        self.cache = PackageIdCache(ROOT / "config/package-ids.json")
+        self.calls: list[str] = []
 
-    assert len(projects) == 24
-    assert len({project["url"] for project in projects}) == len(projects)
-    captured_urls = {
+    def resolve(self, project_url: str, /) -> ResolutionResult:
+        self.calls.append(normalize_project_url(project_url))
+        cached = self.cache.get(project_url)
+        if cached is None:
+            return ResolutionResult(
+                None,
+                ResolutionStatus.UNRESOLVED,
+                None,
+                "captured cache has no previously resolved package ID",
+            )
+        return ResolutionResult(
+            cached.package_id, ResolutionStatus.REUSED, cached.release_id
+        )
+
+
+def captured_pipeline() -> tuple[
+    list[App], list[App], IngestionReport, CapturedResolver
+]:
+    sources = load_json(ROOT / "config/sources.json")
+    release = load_json(CAPTURED / "bboi-release.json")
+    standard_url, dual_url = (
+        asset["browser_download_url"] for asset in release["assets"]
+    )
+    bboi_api = (
+        "https://codeberg.org/api/v1/repos/"
+        f"{sources['bboi']['codeberg_repo']}/releases/latest"
+    )
+    rjny_url = (
+        f"https://raw.githubusercontent.com/{sources['rjny']['repo']}/"
+        f"{sources['rjny']['branch']}/{sources['rjny']['path']}"
+    )
+    http = FakeHttp(
+        {
+            bboi_api: json.dumps(release),
+            standard_url: (CAPTURED / "bboi-standard.json").read_text(),
+            dual_url: (CAPTURED / "bboi-dual.json").read_text(),
+            rjny_url: (CAPTURED / "rjny.json").read_text(),
+            sources["codm"]["readme_url"]: (
+                ROOT / "tests/fixtures/codm-readme.md"
+            ).read_text(),
+        }
+    )
+    policy = parse_composition_policy(load_json(ROOT / "config/composition.json"))
+    higher = [
+        *rjny.fetch(http, sources["rjny"]),
+        *bboi.fetch(http, sources["bboi"]),
+        *fetch_extras(load_json(ROOT / "config/extras.json")),
+    ]
+    eligible_higher = list(
+        apply_composition_policy(policy, higher, require_all=False).candidates
+    )
+    resolver = CapturedResolver()
+    report = IngestionReport()
+    generated = codm.fetch(http, sources["codm"], resolver, eligible_higher, report)
+    return higher, generated, report, resolver
+
+
+def compose_captured_baseline() -> CompositionResult:
+    higher, generated, _, _ = captured_pipeline()
+    return compose(
+        [*higher, *generated],
+        load_json(ROOT / "config/deny.json"),
+        load_json(ROOT / "config/overlay.json"),
+        load_json(ROOT / "config/overlay.dual.json"),
+        policy=parse_composition_policy(load_json(ROOT / "config/composition.json")),
+    )
+
+
+def test_inventory_is_derived_from_pre_migration_admission_and_coverage() -> None:
+    inventory = load_json(FIXTURES / "migration-inventory.json")
+    cached = load_json(ROOT / "config/package-ids.json")
+    higher, generated, report, resolver = captured_pipeline()
+    policy = parse_composition_policy(load_json(ROOT / "config/composition.json"))
+    eligible_higher = apply_composition_policy(
+        policy, higher, require_all=False
+    ).candidates
+    readme_urls = {
         normalize_project_url(url)
         for url in re.findall(
             r"\[[^\]]+\]\((https?://[^)\s]+)\)",
@@ -31,130 +118,162 @@ def test_migration_inventory_maps_captured_projects_and_cache_entries() -> None:
         )
         if normalize_project_url(url).startswith("github.com/")
     }
-    assert {project["url"] for project in projects} == captured_urls
-    assert {project["status"] for project in projects} == {
-        "previously-admitted",
-        "higher-source-dual-coverage",
-        "unresolved-unadmitted",
-    }
-    for project in projects:
-        cache = project["packageIdCache"]
-        if cache is None:
-            assert project["url"] not in captured_cache
-        else:
-            assert cache == captured_cache[project["url"]]
+    generated_urls = {normalize_project_url(app.url) for app in generated}
+    unresolved_urls = {normalize_project_url(item["url"]) for item in report.unresolved}
+    coverage: dict[str, dict[str, set[str]]] = {}
+    for app in eligible_higher:
+        url = normalize_project_url(app.url)
+        if url not in readme_urls:
+            continue
+        by_source = coverage.setdefault(url, {})
+        by_source.setdefault(app.provenance.source, set()).update(
+            variant.value for variant in app.eligibility
+        )
 
-    unresolved = {
-        project["url"]
-        for project in projects
-        if project["status"] == "unresolved-unadmitted"
-    }
-    assert unresolved == {
+    expected = []
+    for url in sorted(readme_urls):
+        source_coverage = [
+            {"source": source, "eligibility": sorted(eligibility)}
+            for source, eligibility in sorted(coverage.get(url, {}).items())
+        ]
+        if url in generated_urls:
+            admission = "admitted"
+        elif url in unresolved_urls:
+            admission = "unresolved"
+        else:
+            admission = "suppressed-by-dual-coverage"
+            assert any("dual" in item["eligibility"] for item in source_coverage)
+        expected.append(
+            {
+                "url": url,
+                "previousAdmission": admission,
+                "higherSourceCoverage": source_coverage,
+                "packageIdCache": cached.get(url),
+            }
+        )
+
+    assert inventory["projects"] == expected
+    assert set(resolver.calls) == generated_urls | unresolved_urls
+    assert {
+        item["url"] for item in expected if item["previousAdmission"] == "unresolved"
+    } == {
         "github.com/averageconsumer/kanto-gear",
         "github.com/castdrian/showdown-ds",
-        "github.com/emulnk/emulnk",
         "github.com/mastercook777/heimdall-ayn-thor-assistant",
     }
 
-    captured_higher_urls: set[str] = set()
-    for name in ("rjny-applications.json", "bboi-single.json", "bboi-dual.json"):
-        document = json.loads((ROOT / "tests/fixtures" / name).read_text())
-        captured_higher_urls.update(
-            normalize_project_url(app["url"]) for app in document["apps"]
+
+def test_current_captured_baseline_reproduces_exact_exports_and_family_winners() -> (
+    None
+):
+    index = load_json(FIXTURES / "baseline/index.json")
+    result = compose_captured_baseline()
+    settings = load_json(ROOT / "config/settings.json")
+
+    for variant in Variant:
+        output = render(result.apps[variant], settings).encode()
+        expected = next(
+            item for item in index["outputs"] if item["variant"] == variant.value
         )
-    replacements = json.loads(
-        (
-            ROOT / "tests/fixtures/composition-baseline/replacement-candidates.json"
-        ).read_text()
-    )
-    for pair in replacements["pairs"]:
-        captured_higher_urls.update(
-            normalize_project_url(pair[side]["url"]) for side in ("standard", "dual")
-        )
-    assert {
-        project["url"] for project in projects if project["higherSource"] is not None
-    } <= captured_higher_urls
+        assert output == (FIXTURES / "baseline" / expected["file"]).read_bytes()
+        assert len(result.apps[variant]) == expected["appCount"]
+        assert hashlib.sha256(output).hexdigest() == expected["sha256"]
+
+    derived_winners: dict[str, dict[str, str]] = {}
+    for selection in result.report.selections:
+        if selection.family in index["familyWinners"]:
+            derived_winners.setdefault(selection.family, {})[
+                selection.variant.value
+            ] = normalize_project_url(selection.url)
+    assert derived_winners == index["familyWinners"]
 
 
-def test_migration_inventory_pins_reproducible_exports_and_family_winners() -> None:
-    inventory = load_fixture("migration-inventory.json")
-    baseline = ROOT / "tests/fixtures/composition-baseline"
-    index = json.loads((baseline / "index.json").read_text())
-
-    recorded_outputs = {item["variant"]: item for item in inventory["baselineOutputs"]}
-    for output in index["outputs"]:
-        contents = (baseline / output["file"]).read_bytes()
-        assert recorded_outputs[output["variant"]] == {
-            "variant": output["variant"],
-            "file": output["file"],
-            "appCount": output["appCount"],
-            "sha256": hashlib.sha256(contents).hexdigest(),
-        }
-
-    assert inventory["familyWinners"] == {
-        "app:ctr": {
-            "single": "github.com/simon358/ctr-native-android",
-            "dual": "github.com/igawa6/ctr-native-android",
-        },
-        "app:dusklight": {
-            "single": "github.com/twilitrealm/dusklight",
-            "dual": "github.com/igawa6/dusklight",
-        },
-        "app:openmw": {
-            "single": "github.com/xyzz/openmw-android",
-            "dual": "github.com/josh-daniels/openmw-ds",
-        },
-        "app:super-metroid": {
-            "single": "github.com/raekwon1603/super_metroid-android",
-            "dual": "github.com/raekwon1603/retroarch",
-        },
-    }
+def test_baseline_index_binds_every_captured_input() -> None:
+    index = load_json(FIXTURES / "baseline/index.json")
+    for item in index["inputs"]:
+        contents = (ROOT / item["file"]).read_bytes()
+        assert hashlib.sha256(contents).hexdigest() == item["sha256"]
 
 
 def test_accepted_state_fixtures_are_bound_and_define_candidate_layout() -> None:
     catalog_bytes = (FIXTURES / "accepted/catalog.json").read_bytes()
     catalog = json.loads(catalog_bytes)
-    metadata = load_fixture("accepted/source.json")
-    state = load_fixture("accepted/resolution-state.json")
-    layout = load_fixture("candidate-layout.json")
+    metadata = load_json(FIXTURES / "accepted/source.json")
+    state = load_json(FIXTURES / "accepted/resolution-state.json")
+    layout = load_json(FIXTURES / "candidate-layout.json")
 
-    assert metadata == {
-        "schemaVersion": 1,
-        "sourceUrl": "https://example.invalid/codm/README.md",
-        "readmeSha256": hashlib.sha256(
-            (FIXTURES / "accepted/README.md").read_bytes()
-        ).hexdigest(),
-        "catalogSha256": hashlib.sha256(catalog_bytes).hexdigest(),
-    }
-    by_url = {
-        app["url"].removeprefix("https://").lower(): app for app in catalog["apps"]
-    }
+    assert (
+        metadata["readmeSha256"]
+        == hashlib.sha256((FIXTURES / "accepted/README.md").read_bytes()).hexdigest()
+    )
+    assert metadata["catalogSha256"] == hashlib.sha256(catalog_bytes).hexdigest()
+    by_url = {normalize_project_url(app["url"]): app for app in catalog["apps"]}
     assert set(by_url) == set(state)
     assert all(state[url]["packageId"] == app["id"] for url, app in by_url.items())
     assert layout["root"] == ".build/source-generation/codm"
-    assert set(layout["currentRunFiles"]) == {
+    assert set(layout["publicationEligible"]) == {
         "catalog.json",
         "source.json",
         "resolution-state.json",
-        "report.json",
     }
+    assert layout["diagnosticOnly"] == ["report.json"]
 
 
-def test_generation_cases_cover_required_migration_boundaries() -> None:
-    cases = load_fixture("cases.json")
-    assert set(cases) == {
-        "newProject",
-        "acceptedFallback",
-        "coveredDualProject",
-        "singleOnlyCoverage",
-        "removal",
-        "conflictingPackageIds",
+def test_generation_cases_encode_complete_input_and_expected_relationships() -> None:
+    cases = load_json(FIXTURES / "cases.json")
+    accepted = {
+        normalize_project_url(app["url"])
+        for app in load_json(FIXTURES / "accepted/catalog.json")["apps"]
     }
-    assert cases["newProject"]["accepted"] is False
-    assert cases["acceptedFallback"]["accepted"] is True
-    assert cases["coveredDualProject"]["higherSourceEligibility"] == ["dual"]
-    assert cases["singleOnlyCoverage"]["higherSourceEligibility"] == ["single"]
-    assert cases["removal"]["accepted"] is True
+    state = set(load_json(FIXTURES / "accepted/resolution-state.json"))
+    assert accepted == state
+
+    new = cases["newProject"]
+    unresolved_additions = set(new["revisionProjects"]) - accepted
+    assert unresolved_additions == {new["url"]}
+    assert new["expectedOutcome"] == "resolve-required"
+
+    fallback = cases["acceptedFallback"]
+    assert fallback["url"] in accepted
+    assert fallback["resolution"]["status"] == "unresolved"
+    retained = sorted(set(fallback["revisionProjects"]) & accepted)
+    assert fallback["expectedCatalogProjects"] == retained
+
+    covered = cases["coveredDualProject"]
+    assert covered["url"] in covered["revisionProjects"]
+    assert "dual" in covered["higherCandidate"]["eligibility"]
+    generated = set(covered["revisionProjects"])
+    ingested = (
+        generated - {covered["url"]}
+        if "dual" in covered["higherCandidate"]["eligibility"]
+        else generated
+    )
+    assert covered["expectedGeneratedProjects"] == sorted(generated)
+    assert covered["expectedIngestedProjects"] == sorted(ingested)
+
+    single = cases["singleOnlyCoverage"]
+    assert single["url"] in single["revisionProjects"]
+    assert single["higherCandidate"]["eligibility"] == ["single"]
+    generated = set(single["revisionProjects"])
+    ingested = (
+        generated - {single["url"]}
+        if "dual" in single["higherCandidate"]["eligibility"]
+        else generated
+    )
+    assert single["expectedGeneratedProjects"] == sorted(generated)
+    assert single["expectedIngestedProjects"] == sorted(ingested)
+
+    removal = cases["removal"]
+    assert removal["url"] in accepted
+    assert removal["url"] not in removal["revisionProjects"]
+    assert (
+        sorted(accepted - set(removal["revisionProjects"]))
+        == removal["expectedDeletedProjects"]
+    )
+
     conflict = cases["conflictingPackageIds"]
-    assert conflict["projects"][0]["packageId"] == conflict["projects"][1]["packageId"]
-    assert conflict["projects"][0]["url"] != conflict["projects"][1]["url"]
+    counts = Counter(project["packageId"] for project in conflict["resolvedProjects"])
+    assert {package_id for package_id, count in counts.items() if count > 1} == {
+        conflict["expectedConflictPackageId"]
+    }
+    assert conflict["expectedOutcome"] == "validation-failure"

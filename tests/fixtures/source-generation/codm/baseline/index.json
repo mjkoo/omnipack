@@ -1,0 +1,88 @@
+{
+  "identity": "current-policy captured-input pre-migration baseline",
+  "inputs": [
+    {
+      "file": "tests/fixtures/reconciliation/rjny.json",
+      "sha256": "697a2b8d567944917fd275e0159d7816db2ecbe56f4493142325ec9e3630eb61"
+    },
+    {
+      "file": "tests/fixtures/reconciliation/bboi-release.json",
+      "sha256": "551eee496727b98a05500eab46963f8d5a50180c019fd938e166287856cd8729"
+    },
+    {
+      "file": "tests/fixtures/reconciliation/bboi-standard.json",
+      "sha256": "0beed3395dd49f7c8d2a2385ba780b690e17b1badf18804bb31582e58f6b0f5b"
+    },
+    {
+      "file": "tests/fixtures/reconciliation/bboi-dual.json",
+      "sha256": "a841696871b351afec38277c2344aa35242358c533e099338d91faca79e3dc5f"
+    },
+    {
+      "file": "tests/fixtures/codm-readme.md",
+      "sha256": "91cf211a14b60942cc775921732a5f35e720db7d368a9b0610f0c603bf1e8318"
+    },
+    {
+      "file": "config/sources.json",
+      "sha256": "c92bbd3076c6d1b6454d5e2c4a0a67a8f1ac038f6f1887b413b17efa6228efa2"
+    },
+    {
+      "file": "config/extras.json",
+      "sha256": "b7432b7255db4d7642a98ea03bdcfc68fb2dc53d6e05eec9eac24f439c2467f3"
+    },
+    {
+      "file": "config/package-ids.json",
+      "sha256": "82415239318dcef65db1d107163ddf9a3ccb5077a573270f6fed043ca96a69e7"
+    },
+    {
+      "file": "config/composition.json",
+      "sha256": "0d9a5cd95f446e93e6d95d238c1c83503df274562ef7c4d3184742e5006227e6"
+    },
+    {
+      "file": "config/deny.json",
+      "sha256": "48788205ac6b0de92ec4939952bf22d1cf436ec5c8ad8dc2a93a43d7561e66b8"
+    },
+    {
+      "file": "config/overlay.json",
+      "sha256": "93f01e45d2c395f35829a8db83b1321cfbb9e4594c9078e5faf2b3cffedf13fc"
+    },
+    {
+      "file": "config/overlay.dual.json",
+      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
+    },
+    {
+      "file": "config/settings.json",
+      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
+    }
+  ],
+  "outputs": [
+    {
+      "variant": "single",
+      "file": "single-screen.golden",
+      "appCount": 92,
+      "sha256": "f55841cc37706d93256f67b679c9b61eaf52f9fe05f61bf285cb3d0c8626f56f"
+    },
+    {
+      "variant": "dual",
+      "file": "dual-screen.golden",
+      "appCount": 109,
+      "sha256": "77f39d1ff147b542c393ce33920876998e78bf6eeb3cfe6eaf421a053c1aa11d"
+    }
+  ],
+  "familyWinners": {
+    "app:ctr": {
+      "single": "github.com/simon358/ctr-native-android",
+      "dual": "github.com/igawa6/ctr-native-android"
+    },
+    "app:dusklight": {
+      "single": "github.com/twilitrealm/dusklight",
+      "dual": "github.com/igawa6/dusklight"
+    },
+    "app:openmw": {
+      "single": "github.com/xyzz/openmw-android",
+      "dual": "github.com/josh-daniels/openmw-ds"
+    },
+    "app:super-metroid": {
+      "dual": "github.com/raekwon1603/retroarch"
+    }
+  }
+}

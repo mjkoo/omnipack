@@ -11,6 +11,13 @@ captured README, their relationship to captured higher-source inputs, and an
 exact mapping to the maintained package-ID cache. An unresolved, unadmitted
 project remains distinct from both accepted fallback and higher-source coverage.
 
-The composition output hashes and family winners are anchored to the protected
-historical fixtures under `tests/fixtures/composition-baseline`; those files are
-inputs to this evidence and are not regenerated here.
+The `baseline` directory is a current-policy, pre-migration reproduction. It
+runs the existing source adapters, composition policy, overlays, deny rules and
+renderer against the captured reconciliation catalogs, the full captured codm
+README and the captured package-ID cache. Its index binds every input by hash,
+then records exact rendered bytes and family winners derived from the pipeline.
+
+The older 88-entry single and 111-entry dual files under
+`tests/fixtures/composition-baseline` remain protected historical evidence for
+the policy revision they captured. They are intentionally not refreshed or
+presented as the current migration baseline.
