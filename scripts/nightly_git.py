@@ -6,7 +6,6 @@ import base64
 import os
 import subprocess
 from collections.abc import Callable, Mapping
-from contextlib import ExitStack
 from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
@@ -15,13 +14,13 @@ from typing import Protocol
 from scripts.nightly_publish import (
     CandidateError,
     CommandResult,
-    LocalAttemptFactory,
     PublicationCandidate,
     RefreshResult,
     StageOutcome,
     _git,
     _git_bytes,
     _git_paths,
+    require_clean_tracked_workspace,
 )
 from scripts.nightly_release_sync import SyncResult
 
@@ -173,25 +172,21 @@ class PublicationResult:
 class PublicationCoordinator:
     def __init__(
         self,
-        attempts: LocalAttemptFactory,
+        root: Path,
         refresh: RefreshBoundary,
         remote: RemoteBoundary,
         release: ReleaseBoundary | None = None,
         *,
         now: Callable[[], datetime] | None = None,
     ) -> None:
-        self.attempts = attempts
+        self.root = root
         self.refresh = refresh
         self.remote = remote
         self.release = release
         self.now = now or (lambda: datetime.now(UTC))
 
     def run(self, run_url: str, token: str) -> PublicationResult:
-        cleanup_start = len(self.attempts.cleanup_errors)
         result = self._run(run_url, token)
-        result = replace(
-            result, cleanup_errors=tuple(self.attempts.cleanup_errors[cleanup_start:])
-        )
         if (
             self.release is None
             or result.status not in ("published", "no-op")
@@ -234,179 +229,143 @@ class PublicationCoordinator:
     def _run(self, run_url: str, token: str) -> PublicationResult:
         records: list[AttemptRecord] = []
         try:
-            base_sha = self.remote.fetch_main()
-        except OSError:
+            base_sha = _git_bytes(self.root, "rev-parse", "HEAD").decode().strip()
+        except CandidateError as error:
+            return PublicationResult("failed", (), None, None, "workspace", str(error))
+        try:
+            require_clean_tracked_workspace(self.root)
+        except CandidateError as error:
             return PublicationResult(
-                "failed", (), None, None, "fetch", "remote main unavailable"
+                "failed", (), base_sha, None, "workspace", str(error)
             )
 
-        for number in (1, 2):
-            started_at = self.now()
-            with ExitStack() as stack:
-                try:
-                    root = stack.enter_context(self.attempts.checkout(base_sha))
-                except CandidateError, OSError:
-                    records.append(
-                        AttemptRecord(
-                            number,
-                            base_sha,
-                            (
-                                StageOutcome(
-                                    "checkout", "failed", "attempt setup failed"
-                                ),
-                            ),
-                            None,
-                            None,
-                            started_at=started_at,
-                            finished_at=self.now(),
-                        )
-                    )
-                    return PublicationResult(
-                        "failed",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "checkout",
-                        "attempt setup failed",
-                    )
-                refreshed = self.refresh.run(root, base_sha)
-                record = AttemptRecord(
-                    number,
-                    base_sha,
-                    refreshed.stages,
-                    _read_optional(root / ".build/report.json"),
-                    _read_optional(root / ".build/verify.json"),
-                    started_at=started_at,
-                    finished_at=self.now(),
-                )
-                records.append(record)
-                if refreshed.status == "failed" or refreshed.candidate is None:
-                    stage = (
-                        refreshed.stages[-1].stage if refreshed.stages else "refresh"
-                    )
-                    return PublicationResult(
-                        "failed",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        stage,
-                        "refresh failed",
-                    )
+        number = 1
+        started_at = self.now()
+        root = self.root
+        refreshed = self.refresh.run(root, base_sha)
+        record = AttemptRecord(
+            number,
+            base_sha,
+            refreshed.stages,
+            _read_optional(root / ".build/report.json"),
+            _read_optional(root / ".build/verify.json"),
+            started_at=started_at,
+            finished_at=self.now(),
+        )
+        records.append(record)
+        if refreshed.status == "failed" or refreshed.candidate is None:
+            stage = refreshed.stages[-1].stage if refreshed.stages else "refresh"
+            return PublicationResult(
+                "failed", tuple(records), base_sha, None, stage, "refresh failed"
+            )
 
-                if self.release is None:
-                    return PublicationResult(
-                        "failed",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "release-preflight",
-                        "owned rolling release seed is unavailable; run bootstrap-release",
-                    )
-                try:
-                    self.release.preflight()
-                except Exception as error:  # noqa: BLE001 - release is external
-                    return PublicationResult(
-                        "failed",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "release-preflight",
-                        f"owned rolling release seed is unavailable: {error}; run bootstrap-release",
-                    )
+        if self.release is None:
+            return PublicationResult(
+                "failed",
+                tuple(records),
+                base_sha,
+                None,
+                "release-preflight",
+                "owned rolling release seed is unavailable; run bootstrap-release",
+            )
+        try:
+            self.release.preflight()
+        except Exception as error:  # noqa: BLE001 - release is external
+            return PublicationResult(
+                "failed",
+                tuple(records),
+                base_sha,
+                None,
+                "release-preflight",
+                f"owned rolling release seed is unavailable: {error}; run bootstrap-release",
+            )
 
-                try:
-                    current = self.remote.fetch_main()
-                except OSError:
-                    return PublicationResult(
-                        "failed",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "fetch",
-                        "remote main unavailable",
-                    )
-                if current != base_sha:
-                    if number == 2:
-                        return PublicationResult(
-                            "failed",
-                            tuple(records),
-                            base_sha,
-                            None,
-                            "concurrency",
-                            "remote main advanced twice",
-                        )
-                    base_sha = current
-                    continue
+        try:
+            current = self.remote.fetch_main()
+        except OSError:
+            return PublicationResult(
+                "failed",
+                tuple(records),
+                base_sha,
+                None,
+                "fetch",
+                "remote main unavailable",
+            )
+        if current != base_sha:
+            return PublicationResult(
+                "failed",
+                tuple(records),
+                base_sha,
+                None,
+                "concurrency",
+                "remote main advanced",
+            )
 
-                if refreshed.status == "no-op":
-                    return PublicationResult(
-                        "no-op",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "complete",
-                        pack_snapshots=_pack_snapshots(refreshed.candidate),
-                    )
+        if refreshed.status == "no-op":
+            return PublicationResult(
+                "no-op",
+                tuple(records),
+                base_sha,
+                None,
+                "complete",
+                pack_snapshots=_pack_snapshots(refreshed.candidate),
+            )
 
-                try:
-                    commit_sha = _create_candidate_commit(
-                        refreshed.candidate, self.now(), run_url, base_sha
-                    )
-                except CandidateError:
-                    return PublicationResult(
-                        "failed",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "commit",
-                        "candidate commit failed",
-                    )
-                records[-1] = replace(records[-1], candidate_sha=commit_sha)
-                try:
-                    pushed = self.remote.push(root, token)
-                except OSError:
-                    pushed = CommandResult(1, "", "push outcome unavailable")
-                if pushed.returncode == 0:
-                    return PublicationResult(
-                        "published",
-                        tuple(records),
-                        base_sha,
-                        commit_sha,
-                        "complete",
-                        pack_snapshots=_pack_snapshots(refreshed.candidate),
-                    )
-                try:
-                    if self.remote.main_contains(root, commit_sha):
-                        return PublicationResult(
-                            "published",
-                            tuple(records),
-                            base_sha,
-                            commit_sha,
-                            "complete",
-                            pack_snapshots=_pack_snapshots(refreshed.candidate),
-                        )
-                    current = self.remote.fetch_main()
-                except OSError:
-                    return PublicationResult(
-                        "uncertain",
-                        tuple(records),
-                        base_sha,
-                        None,
-                        "push",
-                        "remote publication outcome is unreadable",
-                    )
-                if current != base_sha and number == 1:
-                    base_sha = current
-                    continue
+        try:
+            commit_sha = _create_candidate_commit(
+                refreshed.candidate, self.now(), run_url, base_sha
+            )
+        except CandidateError:
+            return PublicationResult(
+                "failed",
+                tuple(records),
+                base_sha,
+                None,
+                "commit",
+                "candidate commit failed",
+            )
+        records[-1] = replace(records[-1], candidate_sha=commit_sha)
+        try:
+            pushed = self.remote.push(root, token)
+        except OSError:
+            pushed = CommandResult(1, "", "push outcome unavailable")
+        if pushed.returncode == 0:
+            return PublicationResult(
+                "published",
+                tuple(records),
+                base_sha,
+                commit_sha,
+                "complete",
+                pack_snapshots=_pack_snapshots(refreshed.candidate),
+            )
+        try:
+            if self.remote.main_contains(root, commit_sha):
                 return PublicationResult(
-                    "failed",
+                    "published",
                     tuple(records),
                     base_sha,
-                    None,
-                    "push",
-                    "push rejected and intended commit is absent from remote main",
+                    commit_sha,
+                    "complete",
+                    pack_snapshots=_pack_snapshots(refreshed.candidate),
                 )
-        raise AssertionError("attempt loop must return")
+            self.remote.fetch_main()
+        except OSError:
+            return PublicationResult(
+                "uncertain",
+                tuple(records),
+                base_sha,
+                None,
+                "push",
+                "remote publication outcome is unreadable",
+            )
+        return PublicationResult(
+            "failed",
+            tuple(records),
+            base_sha,
+            None,
+            "push",
+            "push rejected and intended commit is absent from remote main",
+        )
 
 
 def _create_candidate_commit(

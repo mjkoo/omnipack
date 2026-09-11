@@ -261,7 +261,6 @@ def _publisher(source: Path, token: str) -> Publisher:
     # The project runtime is imported only after setup succeeds and publish starts.
     from scripts.nightly_git import GitRemote, PublicationCoordinator
     from scripts.nightly_publish import (
-        LocalAttemptFactory,
         RefreshOrchestrator,
         SubprocessBoundary,
     )
@@ -285,7 +284,7 @@ def _publisher(source: Path, token: str) -> Publisher:
             return synchronize_release(self.remote, single, dual, source_commit)
 
     return PublicationCoordinator(
-        LocalAttemptFactory(source),
+        source,
         RefreshOrchestrator(SubprocessBoundary()),
         GitRemote(source),
         ReleaseSynchronizer(GitHubReleaseRemote(token)),

@@ -7,8 +7,7 @@ import os
 import shutil
 import subprocess
 import sys
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping, Sequence
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -23,9 +22,7 @@ from scripts.nightly_git import (
 )
 from scripts.nightly_publish import (
     ALLOWED_PATHS,
-    CandidateError,
     CommandResult,
-    LocalAttemptFactory,
     RefreshOrchestrator,
     RefreshResult,
     StageOutcome,
@@ -130,12 +127,54 @@ def _coordinator(
         else cast(ReleaseBoundary | None, release)
     )
     return PublicationCoordinator(
-        LocalAttemptFactory(source),
+        source,
         refresh,
         remote,
         selected_release,
         now=lambda: datetime(2026, 9, 8, 12, tzinfo=UTC),
     )
+
+
+def test_uses_selected_workspace_head_without_another_checkout(tmp_path: Path) -> None:
+    source, _, base = _remote(tmp_path)
+    refresh = ChangingRefresh(change=None)
+
+    result = _coordinator(source, GitRemote(source), refresh).run("run", "token")
+
+    assert result.status == "no-op"
+    assert result.base_sha == base
+    assert refresh.roots == [source]
+    assert _git(source, "rev-parse", "HEAD") == base
+
+
+@pytest.mark.parametrize(
+    ("relative", "state"),
+    [
+        (ALLOWED_PATHS[0], "unstaged"),
+        ("tracked.txt", "staged"),
+        ("tracked.txt", "mode"),
+    ],
+)
+def test_rejects_initial_tracked_changes_before_refresh(
+    tmp_path: Path, relative: str, state: str
+) -> None:
+    source, bare, base = _remote(tmp_path)
+    if state == "mode":
+        _git(source, "config", "core.fileMode", "true")
+        (source / relative).chmod(0o755)
+    else:
+        (source / relative).write_text("local modification\n")
+        if state == "staged":
+            _git(source, "add", relative)
+    refresh = ChangingRefresh()
+
+    result = _coordinator(source, GitRemote(source), refresh).run("run", "token")
+
+    assert result.status == "failed"
+    assert result.stage == "workspace"
+    assert result.base_sha == base
+    assert refresh.roots == []
+    assert _git(bare, "rev-parse", "main") == base
 
 
 @pytest.mark.parametrize("change", [ALLOWED_PATHS[0], None])
@@ -156,7 +195,7 @@ def test_missing_release_boundary_preserves_main_without_claiming_completion(
     assert result.release_status == "not-run"
     assert result.stage == "release-preflight"
     assert result.pack_snapshots is None
-    assert all(not root.exists() for root in refresh.roots)
+    assert refresh.roots == [source]
     issues = RecordingIssues()
     finalized = finalize_publication(result, issues, tmp_path / "diagnostics", "run")
     assert finalized.workflow_status == "failed"
@@ -238,7 +277,7 @@ def test_release_uses_verified_bytes_after_successful_checkout_is_removed(
     assert result.status == "published"
     assert result.release_status == "success"
     assert result.release_revision == 7
-    assert all(not root.exists() for root in refresh.roots)
+    assert refresh.roots == [source]
     single, dual, source_commit = release.calls[0]
     assert result.base_sha is not None
     assert single == b"candidate:" + result.base_sha.encode() + b"\n"
@@ -540,48 +579,6 @@ def test_fresh_attempt_preserves_new_base_readme_around_generated_catalog(
     )
 
 
-class FailingSecondAttempt(LocalAttemptFactory):
-    def __init__(self, source: Path) -> None:
-        super().__init__(source)
-        self.count = 0
-
-    @contextmanager
-    def checkout(self, base_sha: str) -> Iterator[Path]:
-        self.count += 1
-        if self.count == 2:
-            raise CandidateError("credential secret from clone")
-        with super().checkout(base_sha) as root:
-            yield root
-
-
-def test_retry_setup_failure_preserves_first_attempt_diagnostics(
-    tmp_path: Path,
-) -> None:
-    source, bare, _ = _remote(tmp_path)
-
-    def advance() -> None:
-        _advance(source, bare, "newer")
-
-    remote = AdvancingRemote(GitRemote(source), advance)
-    coordinator = PublicationCoordinator(
-        FailingSecondAttempt(source),
-        ChangingRefresh(),
-        remote,
-        RecordingRelease(),
-        now=lambda: datetime(2026, 9, 8, tzinfo=UTC),
-    )
-
-    result = coordinator.run("run", "token")
-
-    assert result.status == "failed"
-    assert result.stage == "checkout"
-    assert len(result.attempts) == 2
-    assert result.attempts[0].build_report is not None
-    assert result.attempts[1].build_report is None
-    assert result.attempts[1].stages[0].detail == "attempt setup failed"
-    assert result.attempts[1].started_at == datetime(2026, 9, 8, tzinfo=UTC)
-
-
 def test_noop_rechecks_advanced_main_with_a_fresh_attempt(tmp_path: Path) -> None:
     source, bare, base = _remote(tmp_path)
     newer: list[str] = []
@@ -706,53 +703,6 @@ def test_unreadable_remote_after_rejected_push_is_uncertain(tmp_path: Path) -> N
     assert "secret-token" not in result.detail
 
 
-def test_cleanup_failure_preserves_confirmed_publication_and_fails_workflow(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    import scripts.nightly_publish as publishing
-    from scripts.nightly import run_publication, run_setup_failure
-    from tests.test_nightly_workflow import FakeApi, _environment, _response
-
-    source, bare, _ = _remote(tmp_path)
-    refresh = ChangingRefresh()
-    remove = publishing.shutil.rmtree
-
-    def fail_cleanup(path: Path) -> None:
-        remove(path)
-        raise OSError("cleanup denied")
-
-    monkeypatch.setattr(publishing.shutil, "rmtree", fail_cleanup)
-    environment = _environment(tmp_path)
-    api = FakeApi([_response(200, [])])
-    finalized = run_publication(
-        environment,
-        publisher=_coordinator(source, GitRemote(source), refresh, RecordingRelease()),
-        api=api,
-    )
-    output = tmp_path / "nightly-diagnostics"
-
-    assert finalized is not None
-
-    assert finalized.workflow_status == "failed"
-    assert finalized.publication_status == "published"
-    assert finalized.release_status == "success"
-    document = json.loads((output / "orchestration-result.json").read_text())
-    assert document["published_sha"] == _git(bare, "rev-parse", "main")
-    assert document["workflow_status"] == "failed"
-    assert document["cleanup_errors"]
-    assert "Cleanup: failed" in finalized.summary
-    assert json.loads((output / "attempt-1-verify.json").read_text())["complete"]
-    assert json.loads((output / "attempt-1-build.json").read_text())["base"]
-    assert [request[0] for request in api.requests] == ["GET"]
-    assert finalized.issue_status == "unchanged"
-    fallback = run_setup_failure(
-        environment, "helper", "publisher execution failed", api=FakeApi([])
-    )
-    assert fallback is not None
-    assert fallback.publication_status == "published"
-    assert fallback.workflow_status == "failed"
-
-
 @pytest.mark.parametrize("defect", [None, "verifier", "inputs", "schema"])
 def test_retry_validates_evidence_with_selected_revision_runtime(
     tmp_path: Path, defect: str | None
@@ -839,7 +789,7 @@ def test_retry_validates_evidence_with_selected_revision_runtime(
 
     process = SelectedRuntimeProcess()
     coordinator = PublicationCoordinator(
-        LocalAttemptFactory(source),
+        source,
         RefreshOrchestrator(process),
         AdvancingRemote(GitRemote(source), advance),
         RecordingRelease(),

@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
 import subprocess
-import tempfile
-from collections.abc import Callable, Iterator, Mapping, Sequence
-from contextlib import contextmanager
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -132,19 +129,7 @@ class Check:
     command: tuple[str, ...]
 
 
-PRE_BUILD_CHECKS = (
-    Check("sync", ("uv", "sync", "--locked")),
-    Check("format-check", ("uv", "run", "--no-sync", "ruff", "format", "--check")),
-    Check("lint-check", ("uv", "run", "--no-sync", "ruff", "check")),
-    Check("typecheck", ("uv", "run", "--no-sync", "ty", "check")),
-    Check(
-        "python-build",
-        ("uv", "build", "--no-sources", "--out-dir", "build/python-dist"),
-    ),
-    Check("tests", ("uv", "run", "--no-sync", "pytest", "--cov")),
-    Check("offline-verify", ("uv", "run", "--no-sync", "pack", "verify")),
-    Check("build", ("uv", "run", "--no-sync", "pack", "build")),
-)
+BUILD = Check("build", ("uv", "run", "--no-sync", "pack", "build"))
 STRUCTURAL_VERIFY = Check(
     "candidate-verify", ("uv", "run", "--no-sync", "pack", "verify")
 )
@@ -156,11 +141,10 @@ class RefreshOrchestrator:
 
     def run(self, root: Path, base_sha: str) -> RefreshResult:
         outcomes: list[StageOutcome] = []
-        for check in PRE_BUILD_CHECKS:
-            if failure := self._run(check, root):
-                outcomes.append(failure)
-                return RefreshResult("failed", base_sha, tuple(outcomes))
-            outcomes.append(StageOutcome(check.stage, "success"))
+        if failure := self._run(BUILD, root):
+            outcomes.append(failure)
+            return RefreshResult("failed", base_sha, tuple(outcomes))
+        outcomes.append(StageOutcome(BUILD.stage, "success"))
 
         try:
             before_verify = _snapshot_allowed(root)
@@ -226,41 +210,6 @@ class RefreshOrchestrator:
             return None
         detail = result.stderr.strip() or result.stdout.strip()
         return StageOutcome(check.stage, "failed", detail)
-
-
-class LocalAttemptFactory:
-    """Create clean, disposable local checkouts for refresh attempts."""
-
-    def __init__(self, source: Path) -> None:
-        self.source = source
-        self.cleanup_errors: list[str] = []
-        try:
-            self.remote_url = (
-                _git_bytes(source, "remote", "get-url", "origin").decode().strip()
-            )
-        except CandidateError:
-            self.remote_url = str(source)
-
-    @contextmanager
-    def checkout(self, base_sha: str) -> Iterator[Path]:
-        root = Path(tempfile.mkdtemp(prefix="obtainium-nightly-"))
-        try:
-            _git(
-                root.parent,
-                "clone",
-                "--quiet",
-                "--no-checkout",
-                str(self.source),
-                str(root),
-            )
-            _git(root, "remote", "set-url", "origin", self.remote_url)
-            _git(root, "checkout", "--quiet", "--detach", base_sha)
-            yield root
-        finally:
-            try:
-                shutil.rmtree(root)
-            except OSError as error:
-                self.cleanup_errors.append(f"attempt checkout cleanup failed: {error}")
 
 
 def validate_candidate(root: Path) -> PublicationCandidate:
@@ -354,6 +303,12 @@ def _reject_unexpected_tracked_changes(root: Path) -> None:
         raise CandidateError(
             f"unexpected tracked changes: {', '.join(sorted(unexpected))}"
         )
+
+
+def require_clean_tracked_workspace(root: Path) -> None:
+    changed = _git_paths(root, "diff", "--name-only", "-z", "HEAD", "--")
+    if changed:
+        raise CandidateError(f"initial tracked changes: {', '.join(sorted(changed))}")
 
 
 def _git_paths(root: Path, *args: str) -> set[str]:

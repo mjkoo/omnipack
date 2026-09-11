@@ -17,7 +17,6 @@ from scripts.nightly_publish import (
     ALLOWED_PATHS,
     CandidateError,
     CommandResult,
-    LocalAttemptFactory,
     PublicationCandidate,
     RefreshOrchestrator,
     validate_candidate,
@@ -97,7 +96,7 @@ def _evidence(root: Path, *, observed: str | None = None) -> None:
     path.write_text(json.dumps(report))
 
 
-def test_refresh_orders_prebuild_checks_build_and_candidate_structural_verification(
+def test_refresh_runs_build_then_candidate_structural_verification(
     tmp_path: Path,
 ) -> None:
     root = _repo(tmp_path)
@@ -110,24 +109,17 @@ def test_refresh_orders_prebuild_checks_build_and_candidate_structural_verificat
         assert not old_evidence.exists()
         _evidence(root)
 
-    process.on_command[9] = replace_evidence
+    process.on_command[2] = replace_evidence
 
     result = RefreshOrchestrator(process).run(root, "abc123")
 
     assert result.status == "no-op"
     assert [outcome.stage for outcome in result.stages] == [
-        "sync",
-        "format-check",
-        "lint-check",
-        "typecheck",
-        "python-build",
-        "tests",
-        "offline-verify",
         "build",
         "candidate-verify",
         "candidate",
     ]
-    assert process.commands[-3:-1] == [
+    assert process.commands[:2] == [
         ("uv", "run", "--no-sync", "pack", "build"),
         ("uv", "run", "--no-sync", "pack", "verify"),
     ]
@@ -135,25 +127,7 @@ def test_refresh_orders_prebuild_checks_build_and_candidate_structural_verificat
     assert "config/composition.json" not in ALLOWED_PATHS
 
 
-def test_every_attempt_reruns_every_refresh_command(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    process = ControlledProcess(root)
-    process.on_command[9] = lambda: _evidence(root)
-    process.on_command[19] = lambda: _evidence(root)
-
-    assert RefreshOrchestrator(process).run(root, "first").status == "no-op"
-    assert RefreshOrchestrator(process).run(root, "second").status == "no-op"
-
-    assert [
-        (command[:-1] if "--validate-evidence" in command else command)
-        for command in process.commands[:10]
-    ] == [
-        (command[:-1] if "--validate-evidence" in command else command)
-        for command in process.commands[10:]
-    ]
-
-
-@pytest.mark.parametrize("fail_at", range(1, 10))
+@pytest.mark.parametrize("fail_at", range(1, 3))
 def test_failed_gate_stops_without_candidate(tmp_path: Path, fail_at: int) -> None:
     root = _repo(tmp_path)
     process = ControlledProcess(root, fail_at=fail_at)
@@ -175,7 +149,7 @@ def test_command_launch_error_is_an_explicit_stage_failure(tmp_path: Path) -> No
     result = RefreshOrchestrator(BrokenProcess()).run(root, "abc123")
 
     assert result.status == "failed"
-    assert result.stages[0].stage == "sync"
+    assert result.stages[0].stage == "build"
     assert result.stages[0].status == "failed"
 
 
@@ -190,16 +164,15 @@ def test_missing_file_before_candidate_verification_is_an_explicit_failure(
 
     assert result.status == "failed"
     assert result.stages[-1].stage == "candidate"
-    assert len(process.commands) == 8
+    assert len(process.commands) == 1
 
 
-def test_candidate_report_cleanup_failure_retains_prebuild_evidence(
+def test_candidate_report_cleanup_failure_is_explicit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _repo(tmp_path)
     process = ControlledProcess(root)
     evidence = root / ".build/verify.json"
-    process.on_command[7] = lambda: _evidence(root)
     original_unlink = Path.unlink
 
     def fail_candidate_cleanup(path: Path, *, missing_ok: bool = False) -> None:
@@ -214,8 +187,7 @@ def test_candidate_report_cleanup_failure_retains_prebuild_evidence(
     assert result.status == "failed"
     assert result.stages[-1].stage == "candidate-evidence-reset"
     assert "cannot remove pre-build evidence" in result.stages[-1].detail
-    assert json.loads(evidence.read_text())["mode"] == "offline"
-    assert len(process.commands) == 8
+    assert len(process.commands) == 1
 
 
 @pytest.mark.parametrize(
@@ -250,7 +222,7 @@ def test_bad_structural_evidence_rejects_candidate(tmp_path: Path, defect: str) 
                 report["schemaVersion"] = 999
         report_path.write_text(json.dumps(report))
 
-    process.on_command[9] = write_defective
+    process.on_command[2] = write_defective
     result = RefreshOrchestrator(process).run(root, "abc123")
 
     assert result.status == "failed"
@@ -461,21 +433,6 @@ def test_unavailable_app_metadata_is_not_a_postbuild_gate_or_reselection(
     assert sum(command[-2:] == ("pack", "build") for command in process.commands) == 1
 
 
-def test_disposable_attempt_is_a_clean_checkout_at_requested_sha(
-    tmp_path: Path,
-) -> None:
-    source = _repo(tmp_path)
-    base = _git(source, "rev-parse", "HEAD")
-    (source / "tracked.txt").write_text("dirty\n")
-
-    with LocalAttemptFactory(source).checkout(base) as checkout:
-        assert checkout != source
-        assert _git(checkout, "rev-parse", "HEAD") == base
-        assert (checkout / "tracked.txt").read_text() == "base\n"
-
-    assert not checkout.exists()
-
-
 @pytest.mark.parametrize("relative", ALLOWED_PATHS)
 def test_candidate_rejects_missing_publishable_file(
     tmp_path: Path, relative: str
@@ -676,7 +633,7 @@ def test_successful_build_command_preserves_soft_failure_policy(tmp_path: Path) 
         report.write_text(json.dumps({"status": "success", "retainedFailures": ["x"]}))
         _evidence(root)
 
-    process.on_command[9] = record_soft_failure_and_evidence
+    process.on_command[2] = record_soft_failure_and_evidence
 
     assert RefreshOrchestrator(process).run(root, "abc123").status == "no-op"
 

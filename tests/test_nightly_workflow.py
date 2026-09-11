@@ -107,6 +107,8 @@ def test_workflow_has_guarded_serialized_publisher_and_pinned_actions() -> None:
         "actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a" in workflow
     )
     assert "persist-credentials: false" in workflow
+    assert "ref: main" in workflow
+    assert "fetch-depth: 0" in workflow
     assert "retention-days: 14" in workflow
     assert "--probe-assets" not in workflow
 
