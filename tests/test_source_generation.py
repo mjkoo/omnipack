@@ -222,6 +222,7 @@ def test_track_only_generation_writes_current_candidate_without_apk_state(
             source_url: b"| Project | Note |\n| --- | --- |\n| [Tracker](https://github.com/example/tracker) | mod |\n",
             release_url: {
                 "id": 7,
+                "published_at": "2026-09-10T00:00:00Z",
                 "assets": [
                     {
                         "name": "mod.zip",
@@ -250,7 +251,16 @@ def test_unchanged_gate_validates_policy_then_makes_zero_release_requests(
     release_url = "https://api.github.com/repos/example/tracker/releases/latest"
     first = generate_codm(
         tmp_path,
-        http=MappingHttp({source_url: readme, release_url: {"id": 7, "assets": []}}),
+        http=MappingHttp(
+            {
+                source_url: readme,
+                release_url: {
+                    "id": 7,
+                    "published_at": "2026-09-10T00:00:00Z",
+                    "assets": [],
+                },
+            }
+        ),
     )
     assert first["status"] == "success"
     output = tmp_path / ".build/source-generation/codm"
@@ -310,10 +320,12 @@ def test_tracker_id_collision_fails_with_both_projects(tmp_path: Path) -> None:
             source_url: readme,
             "https://api.github.com/repos/example/tracker/releases/latest": {
                 "id": 1,
+                "published_at": "2026-09-10T00:00:00Z",
                 "assets": [],
             },
             "https://api.github.com/repos/other/tracker/releases/latest": {
                 "id": 2,
+                "published_at": "2026-09-10T00:00:00Z",
                 "assets": [],
             },
         }

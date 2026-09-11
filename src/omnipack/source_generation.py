@@ -16,7 +16,12 @@ from omnipack.http import HttpClient, HttpConfig, HttpError
 from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.package_id import PackageIdCache, PackageIdResolver
-from omnipack.project_policy import ProjectRule, default_apk_rule, parse_project_policy
+from omnipack.project_policy import (
+    ProjectRule,
+    default_apk_rule,
+    parse_project_policy,
+    repository_url,
+)
 from omnipack.render import render
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.sources import load_json
@@ -65,7 +70,7 @@ def parse_project_table(readme: bytes) -> ParsedProjects:
             while index < len(lines) and lines[index].lstrip().startswith("|"):
                 for raw_url in LINK_RE.findall(lines[index]):
                     try:
-                        normalized = normalize_project_url(raw_url)
+                        normalized = repository_url(raw_url)
                     except ValueError:
                         unsupported.add(raw_url)
                         continue
@@ -73,7 +78,9 @@ def parse_project_table(readme: bytes) -> ParsedProjects:
                         normalized.startswith("github.com/")
                         and len(normalized.split("/")) == 3
                     ):
-                        projects.setdefault(normalized, raw_url)
+                        projects[normalized] = min(
+                            projects.get(normalized, raw_url), raw_url
+                        )
                     else:
                         unsupported.add(raw_url)
                 index += 1
@@ -108,6 +115,10 @@ def _release_id(release: dict[str, Any]) -> str | int:
     value = release.get("id")
     if not isinstance(value, (str, int)) or isinstance(value, bool):
         raise TypeError("release has no host-assigned identifier")
+    if (isinstance(value, str) and not value.strip()) or (
+        isinstance(value, int) and value <= 0
+    ):
+        raise ValueError("release has an invalid host-assigned identifier")
     return value
 
 
@@ -124,7 +135,10 @@ def select_release(
     if not listed:
         if not isinstance(document, dict):
             raise ValueError("unexpected latest release response")
+        _publication_time(document)
         _release_id(document)
+        if document.get("draft") is True or document.get("prerelease") is True:
+            raise ValueError("latest release must be published and stable")
         return document
     if not isinstance(document, list):
         raise TypeError("unexpected releases-list response")
@@ -141,15 +155,7 @@ def select_release(
         ):
             continue
         release_id = _release_id(release)
-        published = release.get("published_at")
-        if not isinstance(published, str):
-            raise TypeError("release has no publication date")
-        try:
-            timestamp = datetime.fromisoformat(published)
-        except ValueError as error:
-            raise ValueError(
-                f"invalid release publication date {published!r}"
-            ) from error
+        timestamp = _publication_time(release)
         title = release.get("name") or release.get("tag_name")
         if not isinstance(title, str):
             raise TypeError("release has no title or tag")
@@ -164,6 +170,22 @@ def select_release(
     if not candidates:
         raise ValueError("no permitted release in the bounded 100-release scan")
     return max(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def _publication_time(release: dict[str, Any]) -> datetime:
+    for flag in ("draft", "prerelease"):
+        if flag in release and not isinstance(release[flag], bool):
+            raise TypeError(f"release {flag} must be boolean")
+    published = release.get("published_at")
+    if not isinstance(published, str):
+        raise TypeError("release has no publication date")
+    try:
+        timestamp = datetime.fromisoformat(published)
+    except ValueError as error:
+        raise ValueError(f"invalid release publication date {published!r}") from error
+    if timestamp.tzinfo is None:
+        raise ValueError("release publication date requires a timezone")
+    return timestamp
 
 
 def effective_settings(rule: ProjectRule) -> dict[str, Any]:
@@ -480,6 +502,7 @@ def _validate_metadata(value: object, catalog_path: Path) -> None:
     if (
         not isinstance(value, dict)
         or set(value) != required
+        or type(value.get("schemaVersion")) is not int
         or value.get("schemaVersion") != 1
     ):
         raise ValueError("accepted source metadata is malformed")
@@ -488,6 +511,9 @@ def _validate_metadata(value: object, catalog_path: Path) -> None:
         for key in required - {"schemaVersion"}
     ):
         raise ValueError("accepted source metadata fields must be nonempty strings")
+    for key in ("readmeSha256", "projectPolicySha256", "catalogSha256"):
+        if re.fullmatch(r"[0-9a-f]{64}", value[key]) is None:
+            raise ValueError(f"accepted source metadata {key} must be a SHA-256 digest")
     if (
         not catalog_path.exists()
         or _sha(catalog_path.read_bytes()) != value["catalogSha256"]
@@ -514,7 +540,19 @@ def _validate_accepted(
                 f"accepted APK catalog/state identity mismatch for {project}"
             )
         fingerprint = cached.get("policyFingerprint")
-        if fingerprint is None and project not in legacy_members:
+        if fingerprint is None and project in legacy_members:
+            default = default_apk_rule()
+            expected = json.loads(
+                _render_catalog([_entry(entry["url"], default, entry["id"])])
+            )["apps"][0]
+            if entry != expected:
+                raise ValueError(
+                    f"bootstrap APK entry does not match default policy for {project}"
+                )
+            cached = {**cached, "policyFingerprint": default.fingerprint}
+            state[project] = cached
+            fingerprint = default.fingerprint
+        if fingerprint is None:
             raise ValueError(
                 f"accepted APK state lacks a policy fingerprint for {project}"
             )
@@ -524,13 +562,15 @@ def _validate_accepted(
             raise ValueError(
                 f"accepted APK state has an invalid policy fingerprint for {project}"
             )
-        if fingerprint is not None and fingerprint != _accepted_apk_fingerprint(entry):
+        if fingerprint is not None and fingerprint not in _accepted_apk_fingerprints(
+            entry
+        ):
             raise ValueError(
                 f"accepted APK settings do not match the policy fingerprint for {project}"
             )
 
 
-def _accepted_apk_fingerprint(entry: dict[str, Any]) -> str:
+def _accepted_apk_fingerprints(entry: dict[str, Any]) -> set[str]:
     settings = json.loads(entry.get("additionalSettings", "{}"))
     if not isinstance(settings, dict):
         raise TypeError("accepted APK additionalSettings must be an object")
@@ -550,9 +590,8 @@ def _accepted_apk_fingerprint(entry: dict[str, Any]) -> str:
         ".git"
     )
     name = entry.get("name")
-    return ProjectRule(
-        "apk", name if name != repository else None, supported
-    ).fingerprint
+    names = [name, None] if name == repository else [name]
+    return {ProjectRule("apk", candidate, supported).fingerprint for candidate in names}
 
 
 def _fallback_compatible(

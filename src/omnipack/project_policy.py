@@ -7,6 +7,7 @@ import json
 import re
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlsplit
 
 from omnipack.urls import normalize_project_url
 
@@ -28,7 +29,49 @@ _REGEX_SETTINGS = {
     "apkFilterRegEx",
     "versionExtractionRegEx",
 }
-_UNSUPPORTED_REGEX_TOKENS = ("(?<=", "(?<!", "(?P<", "(?(", "(?>")
+
+
+def repository_url(raw: str) -> str:
+    """Accept repository links before normalization can discard nested paths."""
+    parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
+    if (
+        parsed.scheme not in {"http", "https"}
+        or parsed.hostname not in {"github.com", "www.github.com"}
+        or parsed.username is not None
+        or parsed.port is not None
+        or re.fullmatch(r"/[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+/?", parsed.path) is None
+    ):
+        raise ValueError("expected a public GitHub repository URL")
+    return normalize_project_url(raw)
+
+
+def _portable_regex(pattern: str) -> None:
+    """Allow literals, classes, anchors, groups, alternation and basic quantifiers.
+
+    Shared escapes are punctuation, d/D, s/S, w/W, b/B and n/r/t/f/v.
+    Noncapturing groups and lookahead are supported; flags, lookbehind,
+    named groups, backreferences, octal and possessive quantifiers are not.
+    """
+    index = 0
+    while index < len(pattern):
+        char = pattern[index]
+        if char == "\\":
+            index += 1
+            if index >= len(pattern):
+                raise ValueError("trailing escape")
+            escape = pattern[index]
+            if escape.isalnum() and escape not in "dDsSwWbBnrtfv":
+                raise ValueError("unsupported regex escape")
+        elif pattern.startswith("(?", index) and pattern[index : index + 3] not in {
+            "(?:",
+            "(?=",
+            "(?!",
+        }:
+            raise ValueError("unsupported regex group")
+        elif char == "+" and index and pattern[index - 1] in "*+?}":
+            raise ValueError("possessive quantifiers are unsupported")
+        index += 1
+    re.compile(pattern)
 
 
 @dataclass(frozen=True, slots=True)
@@ -97,7 +140,7 @@ def parse_project_policy(data: bytes | object) -> ProjectPolicy:
         if not isinstance(raw_url, str) or not isinstance(value, dict):
             raise PolicyError("project policy entries must map URL strings to objects")
         try:
-            url = normalize_project_url(raw_url)
+            url = repository_url(raw_url)
         except ValueError as error:
             raise PolicyError(f"invalid project policy URL {raw_url!r}") from error
         if not url.startswith("github.com/") or len(url.split("/")) != 3:
@@ -131,14 +174,12 @@ def _parse_rule(url: str, value: dict[str, Any]) -> ProjectRule:
         if not isinstance(setting, expected):
             raise PolicyError(f"{url}: setting {key!r} has invalid type")
         if key in _REGEX_SETTINGS and setting:
-            if any(token in setting for token in _UNSUPPORTED_REGEX_TOKENS):
-                raise PolicyError(
-                    f"{url}: regex for {key} uses syntax unsupported by Obtainium"
-                )
             try:
-                re.compile(setting)
-            except re.error as error:
-                raise PolicyError(f"{url}: invalid regex for {key}: {error}") from error
+                _portable_regex(setting)
+            except (ValueError, re.error) as error:
+                raise PolicyError(
+                    f"{url}: invalid or unsupported regex for {key}: {error}"
+                ) from error
     if settings.get("matchGroupToUse") and not settings.get("versionExtractionRegEx"):
         raise PolicyError(f"{url}: matchGroupToUse requires versionExtractionRegEx")
     if kind == "apk":
@@ -152,6 +193,22 @@ def _parse_rule(url: str, value: dict[str, Any]) -> ProjectRule:
         raise PolicyError(f"{url}: rationale must be a nonempty string")
     if not isinstance(installation, str) or not installation.strip():
         raise PolicyError(f"{url}: installation must be a nonempty string")
+    links = re.findall(r"https?://[^\s<>]+", installation)
+    valid_host = False
+    for link in links:
+        link = link.rstrip(".,;)")
+        try:
+            normalized = repository_url(link)
+        except ValueError:
+            continue
+        if link == f"https://{normalized}" and re.search(
+            r"[A-Za-z]{2,}", installation.replace(link, "")
+        ):
+            valid_host = True
+    if not valid_host:
+        raise PolicyError(
+            f"{url}: installation must name its host and canonical HTTPS repository URL"
+        )
     forbidden = set(settings) & {
         "apkFilterRegEx",
         "versionExtractionRegEx",
