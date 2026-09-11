@@ -43,7 +43,8 @@ verification. Exact-byte staging and commit checks SHALL remain required.
 
 The publisher SHALL limit commits to `dist/single-screen.json`,
 `dist/dual-screen.json` and `README.md`. Committed source catalogs, source
-metadata and resolution state SHALL NOT be published or modified by nightly.
+metadata, reviewed project policy and resolution state SHALL NOT be published
+or modified by nightly.
 README changes SHALL be restricted to the interior of exactly one valid catalog
 marker pair; prefix and suffix bytes, including markers, SHALL match the selected
 base revision. This restriction SHALL be rechecked at candidate capture and
@@ -62,7 +63,7 @@ or alter repository protection settings to bypass a rejection.
 
 #### Scenario: Resolver state or source catalog changes
 
-- **WHEN** a nightly candidate changes resolution state, source metadata or a committed source catalog
+- **WHEN** a nightly candidate changes resolution state, source metadata, reviewed project policy or a committed source catalog
 - **THEN** publication is rejected as an out-of-scope tracked mutation
 
 #### Scenario: Successful no-op

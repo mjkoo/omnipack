@@ -103,8 +103,9 @@ removed since the previous output, the families and package ids where candidates
 pins, device preference or source precedence, the candidate exclusions, and the
 denylist entries that matched no candidate in scope and are therefore stale exclusions, and source ingestion failures. Resolution-attempt diagnostics SHALL belong to
 source generation, not routine build reports. Build reports SHALL identify
-admitted codm2000 candidates and their committed package IDs without claiming
-that they were freshly resolved or their releases checked.
+admitted codm2000 candidates and their committed identities, distinguishing
+APK package IDs from track-only resource IDs, without claiming that they were
+freshly resolved or their releases checked.
 
 The report SHALL additionally record each family's per-target winner and
 alternatives, source/origin, original and effective identity, eligibility,
@@ -151,7 +152,7 @@ unchanged rebuild look like a change.
 #### Scenario: Committed generated entry is ingested
 
 - **WHEN** a build admits an entry from the committed codm2000 catalog
-- **THEN** its source and committed package ID are available in build diagnostics without a fresh-resolution claim
+- **THEN** its source, entry kind and committed package or resource ID are available in build diagnostics without a fresh-resolution claim
 
 #### Scenario: The build fails before it writes output
 
@@ -209,32 +210,47 @@ unchanged rebuild look like a change.
 ## Requirement: A separate command generates the README source catalog
 
 The system SHALL provide `pack generate-source codm` and an optional `--force`
-flag. It SHALL compare fetched README bytes to accepted source metadata, skip
-unchanged input unless forced, and produce a complete candidate catalog, source
+flag. It SHALL compare fetched README bytes, configured URL and validated
+reviewed project-policy bytes to accepted source metadata, skip only when all
+inputs are unchanged unless forced, and produce a complete candidate catalog, source
 metadata, resolution state and diagnostic report under `.build/` on success.
 It SHALL NOT write committed source files, pack outputs, git history or PRs.
 It SHALL exit zero for successful generation or an unchanged-source no-op and
 nonzero for failed generation. The report SHALL distinguish those outcomes and
-identify skips, resolved and reused IDs, retained failures and unresolved projects.
+identify unsupported links, inactive project rules, effective policy, resolved
+and reused APK IDs, successful track-only resources, retained failures and
+unresolved projects. It SHALL NOT modify the reviewed project policy. A complete
+catalog SHALL account for every eligible project as an APK or an explicitly
+declared tracker; lack of an APK SHALL NOT imply permission to skip or track it.
 Only artifacts produced by the current invocation SHALL be offered as its result.
 
 ##
 
 ## Scenario: Unchanged source
 
-- **WHEN** the fetched source hash matches the accepted hash and force is absent
+- **WHEN** the configured URL, fetched source hash and valid policy hash match accepted metadata and force is absent
 - **THEN** the command reports a no-op without release or APK requests
 
 ##
 
 ## Scenario: Forced refresh
 
-- **WHEN** force is supplied and README bytes are unchanged
+- **WHEN** force is supplied and README and policy bytes are unchanged
 - **THEN** the command checks releases and generates or reports failure using the normal resolution contract
 
 ##
 
 ## Scenario: Incomplete generation
 
-- **WHEN** a new eligible project cannot be resolved
+- **WHEN** a new APK project cannot be resolved or a new declared tracker cannot be validated
 - **THEN** the command fails with current diagnostics and offers no complete candidate for publication
+
+#### Scenario: Policy update needs generation
+
+- **WHEN** project policy changes while README bytes remain identical
+- **THEN** the command generates under the new policy instead of reporting an unchanged-source no-op
+
+#### Scenario: Kanto needs no APK resolution
+
+- **WHEN** Kanto's explicit track-only rule and permitted release validate
+- **THEN** the report records a tracking resource with its synthetic ID, not a resolved Android package

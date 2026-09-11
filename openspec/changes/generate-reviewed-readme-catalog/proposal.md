@@ -8,11 +8,18 @@ README and APK availability.
 ## What Changes
 
 - Add deterministic README-to-Obtainium catalog generation with automatic
-  package-ID resolution, preserving the existing resolver and credential rules.
+  package-ID resolution and reviewed per-project discovery settings. Keep
+  stable releases as the default; explicitly support prerelease APKs for
+  EmuLnk, Showdown-DS and Heimdall without hardcoded package-ID onboarding.
+- Represent Kanto Gear as a clearly labeled, dual-screen track-only resource.
+  Its Lua mod is installed through the already included Gen1Recomp host;
+  Obtainium supplies release notifications, not mod installation or detection.
+  Failed APK discovery never implicitly converts an app to track-only.
 - Add a separate scheduled and manually dispatched workflow. Changed README
   bytes produce or update one source PR containing catalog, source hash and
-  resolution state; identical accepted bytes skip generation. Manual forced
-  refresh supports release changes without README changes.
+  resolution state; identical accepted README and project-policy inputs skip
+  generation. Manual forced refresh supports release changes without README
+  or policy changes. Automation consumes reviewed policy and cannot modify it.
 - Block incomplete new-project generation, retain accepted entries on refresh
   failures with diagnostics, and leave the accepted source hash unchanged until
   merge. Failed runs are retried by later invocations.
@@ -22,14 +29,16 @@ README and APK availability.
 - **BREAKING**: Remove package-ID cache writes from nightly's publication scope
   and move resolution diagnostics to the generation operation.
 - Validate proposed catalogs and their composed pack effects before PR writes;
-  preserve captured export regressions during migration.
+  preserve captured existing selections and bytes, and separately verify the
+  intended Showdown-DS, Heimdall and Kanto tracker additions.
 
 ## Capabilities
 
 ### New Capabilities
 
 - `readme-source-generation`: Automatic catalog generation, accepted source
-  state, failure handling and the separate catalog-update PR workflow.
+  state, explicit APK/track-only treatment, discovery policy, failure handling
+  and the separate catalog-update PR workflow.
 
 ### Modified Capabilities
 
@@ -43,14 +52,15 @@ README and APK availability.
 ## Impact
 
 Affects the codm adapter, ingestion orchestration, resolver integration, CLI,
-build reports, source configuration, committed catalog/state, nightly path
+build reports, reviewed project policy, source configuration, committed catalog/state, nightly path
 guards, a new Actions workflow, tests and operator documentation. Automatic
-resolution remains GitHub latest-release APK inspection; no new runtime
-dependency is required by this design.
+resolution remains GitHub release APK inspection, with bounded prerelease
+listing where explicitly configured; no new runtime dependency is required.
 
 ## Non-goals
 
-Do not remove automatic resolution, add manual package-ID onboarding, redesign
+Do not remove automatic APK resolution, add manual APK package-ID onboarding,
+add automatic non-APK classification or a mod downloader/installer, redesign
 composition or its historical registry, replace structural publication evidence,
 or change release synchronization. Do not auto-merge catalog PRs, write directly
 to main from generation, alter repository protections, or perform external PR,
