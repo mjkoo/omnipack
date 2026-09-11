@@ -84,12 +84,14 @@ def parse_project_table(readme: bytes) -> ParsedProjects:
     unsupported: set[str] = set()
     found = False
     index = 0
-    while index + 1 < len(lines):
+    while index < len(lines):
         header = lines[index]
-        separator = lines[index + 1]
-        if re.match(
-            r"^\s*\|\s*Project\s*\|", header, re.IGNORECASE
-        ) and SEPARATOR_RE.fullmatch(separator):
+        if re.match(r"^\s*\|\s*Project\s*\|", header, re.IGNORECASE):
+            separator = lines[index + 1] if index + 1 < len(lines) else ""
+            if SEPARATOR_RE.fullmatch(separator) is None:
+                raise ValueError(
+                    "Project catalog table has a missing or invalid delimiter"
+                )
             # Escaped pipes are cell content, including pipes in inline code.
             pipes = list(re.finditer(r"(?<!\\)(?:\\\\)*\|", header.rstrip()))
             columns = len(pipes) - (pipes[-1].end() == len(header.rstrip()))

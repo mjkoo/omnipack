@@ -57,6 +57,10 @@ the unchanged-input gate. Inactive rules whose project is absent from the
 README SHALL be reported without introducing that project or blocking a source
 removal. Neither generation nor its publisher SHALL write this policy.
 
+Numeric version-extraction group selectors and `$N` references SHALL name
+existing groups in the configured regex, with group zero denoting the full
+match. Leading and trailing selector whitespace SHALL be ignored for validation.
+
 Only an explicit reviewed rule SHALL enable prereleases or classify a resource
 as track-only. A 404, missing APK, download failure or package-ID conflict SHALL
 NOT cause automatic classification, a fabricated package ID or a silent skip of
@@ -74,6 +78,11 @@ The initial APK rules SHALL set the supported consumer setting
 EmuLnk. Unconfigured projects SHALL preserve their existing default for that
 setting. Consumer fallback SHALL NOT change which release the generator
 resolves.
+
+#### Scenario: Version extraction references an absent capture group
+
+- **WHEN** a rule selects group `2` or includes `$2` but its version-extraction regex contains only one capturing group
+- **THEN** policy validation fails before discovery or the unchanged-input gate, and no candidate catalog is emitted
 
 #### Scenario: Only prereleases exist
 
@@ -139,6 +148,11 @@ as proposed deletions only after otherwise complete successful generation.
 
 - **WHEN** a valid nonempty README revision removes a previously accepted project
 - **THEN** the complete candidate catalog omits it and diagnostics identify the deletion
+
+#### Scenario: One of multiple Project tables is malformed
+
+- **WHEN** a README contains a valid Project table and another Project header with a missing or invalid delimiter
+- **THEN** generation fails without proposing removals from the malformed table or emitting a candidate catalog
 
 ### Requirement: Package IDs are resolved automatically from release APKs
 

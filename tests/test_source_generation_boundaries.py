@@ -62,6 +62,72 @@ def accept(root, metadata=True):
         (root / "config" / dst).write_bytes((output / src).read_bytes())
 
 
+@pytest.mark.parametrize("separator", ["| -- |", ""])
+def test_malformed_second_table_cannot_propose_removal(tmp_path, separator):
+    source, _ = tracking_root(tmp_path)
+    second = "\n\n| Project |\n| --- |\n| [Other](https://github.com/example/other) |\n"
+    readme = README + second.encode()
+    policy_path = tmp_path / "config/codm-projects.json"
+    policy = json.loads(policy_path.read_bytes())
+    policy["projects"]["github.com/example/other"] = {
+        **policy["projects"][PROJECT],
+        "trackerId": "67890",
+    }
+    policy_path.write_text(json.dumps(policy))
+    http = MappingHttp(
+        {
+            source: readme,
+            API: release(),
+            "https://api.github.com/repos/example/other/releases/latest": release(8),
+        }
+    )
+    assert generate_codm(tmp_path, http=http)["status"] == "success"
+    accept(tmp_path)
+    accepted = (tmp_path / "config/catalogs/codm.json").read_bytes()
+    broken = README + second.replace("| --- |", separator).encode()
+    http = MappingHttp({source: broken})
+    result = generate_codm(tmp_path, http=http)
+    assert result["status"] == "failed"
+    assert "Project catalog table" in result["error"]
+    assert http.urls == [source]
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
+    assert (tmp_path / "config/catalogs/codm.json").read_bytes() == accepted
+
+
+@pytest.mark.parametrize("selector", ["2", "$2", "v$1.$2", " 2 "])
+def test_version_capture_references_fail_before_discovery(tmp_path, selector):
+    source = setup(
+        tmp_path,
+        {
+            "kind": "apk",
+            "additionalSettings": {
+                "versionExtractionRegEx": "^v?(.+)$",
+                "matchGroupToUse": selector,
+            },
+        },
+    )
+    result, http = run(tmp_path, source)
+    assert result["status"] == "failed"
+    assert "capture group" in result["error"]
+    assert http.urls == []
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
+
+
+@pytest.mark.parametrize("selector", ["", "0", "1", "$1", "v$1.$0", " 1 "])
+def test_version_capture_references_preserve_supported_selectors(selector):
+    settings = {
+        "versionExtractionRegEx": "^v?(.+)$",
+        "matchGroupToUse": selector,
+    }
+    policy = parse_project_policy(
+        {
+            "schemaVersion": 1,
+            "projects": {PROJECT: {"kind": "apk", "additionalSettings": settings}},
+        }
+    )
+    assert policy.projects[PROJECT].additional_settings == settings
+
+
 def test_duplicate_order_and_nested_paths():
     links = ["https://github.com/Owner/Repo.git/?a=1", "https://github.com/owner/repo"]
 

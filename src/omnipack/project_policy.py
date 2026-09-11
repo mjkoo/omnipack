@@ -185,6 +185,18 @@ def _parse_rule(url: str, value: dict[str, Any]) -> ProjectRule:
                 ) from error
     if settings.get("matchGroupToUse") and not settings.get("versionExtractionRegEx"):
         raise PolicyError(f"{url}: matchGroupToUse requires versionExtractionRegEx")
+    if pattern := settings.get("versionExtractionRegEx"):
+        selector = settings.get("matchGroupToUse", "").strip()
+        references = (
+            [selector]
+            if re.fullmatch(r"[0-9]+", selector)
+            else re.findall(r"\$([0-9]+)", selector)
+        )
+        group_count = re.compile(pattern).groups
+        if any(int(reference) > group_count for reference in references):
+            raise PolicyError(
+                f"{url}: matchGroupToUse references a nonexistent capture group"
+            )
     if kind == "apk":
         return ProjectRule(kind, name, dict(settings))
     tracker_id = value.get("trackerId")
