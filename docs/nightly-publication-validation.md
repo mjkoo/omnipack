@@ -6,9 +6,10 @@ establish live GitHub publication or Obtainium device acceptance.
 
 ## Results
 
-The initial implementation baseline passed `just check-all`: lock validation, Ruff formatting and lint, Ty, dependency
-audit, Python sdist/wheel builds, all 594 tests, structural pack verification,
-workflow lint, Nix formatting and native flake checks. The suite took 23.57 seconds
+After review fixes, `just check-all` passed: lock validation, Ruff formatting and
+lint, Ty, dependency audit, Python sdist/wheel builds, all 597 tests, structural pack
+verification,
+workflow lint, Nix formatting and native flake checks. The suite took 24.34 seconds
 with 92% package coverage. The dependency audit found no known vulnerabilities or
 adverse project statuses in 10 packages.
 
@@ -16,12 +17,9 @@ Zizmor reported no findings in its default offline mode; online-only audits were
 not run. Nix reported the expected working-tree notice and omitted incompatible
 systems. Its aarch64-darwin checks passed; this is not Linux validation.
 
-The initial focused publication, reporting, workflow and retained release suites
-passed 106 tests. After review fixes, the expanded focused suite including candidate
-tests passed 147 tests in 20.81 seconds; Ruff format/lint, Ty and actionlint passed.
-The current suite collects 597 tests; the 594-test full-check result above predates
-these review fixes. Strict change validation and all nine main-spec validations passed
-after synchronizing the two capability deltas.
+The expanded focused publication, candidate, reporting, workflow and retained
+release suites passed 147 tests in 20.81 seconds. Strict change validation and all
+nine main-spec validations passed after synchronizing the two capability deltas.
 
 ## Behavioral evidence
 
@@ -42,6 +40,16 @@ Artifact-upload behavior is checked against the committed workflow configuration
 no real Actions upload was performed. The result artifact records known main and
 release outcomes without claiming the subsequent upload or overall workflow result.
 Actions step status remains authoritative for those outcomes.
+
+## Review checks
+
+Per-group evidencing reviews checked implementation commits against their proving
+tests. Three reviewers then examined the combined diff for correctness, failure
+handling, idiomatic structure and test proportionality. They identified an initial
+index-cleanliness gap, a missing candidate identifier in summaries, an unused
+artifact helper/test and stale curation guidance. One combined fix round addressed
+all four; its scoped re-review reported no remaining findings. The index and
+summary regressions failed before the fixes and passed afterward.
 
 ## Preservation and reduction
 
