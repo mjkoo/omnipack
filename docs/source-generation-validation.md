@@ -101,3 +101,29 @@ audit found no known vulnerabilities or adverse statuses in 10 packages. Zizmor
 reported no findings in its default offline mode. Nix reported the expected
 dirty-tree notice and omitted incompatible systems; aarch64-darwin checks passed,
 which does not establish cross-system builds.
+
+### Final software review corrections
+
+The final corrections tighten Markdown table structure and code-example
+exclusion, reuse supported GitHub repository-route validation, and discover
+source-branch PRs across all bases before checking ownership. Controlled
+transport evidence proves a retargeted PR is rejected without a push or PR
+creation. One redundant stale-selector test row and three unused test helpers
+were removed; the real CLI stale-selector test, source collision boundaries,
+and historical migration fixtures remain.
+
+After these corrections, the focused suite passed 244 tests. The full suite
+passed 791 tests in 47.90 seconds with 91% coverage, compared with the earlier
+782-test run: ten new regression cases and one redundant row removed. Lock
+validation, Ruff formatting and lint, Ty, sdist/wheel builds, structural pack
+verification, actionlint and zizmor passed. Nix formatting and native flake
+checks passed with an isolated temporary cache and local daemon access; the
+same incompatible systems were omitted.
+
+The new `just check-all` attempt stopped at the OSV audit because sandbox DNS
+could not resolve `api.osv.dev`. All later checks were run separately. The
+previous successful audit above remains the evidence for the unchanged ten
+dependencies; this correction changed neither dependency declarations nor the
+lock file. No live source generation, downloads, device checks or real remote
+writes were repeated. The earlier baseline and device measurements remain
+unchanged.

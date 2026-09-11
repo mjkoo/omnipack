@@ -57,8 +57,10 @@ Use `uv run pack generate-source codm --force` to inspect current releases even
 when the accepted README and policy bytes are unchanged. Force does not guarantee
 a change and does not relax validation.
 
-The candidate directory contains `catalog.json`, `source.json`,
-`resolution-state.json`, and `report.json`. Generation fails if the README tables
+After successful generation, the candidate directory contains `catalog.json`,
+`source.json`, `resolution-state.json`, `report.json`, and `readme-input.bin`.
+When unchanged inputs skip generation, it contains only `report.json` and
+`readme-input.bin`. Generation fails if the README tables
 are malformed or empty, any eligible project is unaccounted for, a new APK or
 tracker cannot be resolved, eligible APKs disagree, an ID collides, accepted
 state is inconsistent, or a selected release has no eligible APK. Partial

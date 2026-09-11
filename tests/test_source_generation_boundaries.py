@@ -565,7 +565,7 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
     )
     for late_failure in [False, True]:
         readme = README + (
-            b"| [New](https://github.com/new/app) | missing |\n"
+            b"| [New](https://github.com/new-project/app) | missing |\n"
             if late_failure
             else b""
         )
@@ -574,7 +574,7 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
                 source: readme,
                 API: release(),
                 ASSET: apk("org.example.app"),
-                "https://api.github.com/repos/new/app/releases/latest": release(
+                "https://api.github.com/repos/new-project/app/releases/latest": release(
                     8, assets=[]
                 ),
             }

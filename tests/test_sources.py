@@ -18,7 +18,6 @@ from omnipack.composition_policy import (
 )
 from omnipack.http import HttpClient, HttpError, HttpResponse
 from omnipack.model import App, Provenance, SourceType, Variant
-from omnipack.package_id import ResolutionResult, ResolutionStatus
 from omnipack.sources import (
     IngestionReport,
     SourceError,
@@ -295,20 +294,6 @@ def test_bboi_rejects_malformed_settings() -> None:
                 "dual_asset_pattern": "dual.json",
             },
         )
-
-
-class StubResolver:
-    def resolve(self, url: str) -> ResolutionResult:
-        repo = url.rstrip("/").split("/")[-1]
-        return ResolutionResult(f"app.{repo.lower()}", ResolutionStatus.RESOLVED, 1)
-
-
-class ResultResolver:
-    def __init__(self, result: ResolutionResult) -> None:
-        self.result = result
-
-    def resolve(self, project_url: str) -> ResolutionResult:
-        return self.result
 
 
 def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(

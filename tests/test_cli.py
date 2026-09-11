@@ -1,8 +1,5 @@
 import json
-import struct
-import zipfile
 from email.message import Message
-from io import BytesIO
 from pathlib import Path
 from urllib.request import Request
 
@@ -20,45 +17,6 @@ from omnipack.sources import IngestionReport, IngestionResult, SourceError
 EMPTY_POLICY = parse_composition_policy(
     {"schemaVersion": 1, "candidates": [], "pins": []}
 )
-
-
-def fixture_apk(package_id: str) -> bytes:
-    strings = ["manifest", "package", package_id]
-    encoded = b""
-    offsets = []
-    for value in strings:
-        offsets.append(len(encoded))
-        raw = value.encode("utf-16-le")
-        encoded += struct.pack("<H", len(value)) + raw + b"\0\0"
-    header_size = 28
-    pool_size = (header_size + 4 * len(strings) + len(encoded) + 3) & ~3
-    pool = (
-        struct.pack(
-            "<HHI5I",
-            1,
-            header_size,
-            pool_size,
-            len(strings),
-            0,
-            0,
-            header_size + 4 * len(strings),
-            0,
-        )
-        + b"".join(struct.pack("<I", offset) for offset in offsets)
-        + encoded
-    )
-    pool += b"\0" * (pool_size - len(pool))
-    start = bytearray(56)
-    struct.pack_into("<HHI", start, 0, 0x0102, 16, 56)
-    struct.pack_into("<HHH", start, 24, 20, 20, 1)
-    struct.pack_into("<III", start, 36, 0xFFFFFFFF, 1, 0xFFFFFFFF)
-    struct.pack_into("<HBBI", start, 48, 8, 0, 3, 2)
-    manifest = bytearray(8) + pool + start
-    struct.pack_into("<HHI", manifest, 0, 3, 8, len(manifest))
-    stream = BytesIO()
-    with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("AndroidManifest.xml", manifest)
-    return stream.getvalue()
 
 
 def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:

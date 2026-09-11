@@ -668,7 +668,6 @@ class GitHubSourceRemote:
                 {
                     "state": "all",
                     "head": f"{CANONICAL_OWNER}:{SOURCE_BRANCH}",
-                    "base": "main",
                     "per_page": 100,
                     "page": page,
                 }

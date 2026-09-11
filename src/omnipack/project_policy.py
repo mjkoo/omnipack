@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from omnipack.model import SourceType
+from omnipack.sources.common import derived_source_type
 from omnipack.urls import normalize_project_url
 
 
@@ -35,7 +37,8 @@ def repository_url(raw: str) -> str:
     """Accept repository links before normalization can discard nested paths."""
     parsed = urlsplit(raw if "://" in raw else f"https://{raw}")
     if (
-        parsed.scheme not in {"http", "https"}
+        derived_source_type(raw) != SourceType.GITHUB
+        or parsed.scheme not in {"http", "https"}
         or parsed.hostname not in {"github.com", "www.github.com"}
         or parsed.username is not None
         or parsed.port is not None

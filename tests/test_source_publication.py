@@ -8,10 +8,6 @@ from pathlib import Path
 
 import pytest
 
-from omnipack.composition_policy import (
-    apply_composition_policy,
-    parse_composition_policy,
-)
 from omnipack.project_policy import default_apk_rule
 from omnipack.source_generation import _canonical_json, _entry, _render_catalog, _sha
 from omnipack.sources import IngestionReport, SourceError
@@ -191,54 +187,30 @@ def test_failed_build_restores_pack_outputs_and_never_stages_source(
     assert not _git(root, "diff", "--cached", "--name-only")
 
 
-@pytest.mark.parametrize("failure", ["collision", "stale-selector"])
-def test_checked_candidate_runs_real_catalog_and_policy_validation(
-    tmp_path: Path, failure: str
-) -> None:
+def test_checked_candidate_rejects_source_catalog_collision(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     app = _entry("https://github.com/example/one", default_apk_rule(), "same.id")
     apps: list[dict[str, object]] = [
         app,
         {**app, "url": "https://github.com/example/two"},
     ]
-    policy: dict[str, object] = {
-        "schemaVersion": 1,
-        "candidates": [],
-        "pins": [],
-    }
-    if failure == "stale-selector":
-        apps = [app]
-        policy["candidates"] = [
-            {
-                "match": {
-                    "source": "codm2000",
-                    "origin": "codm-generated",
-                    "id": "missing.id",
-                    "url": "https://github.com/example/missing",
-                },
-                "rationale": "must remain",
-            }
-        ]
 
     class RealCompositionChecks(Checks):
         def run(self, command: tuple[str, ...], cwd: Path) -> CommandResult:
             if command[-2:] != ("pack", "build"):
                 return CommandResult(0, "", "")
             try:
-                admitted = fetch_codm(
+                fetch_codm(
                     cwd,
                     {"catalog": "config/catalogs/codm.json"},
                     [],
                     IngestionReport(),
                 )
-                apply_composition_policy(
-                    parse_composition_policy(policy), admitted, require_all=True
-                )
             except (SourceError, ValueError) as error:
                 return CommandResult(1, "", str(error))
             raise AssertionError("invalid candidate passed real composition validation")
 
-    with pytest.raises(PublicationError, match="collision|duplicate id|missing.id"):
+    with pytest.raises(PublicationError, match="collision|duplicate id"):
         CheckedSourceCandidate.check(
             root,
             _git(root, "rev-parse", "HEAD"),
@@ -1291,3 +1263,68 @@ def test_cli_unchanged_generation_is_validated_and_bound(
     assert result["status"] == ("failed" if mutation else "no-op")
     if mutation is None:
         assert result["packValidation"] == "not-run-unchanged"
+
+
+def test_transport_discovery_rejects_retargeted_pr_before_any_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from urllib.parse import parse_qs, urlsplit
+
+    from scripts.source_publication import SOURCE_BRANCH
+
+    root = _repo(tmp_path)
+    candidate = _checked(root)
+    branch = candidate.create_commit()
+    bare = tmp_path / "remote.git"
+    _git(tmp_path, "init", "--bare", str(bare))
+    _git(root, "remote", "add", "origin", str(bare))
+    _git(
+        root,
+        "push",
+        "origin",
+        f"{candidate.base_sha}:refs/heads/main",
+        f"{branch}:refs/heads/{SOURCE_BRANCH}",
+    )
+    requests: list[tuple[str, str]] = []
+    pushes: list[object] = []
+    original = subprocess.run
+
+    def observe(command, *args, **kwargs):
+        if command[:2] == ["git", "push"]:
+            pushes.append(command)
+        return original(command, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "run", observe)
+
+    class RetargetedApi:
+        token = ""
+
+        def request(self, method: str, path: str, body=None) -> ApiResponse:
+            requests.append((method, path))
+            query = parse_qs(urlsplit(path).query)
+            item = {
+                "number": 1,
+                "state": "open",
+                "merged_at": None,
+                "body": MARKER,
+                "head": {
+                    "ref": SOURCE_BRANCH,
+                    "sha": branch,
+                    "repo": {
+                        "owner": {"login": "mjkoo"},
+                        "full_name": "mjkoo/omnipack",
+                    },
+                },
+                "base": {"ref": "other", "repo": {"full_name": "mjkoo/omnipack"}},
+            }
+            values = [] if query.get("base") == ["main"] else [item]
+            return ApiResponse(200, {}, json.dumps(values).encode())
+
+    with pytest.raises(PublicationError, match="ownership"):
+        SourcePublicationCoordinator(
+            root, GitHubSourceRemote(root, RetargetedApi())
+        ).publish(candidate, "secret")
+    assert not pushes
+    assert len(requests) == 1 and requests[0][0] == "GET"
+    assert "base" not in parse_qs(urlsplit(requests[0][1]).query)
+    assert _git(bare, "rev-parse", f"refs/heads/{SOURCE_BRANCH}") == branch

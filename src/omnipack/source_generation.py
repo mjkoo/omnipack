@@ -50,9 +50,34 @@ class ParsedProjects:
     unsupported: tuple[str, ...]
 
 
+def _outside_code(lines: list[str]) -> list[str]:
+    """Keep line boundaries while hiding fenced and indented code examples."""
+    visible: list[str] = []
+    fence = ""
+    for line in lines:
+        expanded = line.expandtabs(4)
+        if fence:
+            if re.fullmatch(
+                r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*",
+                expanded,
+            ):
+                fence = ""
+            visible.append("")
+        elif expanded.startswith("    "):
+            visible.append("")
+        elif match := re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", expanded):
+            delimiter, info = match.groups()
+            if delimiter[0] == "~" or "`" not in info:
+                fence = delimiter
+            visible.append("")
+        else:
+            visible.append(line)
+    return visible
+
+
 def parse_project_table(readme: bytes) -> ParsedProjects:
     try:
-        lines = readme.decode("utf-8").splitlines()
+        lines = _outside_code(readme.decode("utf-8").splitlines())
     except UnicodeDecodeError as error:
         raise ValueError("README is not UTF-8") from error
     projects: dict[str, str] = {}
@@ -65,6 +90,13 @@ def parse_project_table(readme: bytes) -> ParsedProjects:
         if re.match(
             r"^\s*\|\s*Project\s*\|", header, re.IGNORECASE
         ) and SEPARATOR_RE.fullmatch(separator):
+            # Escaped pipes are cell content, including pipes in inline code.
+            pipes = list(re.finditer(r"(?<!\\)(?:\\\\)*\|", header.rstrip()))
+            columns = len(pipes) - (pipes[-1].end() == len(header.rstrip()))
+            if columns != separator.count("|") - 1:
+                raise ValueError(
+                    "Project catalog table header/delimiter column mismatch"
+                )
             found = True
             index += 2
             while index < len(lines) and lines[index].lstrip().startswith("|"):

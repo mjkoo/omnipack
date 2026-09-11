@@ -338,3 +338,60 @@ def test_tracker_id_collision_fails_with_both_projects(tmp_path: Path) -> None:
     assert "example/tracker" in result["error"]
     assert "other/tracker" in result["error"]
     assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
+
+
+@pytest.mark.parametrize("separator", ["| --- |", "| --- | --- | --- |"])
+def test_project_table_rejects_mismatched_columns(separator: str) -> None:
+    with pytest.raises(ValueError, match="Project catalog table"):
+        parse_project_table(
+            f"| Project | Notes |\n{separator}\n| [app](https://github.com/a/b) | note |\n".encode()
+        )
+
+
+@pytest.mark.parametrize(
+    "context", ["```markdown\n{}\n```", "~~~~\n{}\n~~~~", "    {}", "\t{}"]
+)
+def test_project_parser_excludes_code_examples(context: str) -> None:
+    example = "| Project |\n| --- |\n| [example](https://github.com/example/code) |"
+    if context in {"    {}", "\t{}"}:
+        example = "\n".join(context.format(line) for line in example.splitlines())
+    else:
+        example = context.format(example)
+    valid = "   | Project | Note |\n   | --- | --- |\n   | [real](https://github.com/example/real) | text |\n"
+    assert parse_project_table((example + "\n\n" + valid).encode()).projects == (
+        "github.com/example/real",
+    )
+    with pytest.raises(ValueError, match="Project catalog table"):
+        parse_project_table(example.encode())
+
+
+def test_generation_reports_site_routes_without_resolving_them(tmp_path: Path) -> None:
+    source, _ = tracking_root(tmp_path)
+    unsupported = "https://github.com/settings/profile"
+    http = MappingHttp(
+        {
+            source: (
+                "| Project |\n| --- |\n| [tracker](https://github.com/example/tracker) |\n"
+                f"| [settings]({unsupported}) |\n"
+            ).encode(),
+            "https://api.github.com/repos/example/tracker/releases/latest": {
+                "id": 7,
+                "published_at": "2026-09-10T00:00:00Z",
+            },
+        }
+    )
+    report = generate_codm(tmp_path, http=http)
+    assert report["status"] == "success"
+    assert report["unsupportedLinks"] == [unsupported]
+    assert http.urls == [
+        source,
+        "https://api.github.com/repos/example/tracker/releases/latest",
+    ]
+
+
+@pytest.mark.parametrize(
+    "header", ["| Project | Notes", r"| Project | Notes \| details |"]
+)
+def test_project_table_preserves_valid_header_cells(header: str) -> None:
+    readme = f"{header}\n| --- | --- |\n| [app](https://github.com/a/b) | note |\n"
+    assert parse_project_table(readme.encode()).projects == ("github.com/a/b",)
