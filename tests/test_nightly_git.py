@@ -1,13 +1,10 @@
 from __future__ import annotations
 
 import base64
-import inspect
 import json
 import os
-import shutil
 import subprocess
-import sys
-from collections.abc import Callable, Mapping, Sequence
+from collections.abc import Callable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import cast
@@ -23,7 +20,6 @@ from scripts.nightly_git import (
 from scripts.nightly_publish import (
     ALLOWED_PATHS,
     CommandResult,
-    RefreshOrchestrator,
     RefreshResult,
     StageOutcome,
     validate_candidate,
@@ -32,21 +28,9 @@ from tests.test_nightly_publish import _evidence, _git, _repo
 
 
 class RecordingRelease:
-    def __init__(
-        self,
-        failure: BaseException | None = None,
-        *,
-        preflight_failure: BaseException | None = None,
-    ) -> None:
+    def __init__(self, failure: BaseException | None = None) -> None:
         self.failure = failure
-        self.preflight_failure = preflight_failure
         self.calls: list[tuple[bytes, bytes, str]] = []
-        self.preflight_calls = 0
-
-    def preflight(self) -> None:
-        self.preflight_calls += 1
-        if self.preflight_failure is not None:
-            raise self.preflight_failure
 
     def synchronize(self, single: bytes, dual: bytes, source_commit: str):
         self.calls.append((single, dual, source_commit))
@@ -188,12 +172,11 @@ def test_missing_release_boundary_preserves_main_without_claiming_completion(
     refresh = ChangingRefresh(change=change)
     result = _coordinator(source, GitRemote(source), refresh, None).run("run", "token")
 
-    assert result.status == "failed"
+    assert result.status == ("published" if change else "no-op")
     assert result.base_sha == base
-    assert result.published_sha is None
-    assert _git(bare, "rev-parse", "main") == base
+    assert _git(bare, "rev-parse", "main") == (result.published_sha or base)
     assert result.release_status == "not-run"
-    assert result.stage == "release-preflight"
+    assert result.stage == "release"
     assert result.pack_snapshots is None
     assert refresh.roots == [source]
     issues = RecordingIssues()
@@ -202,22 +185,23 @@ def test_missing_release_boundary_preserves_main_without_claiming_completion(
     assert issues.failure_bodies and not issues.recovery_bodies
 
 
-def test_release_preflight_failure_blocks_main_and_release_writes(
+def test_release_failure_does_not_block_main_publication(
     tmp_path: Path,
 ) -> None:
     source, bare, base = _remote(tmp_path)
-    release = RecordingRelease(preflight_failure=RuntimeError("discovery unavailable"))
+    release = RecordingRelease(RuntimeError("discovery unavailable"))
 
     result = _coordinator(source, GitRemote(source), ChangingRefresh(), release).run(
         "run", "token"
     )
 
-    assert result.status == "failed"
-    assert result.stage == "release-preflight"
-    assert "bootstrap-release" in result.detail
-    assert _git(bare, "rev-parse", "main") == base
-    assert release.preflight_calls == 1
-    assert release.calls == []
+    assert result.status == "published"
+    assert result.stage == "release"
+    assert result.release_status == "failed"
+    assert "discovery unavailable" in result.detail
+    assert _git(bare, "rev-parse", "main") == result.published_sha
+    assert _git(bare, "rev-parse", "main") != base
+    assert len(release.calls) == 1
 
 
 @pytest.mark.parametrize(
@@ -227,7 +211,7 @@ def test_release_preflight_failure_blocks_main_and_release_writes(
         (200, "unowned release", "release ownership marker is absent"),
     ],
 )
-def test_seed_discovery_blocks_publication_without_owned_release(
+def test_seed_discovery_fails_release_after_main_publication(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     status: int,
@@ -254,16 +238,21 @@ def test_seed_discovery_blocks_publication_without_owned_release(
     coordinator.refresh = ChangingRefresh()
     result = coordinator.run("run", "token")
 
-    assert result.status == "failed"
-    assert result.stage == "release-preflight"
+    assert result.status == "published"
+    assert result.stage == "release"
     assert diagnostic in result.detail
-    assert "bootstrap-release" in result.detail
-    assert result.release_status == "not-run"
-    assert _git(bare, "rev-parse", "main") == base
-    assert requests == [("GET", f"https://api.github.com{RELEASE_PATH}")]
+    if status == 404:
+        assert "bootstrap-release" in result.detail
+    assert result.release_status == "failed"
+    assert _git(bare, "rev-parse", "main") == result.published_sha
+    assert _git(bare, "rev-parse", "main") != base
+    assert requests == [
+        ("GET", f"https://api.github.com{RELEASE_PATH}"),
+        ("GET", f"https://api.github.com{RELEASE_PATH}"),
+    ]
 
 
-def test_release_uses_verified_bytes_after_successful_checkout_is_removed(
+def test_release_uses_captured_verified_bytes_from_workspace(
     tmp_path: Path,
 ) -> None:
     source, _, _ = _remote(tmp_path)
@@ -317,11 +306,6 @@ def test_verified_noop_repairs_release_assets_through_real_synchronizer(
     remote = ControlledReleaseRemote(document)
 
     class RealRelease:
-        def preflight(self) -> None:
-            from scripts.nightly_release import parse_owned_release
-
-            parse_owned_release(remote.discover())
-
         def synchronize(self, single: bytes, dual: bytes, source_commit: str):
             return synchronize_release(remote, single, dual, source_commit)
 
@@ -338,6 +322,46 @@ def test_verified_noop_repairs_release_assets_through_real_synchronizer(
     }
     assert [call[0] for call in remote.calls].count("upload") == 2
     assert result.base_sha == base
+
+
+def test_failed_release_is_repaired_by_later_fresh_noop_without_extra_revision(
+    tmp_path: Path,
+) -> None:
+    from scripts.nightly_release import ReleaseError
+    from scripts.nightly_release_sync import synchronize_release
+    from tests.test_nightly_release import ControlledReleaseRemote
+    from tests.test_nightly_release import release as seed
+
+    source, bare, base = _remote(tmp_path)
+    remote = ControlledReleaseRemote(seed())
+    remote.fail["upload"] = ReleaseError("upload denied")
+
+    class RealRelease:
+        def synchronize(self, single: bytes, dual: bytes, source_commit: str):
+            return synchronize_release(remote, single, dual, source_commit)
+
+    first = _coordinator(
+        source, GitRemote(source), ChangingRefresh(), RealRelease()
+    ).run("run-1", "token")
+
+    assert first.status == "published"
+    assert first.release_status == "failed"
+    assert first.pending_revision == 1
+    assert _git(bare, "rev-list", "--count", f"{base}..main") == "1"
+    assert remote.update_count == 1
+
+    remote.fail.clear()
+    second = _coordinator(
+        source, GitRemote(source), ChangingRefresh(change=None), RealRelease()
+    ).run("run-2", "token")
+
+    assert second.status == "no-op"
+    assert second.release_status == "success"
+    assert second.release_revision == 1
+    assert second.base_sha == first.published_sha
+    assert remote.document["name"] == "omnipack revision 1"
+    assert remote.update_count == 2
+    assert _git(bare, "rev-list", "--count", f"{base}..main") == "1"
 
 
 def test_release_failure_preserves_confirmed_main_sha(tmp_path: Path) -> None:
@@ -449,7 +473,7 @@ class AdvancingRemote:
         delegate: GitRemote,
         advance: Callable[[], None],
         *,
-        advance_on: tuple[int, ...] = (2,),
+        advance_on: tuple[int, ...] = (1,),
     ) -> None:
         self.delegate = delegate
         self.advance = advance
@@ -487,7 +511,7 @@ def _advance(seed: Path, bare: Path, marker: str) -> str:
     return _git(seed, "rev-parse", "HEAD")
 
 
-def test_main_advancement_discards_candidate_and_runs_fresh_attempt(
+def test_main_advancement_fails_without_another_refresh_or_push(
     tmp_path: Path,
 ) -> None:
     source, bare, base = _remote(tmp_path)
@@ -499,15 +523,14 @@ def test_main_advancement_discards_candidate_and_runs_fresh_attempt(
 
     result = _coordinator(source, remote, refresh).run("run", "token")
 
-    assert result.status == "published", result
-    assert refresh.bases == [base, newer[0]]
-    assert len(result.attempts) == 2
-    assert result.attempts[0].build_report is not None
-    assert result.attempts[0].verify_report is not None
-    assert all(not root.exists() for root in refresh.roots)
+    assert result.status == "failed"
+    assert result.stage == "concurrency"
+    assert refresh.bases == [base]
+    assert len(result.attempts) == 1
+    assert _git(bare, "rev-parse", "main") == newer[0]
 
 
-def test_release_uses_only_successful_retry_pair(tmp_path: Path) -> None:
+def test_main_advancement_performs_no_release_write(tmp_path: Path) -> None:
     source, bare, base = _remote(tmp_path)
     newer: list[str] = []
     release = RecordingRelease()
@@ -519,67 +542,12 @@ def test_release_uses_only_successful_retry_pair(tmp_path: Path) -> None:
         "run", "token"
     )
 
+    assert result.status == "failed"
     assert base != newer[0]
-    assert len(release.calls) == 1
-    single, dual, source_commit = release.calls[0]
-    assert single == f"candidate:{newer[0]}\n".encode()
-    assert dual == b"base:dist/dual-screen.json\n"
-    assert source_commit == result.published_sha
+    assert release.calls == []
 
 
-def test_fresh_attempt_preserves_new_base_readme_around_generated_catalog(
-    tmp_path: Path,
-) -> None:
-    from omnipack.catalog import replace_catalog, split_catalog
-
-    source, bare, base = _remote(tmp_path)
-    newer: list[str] = []
-
-    def advance_readme() -> None:
-        _git(source, "fetch", "-q", "origin", "main")
-        _git(source, "checkout", "-q", "-B", "advance-readme", "origin/main")
-        readme = source / "README.md"
-        readme.write_bytes(readme.read_bytes().replace(b"guide", b"updated guide"))
-        _git(source, "add", "README.md")
-        _git(source, "commit", "-qm", "update guide")
-        _git(source, "push", "-q", str(bare), "HEAD:main")
-        newer.append(_git(source, "rev-parse", "HEAD"))
-
-    class CatalogRefresh(ChangingRefresh):
-        def __init__(self) -> None:
-            super().__init__(change=None)
-
-        def run(self, root: Path, base_sha: str) -> RefreshResult:
-            readme = root / "README.md"
-            readme.write_bytes(
-                replace_catalog(readme.read_bytes(), f"catalog:{base_sha}\n".encode())
-            )
-            return super().run(root, base_sha)
-
-    refresh = CatalogRefresh()
-    remote = AdvancingRemote(GitRemote(source), advance_readme)
-
-    result = _coordinator(source, remote, refresh).run("run", "token")
-
-    assert result.status == "published"
-    assert refresh.bases == [base, newer[0]]
-    published = subprocess.run(
-        ["git", "show", "main:README.md"],
-        cwd=bare,
-        check=True,
-        capture_output=True,
-    ).stdout
-    prefix, interior, suffix = split_catalog(published)
-    assert b"updated guide" in prefix
-    assert interior == f"catalog:{newer[0]}\n".encode()
-    assert suffix.endswith(b"credits\r\n")
-    assert (
-        _git(bare, "diff-tree", "--no-commit-id", "--name-only", "-r", "main")
-        == "README.md"
-    )
-
-
-def test_noop_rechecks_advanced_main_with_a_fresh_attempt(tmp_path: Path) -> None:
+def test_noop_rejects_advanced_main_without_another_refresh(tmp_path: Path) -> None:
     source, bare, base = _remote(tmp_path)
     newer: list[str] = []
     remote = AdvancingRemote(
@@ -589,28 +557,11 @@ def test_noop_rechecks_advanced_main_with_a_fresh_attempt(tmp_path: Path) -> Non
 
     result = _coordinator(source, remote, refresh).run("run", "token")
 
-    assert result.status == "no-op"
-    assert refresh.bases == [base, newer[0]]
-
-
-def test_second_advancement_exhausts_attempt_budget(tmp_path: Path) -> None:
-    source, bare, _ = _remote(tmp_path)
-    count = 0
-
-    def advance() -> None:
-        nonlocal count
-        count += 1
-        _advance(source, bare, f"newer-{count}")
-
-    result = _coordinator(
-        source,
-        AdvancingRemote(GitRemote(source), advance, advance_on=(2, 3)),
-        ChangingRefresh(),
-    ).run("run", "token")
-
     assert result.status == "failed"
     assert result.stage == "concurrency"
-    assert len(result.attempts) == 2
+    assert refresh.bases == [base]
+    assert len(result.attempts) == 1
+    assert _git(bare, "rev-parse", "main") == newer[0]
 
 
 class PushOutcomeRemote:
@@ -656,6 +607,42 @@ def test_lost_push_ack_is_reconciled_by_remote_ancestry(tmp_path: Path) -> None:
     assert result.status == "published"
 
 
+def test_remote_ancestry_fetches_complete_history_from_shallow_checkout(
+    tmp_path: Path,
+) -> None:
+    class ShallowGit:
+        def __init__(self) -> None:
+            self.calls: list[tuple[str, ...]] = []
+
+        def run(self, command, cwd, env=None):
+            self.calls.append(command)
+            if command == ("git", "rev-parse", "--is-shallow-repository"):
+                return CommandResult(0, "true\n", "")
+            return CommandResult(0, "", "")
+
+    runner = ShallowGit()
+    remote = GitRemote(tmp_path, runner=runner)
+
+    assert remote.main_contains(tmp_path, "a" * 40) is True
+    assert runner.calls[1] == (
+        "git",
+        "fetch",
+        "--quiet",
+        "--unshallow",
+        "origin",
+        "refs/heads/main:refs/remotes/origin/main",
+    )
+
+
+def test_unreadable_shallow_state_does_not_infer_commit_absence(tmp_path: Path) -> None:
+    class BrokenGit:
+        def run(self, command, cwd, env=None):
+            return CommandResult(1, "", "cannot inspect repository")
+
+    with pytest.raises(OSError, match="repository history"):
+        GitRemote(tmp_path, runner=BrokenGit()).main_contains(tmp_path, "a" * 40)
+
+
 def test_unchanged_rejected_push_fails_without_retry(tmp_path: Path) -> None:
     source, _, _ = _remote(tmp_path)
     result = _coordinator(
@@ -668,7 +655,7 @@ def test_unchanged_rejected_push_fails_without_retry(tmp_path: Path) -> None:
     assert len(result.attempts) == 1
 
 
-def test_advanced_rejected_push_uses_remaining_fresh_attempt(tmp_path: Path) -> None:
+def test_advanced_rejected_push_fails_without_retry(tmp_path: Path) -> None:
     source, bare, _ = _remote(tmp_path)
     delegate = GitRemote(source)
     calls = 0
@@ -685,8 +672,10 @@ def test_advanced_rejected_push_uses_remaining_fresh_attempt(tmp_path: Path) -> 
     refresh = ChangingRefresh()
     result = _coordinator(source, RejectOnce(delegate), refresh).run("run", "token")
 
-    assert result.status == "published"
-    assert len(refresh.bases) == 2
+    assert result.status == "failed"
+    assert result.stage == "push"
+    assert len(refresh.bases) == 1
+    assert calls == 1
 
 
 def test_unreadable_remote_after_rejected_push_is_uncertain(tmp_path: Path) -> None:
@@ -701,115 +690,6 @@ def test_unreadable_remote_after_rejected_push_is_uncertain(tmp_path: Path) -> N
     assert result.published_sha is None
     assert result.attempts[-1].candidate_sha is not None
     assert "secret-token" not in result.detail
-
-
-@pytest.mark.parametrize("defect", [None, "verifier", "inputs", "schema"])
-def test_retry_validates_evidence_with_selected_revision_runtime(
-    tmp_path: Path, defect: str | None
-) -> None:
-    from omnipack.verify import VERIFIER_VERSION
-
-    next_version = "test-next-verifier"
-    source, bare, _ = _remote(tmp_path)
-    project = Path(__file__).resolve().parents[1]
-    for directory in ("src", "scripts"):
-        shutil.copytree(
-            project / directory,
-            source / directory,
-            ignore=shutil.ignore_patterns("__pycache__"),
-        )
-    _git(source, "add", "src", "scripts")
-    _git(source, "commit", "-qm", "add runtime")
-    _git(source, "push", "-q", str(bare), "HEAD:main")
-    base = _git(source, "rev-parse", "HEAD")
-    newer: list[str] = []
-
-    def advance() -> None:
-        verify = source / "src/omnipack/verify.py"
-        verify.write_text(
-            verify.read_text()
-            .replace(
-                f'VERIFIER_VERSION = "{VERIFIER_VERSION}"',
-                f'VERIFIER_VERSION = "{next_version}"',
-            )
-            .replace("SCHEMA_VERSION = 2", "SCHEMA_VERSION = 3")
-            .replace('Path("config/settings.json")', 'Path("config/new-settings.json")')
-        )
-        (source / "config/new-settings.json").write_text("new verifier input\n")
-        report = source / "src/omnipack/report.py"
-        report.write_text(report.read_text().replace("schema != 2:", "schema != 3:"))
-        _git(source, "add", "src", "config/new-settings.json")
-        _git(source, "commit", "-qm", "update verification contract")
-        _git(source, "push", "-q", str(bare), "HEAD:main")
-        newer.append(_git(source, "rev-parse", "HEAD"))
-
-    class SelectedRuntimeProcess:
-        def __init__(self) -> None:
-            self.commands: list[tuple[str, ...]] = []
-
-        def run(self, command: Sequence[str], cwd: Path) -> CommandResult:
-            self.commands.append(tuple(command))
-            if tuple(command[-2:]) == ("pack", "build"):
-                (cwd / ALLOWED_PATHS[0]).write_text("candidate\n")
-            if tuple(command[-2:]) == ("pack", "verify"):
-                code = (
-                    "import json\nfrom pathlib import Path\n"
-                    "from datetime import UTC, datetime\n"
-                    + inspect.getsource(_evidence)
-                    + "\n_evidence(Path.cwd())\n"
-                )
-                completed = self.selected(cwd, ("-c", code))
-                if newer and defect is not None:
-                    path = cwd / ".build/verify.json"
-                    report = json.loads(path.read_text())
-                    if defect == "verifier":
-                        report["verifier"]["version"] = VERIFIER_VERSION
-                    elif defect == "inputs":
-                        report["inputs"]["settings"] = {"state": "missing"}
-                    else:
-                        report["schemaVersion"] = 1
-                    path.write_text(json.dumps(report))
-                return completed
-            if "scripts.nightly_publish" in command:
-                return self.selected(cwd, tuple(command[4:]))
-            return CommandResult(0, "", "")
-
-        def selected(self, root: Path, args: tuple[str, ...]) -> CommandResult:
-            completed = subprocess.run(
-                [sys.executable, *args],
-                cwd=root,
-                env={**os.environ, "PYTHONPATH": str(root / "src")},
-                capture_output=True,
-                text=True,
-                check=False,
-            )
-            return CommandResult(
-                completed.returncode, completed.stdout, completed.stderr
-            )
-
-    process = SelectedRuntimeProcess()
-    coordinator = PublicationCoordinator(
-        source,
-        RefreshOrchestrator(process),
-        AdvancingRemote(GitRemote(source), advance),
-        RecordingRelease(),
-    )
-    result = coordinator.run("run", "token")
-
-    assert result.status == ("published" if defect is None else "failed"), result
-    assert len(result.attempts) == 2
-    assert [attempt.base_sha for attempt in result.attempts] == [base, newer[0]]
-    reports = [
-        json.loads(attempt.verify_report or b"{}") for attempt in result.attempts
-    ]
-    assert reports[0]["verifier"]["version"] == VERIFIER_VERSION
-    if defect is None:
-        assert reports[1]["verifier"]["version"] == next_version
-        assert reports[1]["schemaVersion"] == 3
-        assert reports[1]["inputs"]["settings"]["state"] == "present"
-    else:
-        assert result.published_sha is None
-        assert _git(bare, "rev-parse", "main") == newer[0]
 
 
 @pytest.mark.parametrize("byte_change", [False, True])

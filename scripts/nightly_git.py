@@ -38,8 +38,6 @@ class RemoteBoundary(Protocol):
 
 
 class ReleaseBoundary(Protocol):
-    def preflight(self) -> None: ...
-
     def synchronize(
         self, single: bytes, dual: bytes, source_commit: str
     ) -> SyncResult: ...
@@ -115,11 +113,16 @@ class GitRemote:
         )
 
     def main_contains(self, root: Path, sha: str) -> bool:
+        shallow = self.runner.run(("git", "rev-parse", "--is-shallow-repository"), root)
+        if shallow.returncode != 0 or shallow.stdout.strip() not in ("true", "false"):
+            raise OSError("unable to inspect repository history")
+        options = ("--unshallow",) if shallow.stdout.strip() == "true" else ()
         fetched = self.runner.run(
             (
                 "git",
                 "fetch",
                 "--quiet",
+                *options,
                 "origin",
                 "refs/heads/main:refs/remotes/origin/main",
             ),
@@ -210,10 +213,13 @@ class PublicationCoordinator:
                 source_commit,
             )
         except Exception as error:  # noqa: BLE001 - release is an external boundary
+            detail = str(error)
+            if "release discovery failed with status 404" in detail:
+                detail = f"{detail}; run bootstrap-release"
             return replace(
                 result,
                 stage="release",
-                detail=str(error),
+                detail=detail,
                 release_status="failed",
                 pending_revision=getattr(error, "pending_revision", None),
                 pack_snapshots=None,
@@ -257,27 +263,6 @@ class PublicationCoordinator:
             stage = refreshed.stages[-1].stage if refreshed.stages else "refresh"
             return PublicationResult(
                 "failed", tuple(records), base_sha, None, stage, "refresh failed"
-            )
-
-        if self.release is None:
-            return PublicationResult(
-                "failed",
-                tuple(records),
-                base_sha,
-                None,
-                "release-preflight",
-                "owned rolling release seed is unavailable; run bootstrap-release",
-            )
-        try:
-            self.release.preflight()
-        except Exception as error:  # noqa: BLE001 - release is external
-            return PublicationResult(
-                "failed",
-                tuple(records),
-                base_sha,
-                None,
-                "release-preflight",
-                f"owned rolling release seed is unavailable: {error}; run bootstrap-release",
             )
 
         try:
@@ -348,7 +333,6 @@ class PublicationCoordinator:
                     "complete",
                     pack_snapshots=_pack_snapshots(refreshed.candidate),
                 )
-            self.remote.fetch_main()
         except OSError:
             return PublicationResult(
                 "uncertain",
