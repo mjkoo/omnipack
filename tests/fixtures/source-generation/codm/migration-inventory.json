@@ -1,0 +1,40 @@
+{
+  "capturedReadme": "tests/fixtures/codm-readme.md",
+  "capturedPackageIdState": "config/package-ids.json",
+  "baselineOutputs": [
+    {"variant":"single","file":"single-screen.json","appCount":88,"sha256":"fe4fcc44de39718ae2de87e874afd7393a6719467ebdecbfd981541b71154e08"},
+    {"variant":"dual","file":"dual-screen.json","appCount":111,"sha256":"8d81c9ddbf7ac1d0ac7016662abcfec40da6d892e8dec49db46e44e71ddfe7f7"}
+  ],
+  "familyWinners": {
+    "app:ctr": {"single":"github.com/simon358/ctr-native-android","dual":"github.com/igawa6/ctr-native-android"},
+    "app:dusklight": {"single":"github.com/twilitrealm/dusklight","dual":"github.com/igawa6/dusklight"},
+    "app:openmw": {"single":"github.com/xyzz/openmw-android","dual":"github.com/josh-daniels/openmw-ds"},
+    "app:super-metroid": {"single":"github.com/raekwon1603/super_metroid-android","dual":"github.com/raekwon1603/retroarch"}
+  },
+  "projects": [
+    {"url":"github.com/samyost1/zelda3-android","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["single","dual"],"packageIdCache":null},
+    {"url":"github.com/samyost1/tmc-android","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["single","dual"],"packageIdCache":null},
+    {"url":"github.com/igawa6/dusklight","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["dual"],"packageIdCache":null},
+    {"url":"github.com/josh-daniels/openmw-ds","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["dual"],"packageIdCache":null},
+    {"url":"github.com/andreyvelsk/skyrimwebmonitor","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.andreyvelsk.skyrimwebmonitor","releaseId":383669973}},
+    {"url":"github.com/aureliob/banjorecomp-android","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["single","dual"],"packageIdCache":null},
+    {"url":"github.com/igawa6/ctr-native-android","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.ctrnative","releaseId":379343755}},
+    {"url":"github.com/rosbean/balatro-dualscreen","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.balatro.dualscreen","releaseId":363616301}},
+    {"url":"github.com/raekwon1603/super_metroid-android","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["single","dual"],"packageIdCache":null},
+    {"url":"github.com/aabrole/huntersrecomp","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.thor.mph","releaseId":383420114}},
+    {"url":"github.com/averageconsumer/kanto-gear","status":"unresolved-unadmitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":null},
+    {"url":"github.com/goldoire/pokeemerald-dualscreen","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.pokeemerald.dualscreen","releaseId":372874446}},
+    {"url":"github.com/castdrian/showdown-ds","status":"unresolved-unadmitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":null},
+    {"url":"github.com/exojosh/aynthorsecondscreen","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.exojosh.minecraftsecondscreen","releaseId":367562775}},
+    {"url":"github.com/igawa6/harvestmoon64recomp","status":"higher-source-dual-coverage","higherSource":"bboi","higherSourceEligibility":["single","dual"],"packageIdCache":null},
+    {"url":"github.com/igawa6/dualsouls","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"igawa6.dualsouls","releaseId":375252804}},
+    {"url":"github.com/jakobkhansen/silksongandroid","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.jakobkhansen.silksong","releaseId":385854037}},
+    {"url":"github.com/enrique-paulino/dualscreendex","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.enrpau.dualscreendex","releaseId":286613173}},
+    {"url":"github.com/sofianeelhor/pkforge","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"org.pkforge.app","releaseId":383405230}},
+    {"url":"github.com/chimeragaming/fanmakepokemonmaps_android","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.chimeragaming.pokemonzmap","releaseId":384990510}},
+    {"url":"github.com/emulnk/emulnk","status":"unresolved-unadmitted","higherSource":"rjny","higherSourceEligibility":["dual"],"packageIdCache":null},
+    {"url":"github.com/stormpanda/megingiard","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.stormpanda.megingiard","releaseId":383646790}},
+    {"url":"github.com/mastercook777/heimdall-ayn-thor-assistant","status":"unresolved-unadmitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":null},
+    {"url":"github.com/cylonid/nativealphaforandroid","status":"previously-admitted","higherSource":null,"higherSourceEligibility":[],"packageIdCache":{"packageId":"com.cylonid.nativealpha","releaseId":219359266}}
+  ]
+}

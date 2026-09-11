@@ -1,0 +1,32 @@
+{
+  "settings": {},
+  "apps": [
+    {
+      "id": "com.example.fallback",
+      "url": "https://github.com/example/accepted-fallback",
+      "name": "accepted-fallback",
+      "author": "example",
+      "categories": [],
+      "additionalSettings": "{}",
+      "overrideSource": "GitHub"
+    },
+    {
+      "id": "com.example.covered",
+      "url": "https://github.com/example/covered-dual",
+      "name": "covered-dual",
+      "author": "example",
+      "categories": [],
+      "additionalSettings": "{}",
+      "overrideSource": "GitHub"
+    },
+    {
+      "id": "com.example.removed",
+      "url": "https://github.com/example/removed-project",
+      "name": "removed-project",
+      "author": "example",
+      "categories": [],
+      "additionalSettings": "{}",
+      "overrideSource": "GitHub"
+    }
+  ]
+}
