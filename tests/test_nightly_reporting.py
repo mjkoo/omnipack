@@ -159,3 +159,15 @@ def test_reused_diagnostic_directory_drops_prior_reports(tmp_path: Path) -> None
     assert not (tmp_path / BUILD_REPORT_NAME).exists()
     assert not (tmp_path / VERIFY_REPORT_NAME).exists()
     assert json.loads((tmp_path / RESULT_NAME).read_text())["run_url"] == "current-run"
+
+
+def test_diagnostic_cleanup_attempts_all_reports_before_failing(tmp_path: Path) -> None:
+    (tmp_path / BUILD_REPORT_NAME).mkdir()
+    (tmp_path / VERIFY_REPORT_NAME).write_bytes(b'{"old": true}')
+    (tmp_path / RESULT_NAME).write_bytes(b'{"old": true}')
+
+    with pytest.raises(OSError):
+        write_diagnostics(tmp_path, Publication(build_report=None), "current-run")
+
+    assert not (tmp_path / VERIFY_REPORT_NAME).exists()
+    assert not (tmp_path / RESULT_NAME).exists()

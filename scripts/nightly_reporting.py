@@ -59,8 +59,14 @@ def write_diagnostics(
 ) -> tuple[Path, ...]:
     """Write only available, explicitly named, redacted diagnostic reports."""
     output_dir.mkdir(parents=True, exist_ok=True)
+    cleanup_error: OSError | None = None
     for filename in (RESULT_NAME, BUILD_REPORT_NAME, VERIFY_REPORT_NAME):
-        (output_dir / filename).unlink(missing_ok=True)
+        try:
+            (output_dir / filename).unlink(missing_ok=True)
+        except OSError as error:
+            cleanup_error = error
+    if cleanup_error is not None:
+        raise cleanup_error
     result = {
         "status": _field(outcome, "status", "failed"),
         "stage": _field(outcome, "stage", "unknown"),
