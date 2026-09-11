@@ -139,6 +139,8 @@ def test_uses_selected_workspace_head_without_another_checkout(tmp_path: Path) -
         (ALLOWED_PATHS[0], "unstaged"),
         ("tracked.txt", "staged"),
         ("tracked.txt", "mode"),
+        (ALLOWED_PATHS[0], "opposing"),
+        ("tracked.txt", "opposing"),
     ],
 )
 def test_rejects_initial_tracked_changes_before_refresh(
@@ -150,12 +152,21 @@ def test_rejects_initial_tracked_changes_before_refresh(
         (source / relative).chmod(0o755)
     else:
         (source / relative).write_text("local modification\n")
-        if state == "staged":
+        if state in ("staged", "opposing"):
             _git(source, "add", relative)
+        if state == "opposing":
+            (source / relative).write_text(
+                _git(source, "show", f"HEAD:{relative}") + "\n"
+            )
+            assert _git(source, "diff", "HEAD", "--", relative) == ""
     refresh = ChangingRefresh()
+    release = RecordingRelease()
 
-    result = _coordinator(source, GitRemote(source), refresh).run("run", "token")
+    result = _coordinator(source, GitRemote(source), refresh, release).run(
+        "run", "token"
+    )
 
+    assert release.calls == []
     assert result.status == "failed"
     assert result.stage == "workspace"
     assert result.base_sha == base

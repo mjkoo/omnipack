@@ -6,11 +6,12 @@ from dataclasses import dataclass, replace
 from datetime import UTC, datetime
 from pathlib import Path
 
+import pytest
+
 from scripts.nightly_reporting import (
     BUILD_REPORT_NAME,
     RESULT_NAME,
     VERIFY_REPORT_NAME,
-    artifact_paths,
     log_main_confirmation,
     report_publication,
     write_diagnostics,
@@ -61,17 +62,6 @@ def test_diagnostics_are_flat_redacted_and_write_only_available_reports(
     assert "diagnostic_upload_status" not in result
     assert result["started_at"] == "2026-09-08T10:00:00+00:00"
     assert not (tmp_path / VERIFY_REPORT_NAME).exists()
-
-
-def test_artifact_selection_is_fixed_regular_file_allowlist(tmp_path: Path) -> None:
-    write_diagnostics(tmp_path, Publication(), "run", secrets=("secret-value",))
-    (tmp_path / "notes.txt").write_text("unrelated")
-    (tmp_path / VERIFY_REPORT_NAME).symlink_to(tmp_path / "notes.txt")
-
-    assert [path.name for path in artifact_paths(tmp_path)] == [
-        RESULT_NAME,
-        BUILD_REPORT_NAME,
-    ]
 
 
 def test_summary_redacts_and_escapes_source_text_as_markdown_data(
@@ -142,3 +132,19 @@ def test_invalid_report_text_is_redacted_and_json_encoded(tmp_path: Path) -> Non
 
     document = json.loads((tmp_path / BUILD_REPORT_NAME).read_text())
     assert document["text"] == "line one\n::warning::REDACTED"
+
+
+@pytest.mark.parametrize("status", ["failed", "uncertain"])
+def test_push_summary_identifies_candidate_without_claiming_publication(
+    tmp_path: Path, status: str
+) -> None:
+    outcome = replace(
+        Publication(), status=status, stage="push", candidate_sha="candidate-sha"
+    )
+
+    result = report_publication(outcome, tmp_path, "run")
+
+    assert "- Candidate SHA: candidate-sha" in result.summary
+    assert "- Published SHA: unavailable" in result.summary
+    assert f"- Result: {status}" in result.summary
+    assert result.workflow_status == "failed"

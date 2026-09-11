@@ -90,19 +90,6 @@ def write_diagnostics(
     return tuple(paths)
 
 
-def artifact_paths(output_dir: Path) -> tuple[Path, ...]:
-    """Return available regular files from the fixed diagnostic allowlist."""
-    return tuple(
-        path
-        for path in (
-            output_dir / RESULT_NAME,
-            output_dir / BUILD_REPORT_NAME,
-            output_dir / VERIFY_REPORT_NAME,
-        )
-        if _regular_file(path)
-    )
-
-
 def report_publication(
     outcome: object,
     output_dir: Path,
@@ -136,6 +123,7 @@ def publication_summary(
         "Stage": _field(outcome, "stage", "unknown"),
         "Run": run_url,
         "Base SHA": _field(outcome, "base_sha", None) or "unavailable",
+        "Candidate SHA": _field(outcome, "candidate_sha", None) or "unavailable",
         "Published SHA": _field(outcome, "published_sha", None) or "unavailable",
         "Release synchronization": _field(outcome, "release_status", "not-run"),
         "Release revision": _field(outcome, "release_revision", None) or "unavailable",
@@ -228,10 +216,6 @@ def _redact_url(value: str) -> str:
         return urlunsplit((parsed.scheme, host, parsed.path, query, parsed.fragment))
     except ValueError:
         return _CREDENTIAL.sub(lambda match: f"{match.group(1)}=REDACTED", value)
-
-
-def _regular_file(path: Path) -> bool:
-    return path.is_file() and not path.is_symlink()
 
 
 def _timestamp(value: object) -> str | None:

@@ -306,7 +306,8 @@ def _reject_unexpected_tracked_changes(root: Path) -> None:
 
 
 def require_clean_tracked_workspace(root: Path) -> None:
-    changed = _git_paths(root, "diff", "--name-only", "-z", "HEAD", "--")
+    changed = _git_paths(root, "diff", "--cached", "--name-only", "-z", "HEAD", "--")
+    changed |= _git_paths(root, "diff", "--name-only", "-z", "--")
     if changed:
         raise CandidateError(f"initial tracked changes: {', '.join(sorted(changed))}")
 

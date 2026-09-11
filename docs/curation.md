@@ -43,10 +43,12 @@ unavailable, and wait for a later successful run before treating a new revision
 as complete.
 
 Offline verification validates the complete pair, including this tracker, without
-querying releases. The publisher separately requires an owned release seed before
-main publication and reports bootstrap guidance when it is missing. Omitting the
-tracker is not a valid way to satisfy either contract. Device import, notification,
-acknowledgement, and re-import behavior still require separate device acceptance.
+querying releases. After confirmed main publication or a verified no-op, release
+synchronization requires an owned release seed. A missing seed fails that release
+stage with bootstrap guidance while preserving the successful main outcome.
+Omitting the tracker is not a valid way to satisfy either contract. Device import,
+notification, acknowledgement, and re-import behavior still require separate
+device acceptance.
 
 ## Port setup
 
