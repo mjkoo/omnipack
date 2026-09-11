@@ -67,6 +67,9 @@ def test_workflow_has_one_guarded_publisher_and_visible_diagnostic_upload() -> N
     assert "github.repository == 'mjkoo/omnipack'" in workflow
     assert "github.ref == 'refs/heads/main'" in workflow
     assert "cancel-in-progress: false" in workflow
+    assert "timeout-minutes: 60" in workflow
+    assert "ref: main" in workflow
+    assert "persist-credentials: false" in workflow
     assert "contents: write" in workflow
     assert "issues: write" not in workflow
     assert "uv sync --locked" in workflow

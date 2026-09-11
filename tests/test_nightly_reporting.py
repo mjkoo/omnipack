@@ -148,3 +148,14 @@ def test_push_summary_identifies_candidate_without_claiming_publication(
     assert "- Published SHA: unavailable" in result.summary
     assert f"- Result: {status}" in result.summary
     assert result.workflow_status == "failed"
+
+
+def test_reused_diagnostic_directory_drops_prior_reports(tmp_path: Path) -> None:
+    write_diagnostics(tmp_path, Publication(verify_report=b"{}"), "old-run")
+
+    written = write_diagnostics(tmp_path, Publication(build_report=None), "current-run")
+
+    assert [path.name for path in written] == [RESULT_NAME]
+    assert not (tmp_path / BUILD_REPORT_NAME).exists()
+    assert not (tmp_path / VERIFY_REPORT_NAME).exists()
+    assert json.loads((tmp_path / RESULT_NAME).read_text())["run_url"] == "current-run"

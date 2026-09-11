@@ -22,11 +22,12 @@ from scripts.nightly_git import (
 from scripts.nightly_publish import (
     ALLOWED_PATHS,
     CommandResult,
+    RefreshOrchestrator,
     RefreshResult,
     StageOutcome,
     validate_candidate,
 )
-from tests.test_nightly_publish import _evidence, _git, _repo
+from tests.test_nightly_publish import ControlledProcess, _evidence, _git, _repo
 
 
 class RecordingRelease:
@@ -768,3 +769,53 @@ def test_publication_uses_byte_changes_without_mode_drift(
     assert _git(bare, "rev-list", "--count", f"{base}..main") == (
         "1" if byte_change else "0"
     )
+
+
+@pytest.mark.parametrize("fresh_build_report", [False, True])
+def test_failed_build_does_not_reuse_prior_reports(
+    tmp_path: Path, fresh_build_report: bool
+) -> None:
+    source, _, _ = _remote(tmp_path)
+    _evidence(source)
+    build_report = source / ".build/report.json"
+    build_report.write_bytes(b'{"old": true}')
+    process = ControlledProcess(source, fail_at=1)
+    if fresh_build_report:
+
+        def write_current_report() -> None:
+            build_report.write_bytes(b'{"current": true}')
+
+        process.on_command[1] = write_current_report
+    release = RecordingRelease()
+
+    result = PublicationCoordinator(
+        source, RefreshOrchestrator(process), GitRemote(source), release
+    ).run("run", "")
+
+    assert result.status == "failed"
+    assert result.stage == "build"
+    assert len(process.commands) == 1
+    assert result.verify_report is None
+    assert result.build_report == (b'{"current": true}' if fresh_build_report else None)
+    assert not release.calls
+
+
+@pytest.mark.parametrize("blocked_report", ["report.json", "verify.json"])
+def test_report_reset_failure_stops_before_refresh(
+    tmp_path: Path, blocked_report: str
+) -> None:
+    source, _, _ = _remote(tmp_path)
+    (source / ".build" / blocked_report).mkdir(parents=True)
+    refresh = ChangingRefresh()
+    release = RecordingRelease()
+
+    result = PublicationCoordinator(source, refresh, GitRemote(source), release).run(
+        "run", ""
+    )
+
+    assert result.status == "failed"
+    assert result.stage == "report-reset"
+    assert result.build_report is None
+    assert result.verify_report is None
+    assert not refresh.roots
+    assert not release.calls

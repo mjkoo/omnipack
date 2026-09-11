@@ -249,6 +249,19 @@ class PublicationCoordinator:
 
         started_at = self.now()
         root = self.root
+        try:
+            for relative in (".build/report.json", ".build/verify.json"):
+                (root / relative).unlink(missing_ok=True)
+        except OSError as error:
+            return PublicationResult(
+                "failed",
+                base_sha,
+                None,
+                "report-reset",
+                str(error),
+                started_at=started_at,
+                finished_at=self.now(),
+            )
         refreshed = self.refresh.run(root, base_sha)
         finished_at = self.now()
         details: _RunDetails = {

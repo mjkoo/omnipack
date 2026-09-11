@@ -245,6 +245,12 @@ repository-setting changes.
 - **THEN** Actions shows the failed setup step and logs, with no issue write or fabricated candidate evidence
 - **AND** missing diagnostic files do not require a recovery helper
 
+#### Scenario: Reused workspace fails before verification
+
+- **WHEN** a checkout or diagnostic directory contains reports from a prior run and the current build fails before verification
+- **THEN** only reports produced by the current invocation are offered as diagnostic artifacts
+- **AND** prior verification evidence is not reported as available for the current candidate
+
 #### Scenario: Release fails after a confirmed push
 
 - **WHEN** release synchronization fails after main publication was logged
