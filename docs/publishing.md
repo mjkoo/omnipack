@@ -25,10 +25,11 @@ The structural gate requires complete, successful, fresh evidence matching the
 candidate inputs and verifier identity. Evidence validation runs in the selected
 revision's locked runtime, including its identity, input paths, and report schema. Development CI owns formatting,
 lint, types, packaging and the full suite; nightly does not repeat those checks
-or verify committed packs before building. Existing warnings and generated-source
-soft failures retain their current policy. Verification makes no network requests.
-Building retains source fetching and APK package-ID discovery. A structurally
-invalid selected build blocks publication without choosing another project.
+or verify committed packs before building. Existing source warnings retain their
+current policy. Verification makes no network requests. Building fetches its
+ordinary pack sources but reads the accepted codm catalog without fetching its
+README, discovering APKs, or writing resolution state. A structurally invalid
+selected build blocks publication without choosing another project.
 Unavailable app release metadata after a successful build does not add a
 publication gate or trigger reselection.
 
@@ -37,7 +38,6 @@ The only publishable paths are:
 - `dist/single-screen.json`
 - `dist/dual-screen.json`
 - `README.md` (generated catalog interior only)
-- `config/package-ids.json`
 
 README must contain exactly one valid standalone catalog marker pair. Its prefix
 and suffix, including both marker lines, must match the selected base revision
@@ -47,8 +47,8 @@ README changes.
 
 The publisher checks verified bytes against the staged content and resulting
 commit. Missing files, symlink replacements, unrelated tracked modifications,
-and changed verified bytes reject the candidate. Any changed allowed bytes,
-including a cache-only or catalog-only change, produce one bot commit with subject
+and changed verified bytes reject the candidate. Any changed allowed bytes
+produce one bot commit with subject
 `chore(dist): nightly rebuild YYYY-MM-DD`. The date is UTC; the body identifies
 the run URL and base SHA. Reports and transient caches stay out of commits.
 A byte-identical refresh is a successful no-op and creates no commit, including
@@ -69,7 +69,7 @@ result is reported as **uncertain**, without another blind push or a claim of no
 After confirmed main publication or a verified no-op, the run synchronizes `single-screen.json` and `dual-screen.json` to the owned prerelease
 at tag `continuous`. The release title is `omnipack revision N`. Both variants
 share that revision, and only a change to either JSON increments it. README-only
-and package-id-cache-only changes do not advertise a pack update. The stable
+changes do not advertise a pack update. The stable
 release downloads are:
 
 - <https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json>
@@ -143,7 +143,7 @@ schedule delays and dropped queued jobs in its
 Use Actions step status, logs, summaries and available reports to investigate a
 failed run. Main confirmation and its SHA are logged and flushed before release
 work starts. A release or reporting failure cannot erase that earlier confirmation.
-A failed refresh does not publish its locally updated package-id cache.
+A failed refresh does not publish partial pack or README output.
 
 Automation no longer creates, updates or closes issues. Existing issues are left
 untouched; any migration is a separate maintainer operation. Historical records
@@ -221,3 +221,7 @@ manually; removing it from a later import does not guarantee device deletion.
 See [nightly publication validation](nightly-publication-validation.md) for current
 implementation checks
 and the distinction between controlled tests and operational acceptance.
+
+The separate [reviewed source workflow](source-generation.md) owns codm README
+discovery, APK identity resolution, its source-only branch and pull request, and
+the additional pull-request permission. Nightly cannot publish those source files.

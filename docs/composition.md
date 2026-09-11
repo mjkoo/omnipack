@@ -58,8 +58,9 @@ exclusions. A family exclusion does not disable a contradictory pin silently.
 RJNY target flags determine eligibility; only `excludeFromExport` prevents policy
 from restoring eligibility. BBoi's standard records normally serve both targets,
 while dual records are dual-only and preferred. Both asset origins remain present.
-Extras default to both targets and ordinary preference. Generated entries are
-dual-only and preferred. Higher-source policy is applied before codm URL coverage,
+Extras default to both targets and ordinary preference. Committed codm catalog
+entries retain the `codm-generated` origin and are dual-only and preferred.
+Higher-source policy is applied before codm URL coverage,
 so a single-only candidate does not suppress generation for dual. Merely appearing
 in codm does not promote an ordinary higher-source candidate.
 

@@ -7,18 +7,18 @@ check-all` runs everything CI runs.
 ## Build the packs
 
 Run `uv run pack build` from the repository root. It fetches the configured
-upstreams, updates resolved package ids in `config/package-ids.json`, and
-writes both import files to `dist/` and regenerates the README catalog after
-validating their serialized bytes offline. Keep exactly one standalone pair of
+pack sources, including the committed codm catalog, and writes both import files
+to `dist/` and regenerates the README catalog after validating their serialized
+bytes offline. It does not fetch the codm README or release APKs and does not
+update `config/package-ids.json`. Keep exactly one standalone pair of
 catalog markers in README; the build preserves all bytes outside them. An
 optional `GITHUB_TOKEN` authenticates requests to `api.github.com` through
 `config/http.json`.
 
-The JSON diagnostics are in `.build/report.json`, including generated and
-unresolved projects, family selections and alternatives, selection reasons,
-identity transitions, exclusions, and changes from the previous output. A
-failed build returns a nonzero status and preserves the previous packs and README;
-successfully resolved ids remain cached for later runs.
+The JSON diagnostics are in `.build/report.json`, including family selections
+and alternatives, selection reasons, identity transitions, exclusions, and
+changes from the previous output. A failed build returns a nonzero status and
+preserves the previous packs and README.
 
 ## Verify and inspect
 
@@ -44,6 +44,11 @@ Old verification report schemas require regeneration with `uv run pack verify`.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
+
+See [source generation](source-generation.md) for editing reviewed project
+rules, generating isolated candidates, accepting source data, and operating the
+separate source proposal workflow. See [source generation validation](source-generation-validation.md)
+for the dated controlled, live-build, and device evidence.
 
 See [live validation](validation.md) for the observed import results.
 

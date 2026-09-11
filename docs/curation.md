@@ -159,10 +159,13 @@ still show a one-time update after re-import; external installation may not
 update Obtainium's recorded source version. Replacing an asset under an unchanged
 source version is not detectable through source-version comparison.
 
-Automated source resolution, effective-version format lint and upstream-health
-publication gating are retired. Structural checks retain setting types without
-evaluating patterns, versions or release availability. Investigate changed source
-behavior in Obtainium and record new observations with their dates and provenance.
+Generic whole-pack live resolution, effective-version format lint and
+upstream-health publication gating are retired. The explicit codm source
+generator still resolves reviewed APK projects before their catalog changes are
+accepted; normal builds consume that committed catalog. Structural checks retain
+setting types without evaluating patterns, versions or release availability.
+Investigate changed source behavior in Obtainium and record new observations
+with their dates and provenance.
 
 Policies take effect on the next import. Rollback restores the previous extras
 and overlay and rebuilds both files; publication is a separate maintainer action.

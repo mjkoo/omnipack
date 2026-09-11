@@ -18,7 +18,9 @@ Run commands from the repository root:
 
 The retired `--live` and `--probe-assets` arguments fail before verification starts
 and leave existing evidence untouched. Replace those invocations with `pack verify`.
-There is no replacement automatic app-resolution or asset-probing command.
+There is no generic whole-pack replacement. The separate `pack generate-source
+codm` operation resolves only the explicitly configured codm source candidate;
+it does not extend structural verification or change committed files.
 
 Standalone verification writes schema 2 evidence to `.build/verify.json`, separately
 from the build report. It first writes an incomplete running record and atomically
@@ -35,8 +37,8 @@ exits zero only for a complete run without errors; report persistence failure
 also causes a nonzero exit and a stderr diagnostic.
 
 Verification never rebuilds or changes the packs, README, configuration,
-package-ID cache or `.build/report.json`. Building still performs source ingestion
-and APK package-ID discovery using the existing network failure policy.
+package-ID state or `.build/report.json`. Building performs source ingestion but
+does not discover package IDs; codm discovery belongs to source generation.
 
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. Older verification schemas require regeneration with
