@@ -67,11 +67,22 @@ castdrian/showdown-ds and mastercook777/Heimdall-AYN-Thor-Assistant, and classif
 AverageConsumer/kanto-gear as track-only. Showdown and Heimdall SHALL select
 their versioned APK filenames and retain prerelease suffixes in version
 extraction. Heimdall SHALL exclude the mutable debug-latest release channel.
+The initial APK rules SHALL set the supported consumer setting
+`fallbackToOlderReleases` to true for Heimdall and false for Showdown and
+EmuLnk. Unconfigured projects SHALL preserve their existing default for that
+setting. Consumer fallback SHALL NOT change which release the generator
+resolves.
 
 #### Scenario: Only prereleases exist
 
 - **WHEN** a project explicitly enables prereleases and publishes a matching prerelease APK
 - **THEN** generation can resolve it through the releases list despite a 404 from the stable latest endpoint, and its exported settings permit Obtainium to find that release
+
+#### Scenario: Heimdall client skips debug and falls back for asset availability
+
+- **WHEN** a newer Heimdall release title is `debug-latest`, the newest matching versioned release has no eligible APK, and an older matching versioned release has an eligible APK
+- **THEN** the generated entry's title filter excludes the debug release and its enabled `fallbackToOlderReleases` setting permits Obtainium to use the older matching release
+- **AND** Showdown and EmuLnk retain explicit disabled fallback settings
 
 #### Scenario: An unconfigured project has no stable APK
 
@@ -167,6 +178,12 @@ follow its separate metadata-only contract.
 
 - **WHEN** an APK project's selected release contains only non-APK assets
 - **THEN** resolution fails with an explicit unsupported-asset diagnostic
+
+#### Scenario: Generator remains strict when Heimdall consumer fallback is enabled
+
+- **WHEN** Heimdall's newest matching release has no eligible APK and an older matching release is usable
+- **THEN** generation fails or uses permitted accepted-entry fallback without inspecting the older release as a new successful resolution
+- **AND** the generated consumer setting does not broaden generator release selection
 
 #### Scenario: Explicit asset filter selects the supported APK family
 

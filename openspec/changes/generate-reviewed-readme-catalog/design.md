@@ -98,7 +98,8 @@ repository URL. An absent rule means an APK project with the existing stable,
 all-direct-APK discovery behavior. A rule declares `kind: apk` or
 `kind: track-only`, an optional display `name`, and an `additionalSettings`
 object limited to `includePrereleases`, `filterReleaseTitlesByRegEx`,
-`apkFilterRegEx`, `versionExtractionRegEx` and `matchGroupToUse`. Track-only
+`apkFilterRegEx`, `versionExtractionRegEx`, `matchGroupToUse` and
+`fallbackToOlderReleases`. Track-only
 rules additionally require a stable numeric-string `trackerId`, `rationale`
 and an `installation` instruction naming the host and its canonical URL. APK rules
 cannot supply an ID; identities still come from manifests.
@@ -114,9 +115,9 @@ Use these initial explicit rules:
 
 | Project | Treatment |
 | --- | --- |
-| `github.com/emulnk/emulnk` | APK, `includePrereleases: true`; preserve the higher-source entry at ingestion |
-| `github.com/castdrian/showdown-ds` | APK, prereleases enabled, name `Showdown!`, asset filter `^showdown-v[0-9].*\.apk$` |
-| `github.com/mastercook777/heimdall-ayn-thor-assistant` | APK, prereleases enabled, name `Heimdall`, release-title filter `^Heimdall v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?$`, asset filter `^heimdall-v[0-9].*\.apk$` |
+| `github.com/emulnk/emulnk` | APK, `includePrereleases: true`, `fallbackToOlderReleases: false`; preserve the higher-source entry at ingestion |
+| `github.com/castdrian/showdown-ds` | APK, prereleases enabled, name `Showdown!`, asset filter `^showdown-v[0-9].*\.apk$`, `fallbackToOlderReleases: false` |
+| `github.com/mastercook777/heimdall-ayn-thor-assistant` | APK, prereleases enabled, name `Heimdall`, release-title filter `^Heimdall v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?$`, asset filter `^heimdall-v[0-9].*\.apk$`, `fallbackToOlderReleases: true` |
 | `github.com/averageconsumer/kanto-gear` | Track-only, stable releases, name `Kanto Gear (mod updates)`, tracker ID `1845280017`; install/update through official `https://github.com/bryanthaboi/gen1recomp` using its Mod Index or ZIP import |
 
 For Showdown and Heimdall, source-version extraction `^v?(.+)$` with group `1`
@@ -125,13 +126,17 @@ above are regression evidence, not fixed versions or IDs supplied to discovery.
 Kanto's tracker ID is an explicitly assigned resource identity, not an Android
 package ID; it stays fixed across title, settings and release changes.
 
-Emit the effective discovery settings into generated entries. Keep
-`verifyLatestTag: false` and `sortMethodChoice: date`. For explicit APK rules,
-set `fallbackToOlderReleases: false` so Obtainium follows the declared release
-selection without hiding a broken newest APK behind an older release. Preserve
-unconfigured legacy entries' existing defaults, including their consumer-side
-older-release fallback setting, for byte compatibility. This does not add
-older-release discovery to the generator. Explicitly classified APK entries set
+Emit the effective discovery settings into generated entries. APK rules support
+`fallbackToOlderReleases` as an explicit consumer setting. Keep
+`verifyLatestTag: false` and `sortMethodChoice: date`; initially enable
+`fallbackToOlderReleases` only for Heimdall and explicitly disable it for
+Showdown and EmuLnk. Preserve unconfigured legacy entries' existing defaults,
+including their consumer-side older-release fallback setting, for byte
+compatibility. This setting lets Obtainium skip a matching release with no
+eligible APK and use an older matching release. It does not change generator
+resolution: generation still inspects only the newest matching release and
+fails or uses permitted accepted-entry fallback when that release has no
+eligible, readable, agreeing APK. Explicitly classified APK entries set
 `trackOnly: false`; track-only entries set `trackOnly: true`,
 `versionDetection: false`, `includeZips: false` and
 `autoApkFilterByArch: false`. Do not embed observed releases, APK URLs or
@@ -181,6 +186,14 @@ tie-breaker. Missing/malformed release identifiers or dates fail visibly.
 No eligible release within the bound fails with a diagnostic; do not silently
 broaden the channel or drop the filter. The Heimdall title rule excludes its
 mutable private-development `debug-latest` channel.
+
+Release selection in generation and asset-availability fallback in Obtainium
+are separate. A newer release whose title does not match Heimdall's filter is
+ignored by both. After selecting the newest matching release, generation never
+searches an older release when the selected release has no eligible APK. The
+generated Heimdall entry enables Obtainium's supported
+`fallbackToOlderReleases` setting so the client may search an older matching
+release in that asset-availability case.
 
 Within that one selected release, inspect every direct `.apk` asset matching
 the configured filename regex, case-insensitively for the extension and with
