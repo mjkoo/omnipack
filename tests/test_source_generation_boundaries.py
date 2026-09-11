@@ -592,6 +592,40 @@ def test_invalid_rule_fields_and_combinations(rule):
         parse_project_policy({"schemaVersion": 1, "projects": {PROJECT: rule}})
 
 
+@pytest.mark.parametrize(
+    "policy",
+    [
+        b'{"schemaVersion":1,"schemaVersion":1,"projects":{}}',
+        (
+            b'{"schemaVersion":1,"projects":{'
+            b'"github.com/example/tracker":{"kind":"apk","additionalSettings":{"includePrereleases":false}},'
+            b'"github.com/example/tracker":{"kind":"apk","additionalSettings":{"includePrereleases":true}}}}'
+        ),
+        (
+            b'{"schemaVersion":1,"projects":{"github.com/example/tracker":'
+            b'{"kind":"apk","additionalSettings":{"includePrereleases":false,"includePrereleases":true}}}}'
+        ),
+    ],
+    ids=["root", "project", "setting"],
+)
+def test_duplicate_json_policy_keys_fail_before_discovery(tmp_path, policy):
+    source = setup(tmp_path)
+    policy_path = tmp_path / "config/codm-projects.json"
+    policy_path.write_bytes(policy)
+    with pytest.raises(PolicyError, match="duplicate"):
+        parse_project_policy(policy)
+    result, http = run(tmp_path, source)
+    assert result["status"] == "failed"
+    assert "duplicate" in result["error"]
+    assert http.urls == []
+    assert policy_path.read_bytes() == policy
+    output = tmp_path / ".build/source-generation/codm"
+    assert not any(
+        (output / name).exists()
+        for name in ("catalog.json", "source.json", "resolution-state.json")
+    )
+
+
 def test_duplicate_policy_keys_and_inactive_rules(tmp_path):
     with pytest.raises(PolicyError, match="duplicate"):
         parse_project_policy(

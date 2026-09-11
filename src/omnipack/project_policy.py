@@ -132,9 +132,22 @@ def default_apk_rule() -> ProjectRule:
     return ProjectRule("apk", None, {})
 
 
+def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
+    result: dict[str, Any] = {}
+    for key, value in pairs:
+        if key in result:
+            raise PolicyError(f"duplicate project policy JSON key {key!r}")
+        result[key] = value
+    return result
+
+
 def parse_project_policy(data: bytes | object) -> ProjectPolicy:
     try:
-        document = json.loads(data) if isinstance(data, bytes) else data
+        document = (
+            json.loads(data, object_pairs_hook=_unique_object)
+            if isinstance(data, bytes)
+            else data
+        )
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise PolicyError(f"project policy is not valid JSON: {error}") from error
     if not isinstance(document, dict) or set(document) != {"schemaVersion", "projects"}:

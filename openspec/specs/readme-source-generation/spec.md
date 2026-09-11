@@ -52,7 +52,8 @@ repository URL. A project without a rule SHALL default to APK discovery using
 stable releases. Rules SHALL explicitly distinguish APK projects from
 track-only resources and support bounded prerelease, release-title, APK-filename
 and source-version settings. Invalid types, unsupported fields, invalid regexes,
-duplicate normalized keys and inconsistent rule combinations SHALL fail before
+duplicate JSON object keys at any nesting level, duplicate normalized project
+keys and inconsistent rule combinations SHALL fail before
 the unchanged-input gate. Inactive rules whose project is absent from the
 README SHALL be reported without introducing that project or blocking a source
 removal. Neither generation nor its publisher SHALL write this policy.
@@ -88,6 +89,11 @@ resolves.
 
 - **WHEN** a rule selects group `2` or includes `$2` but its version-extraction regex contains only one capturing group
 - **THEN** policy validation fails before discovery or the unchanged-input gate, and no candidate catalog is emitted
+
+#### Scenario: Policy JSON repeats a key
+
+- **WHEN** policy JSON repeats an object key, including an identical project URL or discovery setting
+- **THEN** generation fails before HTTP requests or candidate creation instead of silently accepting the last value
 
 #### Scenario: Only prereleases exist
 
