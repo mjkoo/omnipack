@@ -1,0 +1,188 @@
+[
+  {
+    "id": "com.metroidarch.app.aarch64",
+    "url": "https://github.com/Raekwon1603/RetroArch",
+    "name": "MetroidArch (Super Metroid)",
+    "author": "Raekwon1603",
+    "categories": [
+      "Emulator"
+    ],
+    "variants": [
+      "dual"
+    ],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": false,
+      "releaseTitleAsVersion": false,
+      "versionDetection": false,
+      "trackOnly": false,
+      "includeZips": false,
+      "autoApkFilterByArch": false,
+      "apkFilterRegEx": "^MetroidArch-v[0-9]+(?:\\.[0-9]+)+\\.apk$",
+      "about": "Super Metroid companion interface for ARM64 dual-screen devices. Requires a supplied ROM and first-run setup; isolate its writable directories from normal RetroArch. See the pack MetroidArch setup guide."
+    }
+  },
+  {
+    "id": "com.game.cinderbox",
+    "url": "https://github.com/Ekyso/Cinderbox",
+    "name": "Cinderbox",
+    "author": "Ekyso",
+    "categories": [
+      "PC Ports"
+    ],
+    "variants": [
+      "single",
+      "dual"
+    ],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "versionDetection": true,
+      "releaseTitleAsVersion": false,
+      "trackOnly": false
+    }
+  },
+  {
+    "id": "dev.net64.ghostship",
+    "url": "https://github.com/HarbourMasters/Ghostship",
+    "name": "Ghostship",
+    "author": "HarbourMasters",
+    "categories": ["PC Ports"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": true,
+      "apkFilterRegEx": "^.*-Android\\.zip$",
+      "autoApkFilterByArch": false,
+      "versionDetection": false,
+      "includeZips": true,
+      "zippedApkFilterRegEx": "^Ghostship\\.apk$",
+      "trackOnly": false
+    }
+  },
+  {
+    "id": "com.theboisclub.pokemonred",
+    "url": "https://github.com/bryanthaboi/gen1recomp",
+    "name": "Pokémon Red/Blue Recomp",
+    "author": "bryanthaboi",
+    "categories": ["Decomps/Recomps"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": true,
+      "verifyLatestTag": false,
+      "sortMethodChoice": "date",
+      "releaseTitleAsVersion": false,
+      "trackOnly": false,
+      "versionDetection": true,
+      "apkFilterRegEx": ".*\\.apk$",
+      "autoApkFilterByArch": true,
+      "includeZips": false
+    }
+  },
+  {
+    "id": "com.aurora.store",
+    "url": "https://gitlab.com/AuroraOSS/AuroraStore",
+    "name": "Aurora Store",
+    "author": "AuroraOSS",
+    "categories": ["Utilities"],
+    "variants": ["single", "dual"],
+    "overrideSource": "GitLab",
+    "additionalSettings": {
+      "apkFilterRegEx": "^AuroraStore-[0-9]+(?:\\.[0-9]+)+\\.apk$",
+      "autoApkFilterByArch": false,
+      "versionDetection": true,
+      "trackOnly": false
+    }
+  },
+  {
+    "id": "com.karin.idTech4Amm",
+    "url": "https://github.com/glKarin/com.n0n3m4.diii4a",
+    "name": "idTech4A++",
+    "author": "glKarin",
+    "categories": ["PC Ports"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "apkFilterRegEx": "^idTech4A\\+\\+_[^_]+\\.apk$",
+      "autoApkFilterByArch": false,
+      "versionDetection": false,
+      "trackOnly": false,
+      "about": "Requires user-supplied game data for supported id Tech games."
+    }
+  },
+  {
+    "id": "is.xyz.vcmi",
+    "url": "https://github.com/vcmi/vcmi",
+    "name": "VCMI",
+    "author": "VCMI",
+    "categories": ["PC Ports"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "apkFilterRegEx": "^VCMI-Android-.*\\.apk$",
+      "autoApkFilterByArch": true,
+      "versionDetection": true,
+      "trackOnly": false,
+      "about": "Requires user-supplied Heroes of Might and Magic III game data."
+    }
+  },
+  {
+    "id": "com.github.bvschaik.julius",
+    "url": "https://github.com/bvschaik/julius",
+    "name": "Julius",
+    "author": "bvschaik",
+    "categories": ["PC Ports"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "apkFilterRegEx": "^julius-.*-android\\.apk$",
+      "autoApkFilterByArch": false,
+      "versionDetection": true,
+      "trackOnly": false,
+      "about": "Requires user-supplied Caesar III game data."
+    }
+  },
+  {
+    "id": "su.xash.engine.test",
+    "url": "https://github.com/FWGS/xash3d-fwgs",
+    "name": "Xash3D FWGS",
+    "author": "FWGS",
+    "categories": ["PC Ports"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": true,
+      "fallbackToOlderReleases": true,
+      "filterReleaseTitlesByRegEx": "^Xash3D FWGS Continuous master Build$",
+      "verifyLatestTag": false,
+      "useLatestAssetDateAsReleaseDate": true,
+      "releaseDateAsVersion": true,
+      "apkFilterRegEx": "^xash3d-fwgs-android\\.apk$",
+      "autoApkFilterByArch": false,
+      "versionDetection": false,
+      "trackOnly": false,
+      "about": "Rolling prerelease engine. Requires user-supplied Half-Life game data."
+    }
+  },
+  {
+    "id": "809443320",
+    "url": "https://github.com/mjkoo/omnipack",
+    "name": "omnipack updates",
+    "author": "mjkoo",
+    "categories": ["Utilities"],
+    "variants": ["single", "dual"],
+    "additionalSettings": {
+      "includePrereleases": true,
+      "fallbackToOlderReleases": true,
+      "filterReleaseTitlesByRegEx": "^omnipack revision [0-9]+$",
+      "verifyLatestTag": false,
+      "sortMethodChoice": "none",
+      "releaseTitleAsVersion": true,
+      "versionExtractionRegEx": "[0-9]+$",
+      "matchGroupToUse": "0",
+      "useLatestAssetDateAsReleaseDate": false,
+      "releaseDateAsVersion": false,
+      "versionDetection": false,
+      "trackOnly": true
+    }
+  }
+]

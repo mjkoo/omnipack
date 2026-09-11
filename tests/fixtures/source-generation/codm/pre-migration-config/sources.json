@@ -10,8 +10,6 @@
     "dual_asset_pattern": "Dual-Screen-Decomp-Recomp.V*.json"
   },
   "codm": {
-    "readme_url": "https://raw.githubusercontent.com/codm2000/Dual-Screen-Games/main/README.md",
-    "catalog": "config/catalogs/codm.json",
-    "project_policy": "config/codm-projects.json"
+    "readme_url": "https://raw.githubusercontent.com/codm2000/Dual-Screen-Games/main/README.md"
   }
 }

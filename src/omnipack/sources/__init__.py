@@ -6,6 +6,7 @@ import json
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from os import PathLike
+from pathlib import Path
 from typing import Any
 
 from omnipack.composition_policy import (
@@ -13,7 +14,6 @@ from omnipack.composition_policy import (
     apply_composition_policy,
 )
 from omnipack.model import App
-from omnipack.package_id import ProjectResolver, ResolutionStatus
 
 from .common import HttpGetter, SourceError
 
@@ -23,22 +23,7 @@ class IngestionReport:
     """Structured source outcomes consumed by the eventual build report."""
 
     skipped: list[dict[str, Any]] = field(default_factory=list)
-    unresolved: list[dict[str, Any]] = field(default_factory=list)
-    generated: list[dict[str, Any]] = field(default_factory=list)
-    retained_failures: list[dict[str, Any]] = field(default_factory=list)
-
-    def record_resolution(
-        self, url: str, app: App | None, status: ResolutionStatus, failure: str | None
-    ) -> None:
-        item = {"source": "codm2000", "url": url}
-        if app is None:
-            self.unresolved.append({**item, "failure": failure})
-        else:
-            self.generated.append({**item, "id": app.id, "status": status.value})
-            if failure:
-                self.retained_failures.append(
-                    {**item, "id": app.id, "failure": failure}
-                )
+    admitted: list[dict[str, Any]] = field(default_factory=list)
 
 
 __all__ = ["IngestionReport", "SourceError"]
@@ -53,10 +38,10 @@ class IngestionResult:
 
 
 def ingest_all(
+    root: Path,
     http: HttpGetter,
     source_config: Mapping[str, object],
     extras_config: object,
-    resolver: ProjectResolver,
     policy: CompositionPolicy,
     report: IngestionReport | None = None,
 ) -> IngestionResult:
@@ -79,7 +64,7 @@ def ingest_all(
     applied_higher = apply_composition_policy(
         policy, higher, require_all=False
     ).candidates
-    generated = codm.fetch(http, section("codm"), resolver, applied_higher, report)
+    generated = codm.fetch(root, section("codm"), applied_higher, report)
     all_candidates = [*rjny_apps, *bboi_apps, *generated, *extra_apps]
     applied = apply_composition_policy(policy, all_candidates)
     return IngestionResult(list(applied.candidates), report, policy)

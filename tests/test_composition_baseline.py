@@ -6,15 +6,17 @@ from pathlib import Path
 
 import pytest
 
-from omnipack.composition_policy import (
-    apply_composition_policy,
-    parse_composition_policy,
-)
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import compose
 from omnipack.model import App, Variant
 from omnipack.overlay import parse_overlay
-from omnipack.package_id import PackageIdCache, ResolutionResult, ResolutionStatus
-from omnipack.sources import IngestionReport, bboi, codm
+from omnipack.package_id import (
+    PackageIdCache,
+    ResolutionResult,
+    ResolutionStatus,
+    generated_project_entry,
+)
+from omnipack.sources import bboi
 from omnipack.sources.extras import fetch as fetch_extras
 from tests.test_sources import FakeHttp
 
@@ -186,7 +188,10 @@ class CapturedPackageResolver:
     """Supply the maintained cached identity without claiming a fresh APK lookup."""
 
     def resolve(self, project_url: str, /) -> ResolutionResult:
-        cached = PackageIdCache(ROOT / "config/package-ids.json").get(project_url)
+        cached = PackageIdCache(
+            ROOT
+            / "tests/fixtures/source-generation/codm/pre-migration-config/package-ids.json"
+        ).get(project_url)
         assert cached is not None
         return ResolutionResult(
             cached.package_id, ResolutionStatus.REUSED, cached.release_id
@@ -217,25 +222,19 @@ def replacement_candidates() -> list[App]:
             dual_url: json.dumps(
                 {"apps": [pair["dual"] for pair in document["pairs"]]}
             ),
-            sources["codm"]["readme_url"]: (
-                FIXTURES / "codm-ctr-readme.md"
-            ).read_text(),
         }
     )
     candidates = bboi.fetch(http, sources["bboi"])
-    policy = parse_composition_policy(historical_policy_document())
-    higher = apply_composition_policy(policy, candidates, require_all=False)
-    report = IngestionReport()
-    generated = codm.fetch(
-        http, sources["codm"], CapturedPackageResolver(), higher.candidates, report
-    )
-    assert not report.skipped
+    generated_app = generated_project_entry(
+        "https://github.com/igawa6/ctr-native-android", CapturedPackageResolver()
+    ).app
+    assert generated_app is not None
+    generated = [generated_app]
     assert len(generated) == 1
     assert set(http.urls) == {
         api,
         standard_url,
         dual_url,
-        sources["codm"]["readme_url"],
     }
     extras = fetch_extras(json.loads((ROOT / "config/extras.json").read_text()))
     return candidates + generated + extras

@@ -12,10 +12,8 @@ from omnipack.merge import compose
 from omnipack.model import App, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
-from omnipack.sources import IngestionReport, codm
+from omnipack.sources import codm
 from omnipack.sources.extras import fetch
-from tests.test_composition_baseline import CapturedPackageResolver
-from tests.test_sources import FakeHttp as SourceHttp
 
 ROOT = Path(__file__).parents[1]
 FIXTURE = ROOT / "tests/fixtures/curation/port-manifests.json"
@@ -185,29 +183,7 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
 
 def test_hollow_knight_source_composition_preserves_dual_only_catalog():
     config = read(ROOT / "config/sources.json")["codm"]
-    source = (ROOT / "tests/fixtures/codm-readme.md").read_text()
-    source = "\n".join(
-        line
-        for line in source.splitlines()
-        if any(
-            marker in line
-            for marker in (
-                "| Project",
-                "|---",
-                "| ---",
-                "github.com/igawa6/dualsouls",
-                "github.com/jakobkhansen/SilksongAndroid",
-            )
-        )
-    )
-    report = IngestionReport()
-    candidates = codm.fetch(
-        SourceHttp({config["readme_url"]: source}),
-        config,
-        CapturedPackageResolver(),
-        [],
-        report,
-    )
+    candidates = codm.fetch(ROOT, config, [])
     ids = {"igawa6.dualsouls", "com.jakobkhansen.silksong"}
     selected = [app for app in candidates if app.id in ids]
     assert {app.id for app in selected} == ids

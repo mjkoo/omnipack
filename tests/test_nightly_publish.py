@@ -69,6 +69,15 @@ def _repo(tmp_path: Path) -> Path:
             )
         else:
             path.write_text(f"base:{relative}\n")
+    for relative in (
+        "config/package-ids.json",
+        "config/catalogs/codm.json",
+        "config/catalogs/codm.source.json",
+        "config/codm-projects.json",
+    ):
+        path = root / relative
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text("{}\n")
     (root / "tracked.txt").write_text("base\n")
     _git(root, "add", ".")
     _git(root, "commit", "-qm", "base")
@@ -257,6 +266,7 @@ class BuildProcess(ControlledProcess):
             }
             for kind in ("standard", "preferred")
         ]
+        (root / "config").mkdir(exist_ok=True)
         files: dict[str, object] = {
             "sources.json": {
                 "rjny": {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
@@ -265,7 +275,7 @@ class BuildProcess(ControlledProcess):
                     "single_asset_pattern": "single.json",
                     "dual_asset_pattern": "dual.json",
                 },
-                "codm": {"readme_url": "https://fixture.test/readme"},
+                "codm": {"catalog": "config/catalogs/codm.json"},
             },
             "http.json": {"credentials": {}},
             "extras.json": [],
@@ -294,6 +304,8 @@ class BuildProcess(ControlledProcess):
         }
         for name, document in files.items():
             (root / "config" / name).write_text(json.dumps(document))
+        (root / "config/catalogs").mkdir(exist_ok=True)
+        (root / "config/catalogs/codm.json").write_text('{"apps":[]}')
         responses = {
             "https://codeberg.org/api/v1/repos/fixture/bboi/releases/latest": json.dumps(
                 {
@@ -308,7 +320,6 @@ class BuildProcess(ControlledProcess):
             ),
             "https://fixture.test/single": '{"apps":[]}',
             "https://fixture.test/dual": '{"apps":[]}',
-            "https://fixture.test/readme": "| Project |\n| --- |\n",
         }
 
         def transport(
@@ -511,16 +522,26 @@ def test_candidate_rejects_staged_content_mismatch(tmp_path: Path) -> None:
         candidate.validate_staged()
 
 
-def test_cache_only_change_is_publishable(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "relative",
+    [
+        "config/package-ids.json",
+        "config/catalogs/codm.json",
+        "config/catalogs/codm.source.json",
+        "config/codm-projects.json",
+    ],
+)
+def test_source_input_change_is_rejected(tmp_path: Path, relative: str) -> None:
     root = _repo(tmp_path)
-    cache = root / "config/package-ids.json"
-    cache.write_text("new cache\n")
+    path = root / relative
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("new source input\n")
+    _git(root, "add", relative)
+    _git(root, "commit", "-m", "fixture source input")
+    path.write_text("mutated\n")
     _evidence(root)
-
-    candidate = validate_candidate(root)
-
-    assert candidate.changed_paths == ("config/package-ids.json",)
-    assert candidate.snapshots["config/package-ids.json"] == b"new cache\n"
+    with pytest.raises(CandidateError, match="unexpected tracked changes"):
+        validate_candidate(root)
 
 
 def test_catalog_interior_change_is_publishable_with_exact_snapshot(

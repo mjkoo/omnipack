@@ -19,7 +19,6 @@ ALLOWED_PATHS = (
     "dist/single-screen.json",
     "dist/dual-screen.json",
     "README.md",
-    "config/package-ids.json",
 )
 
 

@@ -1,0 +1,143 @@
+[
+  {
+    "id": "com.aure.banjorecomp",
+    "url": "https://github.com/AurelioB/BanjoRecomp-Android",
+    "patch": {
+      "additionalSettings": {
+        "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+        "matchGroupToUse": "0"
+      }
+    }
+  },
+  {
+    "id": "com.blacklabelhq.sotn",
+    "url": "https://github.com/sergiomanzur/SymphonyRecomp",
+    "patch": {
+      "additionalSettings": {
+        "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+        "matchGroupToUse": "0"
+      }
+    }
+  },
+  {
+    "id": "com.ctrnative",
+    "url": "https://github.com/Simon358/ctr-native-android",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "com.ctrnative",
+    "url": "https://github.com/igawa6/ctr-native-android",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "com.dishii.soh",
+    "url": "https://github.com/Waterdish/Shipwright-Android",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "com.winlator.cmod",
+    "url": "https://github.com/coffincolors/winlator",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "com.winlator.ludashi",
+    "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "info.cemu.cemu",
+    "url": "https://github.com/SSimco/Cemu",
+    "patch": {
+      "additionalSettings": {
+        "releaseTitleAsVersion": false
+      }
+    }
+  },
+  {
+    "id": "info.cemu.cemu",
+    "url": "https://github.com/sapphirerhodonite/cemu",
+    "patch": {
+      "additionalSettings": {
+        "releaseTitleAsVersion": false
+      }
+    }
+  },
+  {
+    "id": "org.citron.citron_emu",
+    "url": "https://github.com/citron-neo/emulator",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "org.vita3k.emulator",
+    "url": "https://github.com/Vita3K/Vita3K-builds",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "xendroid.compose",
+    "url": "https://github.com/rfandango/XenDroid",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "xyz.blacksheep.mjolnir",
+    "url": "https://github.com/blacksheepmvp/mjolnir",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "igawa6.dualsouls",
+    "url": "https://github.com/igawa6/dualsouls",
+    "patch": {
+      "name": "Hollow Knight: Dual Souls",
+      "categories": ["PC Ports"],
+      "additionalSettings": {
+        "about": "Requires user-supplied Hollow Knight game files. Uses the second screen for maps, inventory and game information."
+      }
+    }
+  },
+  {
+    "id": "com.jakobkhansen.silksong",
+    "url": "https://github.com/jakobkhansen/SilksongAndroid",
+    "patch": {
+      "name": "Hollow Knight: Silksong",
+      "categories": ["PC Ports"],
+      "additionalSettings": {
+        "about": "Requires user-supplied Linux game files and compiles the port on-device. The upstream setup currently documents Android 13 only; Android 15 is unsupported. Uses the second screen for inventory and maps."
+      }
+    }
+  }
+]

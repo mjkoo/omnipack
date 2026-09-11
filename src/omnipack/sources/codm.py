@@ -1,82 +1,65 @@
-"""Scrape codm2000's README table for GitHub links and generate entries.
-
-Each GitHub link not already present by URL in a higher-precedence source
-has its package id resolved from its latest release APK (see
-`omnipack.package_id`) and cached in `config/package-ids.json` so
-nightly runs stay cheap. Non-GitHub rows have no APK feed and are skipped.
-Generated entries map to the dual variant only.
-"""
+"""Load the accepted codm2000 catalog with its source-specific semantics."""
 
 from __future__ import annotations
 
-import re
 from collections.abc import Mapping, Sequence
-from itertools import pairwise
-from urllib.parse import urlsplit
+from pathlib import Path
+from typing import Any
 
-from omnipack.model import App, SourceType, Variant
-from omnipack.package_id import ProjectResolver, generated_project_entry
-from omnipack.sources import IngestionReport
-from omnipack.sources.common import HttpGetter, SourceError, derived_source_type
+from omnipack.model import App, Variant
+from omnipack.sources.common import SourceError, normalize_record
 from omnipack.urls import normalize_project_url
-
-LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)")
 
 
 def fetch(
-    http: HttpGetter,
+    root: Path,
     config: Mapping[str, object],
-    resolver: ProjectResolver,
     higher_precedence: Sequence[App],
-    report: IngestionReport,
+    report: Any | None = None,
 ) -> list[App]:
-    """Return generated entries for codm2000's GitHub-hosted catalog rows."""
-    try:
-        readme_url = config.get("readme_url")
-        if not isinstance(readme_url, str) or not readme_url.strip():
-            raise SourceError("codm", "configured location is empty")
-        text = http.get(readme_url).body.decode("utf-8")
-        lines = text.splitlines()
-        if not any(
-            re.match(r"^\s*\|\s*Project\s*\|", header, re.IGNORECASE)
-            and re.fullmatch(r"\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*", separator)
-            for header, separator in pairwise(lines)
-        ):
-            raise SourceError("codm", "README lacks a Project catalog table")
-        covered = {
-            normalize_project_url(app.url)
-            for app in higher_precedence
-            if Variant.DUAL in app.eligibility
-        }
-        result: list[App] = []
-        seen: set[str] = set()
-        for url in LINK_RE.findall(text):
-            parsed = urlsplit(url)
-            parts = [part for part in parsed.path.split("/") if part]
-            if derived_source_type(url) is not SourceType.GITHUB or len(parts) != 2:
-                report.skipped.append(
+    """Normalize the committed catalog and suppress dual-covered projects."""
+    catalog_path = config.get("catalog")
+    if not isinstance(catalog_path, str) or not catalog_path.strip():
+        raise SourceError("codm", "configured location is empty")
+    from omnipack.sources import load_json
+
+    document = load_json(root / catalog_path, "codm")
+    if not isinstance(document, dict) or not isinstance(document.get("apps"), list):
+        raise SourceError("codm", "catalog must be an object with an apps list")
+    covered = {
+        normalize_project_url(app.url)
+        for app in higher_precedence
+        if Variant.DUAL in app.eligibility
+    }
+    result: list[App] = []
+    identities: dict[str, str] = {}
+    for record in document["apps"]:
+        app = normalize_record(
+            record,
+            source="codm2000",
+            variant=Variant.DUAL,
+            derive_type=True,
+            eligibility=frozenset({Variant.DUAL}),
+            dual_preferred=True,
+            origin="codm-generated",
+        )
+        previous = identities.get(app.id)
+        if previous is not None:
+            raise SourceError(
+                "codm", f"duplicate id {app.id!r} for {previous!r} and {app.url!r}"
+            )
+        identities[app.id] = app.url
+        if normalize_project_url(app.url) not in covered:
+            result.append(app)
+            if report is not None:
+                report.admitted.append(
                     {
                         "source": "codm2000",
-                        "url": url,
-                        "reason": "not a GitHub repository",
+                        "url": app.url,
+                        "kind": "track-only"
+                        if app.additional_settings.get("trackOnly") is True
+                        else "apk",
+                        "id": app.id,
                     }
                 )
-                continue
-            normalized = normalize_project_url(url)
-            if normalized in covered or normalized in seen:
-                continue
-            seen.add(normalized)
-            generated = generated_project_entry(url, resolver)
-            report.record_resolution(
-                url,
-                generated.app,
-                generated.resolution.status,
-                generated.resolution.failure,
-            )
-            if generated.app is not None:
-                result.append(generated.app)
-        return result
-    except SourceError:
-        raise
-    except Exception as error:
-        raise SourceError("codm", str(error)) from error
+    return result

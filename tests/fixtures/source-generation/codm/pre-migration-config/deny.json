@@ -1,0 +1,18 @@
+[
+  {
+    "id": "904332840",
+    "reason": "Track individual apps without including the upstream RJNY pack tracker."
+  },
+  {
+    "id": "com.ghostship.android",
+    "reason": "Replace the legacy Ghostship Android fork with the maintained official release."
+  },
+  {
+    "id": "com.raekwon1603.supermetroid",
+    "reason": "Retire the reviewed old Super Metroid catalog entry; dual-screen devices use MetroidArch."
+  },
+  {
+    "id": "com.raekwon1603.supermetroidds",
+    "reason": "Retire the reviewed old Super Metroid catalog entry; dual-screen devices use MetroidArch."
+  }
+]

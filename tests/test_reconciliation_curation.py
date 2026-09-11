@@ -8,9 +8,10 @@ from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.render import render
-from omnipack.sources import IngestionReport, bboi, codm, rjny
+from omnipack.sources import bboi, rjny
+from omnipack.sources.common import normalize_record
 from omnipack.sources.extras import fetch as fetch_extras
-from tests.test_composition_baseline import CapturedPackageResolver
+from omnipack.urls import normalize_project_url
 from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
@@ -96,22 +97,34 @@ def candidates(refresh: int):
             standard_url: json.dumps(standard),
             dual_url: json.dumps(dual),
             rjny_url: json.dumps(rjny_document),
-            sources["codm"]["readme_url"]: (
-                SNAPSHOTS / "codm-relevant-readme.md"
-            ).read_text(),
         }
     )
     higher = bboi.fetch(http, sources["bboi"]) + rjny.fetch(http, sources["rjny"])
     extras = fetch_extras(read(ROOT / "config/extras.json"))
-    report = IngestionReport()
-    generated = codm.fetch(
-        http,
-        sources["codm"],
-        CapturedPackageResolver(),
-        [*higher, *extras],
-        report,
-    )
-    assert not report.skipped
+    admitted = read(
+        ROOT
+        / "tests/fixtures/source-generation/codm/pre-migration-config/admitted-catalog.json"
+    )["apps"]
+    wanted = {
+        normalize_project_url(url)
+        for url in __import__("re").findall(
+            r"\[[^\]]+\]\((https?://[^)\s]+)\)",
+            (SNAPSHOTS / "codm-relevant-readme.md").read_text(),
+        )
+    }
+    generated = [
+        normalize_record(
+            record,
+            source="codm2000",
+            variant=Variant.DUAL,
+            derive_type=True,
+            eligibility=frozenset({Variant.DUAL}),
+            dual_preferred=True,
+            origin="codm-generated",
+        )
+        for record in admitted
+        if normalize_project_url(record["url"]) in wanted
+    ]
     return [*higher, *extras, *generated]
 
 

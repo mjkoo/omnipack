@@ -181,7 +181,7 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
         assert (dist / name).read_bytes() == before
 
 
-def test_cached_resolution_survives_a_later_render_failure(
+def test_build_failure_does_not_mutate_resolution_state(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (tmp_path / "README.md").write_bytes(
@@ -207,11 +207,10 @@ def test_cached_resolution_survives_a_later_render_failure(
         {variant: [] for variant in Variant}, CompositionReport()
     )
 
+    state = b'{"github.com/old/project":{"packageId":"app.old","releaseId":1}}\n'
+    (config / "package-ids.json").write_bytes(state)
+
     def resolved(_root: Path, report: IngestionReport | None = None) -> IngestionResult:
-        (config / "package-ids.json").write_text(
-            '{"github.com/new/project":{"packageId":"app.new","releaseId":1}}\n',
-            encoding="utf-8",
-        )
         return IngestionResult(
             [],
             report or IngestionReport(),
@@ -227,7 +226,7 @@ def test_cached_resolution_survives_a_later_render_failure(
     )
     monkeypatch.chdir(tmp_path)
     assert main(["build"]) == 1
-    assert "app.new" in (config / "package-ids.json").read_text()
+    assert (config / "package-ids.json").read_bytes() == state
     for name in ("single-screen.json", "dual-screen.json"):
         assert json.loads((dist / name).read_text()) == before
 
@@ -249,7 +248,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
             "single_asset_pattern": "single-*.json",
             "dual_asset_pattern": "dual-*.json",
         },
-        "codm": {"readme_url": "https://fixture.test/readme"},
+        "codm": {"catalog": "config/catalogs/codm.json"},
     }
     files: dict[str, object] = {
         "sources.json": source_config,
@@ -266,6 +265,27 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     }
     for name, value in files.items():
         (config / name).write_text(json.dumps(value), encoding="utf-8")
+    (config / "catalogs").mkdir()
+    (config / "catalogs/codm.json").write_text(
+        json.dumps(
+            {
+                "apps": [
+                    {
+                        "id": "app.generated",
+                        "url": "https://github.com/fixture/generated",
+                        "name": "Generated",
+                        "overrideSource": "GitHub",
+                    },
+                    {
+                        "id": "app.retained",
+                        "url": "https://github.com/fixture/retained",
+                        "name": "Retained",
+                        "overrideSource": "GitHub",
+                    },
+                ]
+            }
+        )
+    )
     record = {
         "id": "app.fixture",
         "url": "https://example.test/app",
@@ -297,38 +317,14 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         ),
         "https://fixture.test/single": '{"apps":[]}',
         "https://fixture.test/dual": '{"apps":[]}',
-        "https://fixture.test/readme": (
-            "| Project |\n| --- |\n"
-            "[website](https://example.test/page) "
-            "[generated](https://github.com/fixture/generated) "
-            "[missing](https://github.com/fixture/missing) "
-            "[retained](https://github.com/fixture/retained)"
-        ),
-        "https://api.github.com/repos/fixture/generated/releases/latest": json.dumps(
-            {
-                "id": 7,
-                "assets": [
-                    {
-                        "name": "app.apk",
-                        "browser_download_url": "https://fixture.test/app.apk",
-                    }
-                ],
-            }
-        ),
     }
-
-    for project in ("missing", "retained"):
-        responses[f"https://api.github.com/repos/fixture/{project}/releases/latest"] = (
-            json.dumps({"id": 8, "assets": []})
-        )
+    requested: list[str] = []
 
     def transport(
         _client: HttpClient, request: Request, _timeout: float, _max_bytes: int | None
     ) -> HttpResponse:
-        if request.full_url == "https://fixture.test/app.apk":
-            body = b"" if request.method == "HEAD" else fixture_apk("app.generated")
-        else:
-            body = responses[request.full_url].encode()
+        requested.append(request.full_url)
+        body = responses[request.full_url].encode()
         return HttpResponse(request.full_url, 200, Message(), body)
 
     if invalid_gate:
@@ -351,6 +347,10 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     monkeypatch.chdir(tmp_path)
     assert main(["build"]) == (1 if invalid_gate else 0)
     assert (tmp_path / ".cache/sentinel").read_bytes() == b"unrelated cache"
+    assert set(requested) == set(responses)
+    assert not any(
+        "github.com/repos" in url or url.endswith(".apk") for url in requested
+    )
     if invalid_gate:
         assert {
             path.name: path.read_bytes() for path in (tmp_path / "dist").glob("*.json")
@@ -361,10 +361,6 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
                 json.loads((tmp_path / "dist" / name).read_text())["apps"][0]["id"]
                 == "app.fixture"
             )
-    assert (
-        json.loads((tmp_path / ".build/report.json").read_text())["skipped"][0]["url"]
-        == "https://example.test/page"
-    )
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["status"] == ("failed" if invalid_gate else "success")
     assert report["offlineVerification"]["status"] == (
@@ -372,36 +368,11 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     )
     if invalid_gate:
         assert report["stage"] == "offline verification"
-    assert report["generated"] == [
-        {
-            "source": "codm2000",
-            "url": "https://github.com/fixture/generated",
-            "id": "app.generated",
-            "status": "resolved",
-        },
-        {
-            "source": "codm2000",
-            "url": "https://github.com/fixture/retained",
-            "id": "app.retained",
-            "status": "reused",
-        },
-    ]
-    failure = "APK resolution failed: latest release has no eligible APK assets"
-    assert report["unresolved"] == [
-        {
-            "source": "codm2000",
-            "url": "https://github.com/fixture/missing",
-            "failure": failure,
-        }
-    ]
-    assert report["retainedFailures"] == [
-        {
-            "source": "codm2000",
-            "url": "https://github.com/fixture/retained",
-            "id": "app.retained",
-            "failure": failure,
-        }
-    ]
+    assert not ({"generated", "unresolved", "retainedFailures"} & report.keys())
+    assert {(item["kind"], item["id"]) for item in report["sourceAdmissions"]} == {
+        ("apk", "app.generated"),
+        ("apk", "app.retained"),
+    }
     assert report["changes"]["dual"] == {
         "added": ["app.fixture", "app.retained"]
         if existing
@@ -410,10 +381,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     }
     assert not (tmp_path / "dist/report.json").exists()
     cache = json.loads((config / "package-ids.json").read_text())
-    assert cache["github.com/fixture/generated"] == {
-        "packageId": "app.generated",
-        "releaseId": 7,
-    }
+    assert cache == files["package-ids.json"]
 
 
 @pytest.mark.parametrize("stage", ["rendering", "report writing", "publication"])

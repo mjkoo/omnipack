@@ -33,7 +33,14 @@ def _render_tracker(variant: Variant) -> str:
 
 
 def test_tracker_id_does_not_collide_with_any_source_or_output_fixture() -> None:
-    paths = [ROOT / "config/extras.json", *ROOT.glob("tests/fixtures/**/*.json")]
+    paths = [
+        ROOT / "config/extras.json",
+        *(
+            path
+            for path in ROOT.glob("tests/fixtures/**/*.json")
+            if "pre-migration-config" not in path.parts
+        ),
+    ]
     occurrences: list[Path] = []
     for path in paths:
         if TRACKER_ID in path.read_text():

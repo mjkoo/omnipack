@@ -12,7 +12,6 @@ from omnipack.build import previous_ids, publish_build
 from omnipack.composition_policy import CompositionPolicy, load_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import CompositionReport, CompositionResult, compose
-from omnipack.package_id import PackageIdCache, PackageIdResolver
 from omnipack.report import format_reports, write_report
 from omnipack.source_generation import generate_codm
 from omnipack.sources import (
@@ -103,10 +102,9 @@ def _ingest_for_build(
         raise SourceError("sources", "configuration must be an object")
     extras_config = load_json(root / "config/extras.json", "extras")
     http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
-    resolver = PackageIdResolver(http, PackageIdCache(root / "config/package-ids.json"))
     policy_bytes = (root / "config/composition.json").read_bytes()
     policy = load_composition_policy(policy_bytes)
-    result = ingest_all(http, source_config, extras_config, resolver, policy, report)
+    result = ingest_all(root, http, source_config, extras_config, policy, report)
     return IngestionResult(result.apps, result.report, result.policy, policy_bytes)
 
 

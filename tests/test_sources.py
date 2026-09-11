@@ -311,11 +311,9 @@ class ResultResolver:
         return self.result
 
 
-def test_codm_extracts_all_github_links_skips_other_hosts_and_deduplicates_dual() -> (
-    None
-):
-    readme_url = "https://example/readme"
-    report = IngestionReport()
+def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
+    tmp_path: Path,
+) -> None:
     higher = [
         App(
             "x",
@@ -345,18 +343,37 @@ def test_codm_extracts_all_github_links_skips_other_hosts_and_deduplicates_dual(
             Provenance("x", "x"),
         ),
     ]
-    apps = codm.fetch(
-        FakeHttp({readme_url: fixture("codm-readme.md")}),
-        {"readme_url": readme_url},
-        StubResolver(),
-        higher,
-        report,
-    )
+    catalog = {
+        "apps": [
+            {
+                "id": "zelda",
+                "url": "https://github.com/samyost1/zelda3-android",
+                "name": "Zelda",
+                "overrideSource": "GitHub",
+            },
+            {
+                "id": "dusk",
+                "url": "https://github.com/igawa6/dusklight",
+                "name": "Dusk",
+                "overrideSource": "GitHub",
+            },
+            {
+                "id": "openmw",
+                "url": "https://github.com/Josh-Daniels/OpenMW-DS",
+                "name": "OpenMW-DS",
+                "overrideSource": "GitHub",
+                "additionalSettings": {"includePrereleases": True},
+            },
+        ]
+    }
+    path = tmp_path / "catalog.json"
+    path.write_text(json.dumps(catalog))
+    report = IngestionReport()
+    apps = codm.fetch(tmp_path, {"catalog": "catalog.json"}, higher, report)
     urls = {app.url for app in apps}
     assert "https://github.com/samyost1/zelda3-android" not in urls
     assert "https://github.com/igawa6/dusklight" not in urls
     assert "https://github.com/Josh-Daniels/OpenMW-DS" in urls
-    assert "https://github.com/cylonid/NativeAlphaForAndroid" in urls
     assert all(
         app.eligibility == frozenset({Variant.DUAL})
         and app.dual_preferred
@@ -368,49 +385,56 @@ def test_codm_extracts_all_github_links_skips_other_hosts_and_deduplicates_dual(
     assert (
         next(app for app in apps if app.url.endswith("OpenMW-DS")).name == "OpenMW-DS"
     )
-    assert any(
-        item["url"].startswith("https://www.nexusmods.com") for item in report.skipped
-    )
-    assert len(urls) == 22  # 24 GitHub repositories minus two dual-covered links
-
-
-def test_codm_reports_unresolved_and_cached_resolution_failures() -> None:
-    readme_url = "https://example/readme"
-    readme = "| Project |\n| --- |\n| [Project](https://github.com/owner/repo) |"
-    unresolved_report = IngestionReport()
-    apps = codm.fetch(
-        FakeHttp({readme_url: readme}),
-        {"readme_url": readme_url},
-        ResultResolver(
-            ResolutionResult(None, ResolutionStatus.UNRESOLVED, 2, "no APK")
-        ),
-        [],
-        unresolved_report,
-    )
-    assert apps == []
-    assert unresolved_report.unresolved == [
+    assert apps[0].additional_settings == {"includePrereleases": True}
+    assert len(urls) == 1
+    assert report.admitted == [
         {
             "source": "codm2000",
-            "url": "https://github.com/owner/repo",
-            "failure": "no APK",
+            "url": "https://github.com/Josh-Daniels/OpenMW-DS",
+            "kind": "apk",
+            "id": "openmw",
         }
     ]
 
-    retained_report = IngestionReport()
-    apps = codm.fetch(
-        FakeHttp({readme_url: readme}),
-        {"readme_url": readme_url},
-        ResultResolver(
-            ResolutionResult(
-                "app.cached", ResolutionStatus.REUSED, 1, "release unavailable"
-            )
-        ),
-        [],
-        retained_report,
-    )
-    assert [app.id for app in apps] == ["app.cached"]
-    assert retained_report.generated[0]["status"] == "reused"
-    assert retained_report.retained_failures[0]["failure"] == "release unavailable"
+
+def test_codm_reports_committed_apk_and_tracker_identities(tmp_path: Path) -> None:
+    records = [
+        {
+            "id": "app.apk",
+            "url": "https://github.com/owner/app",
+            "name": "App",
+            "overrideSource": "GitHub",
+        },
+        {
+            "id": "123",
+            "url": "https://github.com/owner/mod",
+            "name": "Mod",
+            "overrideSource": "GitHub",
+            "additionalSettings": {"trackOnly": True},
+        },
+    ]
+    (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
+    report = IngestionReport()
+    codm.fetch(tmp_path, {"catalog": "catalog.json"}, [], report)
+    assert [(item["kind"], item["id"]) for item in report.admitted] == [
+        ("apk", "app.apk"),
+        ("track-only", "123"),
+    ]
+
+
+def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
+    records = [
+        {
+            "id": "same",
+            "url": f"https://github.com/owner/repo{i}",
+            "name": f"Repo {i}",
+            "overrideSource": "GitHub",
+        }
+        for i in range(2)
+    ]
+    (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
+    with pytest.raises(SourceError, match="duplicate id.*repo0.*repo1"):
+        codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
 
 
 def test_ingestion_applies_policy_before_coverage_and_after_generation(
@@ -471,16 +495,16 @@ def test_ingestion_applies_policy_before_coverage_and_after_generation(
     monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
     monkeypatch.setattr(extras, "fetch", lambda *_args: [])
 
-    def generate(_http, _config, _resolver, candidates, _report):
+    def generate(_root, _config, candidates, _report):
         assert candidates[0].eligibility == frozenset({Variant.SINGLE})
         return [generated]
 
     monkeypatch.setattr(codm, "fetch", generate)
     result = ingest_all(
+        Path("."),
         FakeHttp({}),
         {"rjny": {}, "bboi": {}, "codm": {}},
         [],
-        StubResolver(),
         policy,
     )
     assert [(app.id, app.family) for app in result.apps] == [
@@ -531,10 +555,10 @@ def test_ingestion_requires_generated_policy_selectors_after_resolution(
     monkeypatch.setattr(codm, "fetch", generate)
     with pytest.raises(CompositionPolicyError, match="matched no candidate"):
         ingest_all(
+            Path("."),
             FakeHttp({}),
             {"rjny": {}, "bboi": {}, "codm": {}},
             [],
-            StubResolver(),
             policy,
         )
     assert resolved == [True]
@@ -722,14 +746,7 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
     assert all(app.source_type is declared for app in apps)
 
 
-@pytest.mark.parametrize(
-    "body",
-    [
-        "<html>upstream error</html>",
-        "unrecognized text",
-        "| Project |\nmissing separator",
-    ],
-)
+@pytest.mark.parametrize("body", ["null", "[]", '{"apps":"bad"}'])
 def test_codm_malformed_catalog_aborts_before_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
 ) -> None:
@@ -745,13 +762,8 @@ def test_codm_malformed_catalog_aborts_before_publication(
         (dist / name).write_bytes(content)
 
     def ingest(root: Path, report: IngestionReport) -> IngestionResult:
-        apps = codm.fetch(
-            FakeHttp({"https://fixture/readme": body}),
-            {"readme_url": "https://fixture/readme"},
-            StubResolver(),
-            [],
-            report,
-        )
+        (root / "catalog.json").write_text(body)
+        apps = codm.fetch(root, {"catalog": "catalog.json"}, [])
         return IngestionResult(apps, report)
 
     shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
@@ -763,24 +775,9 @@ def test_codm_malformed_catalog_aborts_before_publication(
     assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
 
 
-def test_codm_skips_github_site_routes_in_project_table() -> None:
-    url = "https://fixture/readme"
-    report = IngestionReport()
-    apps = codm.fetch(
-        FakeHttp(
-            {
-                url: "| Project |\n| --- |\n| [Settings](https://github.com/settings/profile) |\n| [App](https://github.com/owner/repo) |"
-            }
-        ),
-        {"readme_url": url},
-        StubResolver(),
-        [],
-        report,
-    )
-    assert [app.url for app in apps] == ["https://github.com/owner/repo"]
-    assert [item["url"] for item in report.skipped] == [
-        "https://github.com/settings/profile"
-    ]
+def test_codm_missing_catalog_names_source(tmp_path: Path) -> None:
+    with pytest.raises(SourceError, match="codm"):
+        codm.fetch(tmp_path, {"catalog": "missing.json"}, [])
 
 
 def test_explicit_null_extra_source_is_not_inferred():

@@ -79,26 +79,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     )
     write_config(tmp_path)
     ingestion = IngestionReport(
-        skipped=[{"source": "codm2000", "url": "https://covered"}],
-        unresolved=[
-            {"source": "codm2000", "url": "https://missing", "failure": "no APK"}
-        ],
-        generated=[
-            {
-                "source": "codm2000",
-                "url": "https://kept",
-                "id": "kept.id",
-                "status": "reused",
-            }
-        ],
-        retained_failures=[
-            {
-                "source": "codm2000",
-                "url": "https://kept",
-                "id": "kept.id",
-                "failure": "HTTP 503",
-            }
-        ],
+        skipped=[{"source": "codm2000", "url": "https://covered"}]
     )
     build_module.publish_build(
         tmp_path, composition("kept.id", "new.id"), {}, ingestion
@@ -106,9 +87,8 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["changes"]["single"] == {"added": ["new.id"], "removed": ["old.id"]}
     assert report["changes"]["dual"] == {"added": ["new.id"], "removed": []}
-    assert report["generated"] == ingestion.generated
-    assert report["unresolved"] == ingestion.unresolved
-    assert report["retainedFailures"] == ingestion.retained_failures
+    assert not ({"generated", "unresolved", "retainedFailures"} & report.keys())
+    assert report["sourceAdmissions"] == []
     assert report["displacements"][0]["id"] == "old.id"
     assert report["denylistRemovals"][0]["id"] == "denied.id"
     assert report["staleExclusions"][0]["id"] == "stale.id"

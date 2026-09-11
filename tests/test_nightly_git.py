@@ -21,6 +21,7 @@ from scripts.nightly_git import (
 )
 from scripts.nightly_publish import (
     ALLOWED_PATHS,
+    CandidateError,
     CommandResult,
     RefreshOrchestrator,
     RefreshResult,
@@ -62,6 +63,7 @@ class ChangingRefresh:
         self.bases.append(base_sha)
         self.roots.append(root)
         if self.change is not None:
+            (root / self.change).parent.mkdir(parents=True, exist_ok=True)
             (root / self.change).write_text(f"candidate:{base_sha}\n")
         report = root / ".build/report.json"
         report.parent.mkdir(parents=True, exist_ok=True)
@@ -501,24 +503,14 @@ def test_publishes_one_allowlisted_commit_with_metadata(tmp_path: Path) -> None:
     assert "secret-token" not in _git(source, "config", "--list")
 
 
-def test_cache_only_change_is_committed_and_noop_is_not(tmp_path: Path) -> None:
+def test_resolution_state_change_is_rejected(tmp_path: Path) -> None:
     source, bare, base = _remote(tmp_path)
     remote = GitRemote(source)
-    cache_result = _coordinator(
-        source, remote, ChangingRefresh(change="config/package-ids.json")
-    ).run("run", "token")
-    assert cache_result.status == "published"
-    assert (
-        _git(bare, "diff-tree", "--no-commit-id", "--name-only", "-r", "main")
-        == "config/package-ids.json"
-    )
-
-    no_op = _coordinator(source, remote, ChangingRefresh(change=None)).run(
-        "run", "token"
-    )
-    assert no_op.status == "no-op"
-    assert no_op.published_sha is None
-    assert _git(bare, "rev-list", "--count", f"{base}..main") == "1"
+    with pytest.raises(CandidateError, match="unexpected tracked changes"):
+        _coordinator(
+            source, remote, ChangingRefresh(change="config/package-ids.json")
+        ).run("run", "token")
+    assert _git(bare, "rev-list", "--count", f"{base}..main") == "0"
 
 
 class AdvancingRemote:
