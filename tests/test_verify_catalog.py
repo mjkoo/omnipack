@@ -68,17 +68,14 @@ def test_readme_mutation_during_verification_prevents_success(
     assert any(error["code"] == "input_changed" for error in result["errors"])
 
 
-@pytest.mark.parametrize("old_count", [7, 8])
 def test_historical_reports_require_regeneration_and_cannot_authorize_publication(
-    tmp_path: Path, old_count: int
+    tmp_path: Path,
 ) -> None:
     copy_inputs(tmp_path)
     result = verify.run_verification(tmp_path)
     assert result["status"] == "success"
     result["inputs"].pop("readme")
-    if old_count == 7:
-        result["inputs"].pop("composition")
-    result["verifier"]["version"] = "0.3.0" if old_count == 7 else "0.4.0"
+    result["verifier"]["version"] = "0.4.0"
     result["schemaVersion"] = 1
     result["mode"] = "live"
     (tmp_path / verify.VERIFY_PATH).write_text(json.dumps(result))

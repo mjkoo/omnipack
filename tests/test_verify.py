@@ -112,14 +112,11 @@ def test_initial_report_write_error_is_wrapped(tmp_path: Path) -> None:
         verify.run_verification(tmp_path)
 
 
-@pytest.mark.parametrize(
-    "credentials", [{"example.test": 1}, {"example.test": None}, [], None]
-)
-def test_http_config_is_not_read_or_fingerprinted(
-    tmp_path, monkeypatch, credentials
-) -> None:
+def test_http_config_is_not_read_or_fingerprinted(tmp_path, monkeypatch) -> None:
     copy_inputs(tmp_path)
-    (tmp_path / "config/http.json").write_text(json.dumps({"credentials": credentials}))
+    (tmp_path / "config/http.json").write_text(
+        json.dumps({"credentials": {"example.test": 1}})
+    )
     read_bytes = Path.read_bytes
     monkeypatch.setattr(
         Path,

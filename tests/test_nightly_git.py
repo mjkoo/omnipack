@@ -163,12 +163,11 @@ def test_missing_release_boundary_preserves_main_without_claiming_completion(
     assert issues.failure_bodies and not issues.recovery_bodies
 
 
-@pytest.mark.parametrize("reason", ["seed missing", "ownership marker absent"])
-def test_missing_or_unowned_seed_blocks_main_and_release_writes(
-    tmp_path: Path, reason: str
+def test_release_preflight_failure_blocks_main_and_release_writes(
+    tmp_path: Path,
 ) -> None:
     source, bare, base = _remote(tmp_path)
-    release = RecordingRelease(preflight_failure=RuntimeError(reason))
+    release = RecordingRelease(preflight_failure=RuntimeError("discovery unavailable"))
 
     result = _coordinator(source, GitRemote(source), ChangingRefresh(), release).run(
         "run", "token"
@@ -180,6 +179,49 @@ def test_missing_or_unowned_seed_blocks_main_and_release_writes(
     assert _git(bare, "rev-parse", "main") == base
     assert release.preflight_calls == 1
     assert release.calls == []
+
+
+@pytest.mark.parametrize(
+    ("status", "body", "diagnostic"),
+    [
+        (404, None, "release discovery failed with status 404"),
+        (200, "unowned release", "release ownership marker is absent"),
+    ],
+)
+def test_seed_discovery_blocks_publication_without_owned_release(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    status: int,
+    body: str | None,
+    diagnostic: str,
+) -> None:
+    from scripts.nightly import _publisher
+    from scripts.nightly_release import RELEASE_PATH
+    from scripts.nightly_release_transport import GitHubReleaseRemote
+    from tests.test_nightly_release import Opened, release
+
+    source, bare, base = _remote(tmp_path)
+    requests = []
+
+    def opener(request, *, timeout):
+        requests.append((request.get_method(), request.full_url))
+        return Opened(status, json.dumps(release(body=body)).encode())
+
+    remote = GitHubReleaseRemote("token", trusted_opener=opener)
+    monkeypatch.setattr(
+        "scripts.nightly_release_transport.GitHubReleaseRemote", lambda token: remote
+    )
+    coordinator = cast(PublicationCoordinator, _publisher(source, "token"))
+    coordinator.refresh = ChangingRefresh()
+    result = coordinator.run("run", "token")
+
+    assert result.status == "failed"
+    assert result.stage == "release-preflight"
+    assert diagnostic in result.detail
+    assert "bootstrap-release" in result.detail
+    assert result.release_status == "not-run"
+    assert _git(bare, "rev-parse", "main") == base
+    assert requests == [("GET", f"https://api.github.com{RELEASE_PATH}")]
 
 
 def test_release_uses_verified_bytes_after_successful_checkout_is_removed(

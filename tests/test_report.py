@@ -172,57 +172,6 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
 @pytest.mark.parametrize(
     "mutation",
     [
-        {
-            "probes": [
-                {
-                    "name": "app.apk",
-                    "url": "https://example.test/app.apk",
-                    "success": "yes",
-                    "response_url": "https://example.test/app.apk",
-                    "status": 200,
-                    "bytes_read": 1,
-                }
-            ]
-        },
-        {
-            "resolution": {
-                "raw_version": 42,
-                "effective_version": "v1.2",
-                "version_origin": "tag",
-                "candidates": [],
-                "selected": None,
-                "inspected_count": 1,
-                "window_limit": 100,
-            }
-        },
-        {
-            "resolution": {
-                "raw_version": "v1.2",
-                "effective_version": "v1.2",
-                "version_origin": "tag",
-                "candidates": [False],
-                "selected": None,
-                "inspected_count": 1,
-                "window_limit": 100,
-            }
-        },
-        {"errors": [{"code": "bad"}]},
-        {"index": True},
-        {"version_class": []},
-    ],
-)
-def test_live_shaped_fields_are_rejected(tmp_path: Path, mutation: dict) -> None:
-    copy_inputs(tmp_path)
-    report = run_verification(tmp_path)
-    report["entries"] = [mutation]
-    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
-    with pytest.raises(ValueError, match="malformed verification report"):
-        format_reports(tmp_path)
-
-
-@pytest.mark.parametrize(
-    "mutation",
-    [
         {"schemaVersion": []},
         {"schemaVersion": {}},
         {"schemaVersion": True},

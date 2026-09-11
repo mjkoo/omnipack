@@ -120,7 +120,7 @@ that differs from deterministic generation using the captured serialized packs
 and current composition policy. Handwritten content SHALL NOT affect catalog
 comparison but SHALL be included in the exact input fingerprint. Verification
 SHALL NOT rewrite any inputs or fetch sources to generate the expected catalog.
-Catalog errors SHALL prevent live requests like other offline errors.
+Catalog errors SHALL prevent successful verification.
 
 #### Scenario: Stale import link
 

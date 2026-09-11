@@ -1,15 +1,15 @@
 # Structural verification validation
 
-Validation date: 2026-09-10 UTC, macOS aarch64, Python 3.14.7.
+Validation date: 2026-09-11 UTC, macOS aarch64, Python 3.14.7.
 These are local automated checks and controlled publication tests, not device
 acceptance or an operational publication run.
 
 ## Results
 
 `just check-all` passed, including lock validation, Ruff formatting/lint, Ty,
-dependency audit, Python sdist/wheel builds, all 639 retained tests, structural
+dependency audit, Python sdist/wheel builds, all 628 retained tests, structural
 verification, workflow lint, Nix formatting and host flake checks. The test run
-completed in 30.61 seconds with 92% package coverage. The dependency audit found
+completed in 31.67 seconds with 92% package coverage. The dependency audit found
 no known vulnerabilities or adverse project statuses in 10 packages.
 
 Workflow lint reported no findings using zizmor's default offline mode. Nix
@@ -19,7 +19,7 @@ acceptance.
 
 The standalone verification report used schema 2, verifier 1.0.0 with structural
 scope, and offline mode. It completed successfully with no errors from
-23:53:06.695322 to 23:53:06.727122 UTC. Both reports and fingerprints are local
+00:05:19.127087 to 00:05:19.159382 UTC. Both reports and fingerprints are local
 observations, not evidence of current app release availability.
 
 All nine main specs passed `openspec validate --specs`; the change artifacts
@@ -41,7 +41,8 @@ the separate release-seed prerequisite.
   successful candidates need no post-build app HTTP requests. Both configured
   release-fallback values survive in exact candidate bytes.
 - [Git publication tests](../tests/test_nightly_git.py) cover seed ownership before
-  writes, selected-revision evidence, byte boundaries, no-op and recovery.
+  writes through real release discovery for missing and unowned releases,
+  selected-revision evidence, byte boundaries, no-op and recovery.
   [Reporting tests](../tests/test_nightly_reporting.py) distinguish retained
   pre-build evidence from successful and failed candidate evidence.
 - [Curation tests](../tests/test_curation.py) and
@@ -60,8 +61,9 @@ validation page only gains a notice identifying its retired contract.
 
 Python physical lines, counting `src/` plus `scripts/` as implementation and
 `tests/` separately, changed from 9,760 to 7,467 implementation lines and from
-14,613 to 10,890 test lines: reductions of 2,293 and 3,723. Tests decreased from
-999 to 639 because live-resolution guarantees were retired, not replaced.
+14,613 to 10,836 test lines: reductions of 2,293 and 3,777. Tests decreased from
+999 to 628 after retiring live-resolution guarantees and consolidating redundant
+guard tests. The retired guarantees were not replaced.
 
 No export/configuration changes or external publication writes occurred. Live
 app resolution, asset probing and effective-version lint are no longer automated;
