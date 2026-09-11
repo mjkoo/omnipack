@@ -98,4 +98,3 @@ or alter repository protection settings to bypass a rejection.
 
 **Reason**: Resolution state moves to the source-update PR; cache-only nightly commits are retired.
 **Migration**: Use "Publish only verified pack outputs and the README catalog" and the separate readme-source-generation contract. Retained output safety and composition behavior are included in the replacement.
-
