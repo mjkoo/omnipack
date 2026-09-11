@@ -1,7 +1,7 @@
 ## 1. Capture migration evidence and source boundaries
 
-- [ ] 1.1 Inventory eligible README table projects, previously admitted generated candidates and higher-source coverage using captured inputs; record an explicit mapping to existing package-ID cache entries and confirm the baseline pack bytes and family winners are reproducible.
-- [ ] 1.2 Define the accepted catalog/metadata/resolution-state fixtures and candidate output layout; verify fixtures cover a new project, accepted fallback, covered dual project, single-only coverage, removal and conflicting package IDs without modifying protected historical evidence.
+- [x] 1.1 Inventory eligible README table projects, previously admitted generated candidates and higher-source coverage using captured inputs; record an explicit mapping to existing package-ID cache entries and confirm the baseline pack bytes and family winners are reproducible.
+- [x] 1.2 Define the accepted catalog/metadata/resolution-state fixtures and candidate output layout; verify fixtures cover a new project, accepted fallback, covered dual project, single-only coverage, removal and conflicting package IDs without modifying protected historical evidence.
 
 ## 2. Implement automatic source generation
 
