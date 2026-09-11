@@ -647,7 +647,11 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
     assert app.get("latestVersion") in (None, "")
 
 
-@pytest.mark.parametrize("identifier", ["", -1, 0, True, None])
+@pytest.mark.parametrize(
+    "identifier",
+    ["", "9", "10", "0", "-1", "invalid", -1, 0, True, None],
+    ids=lambda value: f"{type(value).__name__}-{value}",
+)
 def test_invalid_host_release_identifier(identifier):
     with pytest.raises((TypeError, ValueError)):
         select_release(JsonHttp(release(identifier)), PROJECT, default_apk_rule())
@@ -720,3 +724,22 @@ def test_tracker_instruction_supports_canonical_host_urls(instruction):
         }
     )
     assert policy.projects[PROJECT].installation == instruction
+
+
+@pytest.mark.parametrize(
+    "name,tag", [("  Release stable  ", "v1"), ("   ", "stable-v1")]
+)
+def test_title_filter_uses_search_and_trimmed_tag_fallback(name, tag):
+    rule = parse_project_policy(
+        {
+            "schemaVersion": 1,
+            "projects": {
+                PROJECT: {
+                    "kind": "apk",
+                    "additionalSettings": {"filterReleaseTitlesByRegEx": "stable"},
+                }
+            },
+        }
+    ).projects[PROJECT]
+    chosen = release(name=name, tag_name=tag)
+    assert select_release(JsonHttp([chosen]), PROJECT, rule) == chosen

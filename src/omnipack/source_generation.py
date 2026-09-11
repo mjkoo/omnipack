@@ -111,13 +111,11 @@ def _release_api(project: str, listed: bool) -> str:
     return f"https://api.github.com/repos/{owner}/{repo}/{suffix}"
 
 
-def _release_id(release: dict[str, Any]) -> str | int:
+def _release_id(release: dict[str, Any]) -> int:
     value = release.get("id")
-    if not isinstance(value, (str, int)) or isinstance(value, bool):
+    if not isinstance(value, int) or isinstance(value, bool):
         raise TypeError("release has no host-assigned identifier")
-    if (isinstance(value, str) and not value.strip()) or (
-        isinstance(value, int) and value <= 0
-    ):
+    if value <= 0:
         raise ValueError("release has an invalid host-assigned identifier")
     return value
 
@@ -146,7 +144,7 @@ def select_release(
         raise ValueError("release scan exceeded the 100-release bound")
     title_pattern = settings.get("filterReleaseTitlesByRegEx", "")
     pattern = re.compile(title_pattern) if title_pattern else None
-    candidates: list[tuple[datetime, tuple[int, str], dict[str, Any]]] = []
+    candidates: list[tuple[datetime, int, dict[str, Any]]] = []
     for release in document:
         if not isinstance(release, dict) or release.get("draft") is True:
             continue
@@ -156,17 +154,14 @@ def select_release(
             continue
         release_id = _release_id(release)
         timestamp = _publication_time(release)
-        title = release.get("name") or release.get("tag_name")
+        title = release.get("name")
+        if title is None or (isinstance(title, str) and not title.strip()):
+            title = release.get("tag_name")
         if not isinstance(title, str):
             raise TypeError("release has no title or tag")
-        if pattern and pattern.fullmatch(title) is None:
+        if pattern and pattern.search(title.strip()) is None:
             continue
-        tie = (
-            (0, str(release_id))
-            if isinstance(release_id, str)
-            else (1, f"{release_id:020d}")
-        )
-        candidates.append((timestamp, tie, release))
+        candidates.append((timestamp, release_id, release))
     if not candidates:
         raise ValueError("no permitted release in the bounded 100-release scan")
     return max(candidates, key=lambda item: (item[0], item[1]))[2]
