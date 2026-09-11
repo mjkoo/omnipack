@@ -48,6 +48,15 @@ def test_project_parser_ignores_links_outside_project_tables() -> None:
             "projects": {
                 "github.com/a/b": {
                     "kind": "apk",
+                    "additionalSettings": {"apkFilterRegEx": "(?<=app)\\.apk$"},
+                }
+            },
+        },
+        {
+            "schemaVersion": 1,
+            "projects": {
+                "github.com/a/b": {
+                    "kind": "apk",
                     "additionalSettings": {"apkFilterRegEx": "["},
                 }
             },
@@ -283,3 +292,34 @@ def test_failed_invocation_rejects_stale_candidates_and_preserves_tracked_inputs
     assert result["status"] == "failed"
     assert {path.name for path in output.iterdir()} == {"report.json"}
     assert all(path.read_bytes() == contents for path, contents in tracked.items())
+
+
+def test_tracker_id_collision_fails_with_both_projects(tmp_path: Path) -> None:
+    source_url, _ = tracking_root(tmp_path)
+    policy_path = tmp_path / "config/codm-projects.json"
+    policy = json.loads(policy_path.read_text())
+    first_rule = policy["projects"]["github.com/example/tracker"]
+    policy["projects"]["github.com/other/tracker"] = {
+        **first_rule,
+        "name": "Other tracker",
+    }
+    policy_path.write_text(json.dumps(policy))
+    readme = b"| Project | Note |\n| --- | --- |\n| [One](https://github.com/example/tracker) | mod |\n| [Two](https://github.com/other/tracker) | mod |\n"
+    http = MappingHttp(
+        {
+            source_url: readme,
+            "https://api.github.com/repos/example/tracker/releases/latest": {
+                "id": 1,
+                "assets": [],
+            },
+            "https://api.github.com/repos/other/tracker/releases/latest": {
+                "id": 2,
+                "assets": [],
+            },
+        }
+    )
+    result = generate_codm(tmp_path, http=http)
+    assert result["status"] == "failed"
+    assert "example/tracker" in result["error"]
+    assert "other/tracker" in result["error"]
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()

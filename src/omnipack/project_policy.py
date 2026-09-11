@@ -28,6 +28,7 @@ _REGEX_SETTINGS = {
     "apkFilterRegEx",
     "versionExtractionRegEx",
 }
+_UNSUPPORTED_REGEX_TOKENS = ("(?<=", "(?<!", "(?P<", "(?(", "(?>")
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,6 +131,10 @@ def _parse_rule(url: str, value: dict[str, Any]) -> ProjectRule:
         if not isinstance(setting, expected):
             raise PolicyError(f"{url}: setting {key!r} has invalid type")
         if key in _REGEX_SETTINGS and setting:
+            if any(token in setting for token in _UNSUPPORTED_REGEX_TOKENS):
+                raise PolicyError(
+                    f"{url}: regex for {key} uses syntax unsupported by Obtainium"
+                )
             try:
                 re.compile(setting)
             except re.error as error:

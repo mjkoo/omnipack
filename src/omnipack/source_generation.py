@@ -404,6 +404,21 @@ def _load_catalog(path: Path) -> list[dict[str, Any]]:
         )
     ):
         raise ValueError("accepted codm catalog is malformed")
+    seen_urls: set[str] = set()
+    seen_ids: dict[str, str] = {}
+    for item in doc["apps"]:
+        normalized = normalize_project_url(item["url"])
+        if normalized in seen_urls:
+            raise ValueError(
+                f"accepted codm catalog has duplicate project {normalized}"
+            )
+        seen_urls.add(normalized)
+        prior = seen_ids.get(item["id"])
+        if prior is not None:
+            raise ValueError(
+                f"accepted codm catalog ID collision {item['id']!r} between {prior} and {item['url']}"
+            )
+        seen_ids[item["id"]] = item["url"]
     return doc["apps"]
 
 
