@@ -36,7 +36,10 @@ A matching fingerprint does not establish current upstream health.
 
 See [verification](verification.md) for structural checks, failure policy,
 and the limits of a successful check. CI verifies committed files offline;
-nightly publication runs fresh structural verification after building its candidate.
+nightly publication uses one checkout and locked setup, then one build and fresh
+structural verification. Formatting, lint, types, packaging and the full suite
+remain development CI responsibilities. Main advancement fails the nightly run
+without another attempt; release readiness is checked after the main outcome.
 Old verification report schemas require regeneration with `uv run pack verify`.
 
 See [pack composition](composition.md) for family selection, policy,

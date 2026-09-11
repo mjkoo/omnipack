@@ -11,9 +11,10 @@ of every queued trigger are not guaranteed.
 
 ## Refresh and publication
 
-Each attempt uses a disposable checkout of the observed remote main revision.
-It synchronizes the locked Python environment, checks formatting, lint, types,
-Python packaging, tests, and committed packs offline, then runs:
+Each run selects main once in the Actions checkout and captures that HEAD as its
+base. It rejects initial tracked modifications and uses that workspace throughout.
+The workflow synchronizes the locked Python environment once, then the publisher
+runs:
 
 ```sh
 uv run --no-sync pack build
@@ -21,9 +22,10 @@ uv run --no-sync pack verify
 ```
 
 The structural gate requires complete, successful, fresh evidence matching the
-candidate inputs and verifier identity. Evidence validation runs in each
-selected revision's locked runtime, including its identity, input paths, and
-report schema. Existing warnings and generated-source
+candidate inputs and verifier identity. Evidence validation runs in the selected
+revision's locked runtime, including its identity, input paths, and report schema. Development CI owns formatting,
+lint, types, packaging and the full suite; nightly does not repeat those checks
+or verify committed packs before building. Existing warnings and generated-source
 soft failures retain their current policy. Verification makes no network requests.
 Building retains source fetching and APK package-ID discovery. A structurally
 invalid selected build blocks publication without choosing another project.
@@ -54,19 +56,17 @@ file-mode-only changes. Byte changes preserve the base file modes. The full
 tracked-change allowlist is rechecked when staging finishes.
 
 Publication uses a normal fast-forward push to main. Before either pushing or
-recognizing a no-op, the publisher rechecks main. If main advanced, it discards
-the candidate and performs one complete fresh attempt at the new revision.
-A second advancement fails the run. It never rebases generated output,
-cherry-picks a stale candidate, or force-pushes.
+recognizing a no-op, the publisher rechecks main. If main advanced, the run fails
+without another build or push. Rerun manually or wait for the next scheduled run
+to build the newer revision. It never rebases generated output, cherry-picks a
+stale candidate, retries the push, or force-pushes.
 
 A rejected or ambiguous push is reconciled by reading remote history. If the
 intended commit is in main's history, publication is confirmed even if a later
-commit has followed it. Otherwise, an advanced main can consume the remaining
-attempt; an unchanged rejection fails. An unreadable remote result is reported
-as **uncertain**, without another blind push or a claim of non-publication.
+commit has followed it. Confirmed absence fails the run. An unreadable remote
+result is reported as **uncertain**, without another blind push or a claim of non-publication.
 
-After confirmed main publication or a verified no-op, the same attempt
-synchronizes `single-screen.json` and `dual-screen.json` to the owned prerelease
+After confirmed main publication or a verified no-op, the run synchronizes `single-screen.json` and `dual-screen.json` to the owned prerelease
 at tag `continuous`. The release title is `omnipack revision N`. Both variants
 share that revision, and only a change to either JSON increments it. README-only
 and package-id-cache-only changes do not advertise a pack update. The stable
@@ -78,20 +78,21 @@ release downloads are:
 Synchronization records a pending target, replaces only changed assets, verifies
 both downloaded asset digests, then promotes the release title and completed
 state. A failed or uncertain main publication performs no release writes. A
-release failure preserves the independently confirmed main SHA, fails the run,
-and keeps the owned failure issue open.
+release failure preserves the independently confirmed main SHA and fails the run.
+Seed readiness gates only this release stage; valid main output can publish even
+when the seed is missing, malformed or unowned.
 
 ## Permissions and repository prerequisites
 
-The workflow uses `GITHUB_TOKEN` with job-scoped `contents: write` and
-`issues: write`. Checkout credential persistence is disabled. Push credentials
-are supplied only to the push process, and issue requests use authorization
+The workflow uses `GITHUB_TOKEN` with job-scoped `contents: write` for main and
+release publication. Checkout credential persistence is disabled. Push credentials
+are supplied only to the push process, and release requests use authorization
 headers. No PAT, automatic repository-setting changes, or ruleset bypass is
 provided.
 
 Before enabling operational publication, a maintainer must confirm that:
 
-- Actions and repository issues are enabled, and organizational policy permits
+- Actions is enabled, and organizational policy permits
   the requested token permissions and pinned actions.
 - The workflow is on the default branch, and main is the intended published
   branch.
@@ -120,12 +121,17 @@ release, or immutable release, and safely reports an existing valid seed. The
 token needs permission to read and create releases and tags in the canonical
 repository; branch or tag protections can still reject the operation. Routine
 publishing never invokes bootstrap. It checks seed existence and ownership using
-release discovery before main publication; a missing or unowned seed blocks main
-and release writes. Structural verification never queries the seed and can pass
-before bootstrap. Synchronization rediscovers ownership and retains digest checks.
+release discovery after confirmed main publication or a verified no-op. A missing,
+malformed or unowned seed fails release synchronization without release writes;
+main remains independently successful. Structural verification never queries the
+seed and can pass before bootstrap. Synchronization retains ownership and digest
+checks. After explicit bootstrap, a later freshly verified main no-op can publish
+the first asset pair at revision one.
 
-A token-authored push does not trigger ordinary push CI, so the checks before
-publication are required. These platform behaviors were checked against
+A token-authored push does not trigger ordinary push CI. Development CI checks
+code changes before landing; nightly checks the generated candidate and its exact
+publication bytes. There is no CI-status polling gate. These platform behaviors
+were checked against
 GitHub's [workflow-trigger documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
 and [protected-branch documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
 Scheduling also requires the workflow on the default branch; GitHub documents
@@ -134,27 +140,15 @@ schedule delays and dropped queued jobs in its
 
 ## Failure and recovery
 
-Handled setup, check, build, verification, and publication failures maintain
-one issue titled **Nightly build failing**. Ownership requires both
-`github-actions[bot]` authorship and the exact body marker
-`<!-- obtainium-pack:nightly-publishing -->`. A matching title alone is not
-ownership. This legacy marker stays stable across the omnipack rename so
-existing issues remain discoverable. Discovery includes all pages of open and closed issues and excludes
-pull requests. The lowest-numbered owned issue is reused and reopened on
-recurrence; other open owned duplicates are closed. Repeated failures replace
-the body rather than adding comments. Ambiguous creation triggers rediscovery
-before any further action.
+Use Actions step status, logs, summaries and available reports to investigate a
+failed run. Main confirmation and its SHA are logged and flushed before release
+work starts. A release or reporting failure cannot erase that earlier confirmation.
+A failed refresh does not publish its locally updated package-id cache.
 
-Confirmed publication or a verified no-op updates and closes existing open
-owned issues with recovery evidence. Success never creates an issue. Issue
-maintenance failure fails the workflow without undoing a confirmed push; a
-later successful run retries closure. A failed refresh does not publish its
-locally updated package-id cache.
-
-Disposable-checkout cleanup failures fail the workflow. Diagnostics retain the
-confirmed publication outcome, published SHA, and per-attempt reports separately
-from cleanup errors. Confirmed publication or a verified no-op still triggers
-issue recovery even when cleanup fails.
+Automation no longer creates, updates or closes issues. Existing issues are left
+untouched; any migration is a separate maintainer operation. Historical records
+retain the legacy ownership marker `<!-- obtainium-pack:nightly-publishing -->`.
+Actions owns workspace disposal.
 
 Release diagnostics report completed and pending revisions separately from the
 main publication result. If an interruption occurs while replacing assets, the
@@ -166,50 +160,49 @@ worked around by changing repository settings.
 
 ## Diagnostics
 
-The Actions summary distinguishes publication, no-op, failure, uncertainty,
-cleanup, issue maintenance, and upload outcomes. It includes run, base, and published
-identifiers where available. Early failures explicitly identify unavailable
-reports. Issue bodies are bounded to 4,000 characters and summaries to 16,000.
+The concise Actions summary and run result distinguish main publication, no-op,
+failure or uncertainty from release synchronization. They include available run,
+base, candidate and confirmed published identifiers, the failing stage, and
+completed or pending release revisions. Verification evidence is structural and
+offline; missing reports do not establish verification success.
 
-The `nightly-publishing-<run-id>` artifact retains redacted orchestration JSON
-and each attempt's build and verification JSON for 14 days. The file allowlist
-excludes APKs, raw HTTP caches, credentials, and unrelated files. Reports from
-discarded attempts are retained separately. Artifact upload happens before its
-final outcome is known, so consult the final Actions summary and step status
-for the upload outcome; the uploaded result initially records it as pending.
-Upload failure fails the workflow without rolling back publication.
+The `nightly-publishing-<run-id>` artifact offers available redacted
+`run-result.json`, `build-report.json` and `verify-report.json` for 14 days,
+after either success or failure. Its
+explicit file allowlist excludes APKs, raw HTTP caches, credentials and unrelated
+files. Diagnostics treat source text as data and redact credential values.
+Actions step status is the authority for artifact upload; the captured run result
+does not claim an upload outcome. Actual upload errors fail the step. Missing
+reports after early setup or helper failure are acceptable.
 
-Diagnostic JSON files are replaced atomically. If a later write fails, fallback
-finalization can reload the last complete result and preserve a confirmed
-publication and its SHA. Fallback keeps the triggering helper failure visible in
-the workflow status and preserves unavailable-report markers. Retained pre-build
-verification is labeled as pre-build evidence. Candidate structural/offline
-evidence is unavailable until the post-build verification runs; the two phases
-are distinguished even though both use offline mode.
-
-System Python can finalize handled uv/Python setup failures. Hard cancellation
-or runner loss may prevent finalization or issue delivery; Actions remains the
-fallback record. No successful verification or publication is inferred from
-an interrupted run.
+Summary writes are best effort, and a write error remains a visible failure.
+Setup failures and unexpected helper failures may leave only Actions status and
+logs. There are no fallback-finalization commands, completion markers or result
+reload recovery. Hard cancellation or runner loss may prevent even those logs
+from arriving; an interrupted run never establishes successful publication.
 
 ## Post-landing operational acceptance
 
 This is a **future maintainer operation**, not an implementation test already
-performed. It can push to main and maintain a real issue.
+performed. It can push to main and modify the real rolling release.
 
 1. Check the repository prerequisites above after landing the workflow.
 2. In Actions, select **Nightly publishing**, choose **Run workflow**, explicitly
    select **main**, and dispatch it.
-3. Inspect the summary and retained reports. Confirm fresh attempt/base IDs,
-   complete successful candidate evidence, and structural/offline verification mode.
+3. Inspect the summary and retained reports. Confirm the selected base and run
+   identifiers, complete successful candidate evidence, and structural/offline
+   verification mode.
 4. Confirm either the published SHA in main's history with only allowed paths,
    or a verified no-op. A failed or uncertain result is not acceptance; inspect
    its failing stage and remote history before deciding what to do next.
-5. If an owned failure issue was already open, confirm that recovery evidence
-   was recorded and the issue closed. Do not manufacture a live failure merely
-   to test issue creation.
-6. Record the run URL, base/published SHA or no-op, verification mode, and issue
-   outcome in the maintainer's operational record.
+5. Confirm release synchronization separately, including both stable JSON downloads
+   and the shared completed revision. If it failed, retain the main confirmation,
+   resolve the reported release prerequisite, and rerun with fresh verification.
+6. Check Obtainium import, unchanged polling, revision-change notification,
+   acknowledgement and re-import on devices.
+7. Record the run URL, base/published SHA or no-op, structural verification result,
+   release revision/outcome, diagnostic upload status and device observations in
+   the maintainer's operational record.
 
 ## Rollback
 
@@ -225,5 +218,6 @@ publisher is a new content publication and receives a higher shared revision.
 If the tracker is intentionally retired, users must remove its Obtainium entry
 manually; removing it from a later import does not guarantee device deletion.
 
-See [publishing validation](publishing-validation.md) for implementation checks
+See [nightly publication validation](nightly-publication-validation.md) for current
+implementation checks
 and the distinction between controlled tests and operational acceptance.

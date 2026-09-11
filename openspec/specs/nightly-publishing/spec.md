@@ -10,65 +10,79 @@ reporting for maintainers.
 
 ### Requirement: Scheduled and manual refreshes use main
 
-The system SHALL offer a daily refresh at 03:00 in America/New_York, following daylight saving time, and a manual workflow dispatch using the same publication policy. Write-capable refreshes SHALL run only for main in the canonical repository. The system SHALL serialize active publishers without canceling an executing publisher for a newer run. Each run SHALL have a 60-minute execution limit. Scheduling SHALL NOT promise exact delivery time or that every queued trigger executes.
+The system SHALL offer a daily refresh at 03:00 in America/New_York, following
+daylight saving time, and manual dispatch using the same publication policy.
+Write-capable refreshes SHALL run only for main in the canonical repository.
+Active publishers SHALL be serialized without canceling an executing publisher,
+with a 60-minute limit per run. Scheduling SHALL NOT promise exact delivery or
+execution of every queued trigger. Each run SHALL select main once in its Actions
+checkout before locked runtime setup, record that base revision, and use that
+same clean initial tracked workspace and revision throughout its single attempt.
 
 #### Scenario: Nightly or manual refresh
 
 - **WHEN** an eligible scheduled or manual run starts
-- **THEN** it selects the current main revision and follows the same refresh gates
+- **THEN** it selects main once and uses that checkout for setup, build, verification and publication
+- **AND** it does not create disposable attempt checkouts or switch revisions during the run
 
 #### Scenario: Ineligible invocation
 
 - **WHEN** the workflow is dispatched from another ref or runs in a fork
-- **THEN** it skips publication and issue writes
+- **THEN** it skips publication and release writes
 
 #### Scenario: Overlapping triggers
 
-- **WHEN** another refresh is triggered while a publisher is executing
-- **THEN** the new trigger does not execute concurrently with or cancel that publisher
+- **WHEN** another refresh is triggered while a publisher executes
+- **THEN** it neither runs concurrently with nor cancels that publisher
 
 #### Scenario: Eastern time changes seasonally
 
 - **WHEN** America/New_York changes between standard and daylight saving time
-- **THEN** the daily scheduled local time remains 03:00
+- **THEN** the scheduled local time remains 03:00
+
+#### Scenario: Dirty initial checkout
+
+- **WHEN** tracked changes already exist before the refresh starts
+- **THEN** publication is rejected without treating those changes as generated output
 
 ### Requirement: Publication requires fresh metadata verification
 
-Each attempt SHALL check its selected revision using the repository's offline
-Python checks, then build both packs and run fresh structural
-verification on the resulting candidate. Publication SHALL require complete
-successful verification evidence matching the candidate's current inputs and
-verifier identity. Evidence validation SHALL use the selected attempt revision's
-runtime, including its verifier identity, input paths, and report schema. Build failure, check failure, verification errors, absent
-evidence, or incomplete evidence SHALL prevent publication of every candidate
-file, including the package-id cache. Existing non-blocking warnings and
-generated-source soft failures SHALL retain their existing policy.
+Each run SHALL set up its selected revision's locked runtime once, build once,
+and run fresh structural verification once on the resulting candidate. Nightly
+SHALL NOT repeat development CI formatting, lint, type, Python packaging or full
+test-suite checks, verify old committed outputs before building, or replace those
+checks with a CI-status polling gate. Publication SHALL require complete successful
+evidence matching the current candidate inputs and selected revision's verifier
+identity, input paths and report schema. Build failure, verification failure,
+missing, stale or incomplete evidence SHALL prevent publication of every
+candidate file, including the package-ID cache. Existing non-blocking warnings
+and generated-source soft failures SHALL retain their policy.
 
-Verification SHALL use `pack verify` without retired live flags and SHALL make no network requests. Building SHALL retain its existing
-network and APK package-id discovery behavior. Prior-run success SHALL NOT
-substitute for fresh structural verification.
+Verification SHALL use `pack verify` without retired live flags and SHALL make
+no network requests. Building SHALL retain its network and APK package-ID
+discovery behavior. Prior-run success SHALL NOT substitute for fresh candidate
+verification. Exact-byte staging and commit checks SHALL remain required.
 
 #### Scenario: Candidate verifies with warnings
 
-- **WHEN** checks, build, and fresh structural verification succeed while build diagnostics contain non-blocking warnings
-- **THEN** the candidate is eligible for publication and warnings remain visible
+- **WHEN** the build and fresh structural verification succeed with non-blocking build warnings
+- **THEN** the candidate is eligible and warnings remain visible without running development CI checks
 
 #### Scenario: Failed refresh after cache updates
 
-- **WHEN** building updates the local cache but building or verification fails
-- **THEN** neither the cache nor the candidate packs are published to main
+- **WHEN** the build updates the local cache but building or verification fails
+- **THEN** no cache, catalog or pack candidate is published
 
 #### Scenario: Stale or incomplete evidence
 
-- **WHEN** verification evidence is absent, incomplete, from another verifier,
-  or does not match the candidate inputs
+- **WHEN** evidence is absent, incomplete, from another verifier or mismatches candidate inputs
 - **THEN** publication is rejected
 
 #### Scenario: App metadata is unavailable after a successful build
 
-- **WHEN** checks, build and fresh structural verification succeed
-- **THEN** publication eligibility does not depend on a separate lookup of each configured app's release metadata
-- **AND** build-time source ingestion and package-ID discovery retain their existing failure policy
+- **WHEN** building and fresh structural verification succeed
+- **THEN** eligibility requires no separate app-release metadata lookup
+- **AND** ingestion and package-ID discovery retain their build-time failure policy
 
 ### Requirement: Publish only the verified output and cache
 
@@ -121,145 +135,128 @@ or alter repository protection settings to bypass a rejection.
 - **WHEN** a candidate changes README content outside the generated section
 - **THEN** publication fails even if standalone verification succeeds
 
-### Requirement: Concurrent changes require a fresh attempt
+### Requirement: Nightly completion includes rolling release synchronization
 
-The publisher SHALL confirm main still matches the attempt's base before a
-push or successful no-op. If main advances, the publisher SHALL discard the
-candidate and perform one complete fresh attempt against the newer revision.
-It SHALL NOT rebase or cherry-pick previously generated output or reuse its
-verification. A run SHALL attempt refresh at most twice; further advancement
-SHALL result in failure without publishing the stale candidate.
+After confirmed main publication or a verified main no-op, the publisher SHALL
+synchronize the owned rolling release from that run's exact verified JSON pair.
+Release readiness SHALL NOT be a prerequisite for otherwise valid main output.
+Main publication and release synchronization SHALL have distinct outcomes.
+Release failure SHALL fail the workflow without undoing a confirmed main push;
+reporting failure SHALL NOT erase already logged confirmation. A later fresh
+verified run SHALL attempt release synchronization even when main is a no-op.
+Failed or uncertain main publication SHALL prohibit release writes.
 
-After a rejected or ambiguous push, the publisher SHALL inspect remote main.
-An intended commit present in its history SHALL count as published. Otherwise,
-an advanced main SHALL use the remaining retry budget. An unchanged main with
-a rejected push, or an unreadable remote outcome, SHALL be reported as failure;
-an uncertain outcome SHALL NOT be described as confirmed non-publication.
+#### Scenario: Main push succeeds and release write fails
+
+- **WHEN** main publication succeeds but release synchronization fails
+- **THEN** the workflow fails with the confirmed main SHA and release failure reported separately
+- **AND** no rollback or issue maintenance occurs
+
+#### Scenario: Missing release seed
+
+- **WHEN** main output is eligible but the release seed is missing or invalid
+- **THEN** main publication or verified no-op proceeds independently
+- **AND** the release stage fails without unauthorized release writes
+
+#### Scenario: Main outcome is uncertain
+
+- **WHEN** the publisher cannot establish whether its push succeeded
+- **THEN** it records uncertainty and performs no release writes
+
+#### Scenario: Later main no-op repairs the release
+
+- **WHEN** a later freshly verified run needs no main commit but release synchronization is incomplete
+- **THEN** it attempts synchronization from that run's verified pair
+
+### Requirement: Main publication uses one refresh attempt
+
+The publisher SHALL confirm main still matches its base before pushing or
+recognizing a verified no-op. If main advances, the run SHALL fail without
+publishing the stale candidate or starting another attempt. A later invocation
+SHALL build and verify its own selected revision. The publisher SHALL NOT rebase,
+cherry-pick generated output, retry a main push, or rebuild within the same run.
+
+After a rejected or ambiguous push, the publisher SHALL inspect remote main
+history. Presence of the intended commit SHALL confirm publication even when
+later commits follow it. Confirmed absence SHALL report failure. An unreadable
+remote result SHALL report uncertainty, never confirmed non-publication. This
+reconciliation SHALL NOT cause another push or refresh attempt.
 
 #### Scenario: Main advances during verification
 
-- **WHEN** the first candidate verifies but main now points to a newer revision
-- **THEN** a fresh attempt checks, builds, and verifies that revision before publishing
+- **WHEN** the candidate verifies but main now points to a newer revision
+- **THEN** the run fails without another build, push or release synchronization
 
-#### Scenario: Main advances with a changed verifier
+#### Scenario: Main advances before a no-op
 
-- **WHEN** the fresh attempt's revision changes verifier identity, input paths,
-  or report schema
-- **THEN** evidence is validated against those selected-revision contracts
-- **AND** evidence that does not match them is rejected
+- **WHEN** generated bytes match the selected base but main has advanced
+- **THEN** the run fails instead of claiming a current no-op or synchronizing the release
 
-#### Scenario: Main advances twice
+#### Scenario: Main advances after the final comparison
 
-- **WHEN** main advances again during the second attempt
-- **THEN** the run fails and does not push the stale candidate
+- **WHEN** a normal push is rejected because another commit landed after the comparison
+- **THEN** the publisher reconciles the intended commit's presence without retrying the push or build
 
 #### Scenario: Push succeeded but acknowledgement was lost
 
-- **WHEN** a push reports an error but the intended commit is found in main's history
-- **THEN** publication is recorded as successful without creating another commit
+- **WHEN** a push reports an error but the intended commit is in main's history
+- **THEN** publication is confirmed and release synchronization is eligible
+- **AND** no additional commit or push is created
 
 #### Scenario: Protected main rejects publication
 
-- **WHEN** pushing is rejected and main still matches the attempt's base
-- **THEN** the run records publication failure without modifying protection settings
+- **WHEN** a push is rejected and the intended commit is confirmed absent
+- **THEN** the run fails without changing repository protections or synchronizing the release
 
-### Requirement: Failures maintain one owned tracking issue
+#### Scenario: Remote outcome cannot be read
 
-Handled setup, check, build, verification, and publication failures SHALL open,
-reopen, or update one automation-owned issue titled `Nightly build failing`.
-Ownership SHALL require the exact marker
-`<!-- obtainium-pack:nightly-publishing -->` and GitHub Actions bot authorship.
-The legacy marker SHALL remain stable across the omnipack rename so existing
-issues remain discoverable. Title matches alone SHALL NOT authorize modification. Discovery SHALL include
-all pages of open and closed issues and exclude pull requests. The
-lowest-numbered owned issue SHALL be canonical; other open owned duplicates
-SHALL be closed. Ambiguous creation SHALL trigger rediscovery before another
-creation attempt.
+- **WHEN** a push reports failure and reconciliation cannot read remote main
+- **THEN** the result is uncertain and no release writes or push retries occur
 
-The issue SHALL identify the failing stage, run URL, attempted base revision,
-publication outcome including uncertainty, and available diagnostics. Repeated
-failures SHALL update its body without adding repeated comments. Confirmed main publication or a verified main no-op SHALL authorize issue recovery only after rolling-release synchronization succeeds. Release failures SHALL update the owned issue and preserve the confirmed main outcome without rollback. Successful combined publication SHALL update and close existing open owned issues with recovery evidence. Success SHALL NOT create a new issue.
+### Requirement: Actions records publication outcomes
 
-#### Scenario: First and recurring failure
+Actions step results and logs SHALL provide the fallback failure record. When
+the publisher can report its outcome, it SHALL produce a concise summary and
+run result identifying available run/base/candidate/confirmed-published identifiers,
+failing stage, main outcome and release outcome. Confirmed main publication or
+no-op SHALL be logged before release synchronization starts. Available build,
+structural-verification and run-result reports SHALL be offered as allowlisted
+artifacts with 14-day retention on success and failure. Missing reports after
+early failure SHALL NOT imply verification success. Verification evidence SHALL
+be identified as structural/offline without live-health claims.
 
-- **WHEN** a refresh fails and no owned issue exists
-- **THEN** one owned issue is created
-- **AND WHEN** a later run fails
-- **THEN** the same issue is updated or reopened
+The workflow SHALL NOT maintain failure issues or request issue-write permission.
+Summary or artifact-upload failure SHALL remain visible as failed Actions steps
+without undoing publication or erasing already logged confirmation. Actions
+SHALL be the authority for upload status; uploaded results SHALL NOT claim an
+upload outcome that was not known when captured. Missing artifacts after failure
+before report creation SHALL be acceptable. Hard cancellation, runner loss or
+helper failure SHALL NOT promise reconstructed summaries or completed operations.
+No separate fallback-finalization or disposable-checkout cleanup contract applies.
 
-#### Scenario: Unrelated issue has the same title
+Diagnostics SHALL exclude credentials, raw HTTP caches and APK downloads, and
+source text SHALL be treated as data rather than executable input. Documentation
+SHALL describe token permissions and direct-push prerequisites without automatic
+repository-setting changes.
 
-- **WHEN** a user-authored or unmarked issue is titled `Nightly build failing`
-- **THEN** the publisher leaves that issue unchanged
+#### Scenario: Setup fails before reports exist
 
-#### Scenario: Recovery without new output
+- **WHEN** runtime setup fails before the publisher creates diagnostic reports
+- **THEN** Actions shows the failed setup step and logs, with no issue write or fabricated candidate evidence
+- **AND** missing diagnostic files do not require a recovery helper
 
-- **WHEN** a run produces a verified main no-op, release synchronization succeeds and an owned failure issue is open
-- **THEN** the issue records recovery and closes
+#### Scenario: Release fails after a confirmed push
 
-#### Scenario: Issue update fails after publication
+- **WHEN** release synchronization fails after main publication was logged
+- **THEN** the workflow fails and preserves the main confirmation separately from the release failure
 
-- **WHEN** publication is confirmed but issue maintenance fails
-- **THEN** the workflow fails with both outcomes visible and does not undo the push
+#### Scenario: Reporting fails after publication
 
-### Requirement: Diagnostics survive handled failures
-
-The workflow SHALL produce a summary and retain available per-attempt build,
-verification, and orchestration reports as artifacts for 14 days on handled
-success and failure. The summary SHALL distinguish publication, no-op, failure,
-uncertain publication, and issue-maintenance outcomes, with run/base/published
-identifiers where available. Missing early-stage reports SHALL be identified as
-unavailable. A retained pre-build verification report SHALL be labeled as pre-build evidence
-and SHALL NOT substitute for fresh verification of the built candidate. Candidate
-verification SHALL be labeled structural/offline, without live-health claims. Diagnostic JSON
-updates SHALL replace files atomically so an interrupted rewrite preserves the
-last complete result for fallback finalization. Fallback SHALL preserve missing-report
-markers and SHALL keep a triggering helper failure visible as workflow failure,
-even when publication is confirmed and issue recovery succeeds. Diagnostics SHALL exclude credentials, raw HTTP caches, and APK
-downloads; source text SHALL be treated as data, not executable input.
-
-Cleanup errors SHALL be recorded separately, fail the workflow, and preserve
-confirmed publication status, its SHA, and available per-attempt reports.
-Issue maintenance or diagnostic upload errors SHALL remain visible as workflow
-failures without undoing confirmed publication. Hard cancellation or runner
-loss SHALL NOT be represented as a completed verification or guaranteed issue
-delivery. The workflow SHALL document its required token permissions and
-direct-push prerequisites without automatically changing repository settings.
-
-#### Scenario: Early failure has no verification report
-
-- **WHEN** setup or building fails before structural verification starts
-- **THEN** the summary records the failure and missing verification evidence,
-  and available diagnostics are retained
-
-#### Scenario: Checkout cleanup fails after publication
-
-- **WHEN** removing a disposable checkout fails after a confirmed push
-- **THEN** the workflow fails with cleanup failure and confirmed publication
-  separately visible in diagnostics
-- **AND** confirmed publication authorizes issue recovery only when release synchronization is also confirmed
-- **AND** the published SHA and captured attempt reports remain available
-
-#### Scenario: Diagnostic upload fails
-
-- **WHEN** artifact upload fails after a confirmed push
-- **THEN** the workflow reports upload failure and preserves the published commit
+- **WHEN** summary generation or artifact upload fails after a confirmed push
+- **THEN** the failing step remains visible and the logged published SHA remains evidence
+- **AND** no rollback, issue operation or fallback reconstruction is attempted
 
 #### Scenario: Sensitive or executable source text
 
 - **WHEN** upstream diagnostics contain shell syntax or credential values
-- **THEN** publication/reporting does not execute that text or expose credentials
-
-### Requirement: Nightly completion includes rolling release synchronization
-
-After confirmed main publication or a verified main no-op, the publisher SHALL synchronize the owned rolling release from that attempt's exact verified JSON pair. Existing main verification, allowlist, concurrency and retry policies SHALL remain intact. Summaries and diagnostic records SHALL distinguish main publication, release synchronization, pending release revision, issue maintenance and cleanup outcomes. Release failure SHALL fail the workflow without undoing a confirmed main push. Cleanup or diagnostic failures SHALL NOT erase confirmed main or release outcomes. Issue recovery after a confirmed main push, including cleanup failure, SHALL additionally require confirmed release synchronization.
-
-#### Scenario: Main push succeeds and release write fails
-
-- **WHEN** release synchronization fails after confirmed main publication
-- **THEN** the workflow fails with the main SHA preserved and release failure reported separately, and the owned issue remains open
-
-#### Scenario: Main outcome is uncertain
-
-- **WHEN** the publisher cannot establish whether its main push succeeded
-- **THEN** it records uncertainty and performs no release writes
+- **THEN** reporting neither executes that text nor exposes credentials

@@ -12,9 +12,9 @@
 
 ## 3. Actions reporting and removal of issue automation
 
-- [ ] 3.1 Remove the issue reconciler, issue-only interfaces and issue-write permission while preserving shared release transport. Verify no runtime issue operations or imports remain and retained release authentication, origin and redirect tests pass; remove tests exclusively covering the retired issue lifecycle.
-- [ ] 3.2 Replace multi-attempt/fallback finalization with one run result and concise best-effort summary; log and flush confirmed main outcome before release work. Remove obsolete finalize/setup/upload commands, completion markers and reload recovery. Verify handled release failures and injected reporting/helper failures preserve earlier log confirmation and expose failure without issue calls or fabricated success.
-- [ ] 3.3 Wire available allowlisted reports to Actions artifact upload with 14-day retention after success or failure, accepting missing reports after early failure while keeping actual upload errors visible. Verify workflow/helper tests cover setup failure, build failure, summary failure, upload failure, secret redaction and source text treated as data, with no serialized claim about an unknown upload outcome.
+- [x] 3.1 Remove the issue reconciler, issue-only interfaces and issue-write permission while preserving shared release transport. Verify no runtime issue operations or imports remain and retained release authentication, origin and redirect tests pass; remove tests exclusively covering the retired issue lifecycle.
+- [x] 3.2 Replace multi-attempt/fallback finalization with one run result and concise best-effort summary; log and flush confirmed main outcome before release work. Remove obsolete finalize/setup/upload commands, completion markers and reload recovery. Verify handled release failures and injected reporting/helper failures preserve earlier log confirmation and expose failure without issue calls or fabricated success.
+- [x] 3.3 Wire available allowlisted reports to Actions artifact upload with 14-day retention after success or failure, accepting missing reports after early failure while keeping actual upload errors visible. Verify workflow/helper tests cover setup failure, build failure, summary failure, upload failure, secret redaction and source text treated as data, with no serialized claim about an unknown upload outcome.
 
 ## 4. Documentation and integrated validation
 

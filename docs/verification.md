@@ -78,14 +78,15 @@ See [structural validation results](structural-verification-validation.md) for
 the retained test suite, publication boundaries and byte-preservation checks.
 
 Nightly publication requires fresh structural evidence for each built candidate,
-validated in the selected revision's runtime. Pre-build checks cannot authorize
-the candidate. Exact bytes, staging, publishable-path restrictions and the README
+validated in the selected revision's runtime after one build. Nightly does not
+run pre-build verification or repeat development CI checks. Exact bytes, staging, publishable-path restrictions and the README
 handwritten-content boundary remain enforced. Structural failure blocks publication
 without selecting a different project. App release metadata becoming unavailable
 after a successful build does not add a verification gate or cause reselection.
 
 The publisher separately checks the rolling release seed's existence and ownership
-before main publication. Verification itself never queries that release, including
+after confirmed main publication or a verified no-op. A seed failure blocks only
+release synchronization. Verification itself never queries that release, including
 when the tracker is present. See [publishing](publishing.md) for explicit bootstrap,
 release synchronization and recovery.
 
