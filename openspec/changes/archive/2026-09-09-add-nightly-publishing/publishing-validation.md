@@ -88,7 +88,7 @@ behavior. Relative documentation links were checked against existing files.
 The guide's acceptance procedure explicitly requires a future maintainer
 dispatch on main, prerequisite checks, fresh evidence inspection, confirmed
 publication/no-op, and recovery inspection when applicable. No operational
-acceptance run is claimed here. See [publishing](publishing.md) for that
+acceptance run is claimed here. See [publishing](../../../../docs/publishing.md) for that
 procedure, permissions, diagnostic limitations, and rollback.
 
 Official GitHub documentation was checked for

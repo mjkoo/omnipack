@@ -76,7 +76,7 @@ and [maintained curation](curation.md) for intended policies and their limitatio
 
 ## Publication and historical evidence
 
-See [structural validation results](structural-verification-validation.md) for
+See [structural validation results](../openspec/changes/archive/2026-09-10-simplify-pack-verification/structural-verification-validation.md) for
 the retained test suite, publication boundaries and byte-preservation checks.
 
 Nightly publication requires fresh structural evidence for each built candidate,
@@ -92,11 +92,11 @@ release synchronization. Verification itself never queries that release, includi
 when the tracker is present. See [publishing](publishing.md) for explicit bootstrap,
 release synchronization and recovery.
 
-Dated observations in [verification validation](verification-validation.md),
-[curation validation](curation-validation.md), and retained fixture provenance
-describe the checks performed at those times. Historical resolver fixtures and
-archived changes remain evidence of the retired implementation, without implying
-current compatibility coverage or upstream health.
+Dated observations in [verification validation](../openspec/changes/archive/2026-09-08-add-pack-verification/verification-validation.md),
+[curation validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md), and retained fixture provenance
+describe the checks performed at those times. Archived changes and git history
+remain evidence of the retired implementation, without implying current
+compatibility coverage or upstream health.
 
 The RJNY verifier was evaluated as an implementation reference at revision
 [`5bb57f833652c389c3b063d3b4af9b42ee11602a`](https://github.com/RJNY/Obtainium-Emulation-Pack/tree/5bb57f833652c389c3b063d3b4af9b42ee11602a),

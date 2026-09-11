@@ -37,8 +37,8 @@ A matching fingerprint does not establish current upstream health.
 See [verification](verification.md) for structural checks, failure policy,
 and the limits of a successful check. CI verifies committed files offline;
 nightly publication uses one checkout and locked setup, then one build and fresh
-structural verification. Formatting, lint, types, packaging and the full suite
-remain development CI responsibilities. Main advancement fails the nightly run
+structural verification. Formatting, lint, types and the full suite remain
+development CI responsibilities. Main advancement fails the nightly run
 without another attempt; release readiness is checked after the main outcome.
 Old verification report schemas require regeneration with `uv run pack verify`.
 
@@ -47,17 +47,15 @@ exclusion, overlay, migration, and rollback behavior.
 
 See [source generation](source-generation.md) for editing reviewed project
 rules, generating isolated candidates, accepting source data, and operating the
-separate source proposal workflow. See [source generation validation](source-generation-validation.md)
+separate source proposal workflow. See [source generation validation](../openspec/changes/archive/2026-09-11-generate-reviewed-readme-catalog/source-generation-validation.md)
 for the dated controlled, live-build, and device evidence.
 
-See [live validation](validation.md) for the observed import results.
-
 See [maintained app curation](curation.md) for version policies and known
-identity findings, and [curation validation](curation-validation.md) for
+identity findings, and [curation validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md) for
 fixture, metadata and device acceptance results.
 
 See [nightly publishing](publishing.md) for scheduled refreshes, permissions,
 failure recovery, diagnostics, and post-landing acceptance.
 
-See [onboarding validation](onboarding-validation.md) for the latest README,
+See [onboarding validation](../openspec/changes/archive/2026-09-10-simplify-pack-onboarding/onboarding-validation.md) for the latest README,
 schedule, tracker-exclusion, and pack verification evidence.

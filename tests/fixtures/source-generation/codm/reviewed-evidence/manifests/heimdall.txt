@@ -1,1 +1,0 @@
-package: name='com.mastercook777.heimdall' versionCode='6' versionName='0.2.1-alpha.1' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'

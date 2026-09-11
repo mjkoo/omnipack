@@ -24,6 +24,4 @@ fork URL. Cinderbox, the other explicit addition, is already configured.
 `RJNY/Obtainium-Emulation-Pack` is an independent upstream and retains its
 name in source configuration, app provenance, fixtures, and attribution.
 Its own pack tracker is excluded from both exports; RJNY remains an app source.
-The legacy nightly issue ownership marker also remains stable so automation
-can recognize existing issues. Archived planning artifacts retain their
-historical names.
+Archived planning artifacts retain their historical names.

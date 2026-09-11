@@ -41,7 +41,6 @@ build-backend = "uv_build"
 
 [tool.uv]
 required-version = ">=0.12.5"
-preview-features = ["audit-command"]
 
 # ruff's defaults are broad; extend-select only adds to them. Never set
 # `select`: it replaces the defaults.

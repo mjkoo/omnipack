@@ -24,7 +24,7 @@ uv run --no-sync pack verify
 The structural gate requires complete, successful, fresh evidence matching the
 candidate inputs and verifier identity. Evidence validation runs in the selected
 revision's locked runtime, including its identity, input paths, and report schema. Development CI owns formatting,
-lint, types, packaging and the full suite; nightly does not repeat those checks
+lint, types and the full suite; nightly does not repeat those checks
 or verify committed packs before building. Existing source warnings retain their
 current policy. Verification makes no network requests. Building fetches its
 ordinary pack sources but reads the accepted codm catalog without fetching its
@@ -146,8 +146,7 @@ work starts. A release or reporting failure cannot erase that earlier confirmati
 A failed refresh does not publish partial pack or README output.
 
 Automation no longer creates, updates or closes issues. Existing issues are left
-untouched; any migration is a separate maintainer operation. Historical records
-retain the legacy ownership marker `<!-- obtainium-pack:nightly-publishing -->`.
+untouched; any migration is a separate maintainer operation.
 Actions owns workspace disposal.
 
 Release diagnostics report completed and pending revisions separately from the
@@ -218,7 +217,7 @@ publisher is a new content publication and receives a higher shared revision.
 If the tracker is intentionally retired, users must remove its Obtainium entry
 manually; removing it from a later import does not guarantee device deletion.
 
-See [nightly publication validation](nightly-publication-validation.md) for current
+See [nightly publication validation](../openspec/changes/archive/2026-09-11-simplify-nightly-publication/nightly-publication-validation.md) for current
 implementation checks
 and the distinction between controlled tests and operational acceptance.
 

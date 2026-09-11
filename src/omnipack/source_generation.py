@@ -15,7 +15,7 @@ from urllib.parse import urlsplit
 from omnipack.http import HttpClient, HttpConfig, HttpError
 from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
-from omnipack.package_id import PackageIdCache, PackageIdResolver, _is_valid_package_id
+from omnipack.package_id import _is_valid_package_id, resolve_release_assets
 from omnipack.project_policy import (
     ProjectRule,
     default_apk_rule,
@@ -369,11 +369,8 @@ def generate_codm(
                     package_id = cached["packageId"]
                     status = "reused"
                 else:
-                    scratch_cache = PackageIdCache(output / ".resolver-state.json")
-                    resolver = PackageIdResolver(
-                        cast(HttpClient, client), scratch_cache
-                    )
-                    package_id = resolver.resolve_release_assets(
+                    package_id = resolve_release_assets(
+                        cast(HttpClient, client),
                         release,
                         rule.additional_settings.get("apkFilterRegEx", ""),
                         report,

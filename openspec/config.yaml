@@ -10,6 +10,17 @@ schema: spec-driven
 #     Domain: e-commerce platform
 
 rules:
+  proposal:
+    - State what the change retires, and estimate the requirements, scenarios,
+      implementation lines and test lines it adds.
+    - For each new requirement about retries, ownership, races, diagnostic
+      formats or evidence, answer whether a visible failure plus a rerun would
+      suffice. If it would, drop the requirement.
+  specs:
+    - State required outcomes, not the mechanisms that achieve them.
+    - Keep per-app data out of normative requirements; it belongs in
+      configuration and tests.
+    - Keep validation records in the change directory, not in docs/.
   tasks:
     - Keep tasks scoped to implementation and its tests and reviews.
     - Do not include running the separate verify or archive workflows

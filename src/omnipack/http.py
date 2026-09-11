@@ -10,7 +10,7 @@ import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
-from http.client import HTTPException, HTTPMessage
+from http.client import HTTPException, HTTPMessage, IncompleteRead
 from io import BytesIO
 from pathlib import Path
 from typing import IO, Any, Protocol
@@ -259,6 +259,11 @@ class HttpClient:
                 raise HttpError(
                     f"response from {redact_url(stream.url)} exceeds {max_bytes} bytes"
                 )
+            # A sized read returns a short body instead of raising when the
+            # connection closes before Content-Length is satisfied.
+            remaining = getattr(stream, "length", None)
+            if remaining:
+                raise IncompleteRead(body, remaining)
             status = stream.status
             if not isinstance(status, int):
                 raise HttpError(

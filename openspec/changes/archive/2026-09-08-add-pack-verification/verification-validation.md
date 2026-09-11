@@ -2,7 +2,7 @@
 
 Historical record: the live-verification contract and commands below are retired.
 The observations and results are preserved as recorded. See
-[current verification guidance](verification.md) for structural checks and
+[current verification guidance](../../../../docs/verification.md) for structural checks and
 report regeneration.
 
 ## Current contract and request budget

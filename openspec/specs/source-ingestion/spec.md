@@ -64,10 +64,10 @@ Across a cross-host redirect, the helper SHALL strip the outgoing host's
 credential; any destination credential SHALL be selected independently from
 that destination's exact registration.
 
-#### Scenario: Cold-cache GitHub resolution uses the API credential
+#### Scenario: Fresh GitHub resolution uses the API credential
 
-- **WHEN** a generated GitHub project has no cached package id, the default
-  HTTP configuration is loaded and `GITHUB_TOKEN` is nonempty
+- **WHEN** a generated GitHub project has no reusable accepted package id, the
+  default HTTP configuration is loaded and `GITHUB_TOKEN` is nonempty
 - **THEN** its policy-selected release metadata request to `api.github.com` carries the
   bearer token through the shared helper, and its ranged APK reads and full
   asset download fallback use that same helper
@@ -78,7 +78,7 @@ that destination's exact registration.
 
 - **WHEN** a registered variable is unset or empty
 - **THEN** requests to its host proceed without Authorization, including
-  cold-cache package-id resolution against public GitHub releases
+  fresh package-id resolution against public GitHub releases
 
 #### Scenario: Host registration does not cover related names
 

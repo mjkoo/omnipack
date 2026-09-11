@@ -1,1 +1,0 @@
-package: name='com.emulnk' versionCode='15' versionName='0.5.10' platformBuildVersionName='15' platformBuildVersionCode='35' compileSdkVersion='35' compileSdkVersionCodename='15'

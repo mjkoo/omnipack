@@ -40,8 +40,8 @@ GitLab requirements move verbatim into their pipeline capabilities:
 
 | Receiving specification | Requirement | Preserved scenarios |
 | --- | --- | --- |
-| [Source ingestion](../openspec/specs/source-ingestion/spec.md) | Public GitLab entries retain native source identity | 1 |
-| [Pack verification](../openspec/specs/pack-verification/spec.md) | GitLab release resolution includes uploaded description APKs | 6 |
+| [Source ingestion](../../../specs/source-ingestion/spec.md) | Public GitLab entries retain native source identity | 1 |
+| [Pack verification](../../../specs/pack-verification/spec.md) | GitLab release resolution includes uploaded description APKs | 6 |
 
 The modified source-type summary retains its five existing scenarios verbatim;
 the modified live-compatibility summary retains its three. Every detailed

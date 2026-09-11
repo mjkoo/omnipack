@@ -4,8 +4,9 @@ This inventory records the migration baseline captured from commit
 `9a33d26fd0b5eb22ad0f2a0ba52ee59ac9eac565`. It is evidence for maintained
 composition rules, not a claim about signature compatibility, installed data,
 or successful device migration. The exact 88-entry single-screen and 111-entry
-dual-screen imports, along with representative candidate origins, are retained
-under [`tests/fixtures/composition-baseline`](../tests/fixtures/composition-baseline/README.md).
+dual-screen imports, along with representative candidate origins, were retained
+under `tests/fixtures/composition-baseline`, since retired; git history keeps
+them.
 
 ## Standard and dual build decisions
 
@@ -22,7 +23,7 @@ under [`tests/fixtures/composition-baseline`](../tests/fixtures/composition-base
 | Crash Team Racing | BBoi standard asset, [`Simon358/ctr-native-android`](https://github.com/Simon358/ctr-native-android), corrected from `com.simon358.ctrnative` to `com.ctrnative` | [`igawa6/ctr-native-android`](https://github.com/igawa6/ctr-native-android), rendered as `com.ctrnative` | Explicit `app:ctr` family. | The configured dual catalog identifies igawa6 as CTR-DS with dual-screen support. Keep Simon for single and prefer igawa6 for dual. |
 
 The three different-package pairs are preserved as complete original records in
-[`replacement-candidates.json`](../tests/fixtures/composition-baseline/replacement-candidates.json),
+`tests/fixtures/composition-baseline/replacement-candidates.json` (since retired),
 including release provenance and source settings. These are explicit maintained
 family associations, not a runtime inference from repository names.
 
@@ -35,8 +36,8 @@ future evidence update explicitly associates them.
 ## Manifest evidence and correction scope
 
 The primary APK observations are stored in
-[`tests/fixtures/curation/manifests.json`](../tests/fixtures/curation/manifests.json)
-and summarized in [maintained app version policies](curation.md#manifest-evidence).
+`tests/fixtures/curation/manifests.json` (since retired)
+and summarized in [maintained app version policies](../../../../docs/curation.md#manifest-evidence).
 Only a correction necessary to implement an evidenced family decision belongs
 in the initial composition policy. Other mismatches remain observations; this
 change does not turn them into identity migrations.

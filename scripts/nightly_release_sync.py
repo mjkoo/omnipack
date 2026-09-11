@@ -54,11 +54,6 @@ class SyncFailure(ReleaseError):
         self.pending_revision = pending_revision
 
 
-def discover_owned_release(remote: ReleaseRemote) -> OwnedRelease:
-    """Discover and validate the owned rolling release without changing it."""
-    return _ReleaseDiscovery(remote).read()
-
-
 def synchronize_release(
     remote: ReleaseRemote, single: bytes, dual: bytes, source_commit: str
 ) -> SyncResult:

@@ -1,10 +1,8 @@
-# Copy verbatim to .github/workflows/lint-actions.yml. Lints every workflow
-# with actionlint (syntax, expressions, shellcheck on run: blocks) and zizmor
-# (supply-chain and permission audits, default hash-pin policy). The two
-# tool versions and the action pins are examples; resolve current ones at
-# setup time (Dependabot keeps the action pins and their comments fresh; the
-# actionlint and zizmor versions are bumped by hand, together with the
-# actionlint tag in the download URL).
+# Lints every workflow with actionlint (syntax, expressions, shellcheck on run:
+# blocks) and zizmor (supply-chain and permission audits, default hash-pin
+# policy). Dependabot keeps the action pins fresh; the actionlint and zizmor
+# versions are bumped by hand, together with the actionlint tag in the
+# download URL.
 name: Lint actions
 
 on:

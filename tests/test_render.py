@@ -14,7 +14,7 @@ from omnipack.render import (
     hydrate_settings,
     render,
 )
-from omnipack.settings_defaults import OBTAINIUM_VERSION, SETTINGS_DEFAULTS
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -64,7 +64,6 @@ def test_defaults_match_every_source_key_set_in_upstream_exports() -> None:
                 json.loads(app["additionalSettings"])
             )
 
-    assert OBTAINIUM_VERSION == "GitHub/HTML 1.6.14; GitLab 1.6.15"
     assert {source: set(SETTINGS_DEFAULTS[source]) for source in observed} == observed
     assert len(SETTINGS_DEFAULTS["GitHub"]) == 29
     assert len(SETTINGS_DEFAULTS["HTML"]) == 29

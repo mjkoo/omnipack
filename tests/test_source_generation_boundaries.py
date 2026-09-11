@@ -5,13 +5,14 @@ from pathlib import Path
 
 import pytest
 
+from omnipack.http import HttpClient, HttpConfig
 from omnipack.project_policy import PolicyError, default_apk_rule, parse_project_policy
 from omnipack.source_generation import (
     generate_codm,
     parse_project_table,
     select_release,
 )
-from tests.test_package_id import apk
+from tests.test_package_id import AssetTransport, apk
 from tests.test_source_generation import JsonHttp, MappingHttp, tracking_root
 
 PROJECT = "github.com/example/tracker"
@@ -111,6 +112,35 @@ def test_version_capture_references_fail_before_discovery(tmp_path, selector):
     assert "capture group" in result["error"]
     assert http.urls == []
     assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
+
+
+@pytest.mark.parametrize("token", ["fixture-token", "", None])
+def test_fresh_resolution_sends_the_api_credential_only_to_the_api_host(
+    tmp_path, monkeypatch, token
+):
+    if token is None:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_TOKEN", token)
+    source = setup(tmp_path)
+    transport = AssetTransport(
+        {
+            source: README,
+            API: json.dumps(release()).encode(),
+            ASSET: apk("org.example.app"),
+        }
+    )
+    http = HttpClient(
+        HttpConfig.from_path("config/http.json"), retries=0, transport=transport
+    )
+    assert generate_codm(tmp_path, http=http)["status"] == "success"
+    sent = [
+        (request.full_url, request.get_header("Authorization"))
+        for request, _ in transport.requests
+    ]
+    assert {url for url, _ in sent} == {source, API, ASSET}
+    expected = f"Bearer {token}" if token else None
+    assert all(value == (expected if url == API else None) for url, value in sent)
 
 
 @pytest.mark.parametrize("selector", ["", "0", "1", "$1", "v$1.$0", " 1 "])
@@ -441,7 +471,7 @@ def test_cross_project_collisions(tmp_path, other_kind, monkeypatch):
     if other_kind == "track-only":
         identifier = "123"
         monkeypatch.setattr(
-            "omnipack.source_generation.PackageIdResolver.resolve_release_assets",
+            "omnipack.source_generation.resolve_release_assets",
             lambda *args, **kwargs: identifier,
         )
         (tmp_path / "config/codm-projects.json").write_text(

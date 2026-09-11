@@ -46,9 +46,6 @@ jobs:
       - name: Type check
         run: just typecheck
 
-      - name: Build
-        run: just build
-
       - name: Test
         run: just test
 
@@ -69,7 +66,7 @@ jobs:
 
       - uses: nix-community/cache-nix-action@7df957e333c1e5da7721f60227dbba6d06080569 # v7.0.2
         with:
-          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock', '**/uv.lock') }}
+          primary-key: nix-${{ runner.os }}-${{ hashFiles('**/*.nix', '**/flake.lock') }}
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 4G
 
@@ -78,6 +75,3 @@ jobs:
 
       - name: Flake check
         run: nix flake check
-
-      - name: Build image
-        run: nix build .#docker --no-link

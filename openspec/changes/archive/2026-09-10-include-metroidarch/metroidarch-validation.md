@@ -1,8 +1,8 @@
 # MetroidArch pack validation
 
 Validated September 10, 2026. This extends the earlier
-[source reconciliation validation](source-reconciliation-validation.md) with
-MetroidArch in the dual-screen pack. The [setup and vetting guide](metroidarch.md)
+[source reconciliation validation](../2026-09-10-reconcile-installed-apps/source-reconciliation-validation.md) with
+MetroidArch in the dual-screen pack. The [setup and vetting guide](../../../../docs/metroidarch.md)
 covers its source, APK observations, storage separation and remaining device work.
 
 ## Output scope
@@ -55,7 +55,7 @@ and confirmed both output hashes above remained unchanged. Offline verification
 passed with no errors or warnings. The two CTR sources were independently checked
 from their APKs and are preserved alongside MetroidArch, including original
 catalog provenance and disabled APK version detection; see the dated
-[CTR evidence](source-reconciliation.md#ctr-release-and-manifest-evidence).
+[CTR evidence](../../../../docs/source-reconciliation.md#ctr-release-and-manifest-evidence).
 
 A fresh MetroidArch metadata check again selected tag `v1.0.1` and
 `MetroidArch-v1.0.1.apk`; the bounded probe returned HTTP 206 and read 1,024 bytes,

@@ -25,11 +25,6 @@ def normalize_project_url(url: str) -> str:
     return urlunsplit(("", authority, path, query, fragment)).removeprefix("//")
 
 
-def project_urls_equal(left: str, right: str) -> bool:
-    """Return whether two URLs identify the same normalized project."""
-    return normalize_project_url(left) == normalize_project_url(right)
-
-
 def _split_url(url: str) -> SplitResult:
     parsed = urlsplit(url)
     if parsed.hostname is None:

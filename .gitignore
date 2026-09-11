@@ -1,8 +1,5 @@
 __pycache__/
 *.py[cod]
-build/
-wheels/
-*.egg-info/
 .venv/
 .pytest_cache/
 .ruff_cache/

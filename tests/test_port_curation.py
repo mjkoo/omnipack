@@ -16,7 +16,6 @@ from omnipack.sources import codm
 from omnipack.sources.extras import fetch
 
 ROOT = Path(__file__).parents[1]
-FIXTURE = ROOT / "tests/fixtures/curation/port-manifests.json"
 PORT_IDS = {
     "com.aurora.store",
     "com.karin.idTech4Amm",

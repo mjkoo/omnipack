@@ -76,10 +76,6 @@ class OwnedRelease:
     state: RollingState
     assets: tuple[ReleaseAsset, ...]
 
-    @property
-    def asset_names(self) -> tuple[str, ...]:
-        return tuple(asset.name for asset in self.assets)
-
 
 @dataclass(frozen=True)
 class BootstrapResult:

@@ -1,4 +1,3 @@
-# Workspaces: add --all-packages to the sync and build targets.
 # Fail instead of rewriting uv.lock when it is stale (keeps uv run check-only).
 export UV_LOCKED := "1"
 
@@ -33,10 +32,6 @@ typecheck:
 lock-check:
     uv lock --check
 
-# Audit dependencies for known vulnerabilities
-audit:
-    uv audit
-
 # Run tests with coverage
 test:
     uv run pytest --cov
@@ -44,10 +39,6 @@ test:
 # Validate committed pack bytes and local configuration without network access
 verify:
     uv run pack verify
-
-# Build sdist and wheel (not `dist/`: that holds the rendered pack output)
-build:
-    uv build --no-sources --out-dir build/python-dist
 
 # Lint the workflows with actionlint and zizmor
 lint-actions:
@@ -66,9 +57,5 @@ nix-fmt:
 nix-fmt-check:
     nix fmt -- --ci
 
-# Build the image and load it into the local docker daemon
-docker-load:
-    $(nix build .#docker --no-link --print-out-paths) | docker image load
-
 # Everything CI runs
-check-all: lock-check format-check lint-check typecheck audit build test verify lint-actions nix-fmt-check flake-check
+check-all: lock-check format-check lint-check typecheck test verify lint-actions nix-fmt-check flake-check

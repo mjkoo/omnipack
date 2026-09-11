@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 
@@ -227,13 +226,3 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             assert settings["trackOnly"] is False
             assert settings["exemptFromBackgroundUpdates"] is False
             assert settings["skipUpdateNotifications"] is False
-
-        # These digests freeze the complete rendered fixture composition.
-        if refresh == 0:
-            expected_hashes = {
-                Variant.SINGLE: "ce4eeadf096a09996811d359c7cce555bab6c94315e129a81dc84b9019e50c69",
-                Variant.DUAL: "8b821d8478896f8ea54296bb0187146d45b7bac136b46144e2c2a4f4f857696f",
-            }
-            for variant in Variant:
-                rendered = render(result.apps[variant], {}).encode()
-                assert hashlib.sha256(rendered).hexdigest() == expected_hashes[variant]

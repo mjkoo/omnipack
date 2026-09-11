@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import http.client
 import json
 import urllib.error
 import urllib.request
@@ -49,6 +50,32 @@ def test_http_config_loads_default_shape(tmp_path: Path) -> None:
     path.write_text(json.dumps({"credentials": {"api.github.com": "TOKEN"}}))
 
     assert HttpConfig.from_path(path).credentials == {"api.github.com": "TOKEN"}
+
+
+@pytest.mark.parametrize("max_bytes", [None, 1024])
+def test_truncated_body_is_retried_then_reported(
+    monkeypatch: pytest.MonkeyPatch, max_bytes: int | None
+) -> None:
+    requests: list[Request] = []
+    sleeps: list[float] = []
+
+    class Socket:
+        def makefile(self, mode: str) -> BytesIO:
+            return BytesIO(b"HTTP/1.1 200 OK\r\nContent-Length: 100\r\n\r\nshort!")
+
+    def open_fixture(handler: urllib.request.HTTPSHandler, request: Request):
+        requests.append(request)
+        stream = http.client.HTTPResponse(Socket())  # ty: ignore[invalid-argument-type]
+        stream.begin()
+        stream.url = request.full_url
+        return stream
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+    client = HttpClient(HttpConfig({}), retries=1, sleep=sleeps.append)
+    with pytest.raises(HttpError, match="failed after 2 attempts"):
+        client.get("https://example.com/data", max_bytes=max_bytes)
+    assert len(requests) == 2
+    assert sleeps == [0.5]
 
 
 def test_head_method_and_response_metadata_are_available() -> None:

@@ -29,27 +29,27 @@ the separate release-seed prerequisite.
 
 ## Behavioral evidence
 
-- [Verification tests](../tests/test_verify.py) and
-  [CLI integration tests](../tests/test_verification_integration.py) cover exact
+- [Verification tests](../../../../tests/test_verify.py) and
+  [CLI integration tests](../../../../tests/test_verification_integration.py) cover exact
   fingerprints, HTTP-configuration independence, interrupted evidence, retired
   flag rejection and report-write failures.
-- [Report tests](../tests/test_report.py) cover unsupported-schema regeneration,
+- [Report tests](../../../../tests/test_report.py) cover unsupported-schema regeneration,
   current/stale evidence and retained build-report behavior.
-- [Publication tests](../tests/test_nightly_publish.py) run real fixture ingestion,
+- [Publication tests](../../../../tests/test_nightly_publish.py) run real fixture ingestion,
   composition, build and verification. A preferred dual candidate remains selected
   with its standard alternative present. Structural failure blocks publication;
   successful candidates need no post-build app HTTP requests. Both configured
   release-fallback values survive in exact candidate bytes.
-- [Git publication tests](../tests/test_nightly_git.py) cover seed ownership before
+- [Git publication tests](../../../../tests/test_nightly_git.py) cover seed ownership before
   writes through real release discovery for missing and unowned releases,
   selected-revision evidence, byte boundaries, no-op and recovery.
-  [Reporting tests](../tests/test_nightly_reporting.py) distinguish retained
+  [Reporting tests](../../../../tests/test_nightly_reporting.py) distinguish retained
   pre-build evidence from successful and failed candidate evidence.
-- [Curation tests](../tests/test_curation.py) and
-  [reconciliation tests](../tests/test_reconciliation_curation.py) preserve fixture
+- [Curation tests](../../../../tests/test_curation.py) and
+  [reconciliation tests](../../../../tests/test_reconciliation_curation.py) preserve fixture
   render hashes and explicit policies through source refreshes. Shared
-  [HTTP](../tests/test_http.py), [source](../tests/test_sources.py) and
-  [package-ID](../tests/test_package_id.py) behavior remains covered.
+  [HTTP](../../../../tests/test_http.py), [source](../../../../tests/test_sources.py) and
+  [package-ID](../../../../tests/test_package_id.py) behavior remains covered.
 
 ## Preservation and size
 

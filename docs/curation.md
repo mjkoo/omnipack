@@ -169,5 +169,5 @@ with their dates and provenance.
 
 Policies take effect on the next import. Rollback restores the previous extras
 and overlay and rebuilds both files; publication is a separate maintainer action.
-See [validation](curation-validation.md) for exact generated hashes, command
+See [validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md) for exact generated hashes, command
 outcomes, upstream drift and outstanding device acceptance.

@@ -10,8 +10,6 @@ from __future__ import annotations
 
 from typing import Any, Final
 
-OBTAINIUM_VERSION: Final = "GitHub/HTML 1.6.14; GitLab 1.6.15"
-
 _COMMON: dict[str, Any] = {
     "trackOnly": False,
     "versionExtractionRegEx": "",

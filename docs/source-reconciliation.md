@@ -187,5 +187,5 @@ See [curation](curation.md) for that remaining identity/asset selection caveat a
 
 The [captured regression evidence](../tests/fixtures/reconciliation/README.md)
 retains source inputs and selected manifest observations. See
-[validation results](source-reconciliation-validation.md) for generated hashes
+[validation results](../openspec/changes/archive/2026-09-10-reconcile-installed-apps/source-reconciliation-validation.md) for generated hashes
 and the dated live-resolution observations from that validation run.

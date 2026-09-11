@@ -1,7 +1,7 @@
 # Source reconciliation validation
 
 This records the preceding reconciliation snapshot. The later MetroidArch addition
-is documented in [MetroidArch validation](metroidarch-validation.md); counts and
+is documented in [MetroidArch validation](../2026-09-10-include-metroidarch/metroidarch-validation.md); counts and
 hashes below describe the earlier output, not the current pack.
 
 Validation date: 2026-09-10 UTC. Verifier 0.7.0 retains the GitHub/HTML

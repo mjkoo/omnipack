@@ -10,7 +10,7 @@
         "url": "https://github.com/xyzz/openmw-android"
       },
       "family": "app:openmw",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see docs/composition-inventory.md."
+      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see openspec/changes/archive/2026-09-09-device-aware-pack-composition/composition-inventory.md."
     },
     {
       "match": {
@@ -31,7 +31,7 @@
         "url": "https://github.com/Raekwon1603/super_metroid-android"
       },
       "family": "app:super-metroid",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see docs/composition-inventory.md."
+      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see openspec/changes/archive/2026-09-09-device-aware-pack-composition/composition-inventory.md."
     },
     {
       "match": {
@@ -41,7 +41,7 @@
         "url": "https://github.com/Raekwon1603/super_metroid-android"
       },
       "family": "app:super-metroid",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see docs/composition-inventory.md."
+      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see openspec/changes/archive/2026-09-09-device-aware-pack-composition/composition-inventory.md."
     },
     {
       "match": {
@@ -51,7 +51,7 @@
         "url": "https://github.com/TwilitRealm/dusklight"
       },
       "family": "app:dusklight",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see docs/composition-inventory.md."
+      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app; see openspec/changes/archive/2026-09-09-device-aware-pack-composition/composition-inventory.md."
     },
     {
       "match": {
@@ -73,7 +73,7 @@
       },
       "family": "app:ctr",
       "packageId": "com.ctrnative",
-      "rationale": "The Simon build is the standard CTR candidate. Its recorded primary APK manifest declares com.ctrnative; see docs/composition-inventory.md."
+      "rationale": "The Simon build is the standard CTR candidate. Its recorded primary APK manifest declares com.ctrnative; see openspec/changes/archive/2026-09-09-device-aware-pack-composition/composition-inventory.md."
     },
     {
       "match": {

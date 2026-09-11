@@ -142,4 +142,23 @@ completed implementation boxes and approved completion of the remaining
 review/archive process box after its report. All 19 tasks are complete.
 
 The required full-suite rerun after the audit passed all 791 tests in 46.37
-seconds. No production code changed after the audit.
+seconds. No production code changed between the audit and that rerun.
+
+## Post-archive fixes
+
+Three validation gaps found after archiving were fixed on 2026-09-11, each with
+its specification scenario and regression tests:
+
+- `519d7b7` rejects a README whose Project tables include a malformed one beside
+  a valid one, and version-extraction group selectors or `$N` references that
+  name a capture group absent from the configured regex.
+- `aa862bf` rejects the regex shorthand classes and word boundaries (`\d`,
+  `\D`, `\s`, `\S`, `\w`, `\W`, `\b`, `\B`) whose Python and Dart semantics
+  differ. The source generation guide now asks for explicit character classes.
+- `e2f0e58` rejects duplicate JSON object keys at any nesting level of the
+  project policy, before any HTTP request.
+
+Each fix tightened README or policy validation only. The committed catalog,
+policy, resolution state and pack outputs were unchanged. At `e2f0e58` the full
+suite passed 815 tests. No live generation, device check or remote write was
+repeated.

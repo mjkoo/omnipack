@@ -65,6 +65,6 @@ validation. On an available device, exercise a numeric entry such as Cinderbox
 and a correctly identified source-tracked entry such as Vita3K, recording initial
 import, repeated import, recorded/installed versions, and a distinct source build.
 Check the one-time re-import prompt and external-install limitations described
-in [curation](curation.md). The four known mismatched identities must not be
+in [curation](../../../../docs/curation.md). The four known mismatched identities must not be
 used as evidence of successful device behavior. Earlier import validation of
 older packs does not establish acceptance of these policies.

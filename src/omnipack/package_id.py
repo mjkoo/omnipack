@@ -10,19 +10,12 @@ see <https://unlicense.org>.
 
 from __future__ import annotations
 
-import json
 import re
 import struct
 import zlib
-from dataclasses import dataclass
-from enum import Enum
-from pathlib import Path
-from typing import Any, Protocol
-from urllib.parse import urlsplit
+from typing import Any
 
 from omnipack.http import HttpClient, HttpError
-from omnipack.model import App, Provenance, SourceType, Variant
-from omnipack.urls import normalize_project_url
 
 MAX_APK_FULL_DOWNLOAD = 40 * 1024 * 1024
 ZIP_TAIL_SIZE = 128 * 1024
@@ -36,216 +29,59 @@ AXML_TYPE_STRING = 0x03
 PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
 
 
-@dataclass(frozen=True, slots=True)
-class CacheEntry:
-    package_id: str
-    release_id: str | int
-
-
-class ResolutionStatus(str, Enum):
-    RESOLVED = "resolved"
-    REUSED = "reused"
-    UNRESOLVED = "unresolved"
-
-
-@dataclass(frozen=True, slots=True)
-class ResolutionResult:
-    package_id: str | None
-    status: ResolutionStatus
-    release_id: str | int | None
-    failure: str | None = None
-
-
-class ProjectResolver(Protocol):
-    def resolve(self, project_url: str, /) -> ResolutionResult: ...
-
-
-@dataclass(frozen=True, slots=True)
-class GeneratedProjectResult:
-    app: App | None
-    resolution: ResolutionResult
-
-
-class PackageIdCache:
-    """A normalized-project cache persisted immediately after each resolution."""
-
-    def __init__(self, path: str | Path) -> None:
-        self.path = Path(path)
-        self._entries = self._read()
-
-    def get(self, project_url: str) -> CacheEntry | None:
-        return self._entries.get(normalize_project_url(project_url))
-
-    def put(self, project_url: str, entry: CacheEntry) -> None:
-        self._entries[normalize_project_url(project_url)] = entry
-        self.path.parent.mkdir(parents=True, exist_ok=True)
-        temporary = self.path.with_suffix(f"{self.path.suffix}.tmp")
-        document = {
-            key: {"packageId": value.package_id, "releaseId": value.release_id}
-            for key, value in sorted(self._entries.items())
-        }
-        temporary.write_text(json.dumps(document, indent=2) + "\n", encoding="utf-8")
-        temporary.replace(self.path)
-
-    def _read(self) -> dict[str, CacheEntry]:
-        if not self.path.exists():
-            return {}
-        document = json.loads(self.path.read_text(encoding="utf-8"))
-        if not isinstance(document, dict):
-            raise TypeError("package-id cache must be a JSON object")
-        result: dict[str, CacheEntry] = {}
-        for project, value in document.items():
-            if (
-                not isinstance(project, str)
-                or not isinstance(value, dict)
-                or not isinstance(value.get("packageId"), str)
-                or not isinstance(value.get("releaseId"), (str, int))
-                or isinstance(value.get("releaseId"), bool)
-            ):
-                raise TypeError(f"invalid package-id cache entry for {project!r}")
-            result[normalize_project_url(project)] = CacheEntry(
-                value["packageId"], value["releaseId"]
-            )
-        return result
-
-
-class PackageIdResolver:
-    def __init__(self, http: HttpClient, cache: PackageIdCache) -> None:
-        self.http = http
-        self.cache = cache
-
-    def resolve(self, project_url: str) -> ResolutionResult:
-        cached = self.cache.get(project_url)
-        try:
-            release = self._latest_github_release(project_url)
-            release_id = release.get("id")
-            if not isinstance(release_id, (str, int)) or isinstance(release_id, bool):
-                raise TypeError("latest release has no host-assigned identifier")
-        except (HttpError, ValueError, KeyError, TypeError) as error:
-            return self._failure(cached, None, f"latest release lookup failed: {error}")
-        if cached is not None and cached.release_id == release_id:
-            return ResolutionResult(
-                cached.package_id, ResolutionStatus.REUSED, cached.release_id
-            )
-        try:
-            package_id = self._resolve_release_assets(release)
-        except (HttpError, ValueError, KeyError, TypeError, zlib.error) as error:
-            return self._failure(cached, release_id, f"APK resolution failed: {error}")
-        self.cache.put(project_url, CacheEntry(package_id, release_id))
-        return ResolutionResult(package_id, ResolutionStatus.RESOLVED, release_id)
-
-    @staticmethod
-    def _failure(
-        cached: CacheEntry | None, release_id: str | int | None, message: str
-    ) -> ResolutionResult:
-        if cached is not None:
-            return ResolutionResult(
-                cached.package_id, ResolutionStatus.REUSED, cached.release_id, message
-            )
-        return ResolutionResult(None, ResolutionStatus.UNRESOLVED, release_id, message)
-
-    def _latest_github_release(self, project_url: str) -> dict[str, Any]:
-        parsed = urlsplit(project_url)
-        if parsed.hostname is None:
-            parsed = urlsplit(f"https://{project_url}")
-        host = (parsed.hostname or "").lower().removeprefix("www.")
-        parts = [part for part in parsed.path.split("/") if part]
-        if host != "github.com" or len(parts) < 2:
-            raise ValueError(f"unsupported project URL: {project_url}")
-        response = self.http.get(
-            f"https://api.github.com/repos/{parts[0]}/{parts[1].removesuffix('.git')}/releases/latest",
-            headers={"Accept": "application/vnd.github+json"},
-        )
-        document = response.json()
-        if not isinstance(document, dict):
-            raise TypeError("unexpected latest release response")
-        return document
-
-    def _resolve_release_assets(self, release: dict[str, Any]) -> str:
-        return self.resolve_release_assets(release)
-
-    def resolve_release_assets(
-        self,
-        release: dict[str, Any],
-        filename_pattern: str = "",
-        report: dict[str, Any] | None = None,
-        project_url: str | None = None,
-    ) -> str:
-        assets = release.get("assets")
-        if not isinstance(assets, list):
-            raise TypeError("latest release has no asset list")
-        pattern = re.compile(filename_pattern) if filename_pattern else None
-        eligible: list[tuple[str, str]] = []
-        filtered: list[str] = []
-        for asset in assets:
-            if not isinstance(asset, dict):
+def resolve_release_assets(
+    http: HttpClient,
+    release: dict[str, Any],
+    filename_pattern: str = "",
+    report: dict[str, Any] | None = None,
+    project_url: str | None = None,
+) -> str:
+    """Return the one package ID declared by every eligible APK in a release."""
+    assets = release.get("assets")
+    if not isinstance(assets, list):
+        raise TypeError("latest release has no asset list")
+    pattern = re.compile(filename_pattern) if filename_pattern else None
+    eligible: list[tuple[str, str]] = []
+    filtered: list[str] = []
+    for asset in assets:
+        if not isinstance(asset, dict):
+            continue
+        name, url = asset.get("name"), asset.get("browser_download_url")
+        if isinstance(name, str) and name.lower().endswith(".apk"):
+            if pattern is not None and pattern.search(name) is None:
+                filtered.append(name)
                 continue
-            name, url = asset.get("name"), asset.get("browser_download_url")
-            if isinstance(name, str) and name.lower().endswith(".apk"):
-                if pattern is not None and pattern.search(name) is None:
-                    filtered.append(name)
-                    continue
-                if not isinstance(url, str) or not url:
-                    raise ValueError(f"eligible APK {name!r} has no download URL")
-                eligible.append((name, url))
-        if report is not None and filtered:
-            report.setdefault("filteredAssets", []).append(
-                {"url": project_url, "names": sorted(filtered)}
-            )
-        if not eligible:
-            raise ValueError("latest release has no eligible APK assets")
-        resolved: list[str] = []
-        for name, url in eligible:
-            try:
-                manifest = extract_android_manifest_from_apk_url(self.http, url)
-                resolved.append(parse_axml_package_id(manifest))
-            except (
-                HttpError,
-                ValueError,
-                KeyError,
-                TypeError,
-                IndexError,
-                struct.error,
-                zlib.error,
-            ) as error:
-                raise ValueError(
-                    f"cannot read eligible APK {name!r}: {error}"
-                ) from error
-        unique = set(resolved)
-        if len(unique) != 1:
-            raise ValueError(
-                "eligible APK assets declare different package ids: "
-                + ", ".join(sorted(unique))
-            )
-        return resolved[0]
-
-
-def generated_project_entry(
-    project_url: str, resolver: ProjectResolver
-) -> GeneratedProjectResult:
-    """Resolve one README project into a generated dual-screen candidate."""
-    resolution = resolver.resolve(project_url)
-    if resolution.package_id is None:
-        return GeneratedProjectResult(None, resolution)
-    parsed = urlsplit(project_url)
-    parts = [part for part in parsed.path.split("/") if part]
-    if len(parts) < 2:
-        raise ValueError(f"project URL lacks owner and repository: {project_url}")
-    owner, repository = parts[0], parts[1].removesuffix(".git")
-    app = App(
-        id=resolution.package_id,
-        url=project_url,
-        name=repository,
-        source_type=SourceType.GITHUB,
-        categories=(),
-        variant=Variant.DUAL,
-        provenance=Provenance(source="codm2000", url=project_url),
-        raw={"author": owner},
-        eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
-        origin="codm-generated",
-    )
-    return GeneratedProjectResult(app, resolution)
+            if not isinstance(url, str) or not url:
+                raise ValueError(f"eligible APK {name!r} has no download URL")
+            eligible.append((name, url))
+    if report is not None and filtered:
+        report.setdefault("filteredAssets", []).append(
+            {"url": project_url, "names": sorted(filtered)}
+        )
+    if not eligible:
+        raise ValueError("latest release has no eligible APK assets")
+    resolved: list[str] = []
+    for name, url in eligible:
+        try:
+            manifest = extract_android_manifest_from_apk_url(http, url)
+            resolved.append(parse_axml_package_id(manifest))
+        except (
+            HttpError,
+            ValueError,
+            KeyError,
+            TypeError,
+            IndexError,
+            struct.error,
+            zlib.error,
+        ) as error:
+            raise ValueError(f"cannot read eligible APK {name!r}: {error}") from error
+    unique = set(resolved)
+    if len(unique) != 1:
+        raise ValueError(
+            "eligible APK assets declare different package ids: "
+            + ", ".join(sorted(unique))
+        )
+    return resolved[0]
 
 
 def extract_android_manifest_from_apk_url(http: HttpClient, url: str) -> bytes:
