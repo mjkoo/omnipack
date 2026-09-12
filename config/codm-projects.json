@@ -31,6 +31,13 @@
         "fallbackToOlderReleases": true
       }
     },
+    "github.com/rsigristc/dw3-ds-android": {
+      "kind": "apk",
+      "name": "DW2003 Dual Screen",
+      "additionalSettings": {
+        "apkFilterRegEx": "^DW2003-Dual-Screen-v[0-9].*\\.apk$"
+      }
+    },
     "github.com/averageconsumer/kanto-gear": {
       "kind": "track-only",
       "name": "Kanto Gear (mod updates)",

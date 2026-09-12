@@ -118,6 +118,13 @@ older release. The generated Obtainium entry sets
 matching releases when its selected release lacks an eligible asset.
 Showdown and EmuLnk explicitly set that client option to false.
 
+DW2003 Dual Screen filters APK assets to the `DW2003-Dual-Screen-v*` family.
+Since v1.4.0 each upstream release also attaches a Pocket Companion APK,
+`com.digitaladventure.dw2003.remote`, a separate app for a second handheld.
+Without the filter the two APKs disagree on their package ID and resolution
+fails; with it the companion is reported as a filtered asset and the entry
+keeps `com.digitaladventure.dw2003`. The companion is not catalogued.
+
 ## Proposal workflow
 
 The **Reviewed source catalog** Actions workflow runs daily at 04:17 UTC and
