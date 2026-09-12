@@ -23,11 +23,17 @@ It needs separate writable directories to avoid sharing saves and remaps with Re
 
 The catalog below also provides individual app configurations. An **Add to
 Obtainium** link opens an import confirmation; after confirming, install the app
-from Obtainium. **Tracking only** entries provide update notifications and may
-not have an installable app.
+from Obtainium. Some entries only track releases: they provide update
+notifications and may not have an installable app. Most are under **Track
+Only**, but others appear elsewhere, such as **omnipack updates** under
+**Utilities**.
 
 Packs refresh daily, scheduled for 3:00 AM Eastern. Obtainium checks updates for
-apps you import; download and re-import a pack to pick up changes to the collection.
+apps you import, but not for the collection itself. The **omnipack updates**
+tracker notifies you when either pack changes, without saying which one.
+Acknowledging that update does not change your apps; download and re-import your
+pack to pick up changes to the collection. See
+[Tracking omnipack itself](docs/curation.md#tracking-omnipack-itself).
 
 If you imported an older pack, you can manually remove the **Obtainium Emulation
 Pack** tracking entry for RJNY/Obtainium-Emulation-Pack in Obtainium. This removes
@@ -228,8 +234,8 @@ in place.
 ## Sources and credits
 
 - [RJNY's source JSON](https://github.com/RJNY/Obtainium-Emulation-Pack/blob/main/src/applications.json).
-- BBoi34's [standard release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Decomp-Recomp.V3.2.json)
-  and [dual-screen release JSON](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/download/v3.2.0/Dual-Screen-Decomp-Recomp.V3.2.json).
+- BBoi34's standard and dual-screen release JSON, from the
+  [latest Obtainium-Recomp-Decomp release](https://codeberg.org/BBoi34/Obtainium-Recomp-Decomp/releases/latest).
 - [codm2000's project catalog](https://github.com/codm2000/Dual-Screen-Games).
 - [Obtainium](https://github.com/ImranR98/Obtainium), which makes these imports and app updates possible.
 - The individual app developers, linked through the sources in each catalog row.
