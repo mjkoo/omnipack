@@ -88,5 +88,8 @@ hand-off.
   create and approve pull requests" setting is unverified.
 - No release write. The digest record, the served-asset digests GitHub
   reports after an upload, and the published-prerelease checks are tested
-  only against stubbed `gh release view` output.
+  only against stubbed `gh release view` output. Locally, gh 2.100.0 reports
+  a missing release as `release not found` with exit status 1, the text the
+  release step matches before adding the bootstrap guidance; the `gh`
+  version on the runner image is unverified.
 - No device check of the published packs.

@@ -139,8 +139,8 @@ github.ref == 'refs/heads/main'`, `runs-on: ubuntu-latest` and
    and `base` (`HEAD` at checkout) to `GITHUB_OUTPUT`, and the job exports them
    as outputs. Its step summary line is `no-op at <sha>`, `prepared <sha>`, or
    the failing stage: checkout (dirty, or not at `GITHUB_SHA`), build,
-   allowlist (including file modes), README boundary, verify, drift after
-   verify, or bundle.
+   allowlist (including file modes), README boundary, commit, verify, drift
+   after verify, or bundle.
 3. **Upload the bundle** when `changed` is true, with one-day retention.
 4. **Upload** `.build/report.json` and `.build/verify.json`, always, with
    14-day retention.
@@ -792,7 +792,8 @@ The project has no users, so no migration step is planned.
      between their jobs and the write jobs running on the runner's `python3`,
      and the PR-creation repository setting.
 
-   The first source run is expected to reproduce the committed catalog and
-   open no PR, so the source hand-off is first exercised by its first changed
-   run.
+   The live generation run during implementation found two projects added
+   upstream since the committed catalog was last generated, so the first
+   source run is expected to open a proposal. That run is the first real
+   exercise of the source hand-off.
 3. **Rollback:** revert the change.

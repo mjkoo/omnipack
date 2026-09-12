@@ -173,6 +173,9 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
             ]
         )
         if view_result.returncode != 0:
+            # gh prints exactly this for a missing release (checked with gh
+            # 2.100.0). Any other failure does not show that the release is
+            # absent, so it gets no bootstrap guidance.
             if "release not found" in view_result.stderr:
                 raise ReleaseFailure("release is missing", bootstrap=True)
             raise ReleaseFailure("could not read release")
