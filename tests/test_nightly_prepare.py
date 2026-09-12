@@ -16,14 +16,13 @@ import pytest
 
 from scripts.nightly import (
     ALLOWED_PATHS,
-    BOT_EMAIL,
-    BOT_NAME,
     BUILD_COMMAND,
     STRUCTURAL_VERIFY_COMMAND,
     PrepareCommandResult,
     run_prepare,
 )
-from scripts.nightly_write import CommandResult, run_push
+from scripts.nightly_write import run_push
+from scripts.workflow_support import BOT_EMAIL, BOT_NAME, CommandResult
 
 
 class StubGh:

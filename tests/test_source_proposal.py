@@ -16,15 +16,13 @@ from pathlib import Path
 import pytest
 
 from scripts import source_proposal as proposal_module
-from scripts.nightly_write import CommandResult
 from scripts.source_proposal import (
-    BOT_EMAIL,
-    BOT_NAME,
     BRANCH_NAME,
     CATALOG_PATH,
     run_publish,
     run_stage,
 )
+from scripts.workflow_support import BOT_EMAIL, BOT_NAME, CommandResult
 
 CANDIDATE_DIR = ".build/source-generation/codm"
 

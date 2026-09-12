@@ -16,10 +16,10 @@ import pytest
 from scripts import nightly_write as write_module
 from scripts.nightly_write import (
     MARKER,
-    CommandResult,
     run_push,
     run_release,
 )
+from scripts.workflow_support import CommandResult
 
 ALLOWED_PATHS = (
     "dist/single-screen.json",

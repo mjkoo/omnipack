@@ -12,14 +12,24 @@ import argparse
 import json
 import os
 import re
-import subprocess
 import sys
 import tempfile
-from collections.abc import Mapping, Sequence
+from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Protocol
+
+from scripts.workflow_support import (
+    FULL_SHA,
+    DiffEntry,
+    GhRunner,
+    HandoffRejected,
+    SubprocessGhRunner,
+    append_summary,
+    git,
+    ls_remote_sha,
+    verify_handoff,
+)
 
 ALLOWED_PATHS = (
     "dist/single-screen.json",
@@ -29,7 +39,6 @@ ALLOWED_PATHS = (
 ASSET_NAMES = ("single-screen.json", "dual-screen.json")
 TAG = "continuous"
 MARKER = "<!-- omnipack:rolling-pack -->"
-_FULL_SHA = re.compile(r"[0-9a-f]{40}")
 _TITLE = re.compile(r"omnipack revision ([0-9]+)")
 _RECORD = re.compile(
     r"<!-- omnipack:digests single-screen\.json=([0-9a-f]{64})"
@@ -43,35 +52,10 @@ BOOTSTRAP_GUIDANCE = (
 )
 
 
-@dataclass(frozen=True)
-class CommandResult:
-    returncode: int
-    stdout: str
-    stderr: str
-
-
-class GhRunner(Protocol):
-    def run(self, args: Sequence[str]) -> CommandResult: ...
-
-
-class SubprocessGhRunner:
-    """Run `gh` without shell interpolation, reading GH_TOKEN from the process."""
-
-    def run(self, args: Sequence[str]) -> CommandResult:
-        completed = subprocess.run(
-            ["gh", *args], capture_output=True, text=True, check=False
-        )
-        return CommandResult(completed.returncode, completed.stdout, completed.stderr)
-
-
 class PushFailure(RuntimeError):
     def __init__(self, summary: str) -> None:
         super().__init__(summary)
         self.summary = summary
-
-
-class DiffParseError(RuntimeError):
-    """`git diff --raw` failed to run, or one of its lines did not parse."""
 
 
 class ReleaseFailure(RuntimeError):
@@ -108,52 +92,34 @@ def run_push(
     """
     selected_gh = gh or SubprocessGhRunner()
     if (
-        _FULL_SHA.fullmatch(candidate_sha) is None
-        or _FULL_SHA.fullmatch(base_sha) is None
+        FULL_SHA.fullmatch(candidate_sha) is None
+        or FULL_SHA.fullmatch(base_sha) is None
     ):
         return PushOutcome("failed", "push failed")
 
     generic = f"push failed for {candidate_sha}"
     try:
-        head = _expect(_git(root, "rev-parse", "HEAD"), generic).strip()
-        if head != base_sha:
-            raise PushFailure(generic)
-
-        if _expect(_git(root, "status", "--porcelain"), generic).strip():
-            raise PushFailure(generic)
-
-        _expect(_git(root, "bundle", "verify", str(bundle_path)), generic)
-        _expect(_git(root, "fetch", "--quiet", str(bundle_path), "HEAD"), generic)
-        fetched_sha = _expect(_git(root, "rev-parse", "FETCH_HEAD"), generic).strip()
-        if fetched_sha != candidate_sha:
-            raise PushFailure(generic)
-
-        parents = _expect(
-            _git(root, "rev-list", "--parents", "-n", "1", fetched_sha), generic
-        ).split()
-        if len(parents) != 2 or parents[1] != base_sha:
-            raise PushFailure(generic)
-
         try:
-            entries = _diff_raw_entries(root, base_sha, fetched_sha)
-        except DiffParseError:
+            entries = verify_handoff(root, bundle_path, candidate_sha, base_sha)
+        except HandoffRejected:
             raise PushFailure(generic) from None
-        _require_allowed_diff(entries, generic)
+        if not _allowed_diff(entries):
+            raise PushFailure(generic)
 
         auth_result = selected_gh.run(["auth", "setup-git"])
         if auth_result.returncode != 0:
             raise PushFailure(generic)
-        remote_main = _remote_sha(
-            _expect(_git(root, "ls-remote", "origin", "refs/heads/main"), generic)
-        )
+        remote_main = ls_remote_sha(root, "refs/heads/main")
+        if remote_main is None:
+            raise PushFailure(generic)
         if remote_main != base_sha:
             raise PushFailure(f"{generic}: main advanced")
 
-        push_result = _git(root, "push", "origin", f"{candidate_sha}:refs/heads/main")
+        push_result = git(root, "push", "origin", f"{candidate_sha}:refs/heads/main")
         if push_result.returncode != 0:
             raise PushFailure(generic)
 
-        detach_result = _git(root, "checkout", "--detach", candidate_sha)
+        detach_result = git(root, "checkout", "--detach", candidate_sha)
         if detach_result.returncode != 0:
             raise PushFailure(generic)
     except PushFailure as failure:
@@ -173,7 +139,7 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
         single_digest = sha256(single).hexdigest()
         dual_digest = sha256(dual).hexdigest()
 
-        head_result = _git(root, "rev-parse", "HEAD")
+        head_result = git(root, "rev-parse", "HEAD")
         if head_result.returncode != 0:
             raise ReleaseFailure("could not read HEAD")
         head = head_result.stdout.strip()
@@ -182,11 +148,10 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
         if auth_result.returncode != 0:
             raise ReleaseFailure("gh auth setup-git failed")
 
-        ls_remote_result = _git(root, "ls-remote", "origin", "refs/heads/main")
-        if ls_remote_result.returncode != 0:
+        remote_main = ls_remote_sha(root, "refs/heads/main")
+        if remote_main is None:
             raise ReleaseFailure("could not read remote main")
-
-        if _remote_sha(ls_remote_result.stdout) != head:
+        if remote_main != head:
             raise ReleaseFailure("main advanced")
 
         view_result = selected_gh.run(
@@ -326,75 +291,14 @@ def _parse_record(body: str) -> tuple[str, str, str] | None:
     return matches[0]
 
 
-def _diff_raw_entries(
-    root: Path, base_sha: str, candidate_sha: str
-) -> list[tuple[str, str, str]]:
-    """Run `git diff --raw --no-renames <base> <candidate>` and parse its lines.
-
-    Each entry is `(path, old_mode, new_mode)`. Raises `DiffParseError` when
-    git fails to run the diff, or when a line does not parse into a path and
-    two modes.
-    """
-    result = _git(root, "diff", "--raw", "--no-renames", base_sha, candidate_sha)
-    if result.returncode != 0:
-        raise DiffParseError(result.stderr)
-    entries: list[tuple[str, str, str]] = []
-    for line in result.stdout.splitlines():
-        if not line:
-            continue
-        try:
-            meta, path = line.split("\t", 1)
-        except ValueError:
-            raise DiffParseError(line) from None
-        parts = meta.split()
-        if len(parts) < 4:
-            raise DiffParseError(line)
-        entries.append((path, parts[0].lstrip(":"), parts[1]))
-    return entries
-
-
-def _require_allowed_diff(
-    entries: Sequence[tuple[str, str, str]], failure_message: str
-) -> None:
-    if not entries:
-        raise PushFailure(failure_message)
-    for path, old_mode, new_mode in entries:
-        if path not in ALLOWED_PATHS or old_mode != "100644" or new_mode != "100644":
-            raise PushFailure(failure_message)
-
-
-def _remote_sha(ls_remote_output: str) -> str:
-    stripped = ls_remote_output.strip()
-    if not stripped:
-        return ""
-    first_line = stripped.splitlines()[0]
-    tokens = first_line.split()
-    return tokens[0] if tokens else ""
-
-
-def _expect(result: CommandResult, failure_message: str) -> str:
-    if result.returncode != 0:
-        raise PushFailure(failure_message)
-    return result.stdout
-
-
-def _git(root: Path, *args: str) -> CommandResult:
-    completed = subprocess.run(
-        ["git", "-c", "core.hooksPath=/dev/null", *args],
-        cwd=root,
-        capture_output=True,
-        text=True,
-        check=False,
+def _allowed_diff(entries: Sequence[DiffEntry]) -> bool:
+    """At least one entry, each an allowed path at mode 100644 on both sides."""
+    return bool(entries) and all(
+        entry.path in ALLOWED_PATHS
+        and entry.old_mode == "100644"
+        and entry.new_mode == "100644"
+        for entry in entries
     )
-    return CommandResult(completed.returncode, completed.stdout, completed.stderr)
-
-
-def _append_summary(environ: Mapping[str, str], value: str) -> None:
-    summary = environ.get("GITHUB_STEP_SUMMARY")
-    if not summary:
-        return
-    with Path(summary).open("a", encoding="utf-8") as stream:
-        stream.write(value)
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -413,11 +317,11 @@ def main(argv: Sequence[str] | None = None) -> int:
             environ.get("CANDIDATE_SHA", ""),
             environ.get("BASE_SHA", ""),
         )
-        _append_summary(environ, outcome.summary + "\n")
+        append_summary(environ, outcome.summary + "\n")
         return 0 if outcome.status == "published" else 1
 
     outcome = run_release(Path.cwd())
-    _append_summary(environ, outcome.summary + "\n")
+    append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 
 

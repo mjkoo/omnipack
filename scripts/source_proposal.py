@@ -13,24 +13,30 @@ import argparse
 import html
 import json
 import os
-import re
-import stat
-import subprocess
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from scripts.nightly_write import (
-    CommandResult,
-    DiffParseError,
+from scripts.workflow_support import (
+    FULL_SHA,
+    DiffEntry,
     GhRunner,
+    HandoffRejected,
     SubprocessGhRunner,
-    _append_summary,
-    _diff_raw_entries,
-    _remote_sha,
+    append_summary,
+    bot_commit,
+    expect,
+    git,
+    git_output,
+    git_text,
+    ls_remote_sha,
+    regular_file_problem,
+    require_env,
+    run_url,
+    verify_handoff,
+    write_github_output,
 )
-from scripts.nightly_write import _git as _hooked_git
 
 CANONICAL_REPOSITORY = "mjkoo/omnipack"
 CANONICAL_OWNER = "mjkoo"
@@ -43,9 +49,6 @@ BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
 COMMIT_SUBJECT = "chore(catalog): update reviewed codm source"
 PR_TITLE = COMMIT_SUBJECT
-BOT_NAME = "github-actions[bot]"
-BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
-_FULL_SHA = re.compile(r"[0-9a-f]{40}")
 
 
 # --- stage (read-only check job) -----------------------------------------
@@ -97,7 +100,7 @@ def run_stage(
     this run actually rendered.
     """
     try:
-        head = _git_text(root, "rev-parse", "HEAD")
+        head = git_text(root, "rev-parse", "HEAD")
     except OSError:
         return StageOutcome("failed", "checkout", None, None, False)
     if head != github_sha:
@@ -109,8 +112,8 @@ def run_stage(
     report_path = root / REPORT_PATH
 
     if (
-        _file_problem(candidate_path) is not None
-        or _file_problem(catalog_path) is not None
+        regular_file_problem(candidate_path) is not None
+        or regular_file_problem(catalog_path) is not None
     ):
         return StageOutcome("failed", "symlink", base_sha, None, False)
 
@@ -126,7 +129,7 @@ def run_stage(
     retained_failures = _report_retained_failures(report)
 
     try:
-        base_bytes = _git_bytes(root, "show", f"{base_sha}:{CATALOG_PATH}")
+        base_bytes = git_output(root, "show", f"{base_sha}:{CATALOG_PATH}")
     except OSError:
         return StageOutcome("failed", "report", base_sha, None, False)
 
@@ -141,10 +144,10 @@ def run_stage(
     if changed:
         try:
             sha = _commit_candidate(root, base_sha, run_url)
-            if _git_text(root, "rev-parse", "HEAD") != sha:
+            if git_text(root, "rev-parse", "HEAD") != sha:
                 return StageOutcome("failed", "bundle", base_sha, None, False)
             bundle_path.parent.mkdir(parents=True, exist_ok=True)
-            _git(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
+            git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
             body_text = _render_report(
                 base_sha=base_sha,
                 run_url=run_url,
@@ -236,57 +239,10 @@ def _render_report(
 
 
 def _commit_candidate(root: Path, base_sha: str, run_url: str) -> str:
-    _git(root, "checkout", "-q", "-B", BRANCH_NAME)
-    _git(root, "add", "--", CATALOG_PATH)
+    git_output(root, "checkout", "-q", "-B", BRANCH_NAME)
+    git_output(root, "add", "--", CATALOG_PATH)
     body = f"Workflow run: {run_url}\n\nBase SHA: {base_sha}"
-    _git(
-        root,
-        "-c",
-        f"user.name={BOT_NAME}",
-        "-c",
-        f"user.email={BOT_EMAIL}",
-        "-c",
-        "core.hooksPath=/dev/null",
-        "commit",
-        "--quiet",
-        "-m",
-        COMMIT_SUBJECT,
-        "-m",
-        body,
-    )
-    return _git_text(root, "rev-parse", "HEAD")
-
-
-def _file_problem(path: Path) -> str | None:
-    try:
-        info = path.lstat()
-    except OSError:
-        return "missing"
-    if stat.S_ISLNK(info.st_mode):
-        return "symlink"
-    if not stat.S_ISREG(info.st_mode):
-        return "irregular"
-    return None
-
-
-def _git_bytes(root: Path, *args: str) -> bytes:
-    completed = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, check=False
-    )
-    if completed.returncode != 0:
-        raise OSError(
-            completed.stderr.decode(errors="replace").strip()
-            or f"git {' '.join(args)} failed"
-        )
-    return completed.stdout
-
-
-def _git_text(root: Path, *args: str) -> str:
-    return _git_bytes(root, *args).decode().strip()
-
-
-def _git(root: Path, *args: str) -> None:
-    _git_bytes(root, *args)
+    return bot_commit(root, COMMIT_SUBJECT, body)
 
 
 # --- publish (write job) --------------------------------------------------
@@ -325,8 +281,8 @@ def run_publish(
         if changed not in ("true", "false"):
             raise PublishFailure(generic)
         if (
-            _FULL_SHA.fullmatch(base_sha) is None
-            or _FULL_SHA.fullmatch(candidate_sha) is None
+            FULL_SHA.fullmatch(base_sha) is None
+            or FULL_SHA.fullmatch(candidate_sha) is None
         ):
             raise PublishFailure(generic)
         is_changed = changed == "true"
@@ -335,10 +291,10 @@ def run_publish(
         if auth_result.returncode != 0:
             raise PublishFailure(f"{generic}: gh auth setup-git failed")
 
-        ls_remote_result = _hooked_git(root, "ls-remote", "origin", "refs/heads/main")
-        if ls_remote_result.returncode != 0:
+        remote_main = ls_remote_sha(root, "refs/heads/main")
+        if remote_main is None:
             raise PublishFailure(f"{generic}: could not read remote main")
-        if _remote_sha(ls_remote_result.stdout) != base_sha:
+        if remote_main != base_sha:
             raise PublishFailure(f"{generic}: main advanced")
 
         selected_number = _selected_pr_number(selected_gh, generic)
@@ -356,59 +312,35 @@ def run_publish(
         if bundle_path is None or body_path is None:
             raise PublishFailure(generic)
 
-        head = _expect(_hooked_git(root, "rev-parse", "HEAD"), generic).strip()
-        if head != base_sha:
-            raise PublishFailure(generic)
-        if _expect(_hooked_git(root, "status", "--porcelain"), generic).strip():
-            raise PublishFailure(generic)
-
-        _expect(_hooked_git(root, "bundle", "verify", str(bundle_path)), generic)
-        _expect(
-            _hooked_git(root, "fetch", "--quiet", str(bundle_path), "HEAD"), generic
-        )
-        fetched_sha = _expect(
-            _hooked_git(root, "rev-parse", "FETCH_HEAD"), generic
-        ).strip()
-        if fetched_sha != candidate_sha:
-            raise PublishFailure(generic)
-
-        parents = _expect(
-            _hooked_git(root, "rev-list", "--parents", "-n", "1", fetched_sha), generic
-        ).split()
-        if len(parents) != 2 or parents[1] != base_sha:
-            raise PublishFailure(generic)
-
         try:
-            entries = _diff_raw_entries(root, base_sha, fetched_sha)
-        except DiffParseError:
+            entries = verify_handoff(root, bundle_path, candidate_sha, base_sha)
+        except HandoffRejected:
             raise PublishFailure(generic) from None
-        _require_catalog_only_diff(entries, generic)
+        if not _catalog_only_diff(entries):
+            raise PublishFailure(generic)
 
-        remote_branch_output = _expect(
-            _hooked_git(
-                root, "ls-remote", "--heads", "origin", f"refs/heads/{BRANCH_NAME}"
-            ),
-            generic,
-        )
-        remote_branch_sha = _remote_sha(remote_branch_output)
+        remote_branch_sha = ls_remote_sha(root, f"refs/heads/{BRANCH_NAME}")
+        if remote_branch_sha is None:
+            raise PublishFailure(generic)
         needs_push = True
         if remote_branch_sha:
-            _expect(
-                _hooked_git(
-                    root, "fetch", "--quiet", "origin", f"refs/heads/{BRANCH_NAME}"
-                ),
+            expect(
+                git(root, "fetch", "--quiet", "origin", f"refs/heads/{BRANCH_NAME}"),
+                PublishFailure,
                 generic,
             )
-            remote_tree = _expect(
-                _hooked_git(root, "rev-parse", "FETCH_HEAD^{tree}"), generic
+            remote_tree = expect(
+                git(root, "rev-parse", "FETCH_HEAD^{tree}"), PublishFailure, generic
             ).strip()
-            candidate_tree = _expect(
-                _hooked_git(root, "rev-parse", f"{candidate_sha}^{{tree}}"), generic
+            candidate_tree = expect(
+                git(root, "rev-parse", f"{candidate_sha}^{{tree}}"),
+                PublishFailure,
+                generic,
             ).strip()
             needs_push = remote_tree != candidate_tree
 
         if needs_push:
-            push_result = _hooked_git(
+            push_result = git(
                 root,
                 "push",
                 "--force",
@@ -500,45 +432,16 @@ def _selected_pr_number(gh: GhRunner, failure_message: str) -> int | None:
     return number
 
 
-def _require_catalog_only_diff(
-    entries: Sequence[tuple[str, str, str]], failure_message: str
-) -> None:
-    if len(entries) != 1:
-        raise PublishFailure(failure_message)
-    path, old_mode, new_mode = entries[0]
-    if path != CATALOG_PATH or old_mode != "100644" or new_mode != "100644":
-        raise PublishFailure(failure_message)
-
-
-def _expect(result: CommandResult, failure_message: str) -> str:
-    if result.returncode != 0:
-        raise PublishFailure(failure_message)
-    return result.stdout
+def _catalog_only_diff(entries: Sequence[DiffEntry]) -> bool:
+    """Exactly one entry: the catalog, at mode 100644 on both sides."""
+    return len(entries) == 1 and entries[0] == (CATALOG_PATH, "100644", "100644")
 
 
 # --- shared CLI plumbing ---------------------------------------------------
 
 
-def _run_url(environ: Mapping[str, str]) -> str:
-    server = environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
-    repository = environ.get("GITHUB_REPOSITORY", CANONICAL_REPOSITORY)
-    run_id = environ.get("GITHUB_RUN_ID", "unknown")
-    return f"{server}/{repository}/actions/runs/{run_id}"
-
-
-def _write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -> None:
-    output = environ.get("GITHUB_OUTPUT")
-    if not output:
-        return
-    with Path(output).open("a", encoding="utf-8") as stream:
-        stream.writelines(f"{key}={value}\n" for key, value in values.items())
-
-
 def _handoff_paths(environ: Mapping[str, str]) -> tuple[Path, Path]:
-    runner_temp = environ.get("RUNNER_TEMP")
-    if not runner_temp:
-        raise OSError("RUNNER_TEMP is required")
-    directory = Path(runner_temp) / HANDOFF_DIRECTORY
+    directory = Path(require_env(environ, "RUNNER_TEMP")) / HANDOFF_DIRECTORY
     return directory / BUNDLE_NAME, directory / BODY_NAME
 
 
@@ -548,12 +451,12 @@ def _run_stage_command(environ: Mapping[str, str], *, root: Path | None = None) 
     outcome = run_stage(
         selected_root,
         environ.get("GITHUB_SHA", ""),
-        _run_url(environ),
+        run_url(environ),
         bundle_path,
         body_path,
     )
     if outcome.status != "failed":
-        _write_github_output(
+        write_github_output(
             environ,
             {
                 "changed": "true" if outcome.changed else "false",
@@ -561,7 +464,7 @@ def _run_stage_command(environ: Mapping[str, str], *, root: Path | None = None) 
                 "base": outcome.base_sha or "",
             },
         )
-    _append_summary(environ, outcome.summary + "\n")
+    append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 
 
@@ -581,7 +484,7 @@ def _run_publish_command(
         bundle_path,
         body_path,
     )
-    _append_summary(environ, outcome.summary + "\n")
+    append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 
 

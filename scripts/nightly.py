@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import argparse
 import os
-import stat
 import subprocess
 import sys
 from collections.abc import Callable, Mapping, Sequence
@@ -14,20 +13,24 @@ from pathlib import Path
 from typing import Protocol
 
 from omnipack.catalog import CatalogError, split_catalog
+from scripts.nightly_write import ALLOWED_PATHS
+from scripts.workflow_support import (
+    CommandResult,
+    append_summary,
+    bot_commit,
+    git_output,
+    git_text,
+    regular_file_problem,
+    require_env,
+    run_url,
+    write_github_output,
+)
 
-CANONICAL_REPOSITORY = "mjkoo/omnipack"
 HANDOFF_DIRECTORY = "nightly-handoff"
 BUNDLE_NAME = "candidate.bundle"
 
-ALLOWED_PATHS = (
-    "dist/single-screen.json",
-    "dist/dual-screen.json",
-    "README.md",
-)
 BUILD_COMMAND = ("uv", "run", "--no-sync", "pack", "build")
 STRUCTURAL_VERIFY_COMMAND = ("uv", "run", "--no-sync", "pack", "verify")
-BOT_NAME = "github-actions[bot]"
-BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -38,26 +41,7 @@ def main(argv: list[str] | None = None) -> int:
     return _run_prepare_command(os.environ)
 
 
-def _run_url(environ: Mapping[str, str]) -> str:
-    server = environ.get("GITHUB_SERVER_URL", "https://github.com").rstrip("/")
-    repository = environ.get("GITHUB_REPOSITORY", CANONICAL_REPOSITORY)
-    run_id = environ.get("GITHUB_RUN_ID", "unknown")
-    return f"{server}/{repository}/actions/runs/{run_id}"
-
-
-def _append_summary(environ: Mapping[str, str], value: str) -> None:
-    summary = environ.get("GITHUB_STEP_SUMMARY")
-    if not summary:
-        return
-    with Path(summary).open("a", encoding="utf-8") as stream:
-        stream.write(value)
-
-
-@dataclass(frozen=True)
-class PrepareCommandResult:
-    returncode: int
-    stdout: str
-    stderr: str
+PrepareCommandResult = CommandResult
 
 
 class PrepareProcess(Protocol):
@@ -71,9 +55,7 @@ class PrepareSubprocess:
         completed = subprocess.run(
             command, cwd=cwd, capture_output=True, text=True, check=False
         )
-        return PrepareCommandResult(
-            completed.returncode, completed.stdout, completed.stderr
-        )
+        return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
 @dataclass(frozen=True)
@@ -117,7 +99,7 @@ def run_prepare(
     selected_now = now or (lambda: datetime.now(UTC))
 
     try:
-        head = _git_text(root, "rev-parse", "HEAD")
+        head = git_text(root, "rev-parse", "HEAD")
     except OSError:
         return PrepareOutcome("failed", "checkout", None, None, False)
     if head != github_sha or _dirty_paths(root):
@@ -137,11 +119,11 @@ def run_prepare(
     if _dirty_paths(root) - set(ALLOWED_PATHS):
         return PrepareOutcome("failed", "allowlist", base_sha, None, False)
     for relative in ALLOWED_PATHS:
-        if _allowed_file_problem(root / relative) is not None:
+        if regular_file_problem(root / relative, executable_ok=False) is not None:
             return PrepareOutcome("failed", "allowlist", base_sha, None, False)
 
     try:
-        base_readme = _git_bytes(root, "show", f"{base_sha}:README.md")
+        base_readme = git_output(root, "show", f"{base_sha}:README.md")
         current_readme = (root / "README.md").read_bytes()
         base_prefix, _, base_suffix = split_catalog(base_readme)
         current_prefix, _, current_suffix = split_catalog(current_readme)
@@ -154,7 +136,7 @@ def run_prepare(
         changed_paths = tuple(
             relative
             for relative in ALLOWED_PATHS
-            if _git_bytes(root, "show", f"{base_sha}:{relative}")
+            if git_output(root, "show", f"{base_sha}:{relative}")
             != (root / relative).read_bytes()
         )
     except OSError:
@@ -180,10 +162,10 @@ def run_prepare(
         return PrepareOutcome("no-op", "complete", base_sha, base_sha, False)
 
     try:
-        if _git_text(root, "rev-parse", "HEAD") != sha:
+        if git_text(root, "rev-parse", "HEAD") != sha:
             return PrepareOutcome("failed", "bundle", base_sha, None, False)
         bundle_path.parent.mkdir(parents=True, exist_ok=True)
-        _git(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
+        git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
     except OSError:
         return PrepareOutcome("failed", "bundle", base_sha, None, False)
     return PrepareOutcome("prepared", "complete", base_sha, sha, True)
@@ -196,40 +178,11 @@ def _commit_candidate(
     run_url: str,
     base_sha: str,
 ) -> str:
-    _git(root, "add", "--", *changed_paths)
+    git_output(root, "add", "--", *changed_paths)
     date = observed.astimezone(UTC).date().isoformat()
     subject = f"chore(dist): nightly rebuild {date}"
     body = f"Workflow run: {run_url}\n\nBase SHA: {base_sha}"
-    _git(
-        root,
-        "-c",
-        f"user.name={BOT_NAME}",
-        "-c",
-        f"user.email={BOT_EMAIL}",
-        "-c",
-        "core.hooksPath=/dev/null",
-        "commit",
-        "--quiet",
-        "-m",
-        subject,
-        "-m",
-        body,
-    )
-    return _git_text(root, "rev-parse", "HEAD")
-
-
-def _allowed_file_problem(path: Path) -> str | None:
-    try:
-        info = path.lstat()
-    except FileNotFoundError:
-        return "missing"
-    if stat.S_ISLNK(info.st_mode):
-        return "symlink"
-    if not stat.S_ISREG(info.st_mode):
-        return "irregular"
-    if info.st_mode & 0o111:
-        return "executable"
-    return None
+    return bot_commit(root, subject, body)
 
 
 def _dirty_paths(root: Path) -> set[str]:
@@ -239,42 +192,12 @@ def _dirty_paths(root: Path) -> set[str]:
 
 
 def _git_paths(root: Path, *args: str) -> set[str]:
-    return {item.decode() for item in _git_bytes(root, *args).split(b"\0") if item}
-
-
-def _git_bytes(root: Path, *args: str) -> bytes:
-    completed = subprocess.run(
-        ["git", *args], cwd=root, capture_output=True, check=False
-    )
-    if completed.returncode != 0:
-        raise OSError(
-            completed.stderr.decode(errors="replace").strip()
-            or f"git {' '.join(args)} failed"
-        )
-    return completed.stdout
-
-
-def _git_text(root: Path, *args: str) -> str:
-    return _git_bytes(root, *args).decode().strip()
-
-
-def _git(root: Path, *args: str) -> None:
-    _git_bytes(root, *args)
+    return {item.decode() for item in git_output(root, *args).split(b"\0") if item}
 
 
 def _handoff_bundle_path(environ: Mapping[str, str]) -> Path:
-    runner_temp = environ.get("RUNNER_TEMP")
-    if not runner_temp:
-        raise OSError("RUNNER_TEMP is required")
+    runner_temp = require_env(environ, "RUNNER_TEMP")
     return Path(runner_temp) / HANDOFF_DIRECTORY / BUNDLE_NAME
-
-
-def _write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -> None:
-    output = environ.get("GITHUB_OUTPUT")
-    if not output:
-        return
-    with Path(output).open("a", encoding="utf-8") as stream:
-        stream.writelines(f"{key}={value}\n" for key, value in values.items())
 
 
 def _run_prepare_command(
@@ -284,11 +207,11 @@ def _run_prepare_command(
     outcome = run_prepare(
         selected_root,
         environ.get("GITHUB_SHA", ""),
-        _run_url(environ),
+        run_url(environ),
         _handoff_bundle_path(environ),
     )
     if outcome.status != "failed":
-        _write_github_output(
+        write_github_output(
             environ,
             {
                 "changed": "true" if outcome.changed else "false",
@@ -296,7 +219,7 @@ def _run_prepare_command(
                 "base": outcome.base_sha or "",
             },
         )
-    _append_summary(environ, outcome.summary_line + "\n")
+    append_summary(environ, outcome.summary_line + "\n")
     return 0 if outcome.status != "failed" else 1
 
 

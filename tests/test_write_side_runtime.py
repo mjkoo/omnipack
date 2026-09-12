@@ -6,7 +6,11 @@ import ast
 import sys
 from pathlib import Path
 
-WRITE_SIDE_MODULES = ("scripts/nightly_write.py", "scripts/source_proposal.py")
+WRITE_SIDE_MODULES = (
+    "scripts/nightly_write.py",
+    "scripts/source_proposal.py",
+    "scripts/workflow_support.py",
+)
 
 
 def _imported_names(tree: ast.Module) -> set[str]:
