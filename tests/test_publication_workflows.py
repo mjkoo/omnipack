@@ -130,10 +130,15 @@ def assert_no_needs_or_steps_expression_in_run(document: dict[Any, Any]) -> None
 
 
 def assert_base_guard_precedes(job: dict[str, Any], *, guarded_names: set[str]) -> None:
-    """Assert the base guard step runs before every named step and every GH_TOKEN step."""
+    """Assert the base guard step runs right after checkout, before every named
+    step and every GH_TOKEN step."""
     guard_index = step_index(
         job,
         lambda step: step_run(step).strip() == 'test "$BASE_SHA" = "$GITHUB_SHA"',
+    )
+    checkout_index = step_index(job, lambda step: step_uses(step, "actions/checkout@"))
+    assert guard_index == checkout_index + 1, (
+        "the base guard is not the step right after checkout"
     )
     for index, step in enumerate(steps(job)):
         if step.get("name") in guarded_names or "GH_TOKEN" in step_env(step):
