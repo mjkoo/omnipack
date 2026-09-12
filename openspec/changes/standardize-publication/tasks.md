@@ -127,7 +127,7 @@
   - a remote main other than the base, as for a rerun of an earlier run's write job, closes no PR on the unchanged path and makes no push, PR creation or PR edit on the changed path, and summarizes `publish failed: main advanced`;
   - a `BASE_SHA` or `CANDIDATE_SHA` that is not a full SHA, and a `CHANGED` other than `true` or `false`, fail before any fetch, push or PR write;
   - a Markdown-bearing asset name in the change summary appears HTML-escaped in the PR body.
-- [ ] 4.3 Rewrite `.github/workflows/source-catalog.yml`, whose `force` input 1.1 already removed, as two jobs, keeping its guards:
+- [x] 4.3 Rewrite `.github/workflows/source-catalog.yml`, whose `force` input 1.1 already removed, as two jobs, keeping its guards:
   - workflow level: the `17 4 * * *` schedule, `workflow_dispatch` with no inputs, `permissions: {}`, and concurrency group `omnipack-reviewed-source-catalog` with `cancel-in-progress: false`;
   - both jobs: `if: github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'`, `runs-on: ubuntu-latest` and `timeout-minutes: 60`;
   - job `check`: `permissions: contents: read`; checkout with `ref: ${{ github.sha }}`, `fetch-depth: 0` and `persist-credentials: false`; `setup-uv` and `uv sync --locked`; generate, stage, then (when changed) `uv run pytest`, `pack build`, `pack verify` and `git diff --quiet "$SHA" -- config/catalogs/codm.json` with `SHA` mapped from the stage step's output in its `env:`, all without a token; when changed, the bundle and the PR body file uploaded with one-day retention; the generation report always uploaded with 14-day retention; job outputs `changed`, `sha` and `base`;
