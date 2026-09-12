@@ -47,7 +47,7 @@ required-version = ">=0.12.5"
 # on ubuntu-latest), not the project's 3.14, so ruff must not accept syntax
 # newer than 3.12 in them.
 [tool.ruff]
-per-file-target-version = { "scripts/nightly_write.py" = "py312" }
+per-file-target-version = { "scripts/nightly_write.py" = "py312", "scripts/source_proposal.py" = "py312" }
 
 # ruff's defaults are broad; extend-select only adds to them. Never set
 # `select`: it replaces the defaults.

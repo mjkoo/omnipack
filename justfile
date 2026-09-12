@@ -48,7 +48,7 @@ check-py312:
     unset UV_LOCKED
     python312="$(nix build --no-link --print-out-paths nixpkgs#python312)/bin/python3.12"
     uv run --no-project --python "$python312" --with pytest \
-        pytest tests/test_nightly_write.py
+        pytest tests/test_nightly_write.py tests/test_source_proposal.py
 
 # Lint the workflows with actionlint and zizmor
 lint-actions:
