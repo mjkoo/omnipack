@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 from pathlib import Path
 
@@ -51,10 +52,11 @@ def test_handwritten_edit_stales_evidence_but_allows_fresh_verification(
     assert "Evidence: current" in format_reports(tmp_path)
 
 
-def test_readme_mutation_during_verification_prevents_success(
+def test_readme_mutation_during_verification_fingerprints_the_captured_bytes(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     copy_inputs(tmp_path)
+    captured_readme = (tmp_path / "README.md").read_bytes()
     original = verify.validate_offline
 
     def mutate(inputs):
@@ -64,8 +66,12 @@ def test_readme_mutation_during_verification_prevents_success(
 
     monkeypatch.setattr(verify, "validate_offline", mutate)
     result = verify.run_verification(tmp_path)
-    assert result["status"] == "failed"
-    assert any(error["code"] == "input_changed" for error in result["errors"])
+    assert result["status"] == "success"
+    assert result["inputs"]["readme"] == {
+        "state": "present",
+        "sha256": hashlib.sha256(captured_readme).hexdigest(),
+    }
+    assert "Evidence: stale" in format_reports(tmp_path)
 
 
 def test_historical_reports_require_regeneration_and_cannot_authorize_publication(

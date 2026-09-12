@@ -58,11 +58,19 @@ def capture_inputs(
 
 
 def run_verification(root: Path) -> dict[str, Any]:
-    """Verify one captured snapshot and atomically record its evidence."""
+    """Check one captured snapshot of inputs and record its evidence on completion.
+
+    Every input is read once. The checks below, and the fingerprints already
+    captured, describe exactly those bytes, regardless of what a concurrent
+    writer does to the files afterward. The report is written once, when
+    verification completes; a run that is interrupted first leaves no new
+    report, so an existing report on disk still describes only the inputs its
+    own run checked.
+    """
     started = _now()
     snapshots, fingerprints = capture_inputs(root)
-    report = _base_report(started, fingerprints)
-    _write_atomic(root / VERIFY_PATH, report)
+    errors: list[dict[str, Any]] = []
+
     offline_result = validate_offline(
         OfflineInputs(
             snapshots["single"],
@@ -74,7 +82,7 @@ def run_verification(root: Path) -> dict[str, Any]:
             snapshots["composition"],
         )
     )
-    report["errors"] = [_finding(item) for item in offline_result.findings]
+    errors.extend(_finding(item) for item in offline_result.findings)
     from omnipack.catalog import generate_catalog, split_catalog
     from omnipack.composition_policy import load_composition_policy
 
@@ -93,48 +101,31 @@ def run_verification(root: Path) -> dict[str, Any]:
                     "README catalog differs from the captured packs and policy"
                 )
     except ValueError as error:
-        report["errors"].append(
+        errors.append(
             {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
         )
     for name, fingerprint in fingerprints.items():
         if fingerprint["state"] == "unreadable":
-            report["errors"].append(
+            errors.append(
                 {
                     "stage": "input",
                     "code": "input_unreadable",
                     "message": f"{name} input is unreadable",
                 }
             )
-    _, current = capture_inputs(root)
-    if current != fingerprints:
-        report["errors"].append(
-            {
-                "stage": "input",
-                "code": "input_changed",
-                "message": "verification inputs changed during the run",
-            }
-        )
-    report.update(
-        completedAt=_now(),
-        complete=True,
-        status="failed" if report["errors"] else "success",
-    )
-    _write_atomic(root / VERIFY_PATH, report)
-    return report
-
-
-def _base_report(started: str, inputs: dict[str, Any]) -> dict[str, Any]:
-    return {
+    report = {
         "schemaVersion": SCHEMA_VERSION,
         "verifier": verifier_identity(),
         "mode": "offline",
         "startedAt": started,
-        "completedAt": None,
-        "complete": False,
-        "status": "running",
-        "inputs": inputs,
-        "errors": [],
+        "completedAt": _now(),
+        "complete": True,
+        "status": "failed" if errors else "success",
+        "inputs": fingerprints,
+        "errors": errors,
     }
+    _write_atomic(root / VERIFY_PATH, report)
+    return report
 
 
 def _finding(item: Finding) -> dict[str, Any]:

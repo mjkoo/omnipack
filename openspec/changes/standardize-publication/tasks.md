@@ -38,7 +38,7 @@
 
 ## 2. Structural verification report
 
-- [ ] 2.1 Make `verify.py` read each input once, check and fingerprint those bytes, and write `.build/verify.json` once on completion, keeping the schema-2 fields. Update `tests/test_verify.py`: drop the running-record and in-run change tests, and add a test that the report fingerprints the captured bytes. Verify that the `pack report` tests pass unchanged.
+- [x] 2.1 Make `verify.py` read each input once, check and fingerprint those bytes, and write `.build/verify.json` once on completion, keeping the schema-2 fields. Update `tests/test_verify.py`: drop the running-record and in-run change tests, and add a test that the report fingerprints the captured bytes. Verify that the `pack report` tests pass unchanged.
 
 ## 3. Nightly publisher
 

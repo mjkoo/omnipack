@@ -55,42 +55,58 @@ def test_missing_inputs_complete_as_failed_evidence(tmp_path: Path) -> None:
     assert all(value["state"] == "missing" for value in result["inputs"].values())
 
 
-def test_running_record_precedes_offline_validation(
+def test_no_report_written_when_verification_is_interrupted(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     copy_inputs(tmp_path)
 
     def interrupted(_inputs: object) -> object:
-        stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())
-        assert stored["status"] == "running"
-        assert stored["complete"] is False
+        raise KeyboardInterrupt
+
+    monkeypatch.setattr(verify, "validate_offline", interrupted)
+    with pytest.raises(KeyboardInterrupt):
+        verify.run_verification(tmp_path)
+    assert not (tmp_path / verify.VERIFY_PATH).exists()
+
+
+def test_interrupted_verification_leaves_an_existing_report_untouched(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    copy_inputs(tmp_path)
+    completed = verify.run_verification(tmp_path)
+
+    def interrupted(_inputs: object) -> object:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(verify, "validate_offline", interrupted)
     with pytest.raises(KeyboardInterrupt):
         verify.run_verification(tmp_path)
     stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())
-    assert stored["complete"] is False
+    assert stored == completed
 
 
-def test_changed_input_prevents_success(
+def test_report_fingerprints_the_bytes_captured_before_a_later_edit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     copy_inputs(tmp_path)
     real = verify.capture_inputs
-    calls = 0
+    captured_settings = (tmp_path / "config/settings.json").read_bytes()
 
     def capture(root: Path):
-        nonlocal calls
-        calls += 1
-        if calls == 2:
-            (root / "config/settings.json").write_bytes(b'{"changed":true}\n')
-        return real(root)
+        snapshots, fingerprints = real(root)
+        (root / "config/settings.json").write_bytes(b'{"changed":true}\n')
+        return snapshots, fingerprints
 
     monkeypatch.setattr(verify, "capture_inputs", capture)
     result = verify.run_verification(tmp_path)
-    assert any(item["code"] == "input_changed" for item in result["errors"])
-    assert result["status"] == "failed"
+    assert result["status"] == "success"
+    assert result["inputs"]["settings"] == {
+        "state": "present",
+        "sha256": hashlib.sha256(captured_settings).hexdigest(),
+    }
+    from omnipack.report import format_reports
+
+    assert "Evidence: stale" in format_reports(tmp_path)
 
 
 def test_composition_only_change_makes_recorded_evidence_stale(tmp_path: Path) -> None:
@@ -104,7 +120,7 @@ def test_composition_only_change_makes_recorded_evidence_stale(tmp_path: Path) -
     assert "Evidence: stale" in format_reports(tmp_path)
 
 
-def test_initial_report_write_error_is_wrapped(tmp_path: Path) -> None:
+def test_report_write_error_is_wrapped(tmp_path: Path) -> None:
     (tmp_path / ".build").write_text("occupied")
     with pytest.raises(
         verify.VerificationReportError, match="cannot write verification report"

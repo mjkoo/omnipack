@@ -92,25 +92,19 @@ def test_retired_verify_flags_fail_before_replacing_evidence(
     assert report_path.read_bytes() == b'{"prior":"evidence"}'
 
 
-@pytest.mark.parametrize("failure_at", [1, 2])
-def test_cli_initial_and_final_report_write_failures_are_concise(
+def test_cli_report_write_failure_is_concise(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    failure_at: int,
 ) -> None:
     inputs(tmp_path)
     path = tmp_path / ".build/verify.json"
     path.write_bytes(b'{"prior":"evidence"}')
     original = Path.replace
-    calls = 0
 
     def replace(self: Path, target: Path) -> Path:
-        nonlocal calls
         if target == path:
-            calls += 1
-            if calls == failure_at:
-                raise PermissionError("fixture report denied")
+            raise PermissionError("fixture report denied")
         return original(self, target)
 
     monkeypatch.setattr(Path, "replace", replace)
@@ -121,8 +115,4 @@ def test_cli_initial_and_final_report_write_failures_are_concise(
         "cannot write verification report" in error and "fixture report denied" in error
     )
     assert "Traceback" not in error and len(error.splitlines()) == 1
-    stored = json.loads(path.read_bytes())
-    if failure_at == 1:
-        assert stored == {"prior": "evidence"}
-    else:
-        assert stored["status"] == "running" and stored["complete"] is False
+    assert json.loads(path.read_bytes()) == {"prior": "evidence"}
