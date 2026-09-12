@@ -56,6 +56,17 @@ def step_run(step: dict[str, Any]) -> str:
     return step.get("run") or ""
 
 
+def normalized_run(step: dict[str, Any]) -> str:
+    """The step's `run:` command with insignificant whitespace collapsed."""
+    return " ".join(step_run(step).split())
+
+
+def download_artifact_step(job: dict[str, Any]) -> dict[str, Any]:
+    return next(
+        step for step in steps(job) if step_uses(step, "actions/download-artifact@")
+    )
+
+
 def find_step(job: dict[str, Any], name: str) -> dict[str, Any]:
     for step in steps(job):
         if step.get("name") == name:
@@ -261,3 +272,38 @@ def test_nightly_download_lands_in_runner_temp_not_the_workspace() -> None:
         step for step in steps(publish) if step_uses(step, "actions/download-artifact@")
     )
     assert download_step["with"]["path"] == "${{ runner.temp }}/nightly-handoff"
+
+
+def test_nightly_push_step_env_maps_prepare_outputs() -> None:
+    publish = jobs(NIGHTLY)["publish"]
+    push_step = find_step(publish, "Push the verified candidate to main")
+    env = step_env(push_step)
+    assert env["CANDIDATE_SHA"] == "${{ needs.prepare.outputs.sha }}"
+    assert env["BASE_SHA"] == "${{ needs.prepare.outputs.base }}"
+
+
+def test_nightly_step_run_commands_match_the_documented_commands() -> None:
+    prepare = jobs(NIGHTLY)["prepare"]
+    publish = jobs(NIGHTLY)["publish"]
+    sync_step = find_step(prepare, "Sync locked environment")
+    prepare_step = find_step(prepare, "Build, verify and commit a candidate")
+    push_step = find_step(publish, "Push the verified candidate to main")
+    release_step = find_step(publish, "Synchronize the rolling release")
+    assert normalized_run(sync_step) == "uv sync --locked"
+    assert (
+        normalized_run(prepare_step)
+        == "uv run --no-sync python -m scripts.nightly prepare"
+    )
+    assert normalized_run(push_step) == (
+        "python3 -m scripts.nightly_write push \\"
+        ' --bundle "$RUNNER_TEMP/nightly-handoff/candidate.bundle"'
+    )
+    assert normalized_run(release_step) == "python3 -m scripts.nightly_write release"
+
+
+def test_nightly_handoff_upload_and_download_names_match() -> None:
+    prepare = jobs(NIGHTLY)["prepare"]
+    publish = jobs(NIGHTLY)["publish"]
+    upload_step = find_step(prepare, "Upload the candidate hand-off")
+    download_step = download_artifact_step(publish)
+    assert upload_step["with"]["name"] == download_step["with"]["name"]
