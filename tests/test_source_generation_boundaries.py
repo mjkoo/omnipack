@@ -296,6 +296,30 @@ def test_unchanged_inputs_reproduce_the_committed_catalog_byte_for_byte(tmp_path
     assert result["changes"] == {"added": [], "removed": [], "changed": []}
 
 
+def test_project_resolving_to_a_different_entry_is_reported_as_changed(tmp_path):
+    source = setup(tmp_path, {"kind": "apk", "name": "tracker"})
+    assert run(tmp_path, source)[0]["status"] == "success"
+    accept(tmp_path)
+    (tmp_path / "config/codm-projects.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "projects": {
+                    PROJECT: {
+                        "kind": "apk",
+                        "name": "tracker",
+                        "additionalSettings": {"fallbackToOlderReleases": False},
+                    }
+                },
+            }
+        )
+    )
+    result = run(tmp_path, source)[0]
+    assert result["status"] == "success"
+    assert result["changes"] == {"added": [], "removed": [], "changed": [PROJECT]}
+    assert result["retainedFailures"] == []
+
+
 def test_retained_entry_survives_an_unchanged_or_reformatted_policy(tmp_path):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
