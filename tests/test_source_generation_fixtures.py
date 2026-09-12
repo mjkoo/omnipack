@@ -15,6 +15,7 @@ from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
 from omnipack.package_id import _is_valid_package_id
 from omnipack.render import render
+from omnipack.source_generation import _render_catalog
 from omnipack.sources import bboi, codm, rjny
 from omnipack.sources.common import normalize_record
 from omnipack.sources.extras import fetch as fetch_extras
@@ -137,7 +138,9 @@ def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
         "name": "Test Invariant Added",
         "author": "example",
     }
-    return {**catalog, "apps": [*apps, added]}
+    # Route through the generator's own serializer so the variant is itself a
+    # canonical catalog, matching what a real generation run would commit.
+    return json.loads(_render_catalog([*apps, added]))
 
 
 @pytest.fixture(params=["committed", "one-added-one-removed"])
@@ -188,6 +191,33 @@ def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
         else:
             assert settings.get("trackOnly", False) is False
             assert _is_valid_package_id(app["id"])
+
+
+def _canonical_json_bytes(document: dict[str, Any]) -> bytes:
+    return (
+        json.dumps(document, ensure_ascii=False, separators=(",", ":")) + "\n"
+    ).encode()
+
+
+def test_committed_catalog_matches_the_canonical_rendering_of_its_own_entries(
+    codm_catalog: dict[str, Any],
+) -> None:
+    assert _render_catalog(codm_catalog["apps"]) == _canonical_json_bytes(codm_catalog)
+
+
+def test_reordered_keys_or_different_indentation_are_not_canonical(
+    codm_catalog: dict[str, Any],
+) -> None:
+    """Confirm the invariant above is a real byte comparison: a catalog whose
+    keys are reordered, or that is pretty-printed, would fail it.
+    """
+    rendered = _render_catalog(codm_catalog["apps"])
+
+    reordered = {"apps": codm_catalog["apps"], "settings": codm_catalog["settings"]}
+    assert _canonical_json_bytes(reordered) != rendered
+
+    indented = (json.dumps(codm_catalog, ensure_ascii=False, indent=2) + "\n").encode()
+    assert indented != rendered
 
 
 def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
