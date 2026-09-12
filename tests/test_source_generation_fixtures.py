@@ -193,31 +193,21 @@ def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
             assert _is_valid_package_id(app["id"])
 
 
-def _canonical_json_bytes(document: dict[str, Any]) -> bytes:
-    return (
-        json.dumps(document, ensure_ascii=False, separators=(",", ":")) + "\n"
-    ).encode()
+def _is_canonical_catalog(path: Path) -> bool:
+    raw = path.read_bytes()
+    return _render_catalog(json.loads(raw)["apps"]) == raw
 
 
-def test_committed_catalog_matches_the_canonical_rendering_of_its_own_entries(
-    codm_catalog: dict[str, Any],
-) -> None:
-    assert _render_catalog(codm_catalog["apps"]) == _canonical_json_bytes(codm_catalog)
+def test_committed_catalog_bytes_are_the_canonical_rendering_of_its_entries() -> None:
+    assert _is_canonical_catalog(ROOT / "config/catalogs/codm.json")
 
 
-def test_reordered_keys_or_different_indentation_are_not_canonical(
-    codm_catalog: dict[str, Any],
-) -> None:
-    """Confirm the invariant above is a real byte comparison: a catalog whose
-    keys are reordered, or that is pretty-printed, would fail it.
-    """
-    rendered = _render_catalog(codm_catalog["apps"])
-
-    reordered = {"apps": codm_catalog["apps"], "settings": codm_catalog["settings"]}
-    assert _canonical_json_bytes(reordered) != rendered
-
-    indented = (json.dumps(codm_catalog, ensure_ascii=False, indent=2) + "\n").encode()
-    assert indented != rendered
+def test_a_pretty_printed_catalog_is_not_canonical(tmp_path: Path) -> None:
+    path = tmp_path / "codm.json"
+    path.write_text(
+        json.dumps(_committed_codm_catalog(), ensure_ascii=False, indent=2) + "\n"
+    )
+    assert not _is_canonical_catalog(path)
 
 
 def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
