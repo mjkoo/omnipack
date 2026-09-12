@@ -258,6 +258,32 @@ def test_commit_replacing_allowed_file_with_symlink_is_rejected(
     assert _git(bare, "rev-parse", "main") == base
 
 
+def test_commit_renaming_allowed_file_is_rejected(tmp_path: Path) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    _git(seed, "mv", "README.md", "README2.md")
+    _git(
+        seed,
+        "-c",
+        "user.name=github-actions[bot]",
+        "-c",
+        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+        "commit",
+        "-qm",
+        "chore(dist): nightly rebuild 2026-09-12",
+    )
+    sha = _git(seed, "rev-parse", "HEAD")
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+
+    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+
+    assert result.status == "failed"
+    assert result.summary == f"push failed for {sha}"
+    assert _git(bare, "rev-parse", "main") == base
+
+
 def test_commit_setting_executable_bit_is_rejected(tmp_path: Path) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")

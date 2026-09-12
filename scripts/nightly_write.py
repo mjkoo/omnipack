@@ -130,7 +130,9 @@ def run_push(
         if len(parents) != 2 or parents[1] != base_sha:
             raise PushFailure(generic)
 
-        diff_text = _expect(_git(root, "diff", "--raw", base_sha, fetched_sha), generic)
+        diff_text = _expect(
+            _git(root, "diff", "--raw", "--no-renames", base_sha, fetched_sha), generic
+        )
         _require_allowed_diff(diff_text, generic)
 
         auth_result = selected_gh.run(["auth", "setup-git"])
