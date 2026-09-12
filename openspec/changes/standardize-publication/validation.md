@@ -2,11 +2,12 @@
 
 ## Final checks
 
-Run at the branch head after the review and its fixes:
+Run at the branch head after the review, its fixes, and the fixes for the
+verification findings:
 
 - `just check-all` in the dev shell passed: lock, format, lint and type
-  checks, 720 tests with coverage, `pack verify`, the write-side tests under
-  CPython 3.12 (`just check-py312`, 113 tests), actionlint and zizmor, the
+  checks, 732 tests with coverage, `pack verify`, the write-side tests under
+  CPython 3.12 (`just check-py312`, 121 tests), actionlint and zizmor, the
   documentation link check, the nix format check and `nix flake check`.
 - A live `uv run pack build` exited zero, and
   `git diff --exit-code dist/ README.md` then reported no change, so the
@@ -18,7 +19,7 @@ Run at the branch head after the review and its fixes:
 
 ## Test count
 
-720 tests pass, against 771 when this change started. The retired
+732 tests pass, against 771 when this change started. The retired
 publishers' suites left with their modules: the six old nightly test
 modules, the nightly workflow substring checks, `test_source_publication.py`
 and `test_source_workflow.py`. New suites cover `prepare`, `push` and
@@ -31,11 +32,11 @@ Counted as the lines of the `.py` files tracked under each path.
 
 | Path | Start (main, 42980a8) | End | Delta |
 |---|---|---|---|
-| `src/` and `scripts/` | 8,791 | 6,700 | -2,091 |
-| `tests/` | 12,224 | 11,826 | -398 |
+| `src/` and `scripts/` | 8,791 | 6,731 | -2,060 |
+| `tests/` | 12,224 | 12,031 | -193 |
 
 The proposal estimated about 5,800 and 8,200 lines. It was written before
-three later decisions, which account for the gap:
+four later decisions, which account for the gap:
 
 - the split of each workflow into a read-only job and a write job, which
   added the bundle hand-off and its checks;
@@ -43,7 +44,14 @@ three later decisions, which account for the gap:
 - the tests added after a mutation review showed that several guards (the
   parent check, the bot-branch overwrite, disabled hooks, the canonical
   release body, `gh` write failures and the workflow step conditions) had
-  no test that failed when they broke.
+  no test that failed when they broke;
+- the tests added after verification, each shown to fail against a planted
+  defect: that `stage` never stages the policy, packs or README, that fork
+  and duplicate PRs are left alone when the candidate is unchanged, that
+  hooks stay disabled in `publish`, that the release step refuses a
+  symlinked pack file and reports each release state failure's exact
+  reason, that repairs upload both assets, that every action is pinned to a
+  commit SHA, and that the runtime guard reads `scripts/__init__.py`.
 
 ## Live generation comparison
 
