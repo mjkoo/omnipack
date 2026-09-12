@@ -57,8 +57,10 @@ own output to the job log.
 no `setup-uv` and no `uv sync`. It checks out `${{ github.sha }}` shallowly
 with `persist-credentials: false`, then runs a guard step,
 `test "$BASE_SHA" = "$GITHUB_SHA"` with `BASE_SHA` mapped from
-`needs.prepare.outputs.base`, before anything that receives a token. Only its
-push and release steps set `GH_TOKEN: ${{ github.token }}`:
+`needs.prepare.outputs.base`, before any step that receives `GH_TOKEN`. The
+checkout uses the job token only to fetch that revision, and
+`persist-credentials: false` keeps it out of `.git/config`. Only the push and
+release steps set `GH_TOKEN: ${{ github.token }}`:
 
 ```sh
 python3 -m scripts.nightly_write push --bundle <downloaded bundle path>

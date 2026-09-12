@@ -148,8 +148,9 @@ Outputs of the read-only job SHALL reach the write job's scripts only through
 step environment variables, never interpolated into a command, and the scripts
 SHALL reject any commit identifier that is not a full 40-character hexadecimal
 SHA. Within the write job, the credential SHALL be
-passed only to the steps that push to main or write the release, and every git
-command there SHALL run with repository hooks disabled. No checkout SHALL
+passed only to the checkout of the triggering revision and to the steps that
+push to main or write the release, and every git command there SHALL run with
+repository hooks disabled. No checkout SHALL
 persist a credential in the repository configuration. Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
 downloads, and source text SHALL be treated as data rather than executable
 input. Documentation SHALL describe token permissions, direct-push prerequisites

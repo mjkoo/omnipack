@@ -397,10 +397,11 @@ condition `github.repository == 'mjkoo/omnipack' && github.ref ==
 3. **Download** the bundle and the body file when `changed` is true.
 4. **`python3 -m scripts.source_proposal publish`**, with `GH_TOKEN` and no
    `if` condition. It reads `CHANGED`, `CANDIDATE_SHA` and `BASE_SHA` from its
-   `env:`, and rejects a `CHANGED` other than `true` or `false`, a `BASE_SHA`
-   and, when changed, a `CANDIDATE_SHA` that does not match `^[0-9a-f]{40}$`,
-   without echoing the value. It runs every git command with `-c
-   core.hooksPath=/dev/null`.
+   `env:`, and rejects a `CHANGED` other than `true` or `false`, and a
+   `BASE_SHA` or `CANDIDATE_SHA` that does not match `^[0-9a-f]{40}$`, on
+   either path, without echoing the value. `stage` sets `sha` to the base for
+   an unchanged candidate, so both are full SHAs whenever `check` succeeded.
+   It runs every git command with `-c core.hooksPath=/dev/null`.
 
    It first runs `gh auth setup-git` and requires `git ls-remote origin
    refs/heads/main` to report `<base>`. Otherwise it writes `publish failed:
@@ -470,7 +471,10 @@ virtualenv would later run in a step that had `GH_TOKEN`.
   `contents: read`, so every step there, including checkout and `setup-uv`,
   sees only a read-only job token. Only the write job holds `contents: write`
   (and, for the source workflow, `pull-requests: write`), and only its push,
-  release and publish steps receive `GH_TOKEN`.
+  release and publish steps receive `GH_TOKEN`. Its checkout also receives
+  the job token, through `actions/checkout`'s default `token` input, to fetch
+  the triggering revision; `persist-credentials: false` keeps it out of
+  `.git/config`.
 - **Hand-off.** The check job's outputs carry `changed`, `sha` and `base`.
   When changed, a `git bundle` of `<base>..HEAD`, holding only the candidate
   commit, its trees and its changed blobs, travels as a one-day artifact, with
