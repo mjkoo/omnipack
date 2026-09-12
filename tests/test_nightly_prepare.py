@@ -302,6 +302,24 @@ def test_allowed_file_executable_bit_fails_allowlist(tmp_path: Path) -> None:
     assert not bundle_path.exists()
 
 
+def test_new_allowed_file_missing_at_base_fails_allowlist(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    (root / ALLOWED_PATHS[1]).unlink()
+    _git(root, "add", "-A")
+    _git(root, "commit", "-qm", "drop a pack file")
+    base = _git(root, "rev-parse", "HEAD")
+    process = ScriptedProcess(root)
+    process.on_build.append(lambda: (root / ALLOWED_PATHS[1]).write_text("new pack\n"))
+    bundle_path = tmp_path / "candidate.bundle"
+
+    outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)
+
+    assert outcome.status == "failed"
+    assert outcome.stage == "allowlist"
+    assert _git(root, "rev-parse", "HEAD") == base
+    assert not bundle_path.exists()
+
+
 def test_readme_change_outside_markers_fails(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")

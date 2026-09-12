@@ -340,12 +340,15 @@ def run_prepare(
     if current_prefix != base_prefix or current_suffix != base_suffix:
         return PrepareOutcome("failed", "README boundary", base_sha, None, False)
 
-    changed_paths = tuple(
-        relative
-        for relative in ALLOWED_PATHS
-        if _git_bytes(root, "show", f"{base_sha}:{relative}")
-        != (root / relative).read_bytes()
-    )
+    try:
+        changed_paths = tuple(
+            relative
+            for relative in ALLOWED_PATHS
+            if _git_bytes(root, "show", f"{base_sha}:{relative}")
+            != (root / relative).read_bytes()
+        )
+    except OSError:
+        return PrepareOutcome("failed", "allowlist", base_sha, None, False)
 
     sha = base_sha
     if changed_paths:
