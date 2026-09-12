@@ -5,8 +5,9 @@ The **Nightly publishing** workflow is scheduled daily at 3:00 AM Eastern
 dispatched manually with no inputs. Both paths run only for `mjkoo/omnipack`
 on `main`; a dispatch from another ref, or a run in a fork, does not publish.
 One `omnipack-nightly-publisher` concurrency group serializes runs without
-canceling one already in progress. Each job has a 60-minute timeout, and
-scheduling is best effort: GitHub does not guarantee an exact start time or
+canceling one already in progress. The workflow runs two jobs in sequence,
+each limited to 60 minutes, so a run can take about 120 minutes end to end.
+Scheduling is best effort: GitHub does not guarantee an exact start time or
 execution of every queued trigger.
 
 ## Two-job flow and credential split
@@ -17,8 +18,9 @@ the write credential with the steps that push to `main` or write the release.
 
 **`prepare`** holds `permissions: contents: read` and no step in it sets
 `GH_TOKEN` or otherwise receives a token beyond that read-only job token. It
-checks out `${{ github.sha }}` with `persist-credentials: false`, syncs the
-locked project environment, and runs:
+checks out `${{ github.sha }}` with `persist-credentials: false`, sets up uv
+with its GitHub Actions cache disabled, so that nothing this job writes can be
+restored into a later run, syncs the locked project environment, and runs:
 
 ```sh
 uv run --no-sync python -m scripts.nightly prepare
@@ -26,6 +28,9 @@ uv run --no-sync python -m scripts.nightly prepare
 
 `prepare`:
 
+- removes any `.build/report.json` and `.build/verify.json` left in the
+  workspace by an earlier run, so the diagnostics upload carries only this
+  run's reports;
 - requires `HEAD` to equal `GITHUB_SHA` and the checkout to be clean;
 - runs `pack build`;
 - rejects any tracked change outside `dist/single-screen.json`,
@@ -34,7 +39,9 @@ uv run --no-sync python -m scripts.nightly prepare
 - requires the README's generated-catalog markers and everything outside them
   to match the checked-out base revision byte for byte;
 - when any of the three files changed, commits them locally as
-  `github-actions[bot]` with hooks disabled;
+  `github-actions[bot]` with hooks disabled, with the subject
+  `chore(dist): nightly rebuild <UTC date>` (the date as `YYYY-MM-DD`) and a
+  body naming the workflow run's URL and the base SHA;
 - runs `pack verify`;
 - requires the checkout to be clean again afterward;
 - when it committed, confirms `HEAD` is that commit and writes a
@@ -43,7 +50,8 @@ uv run --no-sync python -m scripts.nightly prepare
 It writes `changed`, `sha` and `base` as job outputs, and its step summary
 line is `no-op at <sha>`, `prepared <sha>`, or the name of the stage that
 failed: `checkout`, `build`, `allowlist`, `README boundary`, `verify`,
-`drift after verify` or `bundle`.
+`drift after verify` or `bundle`. `pack build` and `pack verify` write their
+own output to the job log.
 
 **`publish`** needs `prepare`, holds `permissions: contents: write`, and runs
 no `setup-uv` and no `uv sync`. It checks out `${{ github.sha }}` shallowly
@@ -64,7 +72,8 @@ has no `if` condition, so Actions' implicit success gate runs it whenever
 ### Bundle hand-off
 
 When `prepare` committed a candidate, it uploads the bundle as
-`nightly-handoff-<run-id>` with one-day retention. `publish` downloads that
+`nightly-handoff-<run-id>` with one-day retention; the upload fails if the
+bundle is missing. `publish` downloads that
 same artifact, with a SHA-pinned `actions/download-artifact`, only when
 `changed` is `true`. The bundle carries only the candidate commit, its trees
 and its changed blobs; it never carries the checked-out worktree or the
@@ -75,15 +84,21 @@ on both sides, all before doing anything else.
 
 ### The write job's runtime
 
-`publish` installs nothing from the project. `scripts/nightly_write.py`
-imports only the standard library and the `scripts` package, and runs on the
-runner's preinstalled `python3`, which is 3.12 on `ubuntu-latest` even though
-the project otherwise requires Python 3.14. The module starts with
-`from __future__ import annotations` so that no annotation is evaluated at
-import time, and `pyproject.toml` pins its ruff target to `py312`. `just
-check-py312` runs the module's own tests under a real CPython 3.12, both
-locally (from `nixpkgs#python312`) and in CI, since ruff alone cannot catch a
-3.13-or-later standard-library API or an annotation-evaluation difference.
+`publish` installs nothing from the project. `scripts/nightly_write.py`, and
+`scripts/workflow_support.py`, which holds the helpers it shares with the
+source proposal workflow, import only the standard library and each other,
+and run on the runner's preinstalled `python3`, which is 3.12 on
+`ubuntu-latest` even though the project otherwise requires Python 3.14. Each
+module starts with `from __future__ import annotations` so that no
+annotation is evaluated at import time, and `pyproject.toml` pins their ruff
+target to `py312`. `just check-py312` runs the tests of the write jobs'
+scripts (`tests/test_nightly_write.py`, `tests/test_source_proposal.py` and
+`tests/test_workflow_support.py`) under a real CPython 3.12, without the
+project environment, since ruff alone cannot catch a 3.13-or-later
+standard-library API or an annotation-evaluation difference. Locally it
+uses `python312` from the `nixpkgs` this repository's flake pins; CI's
+`check` job runs `just check-py312 /usr/bin/python3` against the runner's
+own interpreter.
 
 Every git command the write job's scripts run adds `-c core.hooksPath=/dev/null`,
 even though the write job's checkout is fresh and runs no project code before
@@ -198,6 +213,11 @@ to decide whether the commit landed. If the commit did land, the next run's
 still synchronizes the release from that already-published pair; recovery
 therefore lags by at most one run rather than needing a retry.
 
+**Checkout after a landed push.** If the push succeeds but checking out the
+pushed commit afterward fails, `push` summarizes `published <sha>`, because
+the commit is on `main`, and still exits nonzero, so the release step does
+not run on the old checkout. The next run synchronizes the release.
+
 **Served-asset repair.** A run whose record matches but whose served assets
 do not (for example, one asset was replaced or deleted by hand, or an
 earlier upload was interrupted after only one asset succeeded) re-uploads
@@ -221,7 +241,10 @@ moves the release backward.
 ownership marker, a malformed title, a draft, a release that is not a
 prerelease, or an immutable release fails the release step with
 `release failed: <reason>` plus the bootstrap guidance above, without any
-release write. A failed release step never undoes a successful `main` push;
+release write. The release counts as missing only when `gh release view`
+reports `release not found`; any other failure to read it, such as an API
+error, fails with `release failed: could not read release` and no bootstrap
+guidance. A failed release step never undoes a successful `main` push;
 the pushed commit stays on `main`.
 
 ## Step summary lines
@@ -231,7 +254,8 @@ line each from `prepare`, `push` and `release`:
 
 - `prepare`: `no-op at <sha>`, `prepared <sha>`, or the failing stage name.
 - `push`: `published <sha>`, `push failed for <sha>`, or
-  `push failed for <sha>: main advanced`.
+  `push failed for <sha>: main advanced`. `published <sha>` on a failed step
+  means the push landed but the checkout after it failed.
 - `release`: `unchanged at revision N`, `repaired at revision N`,
   `revision N+1`, or `release failed: <reason>` (with bootstrap guidance when
   the release itself is the problem).
@@ -242,9 +266,12 @@ line each from `prepare`, `push` and `release`:
 `nightly-diagnostics-<run-id>`, with 14-day retention, whether or not the run
 succeeded; a missing file is ignored rather than failing the upload. When it
 committed a candidate, it also uploads the bundle as
-`nightly-handoff-<run-id>` with one-day retention. Actions' own step status,
-logs and these artifacts are the record of a run; there is no separate
-issue-tracking or notification mechanism.
+`nightly-handoff-<run-id>` with one-day retention. Both uploads replace an
+artifact of the same name, so **Re-run all jobs**, which keeps the run ID,
+does not fail on a name an earlier attempt already used. Actions' own step
+status, logs and these artifacts are the record of a run; there is no
+separate issue-tracking or notification mechanism. A failing `git` or `gh`
+command writes its error output to the job log, never to the step summary.
 
 ## Rollback
 
