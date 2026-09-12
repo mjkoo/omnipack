@@ -148,7 +148,7 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
         assert (dist / name).read_bytes() == before
 
 
-def test_build_failure_does_not_mutate_resolution_state(
+def test_build_failure_does_not_mutate_committed_catalog(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     (tmp_path / "README.md").write_bytes(
@@ -174,8 +174,9 @@ def test_build_failure_does_not_mutate_resolution_state(
         {variant: [] for variant in Variant}, CompositionReport()
     )
 
-    state = b'{"github.com/old/project":{"packageId":"app.old","releaseId":1}}\n'
-    (config / "package-ids.json").write_bytes(state)
+    (config / "catalogs").mkdir()
+    catalog = b'{"apps":[{"id":"app.old","url":"https://github.com/old/project"}]}\n'
+    (config / "catalogs/codm.json").write_bytes(catalog)
 
     def resolved(_root: Path, report: IngestionReport | None = None) -> IngestionResult:
         return IngestionResult(
@@ -193,7 +194,7 @@ def test_build_failure_does_not_mutate_resolution_state(
     )
     monkeypatch.chdir(tmp_path)
     assert main(["build"]) == 1
-    assert (config / "package-ids.json").read_bytes() == state
+    assert (config / "catalogs/codm.json").read_bytes() == catalog
     for name in ("single-screen.json", "dual-screen.json"):
         assert json.loads((dist / name).read_text()) == before
 
@@ -222,9 +223,6 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "http.json": {"credentials": {}},
         "extras.json": [],
         "composition.json": {"schemaVersion": 1, "candidates": [], "pins": []},
-        "package-ids.json": {
-            "github.com/fixture/retained": {"packageId": "app.retained", "releaseId": 1}
-        },
         "deny.json": [],
         "overlay.json": [],
         "overlay.dual.json": [],
@@ -347,8 +345,6 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "removed": [],
     }
     assert not (tmp_path / "dist/report.json").exists()
-    cache = json.loads((config / "package-ids.json").read_text())
-    assert cache == files["package-ids.json"]
 
 
 @pytest.mark.parametrize("stage", ["rendering", "report writing", "publication"])

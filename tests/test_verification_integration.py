@@ -20,10 +20,6 @@ def inputs(root: Path) -> dict[Path, bytes]:
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("settings.json", {}),
         ("http.json", {"credentials": {}}),
-        (
-            "package-ids.json",
-            {"github.com/example/app": {"packageId": "app.example", "releaseId": 42}},
-        ),
     ]:
         (root / "config" / name).write_text(json.dumps(value))
     app = {
