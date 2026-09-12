@@ -9,7 +9,7 @@
   },
   "github.com/chimeragaming/fanmakepokemonmaps_android": {
     "packageId": "com.chimeragaming.pokemonzmap",
-    "releaseId": 384990510
+    "releaseId": 387189939
   },
   "github.com/chimeragaming/pixelnavigator": {
     "packageId": "com.chimeragaming.pixelnavigator",
@@ -43,9 +43,17 @@
     "packageId": "igawa6.dualsouls",
     "releaseId": 375252804
   },
+  "github.com/igawa6/tomba2recompds": {
+    "packageId": "io.github.tomba2recomp",
+    "releaseId": 387168582
+  },
   "github.com/jakobkhansen/silksongandroid": {
     "packageId": "com.jakobkhansen.silksong",
     "releaseId": 385854037
+  },
+  "github.com/kalenjohnson/chrono-duo": {
+    "packageId": "com.kalenjohnson.chronoduo",
+    "releaseId": 384647868
   },
   "github.com/rosbean/balatro-dualscreen": {
     "packageId": "com.balatro.dualscreen",
