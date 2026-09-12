@@ -381,6 +381,85 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     assert _git(bare, "rev-parse", "main") == sha
 
 
+def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+    pre_receive = bare / "hooks" / "pre-receive"
+    pre_receive.write_text(
+        "#!/bin/sh\necho 'protected branch: fixture says no' >&2\nexit 1\n"
+    )
+    pre_receive.chmod(0o755)
+    summary_path = tmp_path / "summary.md"
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", StubGh)
+    monkeypatch.chdir(write_side)
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
+
+    assert exit_code == 1
+    assert summary_path.read_text() == f"push failed for {sha}\n"
+    assert "protected branch: fixture says no" in capsys.readouterr().err
+
+
+def test_detach_failure_after_a_landed_push_reports_published_and_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+    # The remote accepts the push, then leaves the write side's index locked,
+    # so the detach that follows the push fails.
+    post_receive = bare / "hooks" / "post-receive"
+    post_receive.write_text(f"#!/bin/sh\ntouch '{write_side}/.git/index.lock'\n")
+    post_receive.chmod(0o755)
+    summary_path = tmp_path / "summary.md"
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", StubGh)
+    monkeypatch.chdir(write_side)
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
+
+    assert exit_code == 1
+    assert summary_path.read_text() == f"published {sha}\n"
+    assert _git(bare, "rev-parse", "main") == sha
+    assert "index.lock" in capsys.readouterr().err
+
+
+def test_a_branch_whose_name_ends_in_main_does_not_hide_the_real_main(
+    tmp_path: Path,
+) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+    # `a/refs/heads/main` also matches the ls-remote pattern and sorts first.
+    _git(seed, "push", "-q", str(bare), f"{sha}:refs/heads/a/refs/heads/main")
+
+    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+
+    assert result.status == "published"
+    assert _git(bare, "rev-parse", "refs/heads/main") == sha
+
+
 # --- release -----------------------------------------------------------
 
 
@@ -437,6 +516,7 @@ class ScriptedGh:
         *,
         view: dict | None,
         view_ok: bool = True,
+        view_stderr: str = "release not found",
         upload_ok: bool = True,
         edit_ok: bool = True,
         auth_ok: bool = True,
@@ -444,6 +524,7 @@ class ScriptedGh:
     ) -> None:
         self.view = view
         self.view_ok = view_ok
+        self.view_stderr = view_stderr
         self.upload_ok = upload_ok
         self.edit_ok = edit_ok
         self.auth_ok = auth_ok
@@ -458,7 +539,7 @@ class ScriptedGh:
             return CommandResult(0 if self.auth_ok else 1, "", "")
         if args[:2] == ("release", "view"):
             if not self.view_ok:
-                return CommandResult(1, "", "not found")
+                return CommandResult(1, "", self.view_stderr)
             return CommandResult(0, json.dumps(self.view), "")
         if args[:2] == ("release", "upload"):
             return CommandResult(0 if self.upload_ok else 1, "", "")
@@ -612,6 +693,14 @@ def test_differing_record_uploads_and_edits_with_canonical_body(
     assert len(upload_calls) == 1
     assert len(edit_calls) == 1
     assert gh.calls.index(upload_calls[0]) < gh.calls.index(edit_calls[0])
+    assert upload_calls[0] == (
+        "release",
+        "upload",
+        "continuous",
+        str(root / "dist/single-screen.json"),
+        str(root / "dist/dual-screen.json"),
+        "--clobber",
+    )
     edited_body = gh.edited_bodies[0]
     assert MARKER in edited_body
     assert _record_line(SINGLE_DIGEST, DUAL_DIGEST, sha) in edited_body
@@ -941,3 +1030,27 @@ def test_release_cli_exit_code_and_summary(
 
     assert exit_code == 0
     assert summary_path.read_text() == "unchanged at revision 3\n"
+
+
+def test_release_view_failure_other_than_not_found_has_no_bootstrap_guidance(
+    tmp_path: Path,
+) -> None:
+    root, _sha = _release_repo(tmp_path)
+    gh = ScriptedGh(view=None, view_ok=False, view_stderr="HTTP 502: Bad Gateway")
+
+    result = run_release(root, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "release failed: could not read release"
+    assert not any(call[:2] == ("release", "upload") for call in gh.calls)
+
+
+def test_release_not_found_is_missing_with_bootstrap_guidance(tmp_path: Path) -> None:
+    root, _sha = _release_repo(tmp_path)
+    gh = ScriptedGh(view=None, view_ok=False, view_stderr="release not found\n")
+
+    result = run_release(root, gh=gh)
+
+    assert result.summary == (
+        f"release failed: release is missing; {write_module.BOOTSTRAP_GUIDANCE}"
+    )

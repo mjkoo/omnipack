@@ -30,6 +30,7 @@ from scripts.workflow_support import (
     git,
     git_output,
     git_text,
+    log,
     ls_remote_sha,
     regular_file_problem,
     require_env,
@@ -49,6 +50,8 @@ BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
 COMMIT_SUBJECT = "chore(catalog): update reviewed codm source"
 PR_TITLE = COMMIT_SUBJECT
+# GitHub rejects a pull request body longer than this many characters.
+PR_BODY_LIMIT = 65536
 
 
 # --- stage (read-only check job) -----------------------------------------
@@ -122,7 +125,7 @@ def run_stage(
         candidate_bytes = candidate_path.read_bytes()
     except (OSError, ValueError):
         return StageOutcome("failed", "report", base_sha, None, False)
-    if not isinstance(report, dict):
+    if not isinstance(report, dict) or report.get("status") != "success":
         return StageOutcome("failed", "report", base_sha, None, False)
 
     added, removed, changed_urls = _report_changes(report)
@@ -230,12 +233,26 @@ def _render_report(
     lines.extend(html.escape(url) for url in changed)
     lines.append("")
     lines.append("Retained failures:")
-    lines.extend(
+    failure_lines = [
         f"{html.escape(url)}: {html.escape(message)}"
         for url, message in retained_failures
-    )
-    lines.append("</pre>")
-    return "\n".join(lines) + "\n"
+    ]
+    text = "\n".join([*lines, *failure_lines, "</pre>"]) + "\n"
+    if len(text) <= PR_BODY_LIMIT:
+        return text
+
+    # Keep the PR body within GitHub's limit by listing only as many retained
+    # failures as fit, then counting the rest on one line.
+    longest_omission = f"and {len(failure_lines)} more"
+    budget = PR_BODY_LIMIT - len("\n".join([*lines, longest_omission, "</pre>"]) + "\n")
+    kept: list[str] = []
+    for line in failure_lines:
+        if len(line) + 1 > budget:
+            break
+        kept.append(line)
+        budget -= len(line) + 1
+    omission = f"and {len(failure_lines) - len(kept)} more"
+    return "\n".join([*lines, *kept, omission, "</pre>"]) + "\n"
 
 
 def _commit_candidate(root: Path, base_sha: str, run_url: str) -> str:
@@ -297,7 +314,7 @@ def run_publish(
         if remote_main != base_sha:
             raise PublishFailure(f"{generic}: main advanced")
 
-        selected_number = _selected_pr_number(selected_gh, generic)
+        selected_number = _selected_pr_number(selected_gh)
 
         if not is_changed:
             if selected_number is None:
@@ -306,36 +323,47 @@ def run_publish(
                 ["pr", "close", str(selected_number), "--repo", CANONICAL_REPOSITORY]
             )
             if close_result.returncode != 0:
-                raise PublishFailure(generic)
+                raise PublishFailure(f"{generic}: PR close failed")
             return PublishOutcome("closed", f"publish closed PR #{selected_number}")
 
-        if bundle_path is None or body_path is None:
-            raise PublishFailure(generic)
-
+        rejected = f"{generic}: hand-off rejected"
+        if bundle_path is None:
+            raise PublishFailure(rejected)
         try:
             entries = verify_handoff(root, bundle_path, candidate_sha, base_sha)
-        except HandoffRejected:
-            raise PublishFailure(generic) from None
+        except HandoffRejected as rejection:
+            log(f"hand-off rejected: {rejection}")
+            raise PublishFailure(rejected) from None
         if not _catalog_only_diff(entries):
-            raise PublishFailure(generic)
+            log(
+                "hand-off rejected: the candidate changes a file other than the "
+                "catalog, or the catalog's mode"
+            )
+            raise PublishFailure(rejected)
 
+        body_problem = "missing" if body_path is None else _body_problem(body_path)
+        if body_problem is not None:
+            log(f"PR body rejected: {body_problem}")
+            raise PublishFailure(f"{generic}: PR body rejected")
+
+        unreadable = f"{generic}: could not read remote branch"
         remote_branch_sha = ls_remote_sha(root, f"refs/heads/{BRANCH_NAME}")
         if remote_branch_sha is None:
-            raise PublishFailure(generic)
+            raise PublishFailure(unreadable)
         needs_push = True
         if remote_branch_sha:
             expect(
                 git(root, "fetch", "--quiet", "origin", f"refs/heads/{BRANCH_NAME}"),
                 PublishFailure,
-                generic,
+                unreadable,
             )
             remote_tree = expect(
-                git(root, "rev-parse", "FETCH_HEAD^{tree}"), PublishFailure, generic
+                git(root, "rev-parse", "FETCH_HEAD^{tree}"), PublishFailure, unreadable
             ).strip()
             candidate_tree = expect(
                 git(root, "rev-parse", f"{candidate_sha}^{{tree}}"),
                 PublishFailure,
-                generic,
+                unreadable,
             ).strip()
             needs_push = remote_tree != candidate_tree
 
@@ -348,7 +376,7 @@ def run_publish(
                 f"{candidate_sha}:refs/heads/{BRANCH_NAME}",
             )
             if push_result.returncode != 0:
-                raise PublishFailure(generic)
+                raise PublishFailure(f"{generic}: branch push failed")
 
         if selected_number is not None:
             edit_result = selected_gh.run(
@@ -363,7 +391,7 @@ def run_publish(
                 ]
             )
             if edit_result.returncode != 0:
-                raise PublishFailure(generic)
+                raise PublishFailure(f"{generic}: PR edit failed")
             return PublishOutcome("published", f"publish updated PR #{selected_number}")
 
         create_result = selected_gh.run(
@@ -383,13 +411,13 @@ def run_publish(
             ]
         )
         if create_result.returncode != 0:
-            raise PublishFailure(generic)
+            raise PublishFailure(f"{generic}: PR create failed")
         return PublishOutcome("published", "publish created PR")
     except PublishFailure as failure:
         return PublishOutcome("failed", failure.summary)
 
 
-def _selected_pr_number(gh: GhRunner, failure_message: str) -> int | None:
+def _selected_pr_number(gh: GhRunner) -> int | None:
     result = gh.run(
         [
             "pr",
@@ -406,14 +434,15 @@ def _selected_pr_number(gh: GhRunner, failure_message: str) -> int | None:
             "number,isCrossRepository,headRepositoryOwner",
         ]
     )
+    unreadable = "publish failed: PR list failed"
     if result.returncode != 0:
-        raise PublishFailure(failure_message)
+        raise PublishFailure(unreadable)
     try:
         candidates = json.loads(result.stdout)
     except json.JSONDecodeError:
-        raise PublishFailure(failure_message) from None
+        raise PublishFailure(unreadable) from None
     if not isinstance(candidates, list):
-        raise PublishFailure(failure_message)
+        raise PublishFailure(unreadable)
     selected = [
         item
         for item in candidates
@@ -423,13 +452,33 @@ def _selected_pr_number(gh: GhRunner, failure_message: str) -> int | None:
         and item["headRepositoryOwner"].get("login") == CANONICAL_OWNER
     ]
     if len(selected) > 1:
-        raise PublishFailure(failure_message)
+        raise PublishFailure("publish failed: more than one source-update PR")
     if not selected:
         return None
     number = selected[0].get("number")
     if not isinstance(number, int):
-        raise PublishFailure(failure_message)
+        raise PublishFailure(unreadable)
     return number
+
+
+def _body_problem(body_path: Path) -> str | None:
+    """Why the PR body file cannot be sent to `gh`, or None.
+
+    The file must be a regular file (checked with `lstat`, so a symlink to a
+    runner file is refused), valid UTF-8, and within GitHub's length limit.
+    """
+    problem = regular_file_problem(body_path)
+    if problem is not None:
+        return problem
+    try:
+        text = body_path.read_bytes().decode("utf-8")
+    except OSError:
+        return "unreadable"
+    except UnicodeDecodeError:
+        return "not UTF-8"
+    if len(text) > PR_BODY_LIMIT:
+        return "too long"
+    return None
 
 
 def _catalog_only_diff(entries: Sequence[DiffEntry]) -> bool:

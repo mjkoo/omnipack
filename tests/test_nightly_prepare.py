@@ -14,11 +14,13 @@ from pathlib import Path
 
 import pytest
 
+from scripts import nightly as nightly_module
 from scripts.nightly import (
     ALLOWED_PATHS,
     BUILD_COMMAND,
     STRUCTURAL_VERIFY_COMMAND,
     PrepareCommandResult,
+    PrepareSubprocess,
     run_prepare,
 )
 from scripts.nightly_write import run_push
@@ -400,6 +402,103 @@ def test_stale_reports_are_removed_even_when_build_fails(tmp_path: Path) -> None
     assert outcome.stage == "build"
     assert not (root / ".build/report.json").exists()
     assert not (root / ".build/verify.json").exists()
+
+
+def test_stale_reports_are_removed_even_when_the_checkout_check_fails(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    (root / ".build").mkdir()
+    (root / ".build/report.json").write_text('{"stale": true}')
+    (root / ".build/verify.json").write_text('{"stale": true}')
+    (root / "tracked.txt").write_text("dirty\n")
+    process = ScriptedProcess(root)
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.stage == "checkout"
+    assert not (root / ".build/report.json").exists()
+    assert not (root / ".build/verify.json").exists()
+
+
+def _corrupt_index(root: Path) -> None:
+    (root / ".git/index").write_bytes(b"not an index")
+
+
+def test_git_failure_reading_the_checkout_fails_the_checkout_stage(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _corrupt_index(root)
+    process = ScriptedProcess(root)
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "failed"
+    assert outcome.summary_line == "checkout"
+    assert process.calls == []
+
+
+def test_git_failure_after_the_build_fails_the_allowlist_stage(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    process = ScriptedProcess(root)
+    process.on_build.append(lambda: _corrupt_index(root))
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "failed"
+    assert outcome.summary_line == "allowlist"
+
+
+def test_git_failure_after_verification_fails_the_drift_stage(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    process = ScriptedProcess(root)
+    process.on_verify.append(lambda: _corrupt_index(root))
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "failed"
+    assert outcome.summary_line == "drift after verify"
+
+
+def test_build_and_verify_output_passes_through_to_the_log(
+    tmp_path: Path, capfd: pytest.CaptureFixture[str]
+) -> None:
+    result = PrepareSubprocess().run(
+        ("sh", "-c", "echo build-output; echo build-error >&2; exit 3"), tmp_path
+    )
+
+    assert result.returncode == 3
+    captured = capfd.readouterr()
+    assert "build-output" in captured.out
+    assert "build-error" in captured.err
+
+
+def test_prepare_cli_without_runner_temp_exits_with_a_clear_message(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    monkeypatch.chdir(root)
+    monkeypatch.delenv("RUNNER_TEMP", raising=False)
+    monkeypatch.setenv("GITHUB_SHA", _git(root, "rev-parse", "HEAD"))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.example")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "mjkoo/omnipack")
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+
+    with pytest.raises(SystemExit, match="^RUNNER_TEMP is required$"):
+        nightly_module.main(["prepare"])
 
 
 def test_real_prepare_commit_hands_off_to_push(tmp_path: Path) -> None:

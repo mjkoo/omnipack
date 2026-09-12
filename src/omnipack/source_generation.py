@@ -345,10 +345,8 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
             _write_report(output, report)
             return report
         catalog_bytes = _render_catalog(entries)
-        (output / "catalog.json").write_bytes(catalog_bytes)
-        report["status"] = "success"
         common = set(parsed.projects) & set(accepted_by_url)
-        report["changes"] = {
+        changes = {
             "added": sorted(set(parsed.projects) - set(accepted_by_url)),
             "removed": sorted(set(accepted_by_url) - set(parsed.projects)),
             "changed": sorted(
@@ -358,9 +356,14 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                 != _rendered_entry(accepted_by_url[project])
             ),
         }
+        (output / "catalog.json").write_bytes(catalog_bytes)
+        report["changes"] = changes
+        # Success is recorded last, so any exception above fails generation.
+        report["status"] = "success"
         _write_report(output, report)
         return report
     except Exception as error:  # noqa: BLE001 - command records all failures
+        report["status"] = "failed"
         report["error"] = str(error)
         _write_report(output, report)
         return report

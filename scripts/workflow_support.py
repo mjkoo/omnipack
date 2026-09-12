@@ -55,11 +55,18 @@ class SubprocessGhRunner:
         completed = subprocess.run(
             ["gh", *args], capture_output=True, text=True, check=False
         )
+        if completed.returncode != 0:
+            _log_failure(
+                f"gh {' '.join(args[:2])}", completed.returncode, completed.stderr
+            )
         return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
 def git(root: Path, *args: str) -> CommandResult:
-    """Run one git command in `root` with repository hooks disabled."""
+    """Run one git command in `root` with repository hooks disabled.
+
+    A failing command's stderr goes to the job log.
+    """
     completed = subprocess.run(
         ["git", *_NO_HOOKS, *args],
         cwd=root,
@@ -67,22 +74,24 @@ def git(root: Path, *args: str) -> CommandResult:
         text=True,
         check=False,
     )
+    if completed.returncode != 0:
+        _log_failure(_git_command(args), completed.returncode, completed.stderr)
     return CommandResult(completed.returncode, completed.stdout, completed.stderr)
 
 
 def git_output(root: Path, *args: str) -> bytes:
     """Run one git command with hooks disabled and return its exact stdout bytes.
 
-    Raises `GitError` when git exits nonzero.
+    Raises `GitError` when git exits nonzero, after writing its stderr to the
+    job log.
     """
     completed = subprocess.run(
         ["git", *_NO_HOOKS, *args], cwd=root, capture_output=True, check=False
     )
     if completed.returncode != 0:
-        raise GitError(
-            completed.stderr.decode(errors="replace").strip()
-            or f"git {' '.join(args)} failed"
-        )
+        stderr = completed.stderr.decode(errors="replace")
+        _log_failure(_git_command(args), completed.returncode, stderr)
+        raise GitError(stderr.strip() or f"{_git_command(args)} failed")
     return completed.stdout
 
 
@@ -255,3 +264,17 @@ def write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -
 def log(message: str) -> None:
     """Write one diagnostic line to the job log, never the step summary."""
     print(message, file=sys.stderr)
+
+
+def _log_failure(command: str, returncode: int, stderr: str) -> None:
+    log(f"{command} exited {returncode}")
+    if stderr.strip():
+        log(stderr.rstrip("\n"))
+
+
+def _git_command(args: Sequence[str]) -> str:
+    """`git <subcommand>` for a log line, skipping leading `-c` options."""
+    index = 0
+    while index + 1 < len(args) and args[index] == "-c":
+        index += 2
+    return f"git {args[index]}" if index < len(args) else "git"

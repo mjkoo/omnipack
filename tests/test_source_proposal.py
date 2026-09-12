@@ -344,6 +344,90 @@ def test_stage_cli_reads_env_and_exit_code_and_writes_outputs(
     )
 
 
+def test_report_whose_status_is_not_success_fails_with_no_commit(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    report = _report(added=("https://example.test/a",))
+    report["status"] = "failed"
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', report)
+    bundle_path = tmp_path / "candidate.bundle"
+    body_path = tmp_path / "pr-body.md"
+
+    outcome = run_stage(root, base, "run", bundle_path, body_path)
+
+    assert outcome.status == "failed"
+    assert outcome.stage == "report"
+    assert _git(root, "rev-parse", "HEAD") == base
+    assert not bundle_path.exists()
+    assert not body_path.exists()
+
+
+def test_stage_caps_a_huge_retained_failure_list_inside_the_pre_block(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    failures = tuple(
+        (f"https://example.test/project-{index}", "x" * 200) for index in range(1000)
+    )
+    _write_candidate(
+        root, '{"apps": [{"id": "a"}]}\n', _report(retained_failures=failures)
+    )
+    body_path = tmp_path / "pr-body.md"
+
+    outcome = run_stage(
+        root, base, "https://github.example/runs/1", tmp_path / "b.bundle", body_path
+    )
+
+    assert outcome.status == "changed"
+    body_text = body_path.read_text()
+    assert len(body_text) <= 65536
+    pre_block = body_text[body_text.index("<pre>") : body_text.index("</pre>")]
+    assert "https://example.test/project-0: " in pre_block
+    kept = pre_block.count("https://example.test/project-")
+    assert 0 < kept < 1000
+    assert f"and {1000 - kept} more" in pre_block
+    assert body_text.endswith("</pre>\n")
+
+
+def _stage_environment(
+    monkeypatch: pytest.MonkeyPatch, root: Path, tmp_path: Path, base: str
+) -> Path:
+    runner_temp = tmp_path / "runner-temp"
+    runner_temp.mkdir()
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("GITHUB_SHA", base)
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output.txt"))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.example")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "mjkoo/omnipack")
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+    return runner_temp
+
+
+@pytest.mark.parametrize("missing", ["RUNNER_TEMP", "GITHUB_RUN_ID"])
+def test_stage_cli_without_a_required_variable_exits_before_any_commit(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(
+        root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
+    )
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.delenv(missing)
+
+    with pytest.raises(SystemExit, match=f"^{missing} is required$"):
+        proposal_module.main(["stage"])
+
+    assert _git(root, "rev-parse", "HEAD") == base
+    assert not (runner_temp / "source-handoff").exists()
+    assert not (tmp_path / "output.txt").exists()
+
+
 # --- publish ----------------------------------------------------------------
 
 
@@ -595,7 +679,7 @@ def test_two_selected_same_repository_prs_fail_before_any_write(
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "failed"
-    assert result.summary == "publish failed"
+    assert result.summary == "publish failed: more than one source-update PR"
     assert not any(
         call[:2] in (("pr", "close"), ("pr", "edit"), ("pr", "create"))
         for call in gh.calls
@@ -655,6 +739,7 @@ def test_bundle_head_not_matching_candidate_is_rejected(tmp_path: Path) -> None:
     )
 
     assert result.status == "failed"
+    assert result.summary == "publish failed: hand-off rejected"
     assert _bare_branch_sha(bare) == ""
 
 
@@ -851,3 +936,81 @@ def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
     body_text = gh.created_bodies[0]
     assert message in body_text
     assert "<pre>" in body_text
+
+
+def test_rejected_branch_push_fails_with_its_reason_and_no_pr_write(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    pre_receive = bare / "hooks" / "pre-receive"
+    pre_receive.write_text("#!/bin/sh\necho 'fixture rejects the branch' >&2\nexit 1\n")
+    pre_receive.chmod(0o755)
+    gh = ScriptedGh(pr_list=[])
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "publish failed: branch push failed"
+    assert "fixture rejects the branch" in capsys.readouterr().err
+    assert not any(call[:2] == ("pr", "create") for call in gh.calls)
+    assert _bare_branch_sha(bare) == ""
+
+
+def test_failed_pr_create_fails_with_its_reason(tmp_path: Path) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    gh = ScriptedGh(pr_list=[], create_ok=False)
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "publish failed: PR create failed"
+
+
+def _replace_body(body_path: Path, kind: str) -> None:
+    if kind == "missing":
+        body_path.unlink()
+    elif kind == "symlink":
+        target = body_path.parent / "runner-file.txt"
+        target.write_text("runner secrets\n")
+        body_path.unlink()
+        body_path.symlink_to(target)
+    elif kind == "oversized":
+        body_path.write_text("x" * 65537)
+    elif kind == "not-utf-8":
+        body_path.write_bytes(b"\xff\xfe body\n")
+    else:
+        raise AssertionError(kind)
+
+
+@pytest.mark.parametrize("kind", ["missing", "symlink", "oversized", "not-utf-8"])
+def test_unusable_pr_body_fails_before_any_push_or_pr_write(
+    tmp_path: Path, kind: str
+) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    _replace_body(body_path, kind)
+    gh = ScriptedGh(pr_list=[_pr(5)])
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "publish failed: PR body rejected"
+    assert not any(call[:2] in (("pr", "edit"), ("pr", "create")) for call in gh.calls)
+    assert _bare_branch_sha(bare) == ""
+
+
+def test_pr_body_at_the_length_limit_is_accepted(tmp_path: Path) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    body_path.write_text("\u00e9" * 65536, encoding="utf-8")
+    gh = ScriptedGh(pr_list=[])
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "published"

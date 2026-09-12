@@ -829,3 +829,20 @@ def test_title_filter_uses_search_and_trimmed_tag_fallback(name, tag):
     ).projects[PROJECT]
     chosen = release(name=name, tag_name=tag)
     assert select_release(JsonHttp([chosen]), PROJECT, rule) == chosen
+
+
+def test_change_summary_failure_fails_generation_without_a_catalog(tmp_path):
+    source = setup(tmp_path)
+    assert run(tmp_path, source)[0]["status"] == "success"
+    accept(tmp_path)
+    catalog_path = tmp_path / "config/catalogs/codm.json"
+    catalog = json.loads(catalog_path.read_text())
+    catalog["apps"][0]["additionalSettings"] = "{not json"
+    catalog_path.write_text(json.dumps(catalog))
+
+    result = run(tmp_path, source)[0]
+
+    assert result["status"] == "failed"
+    assert "error" in result
+    assert "changes" not in result
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()

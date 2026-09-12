@@ -27,6 +27,7 @@ from scripts.workflow_support import (
     SubprocessGhRunner,
     append_summary,
     git,
+    log,
     ls_remote_sha,
     verify_handoff,
 )
@@ -67,7 +68,7 @@ class ReleaseFailure(RuntimeError):
 
 @dataclass(frozen=True)
 class PushOutcome:
-    status: str  # "published" or "failed"
+    status: str  # "published", "detach-failed" or "failed"
     summary: str
 
 
@@ -101,9 +102,14 @@ def run_push(
     try:
         try:
             entries = verify_handoff(root, bundle_path, candidate_sha, base_sha)
-        except HandoffRejected:
+        except HandoffRejected as rejection:
+            log(f"hand-off rejected: {rejection}")
             raise PushFailure(generic) from None
         if not _allowed_diff(entries):
+            log(
+                "hand-off rejected: the candidate changes a path other than the "
+                "allowed files, or a file mode"
+            )
             raise PushFailure(generic)
 
         auth_result = selected_gh.run(["auth", "setup-git"])
@@ -121,7 +127,10 @@ def run_push(
 
         detach_result = git(root, "checkout", "--detach", candidate_sha)
         if detach_result.returncode != 0:
-            raise PushFailure(generic)
+            # The push landed, so the summary reports it; failing the step
+            # still keeps the release step from running on the base checkout.
+            log("the push landed, but checking out the published commit failed")
+            return PushOutcome("detach-failed", f"published {candidate_sha}")
     except PushFailure as failure:
         return PushOutcome("failed", failure.summary)
     return PushOutcome("published", f"published {candidate_sha}")
@@ -164,7 +173,9 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
             ]
         )
         if view_result.returncode != 0:
-            raise ReleaseFailure("release is missing", bootstrap=True)
+            if "release not found" in view_result.stderr:
+                raise ReleaseFailure("release is missing", bootstrap=True)
+            raise ReleaseFailure("could not read release")
         try:
             document = json.loads(view_result.stdout)
         except json.JSONDecodeError:
@@ -206,10 +217,10 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
             )
 
         if record_matches:
-            _upload(selected_gh)
+            _upload(selected_gh, root)
             return ReleaseOutcome("repaired", f"repaired at revision {title_revision}")
 
-        _upload(selected_gh)
+        _upload(selected_gh, root)
         new_revision = title_revision + 1
         _edit(
             selected_gh, new_revision, _canonical_body(single_digest, dual_digest, head)
@@ -220,14 +231,14 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
         return ReleaseOutcome("failed", f"release failed: {failure.reason}{guidance}")
 
 
-def _upload(gh: GhRunner) -> None:
+def _upload(gh: GhRunner, root: Path) -> None:
     result = gh.run(
         [
             "release",
             "upload",
             TAG,
-            "dist/single-screen.json",
-            "dist/dual-screen.json",
+            str(root / "dist/single-screen.json"),
+            str(root / "dist/dual-screen.json"),
             "--clobber",
         ]
     )

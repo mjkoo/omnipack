@@ -49,13 +49,15 @@ class PrepareProcess(Protocol):
 
 
 class PrepareSubprocess:
-    """Run a check command without shell interpolation."""
+    """Run a check command without shell interpolation.
+
+    Its output goes straight to the job log rather than being captured, so
+    the result carries only the exit status.
+    """
 
     def run(self, command: Sequence[str], cwd: Path) -> PrepareCommandResult:
-        completed = subprocess.run(
-            command, cwd=cwd, capture_output=True, text=True, check=False
-        )
-        return CommandResult(completed.returncode, completed.stdout, completed.stderr)
+        completed = subprocess.run(command, cwd=cwd, check=False)
+        return CommandResult(completed.returncode, "", "")
 
 
 @dataclass(frozen=True)
@@ -98,25 +100,35 @@ def run_prepare(
     selected_process = process or PrepareSubprocess()
     selected_now = now or (lambda: datetime.now(UTC))
 
-    try:
-        head = git_text(root, "rev-parse", "HEAD")
-    except OSError:
-        return PrepareOutcome("failed", "checkout", None, None, False)
-    if head != github_sha or _dirty_paths(root):
-        return PrepareOutcome("failed", "checkout", head, None, False)
-    base_sha = head
-
+    # Reports left by an earlier run in a reused workspace must never reach
+    # this run's diagnostics upload, whichever stage fails.
     for relative in (".build/report.json", ".build/verify.json"):
         try:
             (root / relative).unlink(missing_ok=True)
         except OSError:
-            return PrepareOutcome("failed", "build", base_sha, None, False)
+            return PrepareOutcome("failed", "build", None, None, False)
+
+    try:
+        head = git_text(root, "rev-parse", "HEAD")
+    except OSError:
+        return PrepareOutcome("failed", "checkout", None, None, False)
+    try:
+        dirty = _dirty_paths(root)
+    except OSError:
+        return PrepareOutcome("failed", "checkout", head, None, False)
+    if head != github_sha or dirty:
+        return PrepareOutcome("failed", "checkout", head, None, False)
+    base_sha = head
 
     build_result = selected_process.run(BUILD_COMMAND, root)
     if build_result.returncode != 0:
         return PrepareOutcome("failed", "build", base_sha, None, False)
 
-    if _dirty_paths(root) - set(ALLOWED_PATHS):
+    try:
+        out_of_scope = _dirty_paths(root) - set(ALLOWED_PATHS)
+    except OSError:
+        return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+    if out_of_scope:
         return PrepareOutcome("failed", "allowlist", base_sha, None, False)
     for relative in ALLOWED_PATHS:
         if regular_file_problem(root / relative, executable_ok=False) is not None:
@@ -155,7 +167,11 @@ def run_prepare(
     if verify_result.returncode != 0:
         return PrepareOutcome("failed", "verify", base_sha, None, False)
 
-    if _dirty_paths(root):
+    try:
+        drifted = _dirty_paths(root)
+    except OSError:
+        return PrepareOutcome("failed", "drift after verify", base_sha, None, False)
+    if drifted:
         return PrepareOutcome("failed", "drift after verify", base_sha, None, False)
 
     if not changed_paths:
