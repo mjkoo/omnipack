@@ -167,10 +167,10 @@
 
 ## 6. Final checks and review
 
-- [ ] 6.1 Run `just check-all` in the dev shell. Then run a live `uv run pack build` and confirm `git diff --exit-code dist/ README.md`, followed by `uv run pack verify`. Finally run `openspec validate standardize-publication --strict`. Verify that all pass.
-- [ ] 6.2 Write `openspec/changes/standardize-publication/validation.md` with:
+- [x] 6.1 Run `just check-all` in the dev shell. Then run a live `uv run pack build` and confirm `git diff --exit-code dist/ README.md`, followed by `uv run pack verify`. Finally run `openspec validate standardize-publication --strict`. Verify that all pass.
+- [x] 6.2 Write `openspec/changes/standardize-publication/validation.md` with:
   - the test count against the 771 at the start of this change;
   - the implementation and test line deltas against 8,791 and 12,224;
   - the live generation comparison from 1.6;
   - what remains unestablished: no GitHub run (so no bundle hand-off between real jobs and no write job on the runner's `python3`), no PR, no release write, no device check.
-- [ ] 6.3 Run an independent review of the branch diff against the delta specs and design, fix its findings, and re-run 6.1. Verify that the review's final pass reports no unresolved findings.
+- [x] 6.3 Run an independent review of the branch diff against the delta specs and design, fix its findings, and re-run 6.1. Verify that the review's final pass reports no unresolved findings.
