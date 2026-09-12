@@ -36,10 +36,10 @@ _RECORD = re.compile(
     r" dual-screen\.json=([0-9a-f]{64}) commit=([0-9a-f]{40}) -->"
 )
 BOOTSTRAP_GUIDANCE = (
-    "bootstrap it once with: gh release create continuous --prerelease "
-    '--title "omnipack revision 0" --notes "<!-- omnipack:rolling-pack -->'
-    "\n\nInitial pack publication is pending; JSON assets are not yet "
-    'published."'
+    'bootstrap it once as "One-time rolling release bootstrap" in '
+    "docs/publishing.md describes: "
+    '`gh release create continuous --prerelease --title "omnipack revision 0" '
+    "--notes-file <file>`"
 )
 
 

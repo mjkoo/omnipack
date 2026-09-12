@@ -793,6 +793,16 @@ def test_draft_non_prerelease_or_immutable_fails_with_bootstrap_guidance(
     assert not any(call[:2] == ("release", "upload") for call in gh.calls)
 
 
+def test_bootstrap_guidance_command_matches_the_publishing_guide() -> None:
+    command = write_module.BOOTSTRAP_GUIDANCE.split("`")[1]
+    guide = (Path(__file__).parents[1] / "docs/publishing.md").read_text()
+    flattened = " ".join(guide.replace("\\\n", " ").split())
+
+    assert "docs/publishing.md" in write_module.BOOTSTRAP_GUIDANCE
+    assert command.startswith("gh release create continuous --prerelease")
+    assert command in flattened
+
+
 def test_upload_failure_prevents_edit_without_bootstrap_guidance(
     tmp_path: Path,
 ) -> None:
