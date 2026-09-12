@@ -5,21 +5,38 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import stat
+import subprocess
 import sys
-from collections.abc import Callable, Mapping
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Protocol
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from urllib.request import HTTPRedirectHandler, Request, build_opener
 
+from omnipack.catalog import CatalogError, split_catalog
 from scripts.nightly_release import GitHubApi
 from scripts.nightly_reporting import PublicationReport, redact, report_publication
 
 CANONICAL_REPOSITORY = "mjkoo/omnipack"
 MAIN_REF = "refs/heads/main"
 DIAGNOSTIC_DIRECTORY = "nightly-diagnostics"
+HANDOFF_DIRECTORY = "nightly-handoff"
+BUNDLE_NAME = "candidate.bundle"
+
+# Kept independent of scripts.nightly_publish, which a later change retires.
+ALLOWED_PATHS = (
+    "dist/single-screen.json",
+    "dist/dual-screen.json",
+    "README.md",
+)
+BUILD_COMMAND = ("uv", "run", "--no-sync", "pack", "build")
+STRUCTURAL_VERIFY_COMMAND = ("uv", "run", "--no-sync", "pack", "verify")
+BOT_NAME = "github-actions[bot]"
+BOT_EMAIL = "41898282+github-actions[bot]@users.noreply.github.com"
 
 
 @dataclass(frozen=True)
@@ -134,8 +151,11 @@ def main(argv: list[str] | None = None) -> int:
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("publish")
     commands.add_parser("bootstrap-release")
+    commands.add_parser("prepare")
     arguments = parser.parse_args(argv)
     environ = os.environ
+    if arguments.command == "prepare":
+        return _run_prepare_command(environ)
     if arguments.command == "bootstrap-release":
         return _bootstrap(environ)
     if not is_eligible(environ):
@@ -221,6 +241,250 @@ def _append_summary(environ: Mapping[str, str], value: str) -> None:
         return
     with Path(summary).open("a", encoding="utf-8") as stream:
         stream.write(value)
+
+
+@dataclass(frozen=True)
+class PrepareCommandResult:
+    returncode: int
+    stdout: str
+    stderr: str
+
+
+class PrepareProcess(Protocol):
+    def run(self, command: Sequence[str], cwd: Path) -> PrepareCommandResult: ...
+
+
+class PrepareSubprocess:
+    """Run a check command without shell interpolation."""
+
+    def run(self, command: Sequence[str], cwd: Path) -> PrepareCommandResult:
+        completed = subprocess.run(
+            command, cwd=cwd, capture_output=True, text=True, check=False
+        )
+        return PrepareCommandResult(
+            completed.returncode, completed.stdout, completed.stderr
+        )
+
+
+@dataclass(frozen=True)
+class PrepareOutcome:
+    """The outcome of one guarded `prepare` run.
+
+    `stage` names the failing stage on failure, or `"complete"` otherwise.
+    """
+
+    status: str  # "no-op", "prepared" or "failed"
+    stage: str
+    base_sha: str | None
+    sha: str | None
+    changed: bool
+
+    @property
+    def summary_line(self) -> str:
+        if self.status == "no-op":
+            return f"no-op at {self.sha}"
+        if self.status == "prepared":
+            return f"prepared {self.sha}"
+        return self.stage
+
+
+def run_prepare(
+    root: Path,
+    github_sha: str,
+    run_url: str,
+    bundle_path: Path,
+    *,
+    process: PrepareProcess | None = None,
+    now: Callable[[], datetime] | None = None,
+) -> PrepareOutcome:
+    """Build, allowlist, README-bound, commit locally and verify one candidate.
+
+    Runs entirely in the read-only job: it commits the candidate before
+    verification and hands the exact commit to the write job as a bundle, so
+    the write job can push only bytes this run actually verified.
+    """
+    selected_process = process or PrepareSubprocess()
+    selected_now = now or (lambda: datetime.now(UTC))
+
+    try:
+        head = _git_text(root, "rev-parse", "HEAD")
+    except OSError:
+        return PrepareOutcome("failed", "checkout", None, None, False)
+    if head != github_sha or _dirty_paths(root):
+        return PrepareOutcome("failed", "checkout", head, None, False)
+    base_sha = head
+
+    for relative in (".build/report.json", ".build/verify.json"):
+        try:
+            (root / relative).unlink(missing_ok=True)
+        except OSError:
+            return PrepareOutcome("failed", "build", base_sha, None, False)
+
+    build_result = selected_process.run(BUILD_COMMAND, root)
+    if build_result.returncode != 0:
+        return PrepareOutcome("failed", "build", base_sha, None, False)
+
+    if _dirty_paths(root) - set(ALLOWED_PATHS):
+        return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+    for relative in ALLOWED_PATHS:
+        if _allowed_file_problem(root / relative) is not None:
+            return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+
+    try:
+        base_readme = _git_bytes(root, "show", f"{base_sha}:README.md")
+        current_readme = (root / "README.md").read_bytes()
+        base_prefix, _, base_suffix = split_catalog(base_readme)
+        current_prefix, _, current_suffix = split_catalog(current_readme)
+    except CatalogError, OSError:
+        return PrepareOutcome("failed", "README boundary", base_sha, None, False)
+    if current_prefix != base_prefix or current_suffix != base_suffix:
+        return PrepareOutcome("failed", "README boundary", base_sha, None, False)
+
+    changed_paths = tuple(
+        relative
+        for relative in ALLOWED_PATHS
+        if _git_bytes(root, "show", f"{base_sha}:{relative}")
+        != (root / relative).read_bytes()
+    )
+
+    sha = base_sha
+    if changed_paths:
+        try:
+            sha = _commit_candidate(
+                root, changed_paths, selected_now(), run_url, base_sha
+            )
+        except OSError:
+            return PrepareOutcome("failed", "bundle", base_sha, None, False)
+
+    verify_result = selected_process.run(STRUCTURAL_VERIFY_COMMAND, root)
+    if verify_result.returncode != 0:
+        return PrepareOutcome("failed", "verify", base_sha, None, False)
+
+    if _dirty_paths(root):
+        return PrepareOutcome("failed", "drift after verify", base_sha, None, False)
+
+    if not changed_paths:
+        return PrepareOutcome("no-op", "complete", base_sha, base_sha, False)
+
+    try:
+        if _git_text(root, "rev-parse", "HEAD") != sha:
+            return PrepareOutcome("failed", "bundle", base_sha, None, False)
+        bundle_path.parent.mkdir(parents=True, exist_ok=True)
+        _git(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
+    except OSError:
+        return PrepareOutcome("failed", "bundle", base_sha, None, False)
+    return PrepareOutcome("prepared", "complete", base_sha, sha, True)
+
+
+def _commit_candidate(
+    root: Path,
+    changed_paths: Sequence[str],
+    observed: datetime,
+    run_url: str,
+    base_sha: str,
+) -> str:
+    _git(root, "add", "--", *changed_paths)
+    date = observed.astimezone(UTC).date().isoformat()
+    subject = f"chore(dist): nightly rebuild {date}"
+    body = f"Workflow run: {run_url}\n\nBase SHA: {base_sha}"
+    _git(
+        root,
+        "-c",
+        f"user.name={BOT_NAME}",
+        "-c",
+        f"user.email={BOT_EMAIL}",
+        "-c",
+        "core.hooksPath=/dev/null",
+        "commit",
+        "--quiet",
+        "-m",
+        subject,
+        "-m",
+        body,
+    )
+    return _git_text(root, "rev-parse", "HEAD")
+
+
+def _allowed_file_problem(path: Path) -> str | None:
+    try:
+        info = path.lstat()
+    except FileNotFoundError:
+        return "missing"
+    if stat.S_ISLNK(info.st_mode):
+        return "symlink"
+    if not stat.S_ISREG(info.st_mode):
+        return "irregular"
+    if info.st_mode & 0o111:
+        return "executable"
+    return None
+
+
+def _dirty_paths(root: Path) -> set[str]:
+    tracked = _git_paths(root, "diff", "--name-only", "-z", "HEAD", "--")
+    untracked = _git_paths(root, "ls-files", "--others", "--exclude-standard", "-z")
+    return tracked | untracked
+
+
+def _git_paths(root: Path, *args: str) -> set[str]:
+    return {item.decode() for item in _git_bytes(root, *args).split(b"\0") if item}
+
+
+def _git_bytes(root: Path, *args: str) -> bytes:
+    completed = subprocess.run(
+        ["git", *args], cwd=root, capture_output=True, check=False
+    )
+    if completed.returncode != 0:
+        raise OSError(
+            completed.stderr.decode(errors="replace").strip()
+            or f"git {' '.join(args)} failed"
+        )
+    return completed.stdout
+
+
+def _git_text(root: Path, *args: str) -> str:
+    return _git_bytes(root, *args).decode().strip()
+
+
+def _git(root: Path, *args: str) -> None:
+    _git_bytes(root, *args)
+
+
+def _handoff_bundle_path(environ: Mapping[str, str]) -> Path:
+    runner_temp = environ.get("RUNNER_TEMP")
+    if not runner_temp:
+        raise OSError("RUNNER_TEMP is required")
+    return Path(runner_temp) / HANDOFF_DIRECTORY / BUNDLE_NAME
+
+
+def _write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -> None:
+    output = environ.get("GITHUB_OUTPUT")
+    if not output:
+        return
+    with Path(output).open("a", encoding="utf-8") as stream:
+        stream.writelines(f"{key}={value}\n" for key, value in values.items())
+
+
+def _run_prepare_command(
+    environ: Mapping[str, str], *, root: Path | None = None
+) -> int:
+    selected_root = root or Path.cwd()
+    outcome = run_prepare(
+        selected_root,
+        environ.get("GITHUB_SHA", ""),
+        _run_url(environ),
+        _handoff_bundle_path(environ),
+    )
+    if outcome.status != "failed":
+        _write_github_output(
+            environ,
+            {
+                "changed": "true" if outcome.changed else "false",
+                "sha": outcome.sha or "",
+                "base": outcome.base_sha or "",
+            },
+        )
+    _append_summary(environ, outcome.summary_line + "\n")
+    return 0 if outcome.status != "failed" else 1
 
 
 if __name__ == "__main__":
