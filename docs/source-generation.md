@@ -266,8 +266,9 @@ token. Only `publish` holds `contents: write` and `pull-requests: write`,
 and only its one step receives `GH_TOKEN`. `scripts/source_proposal.py`
 serves both jobs and, like `scripts/nightly_write.py`, imports only the
 standard library and the shared helpers in `scripts/workflow_support.py`,
-and runs on the runner's preinstalled `python3` in the write job. Source text, project URLs, asset names and other upstream-derived
-strings are treated as data: credentials, downloaded APKs and raw HTTP
+and runs on the runner's preinstalled `python3` in the write job. Source
+text, project URLs, asset names and other upstream-derived strings are
+treated as data: credentials, downloaded APKs and raw HTTP
 caches are excluded from summaries and artifacts.
 
 Nightly pack publication remains independent of this workflow. It reads only

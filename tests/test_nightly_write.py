@@ -241,6 +241,22 @@ def test_commit_touching_disallowed_path_is_rejected(tmp_path: Path) -> None:
     assert _git(bare, "rev-parse", "main") == base
 
 
+def test_commit_changing_nothing_is_rejected(tmp_path: Path) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    _git(seed, "commit", "--allow-empty", "-qm", "empty")
+    sha = _git(seed, "rev-parse", "HEAD")
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+
+    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+
+    assert result.status == "failed"
+    assert result.summary == f"push failed for {sha}"
+    assert _git(bare, "rev-parse", "main") == base
+
+
 def test_commit_replacing_allowed_file_with_symlink_is_rejected(
     tmp_path: Path,
 ) -> None:
