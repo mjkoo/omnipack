@@ -53,7 +53,7 @@ jobs:
         run: just verify
 
       - name: Test write job scripts under the runner's python3
-        run: uv run --no-project --python /usr/bin/python3 --with pytest pytest tests/test_nightly_write.py tests/test_source_proposal.py
+        run: just check-py312 /usr/bin/python3
 
   nix:
     name: Nix
@@ -78,3 +78,6 @@ jobs:
 
       - name: Flake check
         run: nix flake check
+
+      - name: Check documentation links
+        run: nix develop --command just check-links

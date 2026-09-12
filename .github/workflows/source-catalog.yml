@@ -34,6 +34,8 @@ jobs:
         with:
           version: "0.12.5"
           python-version: "3.14"
+          # A cache written here could be restored into a later run.
+          enable-cache: false
 
       - name: Sync locked environment
         run: uv sync --locked
@@ -71,7 +73,9 @@ jobs:
           path: |
             ${{ runner.temp }}/source-handoff/candidate.bundle
             ${{ runner.temp }}/source-handoff/pr-body.md
+          if-no-files-found: error
           retention-days: 1
+          overwrite: true
 
       - name: Upload the generation report
         if: always()
@@ -81,6 +85,7 @@ jobs:
           path: .build/source-generation/codm/report.json
           if-no-files-found: ignore
           retention-days: 14
+          overwrite: true
 
   publish:
     name: Push and open the reviewed source proposal

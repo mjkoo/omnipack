@@ -35,6 +35,8 @@ jobs:
         with:
           version: "0.12.5"
           python-version: "3.14"
+          # A cache written here could be restored into a later run.
+          enable-cache: false
 
       - name: Sync locked environment
         run: uv sync --locked
@@ -49,7 +51,9 @@ jobs:
         with:
           name: nightly-handoff-${{ github.run_id }}
           path: ${{ runner.temp }}/nightly-handoff/candidate.bundle
+          if-no-files-found: error
           retention-days: 1
+          overwrite: true
 
       - name: Upload build and verification reports
         if: always()
@@ -61,6 +65,7 @@ jobs:
             .build/verify.json
           if-no-files-found: ignore
           retention-days: 14
+          overwrite: true
 
   publish:
     name: Push and release the candidate

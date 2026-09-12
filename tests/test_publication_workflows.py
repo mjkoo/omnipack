@@ -147,6 +147,23 @@ def assert_base_guard_precedes(job: dict[str, Any], *, guarded_names: set[str]) 
             )
 
 
+def setup_uv_step(job: dict[str, Any]) -> dict[str, Any]:
+    return next(step for step in steps(job) if step_uses(step, "astral-sh/setup-uv@"))
+
+
+def assert_setup_uv_writes_no_cache(job: dict[str, Any]) -> None:
+    """A check job must not seed a uv cache that later runs would restore."""
+    assert setup_uv_step(job)["with"]["enable-cache"] is False
+
+
+def assert_upload_overwrites(step: dict[str, Any], *, if_no_files_found: str) -> None:
+    """Re-running all jobs reuses the run ID, so an upload must replace the
+    artifact an earlier attempt left under the same name."""
+    with_block = step["with"]
+    assert with_block["overwrite"] is True
+    assert with_block["if-no-files-found"] == if_no_files_found
+
+
 # --- nightly workflow ----------------------------------------------------
 
 NIGHTLY = load_workflow("nightly.yml")
@@ -269,6 +286,21 @@ def test_nightly_handoff_upload_is_one_day_and_names_an_exact_file() -> None:
     with_block = upload_step["with"]
     assert with_block["retention-days"] == 1
     assert with_block["path"] == "${{ runner.temp }}/nightly-handoff/candidate.bundle"
+
+
+def test_nightly_prepare_setup_uv_writes_no_cache() -> None:
+    assert_setup_uv_writes_no_cache(jobs(NIGHTLY)["prepare"])
+
+
+def test_nightly_uploads_overwrite_and_the_handoff_requires_its_bundle() -> None:
+    prepare = jobs(NIGHTLY)["prepare"]
+    assert_upload_overwrites(
+        find_step(prepare, "Upload the candidate hand-off"), if_no_files_found="error"
+    )
+    assert_upload_overwrites(
+        find_step(prepare, "Upload build and verification reports"),
+        if_no_files_found="ignore",
+    )
 
 
 def test_nightly_download_lands_in_runner_temp_not_the_workspace() -> None:
@@ -427,6 +459,38 @@ def test_source_handoff_upload_is_one_day_and_names_exact_files() -> None:
         "${{ runner.temp }}/source-handoff/candidate.bundle\n"
         "${{ runner.temp }}/source-handoff/pr-body.md\n"
     )
+
+
+def test_source_check_setup_uv_writes_no_cache() -> None:
+    assert_setup_uv_writes_no_cache(jobs(SOURCE)["check"])
+
+
+def test_source_uploads_overwrite_and_the_handoff_requires_its_files() -> None:
+    check = jobs(SOURCE)["check"]
+    assert_upload_overwrites(
+        find_step(check, "Upload the candidate hand-off"), if_no_files_found="error"
+    )
+    assert_upload_overwrites(
+        find_step(check, "Upload the generation report"), if_no_files_found="ignore"
+    )
+
+
+def test_source_checks_and_handoff_run_only_for_a_changed_candidate() -> None:
+    check = jobs(SOURCE)["check"]
+    for name in (
+        "Run the test suite against the candidate catalog",
+        "Build the candidate pack",
+        "Verify the candidate pack",
+        "Guard the committed catalog",
+        "Upload the candidate hand-off",
+    ):
+        assert find_step(check, name)["if"] == "steps.stage.outputs.changed == 'true'"
+    for name in (
+        "Sync locked environment",
+        "Generate one source candidate",
+        "Stage the reviewed catalog candidate",
+    ):
+        assert "if" not in find_step(check, name)
 
 
 def test_source_download_lands_in_runner_temp_not_the_workspace() -> None:
