@@ -256,9 +256,7 @@ def _entry(source_url: str, rule: ProjectRule, identifier: str) -> dict[str, Any
     }
 
 
-def generate_codm(
-    root: Path, *, force: bool = False, http: GenerationHttp | None = None
-) -> dict[str, Any]:
+def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str, Any]:
     output = root / ".build/source-generation/codm"
     if output.exists():
         shutil.rmtree(output)
@@ -267,7 +265,7 @@ def generate_codm(
         "status": "failed",
         "apk": [],
         "tracking": [],
-        "warnings": [],
+        "retainedFailures": [],
     }
     try:
         sources = load_json(root / "config/sources.json", "sources")
@@ -277,76 +275,28 @@ def generate_codm(
         source_url = config.get("readme_url")
         policy_path = config.get("project_policy", "config/codm-projects.json")
         catalog_path = config.get("catalog", "config/catalogs/codm.json")
-        metadata_path = config.get(
-            "source_metadata", "config/catalogs/codm.source.json"
-        )
         if not isinstance(source_url, str) or not source_url:
             raise ValueError("codm README URL is empty")
-        if not all(
-            isinstance(value, str)
-            for value in (policy_path, catalog_path, metadata_path)
-        ):
+        if not all(isinstance(value, str) for value in (policy_path, catalog_path)):
             raise ValueError("codm source paths must be strings")
         policy_bytes = (root / policy_path).read_bytes()
         policy = parse_project_policy(policy_bytes)
         client = http or HttpClient(HttpConfig.from_path(root / "config/http.json"))
         readme = client.get(source_url).body
         parsed = parse_project_table(readme)
-        report["inputs"] = {
-            "sourceUrl": source_url,
-            "readmeSha256": _sha(readme),
-            "projectPolicySha256": _sha(policy_bytes),
-        }
+        report["inputs"] = {"sourceUrl": source_url, "readmeSha256": _sha(readme)}
         report["unsupportedLinks"] = list(parsed.unsupported)
         report["inactiveRules"] = sorted(set(policy.projects) - set(parsed.projects))
-        metadata_file = root / metadata_path
-        accepted_metadata = (
-            load_json(metadata_file, "codm source metadata")
-            if metadata_file.exists()
-            else None
-        )
-        if accepted_metadata is not None:
-            _validate_metadata(accepted_metadata, root / catalog_path)
-            assert isinstance(accepted_metadata, dict)
-        accepted_catalog = _load_catalog(root / catalog_path)
         accepted_by_url = {
-            normalize_project_url(item["url"]): item for item in accepted_catalog
+            normalize_project_url(item["url"]): item
+            for item in _load_catalog(root / catalog_path)
         }
-        accepted_state = _load_state(root / "config/package-ids.json")
-        legacy_members = config.get("legacy_default_projects", [])
-        if not isinstance(legacy_members, list) or not all(
-            isinstance(item, str) for item in legacy_members
-        ):
-            raise ValueError("codm legacy_default_projects must be a string list")
-        if accepted_metadata is not None and legacy_members:
-            raise ValueError(
-                "codm legacy_default_projects is bootstrap-only and cannot remain after acceptance"
-            )
-        _validate_accepted(
-            accepted_by_url,
-            accepted_state,
-            {normalize_project_url(item) for item in legacy_members},
-        )
-        input_match = bool(
-            accepted_metadata
-            and accepted_metadata.get("sourceUrl") == source_url
-            and accepted_metadata.get("readmeSha256") == _sha(readme)
-            and accepted_metadata.get("projectPolicySha256") == _sha(policy_bytes)
-        )
-        if input_match and not force:
-            (output / "readme-input.bin").write_bytes(readme)
-            report["status"] = "unchanged"
-            _write_report(output, report)
-            return report
-        candidate_state = dict(accepted_state)
         entries: list[dict[str, Any]] = []
+        rendered_by_project: dict[str, dict[str, Any]] = {}
         failed = False
         for project in parsed.projects:
             rule = policy.projects.get(project, default_apk_rule())
-            report.setdefault("effectivePolicy", {})[project] = {
-                **rule.canonical(),
-                "fingerprint": rule.fingerprint,
-            }
+            report.setdefault("effectivePolicy", {})[project] = rule.canonical()
             try:
                 release = select_release(client, project, rule)
                 release_id = _release_id(release)
@@ -354,51 +304,36 @@ def generate_codm(
                     assert rule.tracker_id is not None
                     entry = _entry(parsed.source_urls[project], rule, rule.tracker_id)
                     entries.append(entry)
+                    rendered_by_project[project] = _rendered_entry(entry)
                     report["tracking"].append(
                         {"url": project, "id": rule.tracker_id, "status": "verified"}
                     )
-                    candidate_state.pop(project, None)
                     continue
-                cached = accepted_state.get(project)
-                if (
-                    cached
-                    and project in accepted_by_url
-                    and cached.get("releaseId") == release_id
-                    and cached.get("policyFingerprint") == rule.fingerprint
-                ):
-                    package_id = cached["packageId"]
-                    status = "reused"
-                else:
-                    package_id = resolve_release_assets(
-                        cast(HttpClient, client),
-                        release,
-                        rule.additional_settings.get("apkFilterRegEx", ""),
-                        report,
-                        project,
-                    )
-                    status = "resolved"
+                package_id = resolve_release_assets(
+                    cast(HttpClient, client),
+                    release,
+                    rule.additional_settings.get("apkFilterRegEx", ""),
+                    report,
+                    project,
+                )
                 entry = _entry(parsed.source_urls[project], rule, package_id)
                 entries.append(entry)
-                candidate_state[project] = {
-                    "packageId": package_id,
-                    "releaseId": release_id,
-                    "policyFingerprint": rule.fingerprint,
-                }
+                rendered_by_project[project] = _rendered_entry(entry)
                 report["apk"].append(
                     {
                         "url": project,
                         "packageId": package_id,
                         "releaseId": release_id,
-                        "status": status,
+                        "status": "resolved",
                     }
                 )
             except (HttpError, ValueError, TypeError, KeyError) as error:
                 accepted = accepted_by_url.get(project)
-                state = accepted_state.get(project)
-                if accepted is not None and _fallback_compatible(accepted, state, rule):
+                if accepted is not None and _retained(rule, accepted):
                     entries.append(accepted)
-                    report["warnings"].append(
-                        {"url": project, "error": str(error), "status": "retained"}
+                    rendered_by_project[project] = _rendered_entry(accepted)
+                    report["retainedFailures"].append(
+                        {"url": project, "message": str(error)}
                     )
                 else:
                     failed = True
@@ -411,30 +346,18 @@ def generate_codm(
             _write_report(output, report)
             return report
         catalog_bytes = _render_catalog(entries)
-        metadata = {
-            "schemaVersion": 1,
-            "sourceUrl": source_url,
-            "readmeSha256": _sha(readme),
-            "projectPolicySha256": _sha(policy_bytes),
-            "catalogSha256": _sha(catalog_bytes),
-        }
-        (output / "readme-input.bin").write_bytes(readme)
         (output / "catalog.json").write_bytes(catalog_bytes)
-        (output / "source.json").write_bytes(_canonical_json(metadata))
-        (output / "resolution-state.json").write_bytes(
-            _canonical_json(
-                {
-                    key: candidate_state[key]
-                    for key in sorted(candidate_state)
-                    if key in parsed.projects
-                    and policy.projects.get(key, default_apk_rule()).kind == "apk"
-                }
-            )
-        )
         report["status"] = "success"
+        common = set(parsed.projects) & set(accepted_by_url)
         report["changes"] = {
             "added": sorted(set(parsed.projects) - set(accepted_by_url)),
             "removed": sorted(set(accepted_by_url) - set(parsed.projects)),
+            "changed": sorted(
+                project
+                for project in common
+                if rendered_by_project[project]
+                != _rendered_entry(accepted_by_url[project])
+            ),
         }
         _write_report(output, report)
         return report
@@ -442,6 +365,30 @@ def generate_codm(
         report["error"] = str(error)
         _write_report(output, report)
         return report
+
+
+def _rendered_entry(entry: dict[str, Any]) -> dict[str, Any]:
+    """Render one catalog entry through the same normalization the generator
+    uses to write the catalog, so entries can be compared regardless of
+    settings ordering or default-merging.
+    """
+    return cast(dict[str, Any], json.loads(_render_catalog([entry]))["apps"][0])
+
+
+def _retained(rule: ProjectRule, accepted: dict[str, Any]) -> bool:
+    """A failed project keeps its committed entry only when the current rule,
+    rendered with the identity it is authoritative for, reproduces that entry
+    exactly: the committed package ID for an APK rule, or the rule's own
+    tracker ID for a track-only rule, both against the committed URL.
+    """
+    identity = rule.tracker_id if rule.kind == "track-only" else accepted.get("id")
+    if not isinstance(identity, str):
+        return False
+    try:
+        candidate = _entry(accepted["url"], rule, identity)
+        return _rendered_entry(candidate) == _rendered_entry(accepted)
+    except TypeError, ValueError, KeyError:
+        return False
 
 
 def _load_catalog(path: Path) -> list[dict[str, Any]]:

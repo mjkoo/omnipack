@@ -187,12 +187,10 @@ def tracking_root(tmp_path: Path) -> tuple[str, str]:
                     "readme_url": source_url,
                     "project_policy": "config/codm-projects.json",
                     "catalog": "config/catalogs/codm.json",
-                    "source_metadata": "config/catalogs/codm.source.json",
                 }
             }
         )
     )
-    (config / "package-ids.json").write_text("{}")
     (config / "codm-projects.json").write_text(
         json.dumps(
             {
@@ -238,47 +236,31 @@ def test_track_only_generation_writes_current_candidate_without_apk_state(
     app = json.loads((output / "catalog.json").read_text())["apps"][0]
     settings = json.loads(app["additionalSettings"])
     assert app["id"] == "12345" and settings["trackOnly"] is True
-    assert json.loads((output / "resolution-state.json").read_text()) == {}
     assert "https://fixture.test/mod.zip" not in http.urls
     assert report["tracking"] == [{"url": project, "id": "12345", "status": "verified"}]
 
 
-def test_unchanged_gate_validates_policy_then_makes_zero_release_requests(
-    tmp_path: Path,
-) -> None:
-    source_url, _ = tracking_root(tmp_path)
+def test_every_invocation_resolves_every_project_afresh(tmp_path: Path) -> None:
+    source_url, project = tracking_root(tmp_path)
     readme = b"| Project | Note |\n| --- | --- |\n| [Tracker](https://github.com/example/tracker) | mod |\n"
     release_url = "https://api.github.com/repos/example/tracker/releases/latest"
+    release = {"id": 7, "published_at": "2026-09-10T00:00:00Z", "assets": []}
     first = generate_codm(
-        tmp_path,
-        http=MappingHttp(
-            {
-                source_url: readme,
-                release_url: {
-                    "id": 7,
-                    "published_at": "2026-09-10T00:00:00Z",
-                    "assets": [],
-                },
-            }
-        ),
+        tmp_path, http=MappingHttp({source_url: readme, release_url: release})
     )
     assert first["status"] == "success"
     output = tmp_path / ".build/source-generation/codm"
     (tmp_path / "config/catalogs/codm.json").write_bytes(
         (output / "catalog.json").read_bytes()
     )
-    (tmp_path / "config/catalogs/codm.source.json").write_bytes(
-        (output / "source.json").read_bytes()
-    )
-    second_http = MappingHttp({source_url: readme})
+    second_http = MappingHttp({source_url: readme, release_url: release})
     second = generate_codm(tmp_path, http=second_http)
-    assert second["status"] == "unchanged"
-    assert second_http.urls == [source_url]
-    assert not (output / "catalog.json").exists()
-    assert {path.name for path in output.iterdir()} == {
-        "report.json",
-        "readme-input.bin",
-    }
+    assert second["status"] == "success"
+    assert second_http.urls == [source_url, release_url]
+    assert (output / "catalog.json").read_bytes() == (
+        tmp_path / "config/catalogs/codm.json"
+    ).read_bytes()
+    assert second["tracking"] == [{"url": project, "id": "12345", "status": "verified"}]
 
 
 def test_failed_invocation_rejects_stale_candidates_and_preserves_tracked_inputs(
@@ -287,14 +269,13 @@ def test_failed_invocation_rejects_stale_candidates_and_preserves_tracked_inputs
     source_url, _ = tracking_root(tmp_path)
     output = tmp_path / ".build/source-generation/codm"
     output.mkdir(parents=True)
-    for name in ("catalog.json", "source.json", "resolution-state.json", "report.json"):
+    for name in ("catalog.json", "report.json"):
         (output / name).write_text("stale")
     tracked = {
         path: path.read_bytes()
         for path in (
             tmp_path / "config/sources.json",
             tmp_path / "config/codm-projects.json",
-            tmp_path / "config/package-ids.json",
         )
     }
     (tmp_path / "config/codm-projects.json").write_text("not json")

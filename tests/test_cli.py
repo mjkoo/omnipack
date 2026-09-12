@@ -31,15 +31,24 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
 def test_generate_source_codm_exit_status(
     monkeypatch: pytest.MonkeyPatch, status: str, expected: int
 ) -> None:
-    calls: list[tuple[Path, bool]] = []
+    calls: list[Path] = []
 
-    def generate(root: Path, *, force: bool = False) -> dict[str, object]:
-        calls.append((root, force))
+    def generate(root: Path) -> dict[str, object]:
+        calls.append(root)
         return {"status": status}
 
     monkeypatch.setattr(cli, "generate_codm", generate)
-    assert main(["generate-source", "codm", "--force"]) == expected
-    assert calls == [(Path.cwd(), True)]
+    assert main(["generate-source", "codm"]) == expected
+    assert calls == [Path.cwd()]
+
+
+def test_generate_source_codm_rejects_force(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as excinfo:
+        main(["generate-source", "codm", "--force"])
+    assert excinfo.value.code == 2
+    assert "--force" in capsys.readouterr().err
 
 
 def test_verify_missing_inputs_fails_and_report_displays_failure(

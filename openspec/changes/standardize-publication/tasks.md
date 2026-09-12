@@ -7,7 +7,7 @@
   - the `inputs.force` term from the remaining generation step's condition.
 
   This lands before 1.2 removes `--force` from the CLI, so no workflow step ever invokes a removed flag. Until 4.3 rewrites it, the source workflow generates but proposes nothing; main stays unpushed until this change lands, so no run sees that gap. Verify that `git grep` finds no reference to `source_publication` outside `docs/` and `openspec/`, that `git grep -e '--force' -e 'inputs.force' .github/workflows` finds nothing, that actionlint and zizmor pass, and that `just check-all` passes.
-- [ ] 1.2 Rewrite `generate_codm` to resolve every project on every run. When a project fails, retain main's committed entry byte for byte only if the current rule reproduces it exactly when rendered with the identity the rule is authoritative for: an APK rule with the committed entry's package ID and URL, and a track-only rule with the rule's `trackerId` and the committed URL. Fail generation for every other failure. Remove:
+- [x] 1.2 Rewrite `generate_codm` to resolve every project on every run. When a project fails, retain main's committed entry byte for byte only if the current rule reproduces it exactly when rendered with the identity the rule is authoritative for: an APK rule with the committed entry's package ID and URL, and a track-only rule with the rule's `trackerId` and the committed URL. Fail generation for every other failure. Remove:
   - the metadata and state loading;
   - the input gate and the `force` parameter and CLI flag;
   - `legacy_default_projects`;

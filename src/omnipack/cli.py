@@ -143,8 +143,8 @@ def report(_args: argparse.Namespace) -> int:
     return 0
 
 
-def generate_source(args: argparse.Namespace) -> int:
-    result = generate_codm(Path.cwd(), force=args.force)
+def generate_source(_args: argparse.Namespace) -> int:
+    result = generate_codm(Path.cwd())
     if result["status"] == "failed":
         detail = result.get("error") or result.get("unresolved") or "generation failed"
         print(f"source generation failed: {detail}", file=sys.stderr)
@@ -172,7 +172,6 @@ def _parser() -> argparse.ArgumentParser:
     )
     source_parsers = generate_parser.add_subparsers(dest="source", required=True)
     codm_parser = source_parsers.add_parser("codm", help="generate codm source")
-    codm_parser.add_argument("--force", action="store_true")
     codm_parser.set_defaults(func=generate_source)
 
     return parser

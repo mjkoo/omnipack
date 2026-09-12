@@ -5,6 +5,7 @@ from pathlib import Path
 
 import pytest
 
+from omnipack.cli import main
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.project_policy import PolicyError, default_apk_rule, parse_project_policy
 from omnipack.source_generation import (
@@ -54,13 +55,11 @@ def run(root, source, rel=None, **kwargs):
     return result, http
 
 
-def accept(root, metadata=True):
+def accept(root):
     output = root / ".build/source-generation/codm"
-    for src, dst in [
-        ("catalog.json", "catalogs/codm.json"),
-        ("resolution-state.json", "package-ids.json"),
-    ] + ([("source.json", "catalogs/codm.source.json")] if metadata else []):
-        (root / "config" / dst).write_bytes((output / src).read_bytes())
+    (root / "config/catalogs/codm.json").write_bytes(
+        (output / "catalog.json").read_bytes()
+    )
 
 
 @pytest.mark.parametrize("separator", ["| -- |", ""])
@@ -281,118 +280,47 @@ def test_latest_requires_published_stable_release(fields):
         select_release(JsonHttp(release(**fields)), PROJECT, default_apk_rule())
 
 
-@pytest.mark.parametrize("failure", [False, True])
-def test_bootstrap_derives_default_fingerprint_for_admitted_member(tmp_path, failure):
-    source = setup(tmp_path)
-    assert run(tmp_path, source)[0]["status"] == "success"
-    accept(tmp_path, metadata=False)
-    state_path = tmp_path / "config/package-ids.json"
-    state = json.loads(state_path.read_text())
-    state[PROJECT].pop("policyFingerprint")
-    state_path.write_text(json.dumps(state))
-    config_path = tmp_path / "config/sources.json"
-    config = json.loads(config_path.read_text())
-    config["codm"]["legacy_default_projects"] = [PROJECT]
-    config_path.write_text(json.dumps(config))
-    result, http = run(tmp_path, source, {"id": 8} if failure else release())
-    assert result["status"] == "success"
-    assert ASSET not in http.urls
-    assert result["warnings"] if failure else result["apk"][0]["status"] == "reused"
-    candidate = json.loads(
-        (tmp_path / ".build/source-generation/codm/resolution-state.json").read_text()
-    )
-    assert candidate[PROJECT]["policyFingerprint"] == default_apk_rule().fingerprint
-    assert "policyFingerprint" not in json.loads(state_path.read_text())[PROJECT]
-
-
-def test_explicit_repository_name_is_valid_after_acceptance(tmp_path):
+def test_unchanged_inputs_reproduce_the_committed_catalog_byte_for_byte(tmp_path):
     source = setup(tmp_path, {"kind": "apk", "name": "tracker"})
     assert run(tmp_path, source)[0]["status"] == "success"
     accept(tmp_path)
-    assert run(tmp_path, source)[0]["status"] == "unchanged"
+    committed = (tmp_path / "config/catalogs/codm.json").read_bytes()
+    result, http = run(tmp_path, source)
+    assert result["status"] == "success"
+    assert http.urls[:2] == [source, API]
+    assert all(url == ASSET for url in http.urls[2:])
+    assert result["apk"][0]["status"] == "resolved"
+    assert (
+        tmp_path / ".build/source-generation/codm/catalog.json"
+    ).read_bytes() == committed
+    assert result["changes"] == {"added": [], "removed": [], "changed": []}
 
 
-@pytest.mark.parametrize(
-    "field,value",
-    [
-        ("schemaVersion", True),
-        ("readmeSha256", "bad"),
-        ("projectPolicySha256", "g" * 64),
-    ],
-)
-def test_malformed_accepted_metadata_fails(tmp_path, field, value):
+def test_retained_entry_survives_an_unchanged_or_reformatted_policy(tmp_path):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
     accept(tmp_path)
-    path = tmp_path / "config/catalogs/codm.source.json"
-    data = json.loads(path.read_text())
-    data[field] = value
-    path.write_text(json.dumps(data))
-    result, http = run(tmp_path, source)
-    assert result["status"] == "failed"
-    assert http.urls == [source]
-
-
-@pytest.mark.parametrize(
-    "change", ["force", "release", "policy", "format", "readme", "url"]
-)
-def test_accepted_gate_and_fresh_inspection(tmp_path, change):
-    source = setup(tmp_path)
-    first, _ = run(tmp_path, source)
-    assert first["apk"][0]["status"] == "resolved"
-    output = tmp_path / ".build/source-generation/codm"
-    original = (output / "catalog.json").read_bytes()
-    accept(tmp_path)
-    policy = tmp_path / "config/codm-projects.json"
-    rel = release()
-    readme = README
-    if change == "policy":
-        policy.write_text(
-            json.dumps(
-                {
-                    "schemaVersion": 1,
-                    "projects": {
-                        PROJECT: {
-                            "kind": "apk",
-                            "additionalSettings": {"fallbackToOlderReleases": False},
-                        }
-                    },
-                }
-            )
-        )
-    elif change == "format":
-        policy.write_text(json.dumps(json.loads(policy.read_text()), indent=4))
-    elif change == "readme":
-        readme += b"\nprose\n"
-    elif change == "release":
-        rel = release(8)
-    elif change == "url":
-        config = tmp_path / "config/sources.json"
-        data = json.loads(config.read_text())
-        source += "?new=1"
-        data["codm"]["readme_url"] = source
-        config.write_text(json.dumps(data))
-    http = MappingHttp({source: readme, API: rel, ASSET: apk("org.example.app")})
-    result = generate_codm(tmp_path, force=change in {"force", "release"}, http=http)
+    policy_path = tmp_path / "config/codm-projects.json"
+    policy_path.write_text(json.dumps(json.loads(policy_path.read_text()), indent=4))
+    committed = (tmp_path / "config/catalogs/codm.json").read_bytes()
+    result, http = run(tmp_path, source, release(8, assets=[]))
     assert result["status"] == "success"
-    assert (ASSET in http.urls) == (change in {"release", "policy"})
-    assert result["apk"][0]["status"] == (
-        "resolved" if change in {"release", "policy"} else "reused"
-    )
-    assert ((output / "catalog.json").read_bytes() == original) == (change != "policy")
+    assert ASSET not in http.urls
+    assert result["retainedFailures"] == [
+        {"url": PROJECT, "message": result["retainedFailures"][0]["message"]}
+    ]
+    assert (
+        tmp_path / ".build/source-generation/codm/catalog.json"
+    ).read_bytes() == committed
+    assert result["changes"] == {"added": [], "removed": [], "changed": []}
 
 
-@pytest.mark.parametrize(
-    "mode", ["new", "cache-only", "policy-change", "accepted", "kind-change"]
-)
+@pytest.mark.parametrize("mode", ["new", "policy-change", "accepted", "kind-change"])
 def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
     if mode != "new":
         accept(tmp_path)
-    if mode == "cache-only":
-        (tmp_path / "config/catalogs/codm.json").unlink()
-        (tmp_path / "config/catalogs/codm.source.json").unlink()
     if mode == "policy-change":
         (tmp_path / "config/codm-projects.json").write_text(
             json.dumps(
@@ -422,19 +350,10 @@ def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
         tmp_path,
         source,
         {"id": 8} if mode == "kind-change" else release(8, assets=[]),
-        force=True,
     )
     assert result["status"] == ("success" if mode == "accepted" else "failed")
     if mode == "accepted":
-        assert result["warnings"][0]["status"] == "retained"
-        assert (
-            json.loads(
-                (
-                    tmp_path / ".build/source-generation/codm/resolution-state.json"
-                ).read_text()
-            )[PROJECT]["releaseId"]
-            == 7
-        )
+        assert result["retainedFailures"][0]["url"] == PROJECT
     else:
         assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
 
@@ -460,8 +379,10 @@ def test_retries_never_accept_partial_resolutions(tmp_path):
         result = generate_codm(tmp_path, http=http)
         assert ASSET in http.urls
         assert result["status"] == ("failed" if attempt < 2 else "success")
-        assert (tmp_path / "config/package-ids.json").read_text() == "{}"
-        assert not (tmp_path / "config/catalogs/codm.source.json").exists()
+        candidate_exists = (
+            tmp_path / ".build/source-generation/codm/catalog.json"
+        ).exists()
+        assert candidate_exists == (attempt == 2)
 
 
 @pytest.mark.parametrize("other_kind", ["apk", "track-only"])
@@ -593,12 +514,34 @@ def test_tracker_fallback_and_transition(tmp_path, transition):
         (tmp_path / "config/codm-projects.json").write_text(
             json.dumps({"schemaVersion": 1, "projects": {}})
         )
-    result, http = run(tmp_path, source, release(8, assets=[]), force=True)
+    result, http = run(tmp_path, source, release(8, assets=[]))
     assert result["status"] == ("failed" if transition else "success")
     assert ASSET not in http.urls
     if not transition:
-        result, _ = run(tmp_path, source, {"id": 8}, force=True)
-        assert result["warnings"][0]["status"] == "retained"
+        result, _ = run(tmp_path, source, {"id": 8})
+        assert result["retainedFailures"][0]["url"] == PROJECT
+
+
+def test_tracker_id_change_with_failed_lookup_blocks_generation(tmp_path):
+    source_url, project = tracking_root(tmp_path)
+    readme = b"| Project | Note |\n| --- | --- |\n| [Tracker](https://github.com/example/tracker) | mod |\n"
+    release_url = "https://api.github.com/repos/example/tracker/releases/latest"
+    good_release = {"id": 7, "published_at": "2026-09-10T00:00:00Z", "assets": []}
+    first = generate_codm(
+        tmp_path, http=MappingHttp({source_url: readme, release_url: good_release})
+    )
+    assert first["status"] == "success"
+    (tmp_path / "config/catalogs/codm.json").write_bytes(
+        (tmp_path / ".build/source-generation/codm/catalog.json").read_bytes()
+    )
+    policy_path = tmp_path / "config/codm-projects.json"
+    policy = json.loads(policy_path.read_text())
+    policy["projects"][project]["trackerId"] = "67890"
+    policy_path.write_text(json.dumps(policy))
+    result = generate_codm(tmp_path, http=MappingHttp({source_url: readme}))
+    assert result["status"] == "failed"
+    assert result["retainedFailures"] == []
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
 
 
 @pytest.mark.parametrize(
@@ -650,10 +593,7 @@ def test_duplicate_json_policy_keys_fail_before_discovery(tmp_path, policy):
     assert http.urls == []
     assert policy_path.read_bytes() == policy
     output = tmp_path / ".build/source-generation/codm"
-    assert not any(
-        (output / name).exists()
-        for name in ("catalog.json", "source.json", "resolution-state.json")
-    )
+    assert not (output / "catalog.json").exists()
 
 
 def test_duplicate_policy_keys_and_inactive_rules(tmp_path):
@@ -680,30 +620,8 @@ def test_duplicate_policy_keys_and_inactive_rules(tmp_path):
     assert result["inactiveRules"] == ["github.com/inactive/app"]
 
 
-@pytest.mark.parametrize("variant", ["not-admitted", "nondefault", "after-acceptance"])
-def test_bootstrap_rejects_unproven_legacy_entries(tmp_path, variant):
-    source = setup(
-        tmp_path, {"kind": "apk", "name": "Custom"} if variant == "nondefault" else None
-    )
-    assert run(tmp_path, source)[0]["status"] == "success"
-    accept(tmp_path, metadata=variant == "after-acceptance")
-    path = tmp_path / "config/package-ids.json"
-    state = json.loads(path.read_text())
-    state[PROJECT].pop("policyFingerprint")
-    path.write_text(json.dumps(state))
-    config = tmp_path / "config/sources.json"
-    data = json.loads(config.read_text())
-    data["codm"]["legacy_default_projects"] = (
-        [] if variant == "not-admitted" else [PROJECT]
-    )
-    config.write_text(json.dumps(data))
-    assert run(tmp_path, source)[0]["status"] == "failed"
-
-
 def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch):
     import subprocess
-
-    from omnipack.cli import main
 
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
@@ -742,10 +660,10 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
         monkeypatch.setattr(
             "omnipack.source_generation.HttpClient", lambda config, client=http: client
         )
-        assert main(["generate-source", "codm", "--force"]) == int(late_failure)
+        assert main(["generate-source", "codm"]) == int(late_failure)
         output = tmp_path / ".build/source-generation/codm"
         report = json.loads((output / "report.json").read_text())
-        assert report["apk"][0]["status"] == "reused"
+        assert report["apk"][0]["status"] == "resolved"
         assert report["status"] == ("failed" if late_failure else "success")
         assert all(p.read_bytes() == content for p, content in tracked.items())
         assert (
@@ -757,8 +675,6 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
 
 
 def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
-    from omnipack.cli import main
-
     source = setup(
         tmp_path,
         {
@@ -801,7 +717,6 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
     )
     assert "acknowledgement does not install" in settings["about"]
     assert http.urls == [source, API]
-    assert json.loads((output / "resolution-state.json").read_text()) == {}
     assert "mod.zip" not in (output / "catalog.json").read_text()
     assert app.get("installedVersion") in (None, "")
     assert app.get("latestVersion") in (None, "")
@@ -815,18 +730,6 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
 def test_invalid_host_release_identifier(identifier):
     with pytest.raises((TypeError, ValueError)):
         select_release(JsonHttp(release(identifier)), PROJECT, default_apk_rule())
-
-
-def test_catalog_digest_failure_precedes_resolution(tmp_path):
-    source = setup(tmp_path)
-    assert run(tmp_path, source)[0]["status"] == "success"
-    accept(tmp_path)
-    path = tmp_path / "config/catalogs/codm.json"
-    path.write_bytes(path.read_bytes() + b" ")
-    result, http = run(tmp_path, source)
-    assert result["status"] == "failed"
-    assert "digest" in result["error"]
-    assert http.urls == [source]
 
 
 def test_both_kind_transitions_require_fresh_destination_validation(tmp_path):
@@ -854,7 +757,6 @@ def test_both_kind_transitions_require_fresh_destination_validation(tmp_path):
     assert ASSET not in http.urls
     assert result["tracking"][0]["id"] == "123"
     accept(tmp_path)
-    assert json.loads((tmp_path / "config/package-ids.json").read_text()) == {}
     path.write_text(json.dumps({"schemaVersion": 1, "projects": {}}))
     result, http = run(tmp_path, source)
     assert result["status"] == "success"
