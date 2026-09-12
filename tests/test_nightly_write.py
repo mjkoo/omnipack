@@ -856,7 +856,7 @@ def test_head_read_failure_fails_with_release_failed_reason(
     result = run_release(root, gh=gh)
 
     assert result.status == "failed"
-    assert result.summary.startswith("release failed:")
+    assert result.summary == "release failed: could not read HEAD"
     assert "gh release create" not in result.summary
     assert gh.calls == []
 
