@@ -49,8 +49,8 @@ uv run --no-sync python -m scripts.nightly prepare
 
 It writes `changed`, `sha` and `base` as job outputs, and its step summary
 line is `no-op at <sha>`, `prepared <sha>`, or the name of the stage that
-failed: `checkout`, `build`, `allowlist`, `README boundary`, `verify`,
-`drift after verify` or `bundle`. `pack build` and `pack verify` write their
+failed: `checkout`, `build`, `allowlist`, `README boundary`, `commit`,
+`verify`, `drift after verify` or `bundle`. `pack build` and `pack verify` write their
 own output to the job log.
 
 **`publish`** needs `prepare`, holds `permissions: contents: write`, and runs

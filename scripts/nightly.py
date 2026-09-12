@@ -161,7 +161,7 @@ def run_prepare(
                 root, changed_paths, selected_now(), run_url, base_sha
             )
         except OSError:
-            return PrepareOutcome("failed", "bundle", base_sha, None, False)
+            return PrepareOutcome("failed", "commit", base_sha, None, False)
 
     verify_result = selected_process.run(STRUCTURAL_VERIFY_COMMAND, root)
     if verify_result.returncode != 0:

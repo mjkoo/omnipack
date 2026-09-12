@@ -573,6 +573,29 @@ def test_git_failure_after_the_build_fails_the_allowlist_stage(tmp_path: Path) -
     assert outcome.summary_line == "allowlist"
 
 
+def test_git_failure_committing_the_candidate_fails_the_commit_stage(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    bundle = tmp_path / "candidate.bundle"
+    process = ScriptedProcess(root)
+
+    def change_pack_and_lock_the_index() -> None:
+        (root / "dist/single-screen.json").write_text("new single\n")
+        (root / ".git/index.lock").write_bytes(b"")
+
+    process.on_build.append(change_pack_and_lock_the_index)
+
+    outcome = run_prepare(root, base, "run", bundle, process=process, now=_now)
+
+    assert outcome.status == "failed"
+    assert outcome.summary_line == "commit"
+    assert _git(root, "rev-parse", "HEAD") == base
+    assert not bundle.exists()
+    assert STRUCTURAL_VERIFY_COMMAND not in process.calls
+
+
 def test_git_failure_after_verification_fails_the_drift_stage(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
