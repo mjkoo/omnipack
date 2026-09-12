@@ -320,6 +320,31 @@ def test_project_resolving_to_a_different_entry_is_reported_as_changed(tmp_path)
     assert result["retainedFailures"] == []
 
 
+def test_readme_additions_and_removals_are_reported(tmp_path):
+    source = setup(tmp_path)
+    assert run(tmp_path, source)[0]["status"] == "success"
+    accept(tmp_path)
+    other_api = "https://api.github.com/repos/other/app/releases/latest"
+    other_asset = ASSET + "?other"
+    http = MappingHttp(
+        {
+            source: b"| Project | Note |\n| --- | --- |\n"
+            b"| [Other](https://github.com/other/app) | app |\n",
+            other_api: release(
+                8, assets=[{"name": "other.apk", "browser_download_url": other_asset}]
+            ),
+            other_asset: apk("org.example.other"),
+        }
+    )
+    result = generate_codm(tmp_path, http=http)
+    assert result["status"] == "success"
+    assert result["changes"] == {
+        "added": ["github.com/other/app"],
+        "removed": [PROJECT],
+        "changed": [],
+    }
+
+
 def test_retained_entry_survives_an_unchanged_or_reformatted_policy(tmp_path):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"

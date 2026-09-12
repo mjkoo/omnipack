@@ -9,13 +9,16 @@ workflow with a differently named check job can reuse them.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any
 
+import pytest
 import yaml
 
 WORKFLOWS_DIR = Path(__file__).resolve().parent.parent / ".github" / "workflows"
 STATUS_FUNCTIONS = ("always()", "failure()", "cancelled()", "!cancelled()")
+PINNED_ACTION = re.compile(r"[^@\s]+@[0-9a-f]{40}")
 
 
 def load_workflow(name: str) -> dict[Any, Any]:
@@ -167,6 +170,16 @@ def assert_upload_overwrites(step: dict[str, Any], *, if_no_files_found: str) ->
 # --- nightly workflow ----------------------------------------------------
 
 NIGHTLY = load_workflow("nightly.yml")
+
+
+@pytest.mark.parametrize("workflow", ["nightly.yml", "source-catalog.yml"])
+def test_every_action_is_pinned_to_a_full_commit_sha(workflow: str) -> None:
+    for job_name, job in jobs(load_workflow(workflow)).items():
+        for step in steps(job):
+            if "uses" in step:
+                assert PINNED_ACTION.fullmatch(str(step["uses"])), (
+                    f"{workflow} job {job_name} uses an unpinned {step['uses']!r}"
+                )
 
 
 def test_nightly_triggers_permissions_and_concurrency() -> None:

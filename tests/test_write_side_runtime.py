@@ -67,6 +67,8 @@ def test_write_side_modules_import_only_stdlib_and_scripts() -> None:
                     "library or the scripts package"
                 )
                 continue
+            # Importing any scripts module runs the package's __init__ first.
+            pending.append("scripts/__init__.py")
             if name == "scripts":
                 continue
             submodule = root / (name.replace(".", "/") + ".py")
