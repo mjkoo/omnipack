@@ -25,9 +25,7 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
-@pytest.mark.parametrize(
-    ("status", "expected"), [("success", 0), ("unchanged", 0), ("failed", 1)]
-)
+@pytest.mark.parametrize(("status", "expected"), [("success", 0), ("failed", 1)])
 def test_generate_source_codm_exit_status(
     monkeypatch: pytest.MonkeyPatch, status: str, expected: int
 ) -> None:

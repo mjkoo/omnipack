@@ -127,13 +127,23 @@ def _committed_codm_catalog() -> dict[str, Any]:
     return load_json(ROOT / "config/catalogs/codm.json")
 
 
+ADDED_ID = "com.example.testinvariant.added"
+
+
 def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
     catalog = _committed_codm_catalog()
     apps = list(catalog["apps"])
-    removed = apps.pop()
+    apps.pop()
+    # The added project copies the settings of an APK entry, chosen for its
+    # kind rather than its position, under a new ID and URL.
+    template = next(
+        app
+        for app in apps
+        if not json.loads(app["additionalSettings"]).get("trackOnly", False)
+    )
     added = {
-        **removed,
-        "id": "com.example.testinvariant.added",
+        **template,
+        "id": ADDED_ID,
         "url": "https://github.com/example/testinvariant-added",
         "name": "Test Invariant Added",
         "author": "example",
@@ -216,6 +226,8 @@ def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
     higher, _ = captured_pipeline()
     result = _compose_with_codm_catalog(codm_catalog, tmp_path, higher)
     assert result.apps[Variant.DUAL]
+    if any(app["id"] == ADDED_ID for app in codm_catalog["apps"]):
+        assert ADDED_ID in {app.id for app in result.apps[Variant.DUAL]}
 
 
 def test_committed_catalog_leaves_the_single_screen_pack_unchanged(

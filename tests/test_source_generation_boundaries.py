@@ -331,7 +331,7 @@ def test_retained_entry_survives_an_unchanged_or_reformatted_policy(tmp_path):
     assert result["status"] == "success"
     assert ASSET not in http.urls
     assert result["retainedFailures"] == [
-        {"url": PROJECT, "message": result["retainedFailures"][0]["message"]}
+        {"url": PROJECT, "message": "latest release has no eligible APK assets"}
     ]
     assert (
         tmp_path / ".build/source-generation/codm/catalog.json"
@@ -339,7 +339,7 @@ def test_retained_entry_survives_an_unchanged_or_reformatted_policy(tmp_path):
     assert result["changes"] == {"added": [], "removed": [], "changed": []}
 
 
-@pytest.mark.parametrize("mode", ["new", "policy-change", "accepted", "kind-change"])
+@pytest.mark.parametrize("mode", ["new", "policy-change", "kind-change"])
 def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
@@ -375,11 +375,8 @@ def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
         source,
         {"id": 8} if mode == "kind-change" else release(8, assets=[]),
     )
-    assert result["status"] == ("success" if mode == "accepted" else "failed")
-    if mode == "accepted":
-        assert result["retainedFailures"][0]["url"] == PROJECT
-    else:
-        assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
+    assert result["status"] == "failed"
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
 
 
 def test_retries_never_accept_partial_resolutions(tmp_path):

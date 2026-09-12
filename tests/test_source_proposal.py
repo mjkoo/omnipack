@@ -10,6 +10,7 @@ selection behavior against temporary repositories and a bare remote.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -34,12 +35,25 @@ def _isolated_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for name in list(os.environ):
+        if name.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_")):
+            monkeypatch.delenv(name)
 
 
 def _git(root: Path, *args: str) -> str:
     return subprocess.run(
         ["git", *args], cwd=root, check=True, capture_output=True, text=True
     ).stdout.strip()
+
+
+def _install_failing_hooks(root: Path, *names: str) -> None:
+    """Hooks that would fail any git command that ran them."""
+    hooks = root / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        hook = hooks / name
+        hook.write_text("#!/bin/sh\necho 'a repository hook ran' >&2\nexit 1\n")
+        hook.chmod(0o755)
 
 
 def _repo(tmp_path: Path, name: str = "repo") -> Path:
@@ -159,6 +173,58 @@ def test_changed_candidate_writes_bundle_and_body_with_run_url_and_base_sha(
     body_text = body_path.read_text()
     assert "https://github.example/runs/9" in body_text
     assert base in body_text
+
+
+def _pre_block(text: str) -> str:
+    return text[text.index("<pre>") : text.index("</pre>")]
+
+
+def test_catalog_changes_appear_escaped_in_the_summary_and_body(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(
+        root,
+        '{"apps": [{"id": "a"}]}\n',
+        _report(
+            added=("https://example.test/a?x=1&y=2",),
+            removed=("https://example.test/<removed>",),
+            changed=("https://example.test/c&d",),
+        ),
+    )
+    body_path = tmp_path / "pr-body.md"
+
+    outcome = run_stage(
+        root, base, "https://github.example/runs/9", tmp_path / "b.bundle", body_path
+    )
+
+    expected = (
+        "Added:\nhttps://example.test/a?x=1&amp;y=2\n\n"
+        "Removed:\nhttps://example.test/&lt;removed&gt;\n\n"
+        "Changed:\nhttps://example.test/c&amp;d\n\n"
+        "Retained failures:\n"
+    )
+    assert expected in _pre_block(outcome.summary)
+    assert expected in _pre_block(body_path.read_text())
+
+
+def test_repository_hooks_never_run_when_staging(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _install_failing_hooks(
+        root, "pre-commit", "commit-msg", "post-commit", "post-checkout"
+    )
+    _write_candidate(
+        root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
+    )
+
+    outcome = run_stage(
+        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
+    )
+
+    assert outcome.status == "changed"
+    assert _git(root, "rev-parse", "--abbrev-ref", "HEAD") == BRANCH_NAME
 
 
 def test_changed_candidate_commits_only_the_catalog_as_the_bot(tmp_path: Path) -> None:
@@ -334,8 +400,9 @@ def test_stage_cli_reads_env_and_exit_code_and_writes_outputs(
     exit_code = proposal_module.main(["stage"])
 
     assert exit_code == 0
-    output_text = output_path.read_text()
-    assert "changed=true" in output_text
+    sha = _git(root, "rev-parse", "HEAD")
+    assert sha != base
+    assert output_path.read_text() == f"changed=true\nsha={sha}\nbase={base}\n"
     assert (runner_temp / "source-handoff" / "candidate.bundle").exists()
     assert (runner_temp / "source-handoff" / "pr-body.md").exists()
     assert (
@@ -406,6 +473,23 @@ def _stage_environment(
     monkeypatch.setenv("GITHUB_REPOSITORY", "mjkoo/omnipack")
     monkeypatch.setenv("GITHUB_RUN_ID", "42")
     return runner_temp
+
+
+def test_stage_cli_writes_changed_false_for_an_unchanged_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, '{"apps": []}\n', _report())
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+
+    exit_code = proposal_module.main(["stage"])
+
+    assert exit_code == 0
+    assert (tmp_path / "output.txt").read_text() == (
+        f"changed=false\nsha={base}\nbase={base}\n"
+    )
+    assert not (runner_temp / "source-handoff").exists()
 
 
 @pytest.mark.parametrize("missing", ["RUNNER_TEMP", "GITHUB_RUN_ID"])
@@ -551,14 +635,15 @@ def test_unchanged_closes_an_open_pr_and_makes_no_push_or_pr_write(
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    _git(seed, "remote", "add", "origin", str(bare))
     write_side = _write_side(tmp_path, bare, base)
     gh = ScriptedGh(pr_list=[_pr(7)])
 
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
 
     assert result.status == "closed"
-    assert any(call[:2] == ("pr", "close") for call in gh.calls)
+    assert result.summary == "publish closed PR #7"
+    close_calls = [call for call in gh.calls if call[:2] == ("pr", "close")]
+    assert close_calls == [("pr", "close", "7", "--repo", "mjkoo/omnipack")]
     assert not any(call[:2] == ("pr", "create") for call in gh.calls)
     assert not any(call[:2] == ("pr", "edit") for call in gh.calls)
     assert _bare_branch_sha(bare) == ""
@@ -605,8 +690,11 @@ def test_changed_with_an_open_pr_edits_its_body(tmp_path: Path) -> None:
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "published"
+    assert result.summary == "publish updated PR #3"
     edit_calls = [call for call in gh.calls if call[:2] == ("pr", "edit")]
     assert len(edit_calls) == 1
+    assert edit_calls[0][:3] == ("pr", "edit", "3")
+    assert gh.edited_bodies == [body_path.read_text()]
     assert not any(call[:2] == ("pr", "create") for call in gh.calls)
     assert _git(bare, "rev-parse", f"refs/heads/{BRANCH_NAME}") == sha
 
@@ -639,26 +727,45 @@ def test_equal_trees_make_no_push_even_with_a_different_hand_made_commit(
     assert len(edit_calls) == 1
 
 
-def test_bare_remote_without_the_branch_pushes_and_creates_pr(tmp_path: Path) -> None:
-    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
-    gh = ScriptedGh(pr_list=[])
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "published"
-    assert _git(bare, "rev-parse", f"refs/heads/{BRANCH_NAME}") == sha
-    assert any(call[:2] == ("pr", "create") for call in gh.calls)
-
-
-def test_fork_pr_sharing_the_branch_name_is_untouched_and_own_pr_is_created(
+def test_hand_pushed_commit_with_a_different_tree_is_overwritten(
     tmp_path: Path,
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
+
+    # Someone pushes a commit to the bot branch whose tree differs from the
+    # rebuild; the next changed run replaces it.
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
+    _git(other, "config", "user.name", "Someone")
+    _git(other, "config", "user.email", "someone@example.invalid")
+    _git(other, "checkout", "-q", "-b", BRANCH_NAME, base)
+    (other / CATALOG_PATH).write_text('{"apps": [{"id": "hand"}]}\n')
+    _git(other, "commit", "-qam", "hand-made")
+    hand_made_sha = _git(other, "rev-parse", "HEAD")
+    _git(other, "push", "-q", "origin", f"HEAD:refs/heads/{BRANCH_NAME}")
+    assert _bare_branch_sha(bare) == hand_made_sha
+
     write_side = _write_side(tmp_path, bare, base)
-    gh = ScriptedGh(pr_list=[_pr(11, cross_repo=True, owner="someoneelse")])
+    gh = ScriptedGh(pr_list=[_pr(4)])
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "published"
+    assert _bare_branch_sha(bare) == sha
+
+
+@pytest.mark.parametrize(
+    ("cross_repo", "owner"),
+    [(True, "someoneelse"), (True, "mjkoo"), (False, "someoneelse")],
+)
+def test_fork_pr_sharing_the_branch_name_is_untouched_and_own_pr_is_created(
+    tmp_path: Path, cross_repo: bool, owner: str
+) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    gh = ScriptedGh(pr_list=[_pr(11, cross_repo=cross_repo, owner=owner)])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
@@ -687,25 +794,11 @@ def test_two_selected_same_repository_prs_fail_before_any_write(
     assert _bare_branch_sha(bare) == ""
 
 
-def test_bundle_with_wrong_parent_fails_before_any_push_or_pr_write(
-    tmp_path: Path,
-) -> None:
-    seed, base, sha, _bundle_path, body_path = _staged_candidate(tmp_path)
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
-
-    # A commit with the same catalog content as the real candidate, but
-    # built on an unrelated parent instead of `base`.
-    _git(seed, "checkout", "-q", "main")
-    (seed / "tracked.txt").write_text("unrelated\n")
-    _git(seed, "add", "tracked.txt")
-    _git(seed, "commit", "-qm", "unrelated")
-    wrong_base = _git(seed, "rev-parse", "HEAD")
-    _git(seed, "checkout", "-q", "-B", BRANCH_NAME)
-    _git(seed, "checkout", sha, "--", CATALOG_PATH)
-    _git(seed, "add", "--", CATALOG_PATH)
+def _bot_catalog_commit(root: Path, catalog_text: str) -> str:
+    (root / CATALOG_PATH).write_text(catalog_text)
+    _git(root, "add", "--", CATALOG_PATH)
     _git(
-        seed,
+        root,
         "-c",
         "user.name=github-actions[bot]",
         "-c",
@@ -714,16 +807,32 @@ def test_bundle_with_wrong_parent_fails_before_any_push_or_pr_write(
         "-qm",
         "chore(catalog): update reviewed codm source",
     )
-    wrong_parent_sha = _git(seed, "rev-parse", "HEAD")
-    wrong_bundle_path = tmp_path / "wrong-parent.bundle"
-    _git(seed, "bundle", "create", str(wrong_bundle_path), f"{wrong_base}..HEAD")
+    return _git(root, "rev-parse", "HEAD")
+
+
+def test_bundle_with_wrong_parent_fails_before_any_push_or_pr_write(
+    tmp_path: Path,
+) -> None:
+    seed = _repo(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    # Two catalog commits on base, bundled from base: the bundle verifies
+    # against the write side's base checkout and the diff names only the
+    # catalog, so only the parent check can reject it.
+    _git(seed, "checkout", "-q", "-b", BRANCH_NAME)
+    _bot_catalog_commit(seed, '{"apps": [{"id": "intermediate"}]}\n')
+    sha = _bot_catalog_commit(seed, '{"apps": [{"id": "a"}]}\n')
+    bundle_path = tmp_path / "candidate.bundle"
+    _git(seed, "bundle", "create", str(bundle_path), f"{base}..HEAD")
+    body_path = tmp_path / "pr-body.md"
+    body_path.write_text("body\n")
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
     gh = ScriptedGh(pr_list=[])
 
-    result = run_publish(
-        write_side, "true", wrong_parent_sha, base, wrong_bundle_path, body_path, gh=gh
-    )
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "failed"
+    assert result.summary == "publish failed: hand-off rejected"
     assert not any(call[:2] == ("pr", "create") for call in gh.calls)
     assert _bare_branch_sha(bare) == ""
 
@@ -876,6 +985,7 @@ def test_remote_main_other_than_base_fails_on_both_paths(tmp_path: Path) -> None
         call[:2] in (("pr", "close"), ("pr", "edit"), ("pr", "create"))
         for call in gh2.calls
     )
+    assert _bare_branch_sha(bare) == ""
 
 
 @pytest.mark.parametrize(
@@ -909,7 +1019,7 @@ def test_malformed_env_values_are_rejected_before_any_fetch_or_write(
 def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
     tmp_path: Path,
 ) -> None:
-    message = "[x](https://example.test) ![i](https://example.test/i.png) `y`"
+    message = "[x](https://example.test) <b>app.apk</b> & ![i](https://e.test/i.png)"
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     _write_candidate(
@@ -934,8 +1044,12 @@ def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
 
     assert result.status == "published"
     body_text = gh.created_bodies[0]
-    assert message in body_text
-    assert "<pre>" in body_text
+    escaped = (
+        "[x](https://example.test) &lt;b&gt;app.apk&lt;/b&gt; &amp; "
+        "![i](https://e.test/i.png)"
+    )
+    assert f"https://example.test/proj: {escaped}" in _pre_block(body_text)
+    assert message not in body_text
 
 
 def test_rejected_branch_push_fails_with_its_reason_and_no_pr_write(
@@ -956,18 +1070,6 @@ def test_rejected_branch_push_fails_with_its_reason_and_no_pr_write(
     assert "fixture rejects the branch" in capsys.readouterr().err
     assert not any(call[:2] == ("pr", "create") for call in gh.calls)
     assert _bare_branch_sha(bare) == ""
-
-
-def test_failed_pr_create_fails_with_its_reason(tmp_path: Path) -> None:
-    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
-    gh = ScriptedGh(pr_list=[], create_ok=False)
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "failed"
-    assert result.summary == "publish failed: PR create failed"
 
 
 def _replace_body(body_path: Path, kind: str) -> None:
@@ -1014,3 +1116,117 @@ def test_pr_body_at_the_length_limit_is_accepted(tmp_path: Path) -> None:
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "published"
+
+
+@pytest.mark.parametrize(
+    ("knob", "changed", "open_prs", "reason"),
+    [
+        ("auth_ok", "true", [], "publish failed: gh auth setup-git failed"),
+        ("pr_list_ok", "true", [], "publish failed: PR list failed"),
+        ("close_ok", "false", [6], "publish failed: PR close failed"),
+        ("edit_ok", "true", [6], "publish failed: PR edit failed"),
+        ("create_ok", "true", [], "publish failed: PR create failed"),
+    ],
+)
+def test_failed_gh_operation_exits_nonzero_with_its_reason(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    knob: str,
+    changed: str,
+    open_prs: list[int],
+    reason: str,
+) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    gh = ScriptedGh(pr_list=[_pr(number) for number in open_prs], **{knob: False})
+    summary_path = tmp_path / "summary.md"
+    monkeypatch.setattr(proposal_module, "SubprocessGhRunner", lambda: gh)
+    monkeypatch.chdir(write_side)
+    monkeypatch.setenv("CHANGED", changed)
+    monkeypatch.setenv("CANDIDATE_SHA", sha if changed == "true" else base)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    exit_code = proposal_module.main(
+        ["publish", "--bundle", str(bundle_path), "--body-file", str(body_path)]
+    )
+
+    assert exit_code == 1
+    assert summary_path.read_text() == f"{reason}\n"
+
+
+def _commit_with_tree(root: Path, tree: str, parent: str) -> str:
+    return subprocess.run(
+        ["git", "commit-tree", tree, "-p", parent, "-m", "hand-made"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+        env={
+            **os.environ,
+            "GIT_AUTHOR_NAME": "Someone",
+            "GIT_AUTHOR_EMAIL": "someone@example.invalid",
+            "GIT_COMMITTER_NAME": "Someone",
+            "GIT_COMMITTER_EMAIL": "someone@example.invalid",
+        },
+    ).stdout.strip()
+
+
+def _tree_with_catalog_of(root: Path, tree_of: str, catalog_of: str) -> str:
+    """`tree_of`'s tree with the catalog blob from `catalog_of`."""
+    index = root.parent / f"{root.name}-scratch-index"
+    env = {**os.environ, "GIT_INDEX_FILE": str(index)}
+    blob = _git(root, "rev-parse", f"{catalog_of}:{CATALOG_PATH}")
+    for args in (
+        ["read-tree", tree_of],
+        ["update-index", "--cacheinfo", f"100644,{blob},{CATALOG_PATH}"],
+    ):
+        subprocess.run(["git", *args], cwd=root, check=True, env=env)
+    return subprocess.run(
+        ["git", "write-tree"],
+        cwd=root,
+        check=True,
+        capture_output=True,
+        text=True,
+        env=env,
+    ).stdout.strip()
+
+
+@pytest.mark.parametrize("same_tree", [True, False])
+def test_bot_branch_built_on_an_older_main_is_compared_from_a_shallow_checkout(
+    tmp_path: Path, same_tree: bool
+) -> None:
+    seed = _repo(tmp_path)
+    older_main = _git(seed, "rev-parse", "HEAD")
+    (seed / "README.md").write_text("newer guide\n")
+    _git(seed, "commit", "-qam", "advance main")
+    base = _git(seed, "rev-parse", "HEAD")
+    _write_candidate(
+        seed, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
+    )
+    bundle_path = tmp_path / "candidate.bundle"
+    body_path = tmp_path / "pr-body.md"
+    outcome = run_stage(
+        seed, base, "https://github.example/runs/1", bundle_path, body_path
+    )
+    sha = outcome.sha
+    assert sha is not None
+    # The existing bot branch was built on the older main, outside the write
+    # side's depth-1 history of the newer one.
+    tree = (
+        _git(seed, "rev-parse", f"{sha}^{{tree}}")
+        if same_tree
+        else _tree_with_catalog_of(seed, older_main, sha)
+    )
+    existing = _commit_with_tree(seed, tree, older_main)
+    bare = _bare_from(seed, tmp_path)
+    _git(seed, "push", "-q", str(bare), f"{existing}:refs/heads/{BRANCH_NAME}")
+    write_side = _write_side(tmp_path, bare, base)
+    gh = ScriptedGh(pr_list=[_pr(8)])
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "published"
+    assert _bare_branch_sha(bare) == (existing if same_tree else sha)
+    assert _git(write_side, "rev-parse", "--is-shallow-repository") == "true"

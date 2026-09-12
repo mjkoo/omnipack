@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from omnipack import verify
+from omnipack.catalog import split_catalog
 from omnipack.report import format_reports
 from tests.test_verify import copy_inputs
 
@@ -56,11 +57,15 @@ def test_readme_mutation_during_verification_fingerprints_the_captured_bytes(
 ) -> None:
     copy_inputs(tmp_path)
     captured_readme = (tmp_path / "README.md").read_bytes()
+    _, interior, _ = split_catalog(captured_readme)
+    assert captured_readme.count(interior) == 1
     original = verify.validate_offline
 
     def mutate(inputs):
+        # Rewrite the generated catalog interior on disk after the capture;
+        # the catalog check must still read the captured bytes.
         readme = tmp_path / "README.md"
-        readme.write_bytes(readme.read_bytes() + b"edit")
+        readme.write_bytes(captured_readme.replace(interior, b"\nstale\n"))
         return original(inputs)
 
     monkeypatch.setattr(verify, "validate_offline", mutate)

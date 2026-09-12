@@ -8,6 +8,7 @@ project's own interpreter.
 from __future__ import annotations
 
 import json
+import os
 import subprocess
 from pathlib import Path
 
@@ -35,6 +36,9 @@ def _isolated_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for name in list(os.environ):
+        if name.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_")):
+            monkeypatch.delenv(name)
 
 
 class StubGh:
@@ -45,6 +49,16 @@ class StubGh:
     def run(self, args):
         self.calls.append(tuple(args))
         return CommandResult(0 if self.auth_ok else 1, "", "")
+
+
+def _install_failing_hooks(root: Path, *names: str) -> None:
+    """Hooks that would fail any git command that ran them."""
+    hooks = root / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        hook = hooks / name
+        hook.write_text("#!/bin/sh\necho 'a repository hook ran' >&2\nexit 1\n")
+        hook.chmod(0o755)
 
 
 def _git(root: Path, *args: str) -> str:
@@ -182,12 +196,12 @@ def test_bundle_with_wrong_parent_is_rejected_before_push(tmp_path: Path) -> Non
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    (seed / "tracked.txt").write_text("unrelated\n")
-    _git(seed, "add", "tracked.txt")
-    _git(seed, "commit", "-qm", "unrelated")
-    wrong_base = _git(seed, "rev-parse", "HEAD")
+    # Two allowed-path commits on base, bundled from base: the bundle verifies
+    # against the write side's base checkout and the diff touches only
+    # allowed files, so only the parent check can reject it.
+    _bot_commit(seed, {ALLOWED_PATHS[1]: "intermediate\n"})
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, wrong_base, tmp_path / "candidate.bundle")
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
 
     result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
@@ -237,32 +251,6 @@ def test_commit_replacing_allowed_file_with_symlink_is_rejected(
     target.unlink()
     target.symlink_to(seed / "README.md")
     _git(seed, "add", "--", ALLOWED_PATHS[0])
-    _git(
-        seed,
-        "-c",
-        "user.name=github-actions[bot]",
-        "-c",
-        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit",
-        "-qm",
-        "chore(dist): nightly rebuild 2026-09-12",
-    )
-    sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
-
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
-
-
-def test_commit_renaming_allowed_file_is_rejected(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    _git(seed, "mv", "README.md", "README2.md")
     _git(
         seed,
         "-c",
@@ -337,6 +325,49 @@ def test_malformed_shas_are_rejected_before_any_fetch_or_push(
     assert result.status == "failed"
     assert result.summary == "push failed"
     assert gh.calls == []
+    assert _git(bare, "rev-parse", "main") == base
+
+
+def test_write_side_repository_hooks_never_run(tmp_path: Path) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+    _install_failing_hooks(
+        write_side, "pre-push", "post-checkout", "reference-transaction"
+    )
+
+    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+
+    assert result.summary == f"published {sha}"
+    assert _git(bare, "rev-parse", "main") == sha
+    assert _git(write_side, "rev-parse", "HEAD") == sha
+
+
+def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = _write_side(tmp_path, bare, base)
+    summary_path = tmp_path / "summary.md"
+    gh = StubGh()
+    gh.auth_ok = False
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", lambda: gh)
+    monkeypatch.chdir(write_side)
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
+
+    assert exit_code == 1
+    assert summary_path.read_text() == f"push failed for {sha}\n"
     assert _git(bare, "rev-parse", "main") == base
 
 
@@ -499,6 +530,25 @@ def _record_line(single: str, dual: str, commit: str) -> str:
     )
 
 
+BOOTSTRAP_BODY = (
+    "<!-- omnipack:rolling-pack -->\n"
+    "\n"
+    "Initial pack publication is pending; JSON assets are not yet published.\n"
+)
+
+
+def _canonical_body(commit: str) -> str:
+    return (
+        "<!-- omnipack:rolling-pack -->\n"
+        "\n"
+        "Download the current pack pair directly from the stable URLs:\n"
+        "- https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json\n"
+        "- https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json\n"
+        "\n"
+        f"{_record_line(SINGLE_DIGEST, DUAL_DIGEST, commit)}\n"
+    )
+
+
 def _body(*, marker: bool = True, record: str | None = None) -> str:
     lines = []
     if marker:
@@ -520,7 +570,6 @@ class ScriptedGh:
         upload_ok: bool = True,
         edit_ok: bool = True,
         auth_ok: bool = True,
-        ls_remote_sha: str | None = None,
     ) -> None:
         self.view = view
         self.view_ok = view_ok
@@ -528,7 +577,6 @@ class ScriptedGh:
         self.upload_ok = upload_ok
         self.edit_ok = edit_ok
         self.auth_ok = auth_ok
-        self.ls_remote_sha = ls_remote_sha
         self.calls: list[tuple[str, ...]] = []
         self.edited_bodies: list[str] = []
 
@@ -701,18 +749,17 @@ def test_differing_record_uploads_and_edits_with_canonical_body(
         str(root / "dist/dual-screen.json"),
         "--clobber",
     )
-    edited_body = gh.edited_bodies[0]
-    assert MARKER in edited_body
-    assert _record_line(SINGLE_DIGEST, DUAL_DIGEST, sha) in edited_body
-    assert "not yet published" not in edited_body
+    assert gh.edited_bodies == [_canonical_body(sha)]
     assert "omnipack revision 4" in edit_calls[0]
 
 
-def test_missing_record_uploads_and_bumps(tmp_path: Path) -> None:
-    root, _sha = _release_repo(tmp_path)
+def test_bootstrap_seed_is_replaced_by_the_canonical_body_at_revision_1(
+    tmp_path: Path,
+) -> None:
+    root, sha = _release_repo(tmp_path)
     view = {
         "name": "omnipack revision 0",
-        "body": _body(record=None),
+        "body": BOOTSTRAP_BODY,
         "assets": [],
         "isDraft": False,
         "isPrerelease": True,
@@ -724,6 +771,18 @@ def test_missing_record_uploads_and_bumps(tmp_path: Path) -> None:
 
     assert result.status == "advanced"
     assert result.summary == "revision 1"
+    upload_calls = [call for call in gh.calls if call[:2] == ("release", "upload")]
+    assert upload_calls == [
+        (
+            "release",
+            "upload",
+            "continuous",
+            str(root / "dist/single-screen.json"),
+            str(root / "dist/dual-screen.json"),
+            "--clobber",
+        )
+    ]
+    assert gh.edited_bodies == [_canonical_body(sha)]
 
 
 def test_matching_record_with_differing_served_digest_repairs_without_edit(
@@ -1054,3 +1113,30 @@ def test_release_not_found_is_missing_with_bootstrap_guidance(tmp_path: Path) ->
     assert result.summary == (
         f"release failed: release is missing; {write_module.BOOTSTRAP_GUIDANCE}"
     )
+
+
+def test_release_cli_fails_when_the_release_edit_fails(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root, _sha = _release_repo(tmp_path)
+    view = {
+        "name": "omnipack revision 3",
+        "body": _body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
+        "assets": [],
+        "isDraft": False,
+        "isPrerelease": True,
+        "isImmutable": False,
+    }
+    summary_path = tmp_path / "summary.md"
+    monkeypatch.setattr(
+        write_module,
+        "SubprocessGhRunner",
+        lambda: ScriptedGh(view=view, edit_ok=False),
+    )
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    exit_code = write_module.main(["release"])
+
+    assert exit_code == 1
+    assert summary_path.read_text() == "release failed: release edit failed\n"

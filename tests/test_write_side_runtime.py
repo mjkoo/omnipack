@@ -13,14 +13,24 @@ WRITE_SIDE_MODULES = (
 )
 
 
-def _imported_names(tree: ast.Module) -> set[str]:
-    """Every dotted module name this file imports, at any depth."""
+def _imported_names(tree: ast.Module, relative: str) -> set[str]:
+    """Every dotted module name this file imports, at any depth.
+
+    A relative import fails the check outright: the write job runs these
+    modules as `python3 -m scripts.<name>`, and every import must name its
+    module so the check below can follow it.
+    """
     names: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             names.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.level == 0 and node.module:
+        elif isinstance(node, ast.ImportFrom):
+            assert node.level == 0 and node.module, (
+                f"{relative} uses a relative import; import scripts modules by name"
+            )
             names.add(node.module)
+            if node.module == "scripts":
+                names.update(f"scripts.{alias.name}" for alias in node.names)
     return names
 
 
@@ -49,7 +59,7 @@ def test_write_side_modules_import_only_stdlib_and_scripts() -> None:
         assert _has_future_annotations(tree), (
             f"{relative} must start with `from __future__ import annotations`"
         )
-        for name in _imported_names(tree):
+        for name in _imported_names(tree, relative):
             top = name.split(".")[0]
             if top != "scripts":
                 assert top in sys.stdlib_module_names, (

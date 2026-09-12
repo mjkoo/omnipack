@@ -7,6 +7,7 @@ temporary repository and bare remote.
 
 from __future__ import annotations
 
+import os
 import subprocess
 from collections.abc import Callable
 from datetime import UTC, datetime
@@ -47,6 +48,9 @@ def _isolated_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setenv("HOME", str(home))
     monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
     monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
+    for name in list(os.environ):
+        if name.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_")):
+            monkeypatch.delenv(name)
 
 
 def _git(root: Path, *args: str) -> str:
@@ -73,6 +77,16 @@ def _repo(tmp_path: Path, name: str = "repo") -> Path:
     _git(root, "add", ".")
     _git(root, "commit", "-qm", "base")
     return root
+
+
+def _install_failing_hooks(root: Path, *names: str) -> None:
+    """Hooks that would fail any git command that ran them."""
+    hooks = root / ".git" / "hooks"
+    hooks.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        hook = hooks / name
+        hook.write_text("#!/bin/sh\necho 'a repository hook ran' >&2\nexit 1\n")
+        hook.chmod(0o755)
 
 
 class ScriptedProcess:
@@ -235,6 +249,106 @@ def test_changed_run_writes_bundle_holding_head_with_base_prerequisite(
     assert heads == f"{outcome.sha} HEAD"
     verification = _git(root, "bundle", "verify", str(bundle_path))
     assert base in verification
+
+
+def test_readme_catalog_interior_change_is_committed(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    process = ScriptedProcess(root)
+    process.on_build.append(
+        lambda: (root / "README.md").write_bytes(
+            README_BYTES.replace(b"base catalog", b"rebuilt catalog")
+        )
+    )
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "prepared"
+    assert outcome.summary_line == f"prepared {outcome.sha}"
+    assert (
+        _git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
+        == "README.md"
+    )
+
+
+def test_repository_hooks_never_run_on_the_candidate_commit(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _install_failing_hooks(root, "pre-commit", "commit-msg", "post-commit")
+    process = ScriptedProcess(root)
+    process.on_build.append(
+        lambda: (root / ALLOWED_PATHS[0]).write_text("changed pack\n")
+    )
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "prepared"
+
+
+def _prepare_environment(
+    monkeypatch: pytest.MonkeyPatch, root: Path, tmp_path: Path
+) -> Path:
+    runner_temp = tmp_path / "runner-temp"
+    runner_temp.mkdir()
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("GITHUB_SHA", _git(root, "rev-parse", "HEAD"))
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output.txt"))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.example")
+    monkeypatch.setenv("GITHUB_REPOSITORY", "mjkoo/omnipack")
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+    return runner_temp
+
+
+def test_prepare_cli_writes_changed_sha_and_base_for_a_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    runner_temp = _prepare_environment(monkeypatch, root, tmp_path)
+    process = ScriptedProcess(root)
+    process.on_build.append(
+        lambda: (root / ALLOWED_PATHS[0]).write_text("changed pack\n")
+    )
+    monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
+
+    exit_code = nightly_module.main(["prepare"])
+
+    sha = _git(root, "rev-parse", "HEAD")
+    assert exit_code == 0
+    assert sha != base
+    assert (tmp_path / "output.txt").read_text() == (
+        f"changed=true\nsha={sha}\nbase={base}\n"
+    )
+    assert (tmp_path / "summary.md").read_text() == f"prepared {sha}\n"
+    assert (runner_temp / "nightly-handoff" / "candidate.bundle").exists()
+    assert "https://github.example/mjkoo/omnipack/actions/runs/42" in _git(
+        root, "show", "-s", "--format=%b", "HEAD"
+    )
+
+
+def test_prepare_cli_writes_changed_false_for_a_no_op(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    runner_temp = _prepare_environment(monkeypatch, root, tmp_path)
+    process = ScriptedProcess(root)
+    monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
+
+    exit_code = nightly_module.main(["prepare"])
+
+    assert exit_code == 0
+    assert (tmp_path / "output.txt").read_text() == (
+        f"changed=false\nsha={base}\nbase={base}\n"
+    )
+    assert (tmp_path / "summary.md").read_text() == f"no-op at {base}\n"
+    assert not (runner_temp / "nightly-handoff").exists()
 
 
 def test_out_of_scope_tracked_change_fails_allowlist(tmp_path: Path) -> None:
