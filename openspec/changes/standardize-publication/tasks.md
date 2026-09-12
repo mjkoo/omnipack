@@ -34,7 +34,7 @@
   - a single-screen pack unchanged.
 
   Verify that they pass on the committed catalog and on a test-local catalog with one project added and one removed.
-- [ ] 1.6 Run `uv run pack generate-source codm` live and compare `.build/source-generation/codm/catalog.json` with `config/catalogs/codm.json`. Record the result, and explain any difference, in `openspec/changes/standardize-publication/validation.md`.
+- [x] 1.6 Run `uv run pack generate-source codm` live and compare `.build/source-generation/codm/catalog.json` with `config/catalogs/codm.json`. Record the result, and explain any difference, in `openspec/changes/standardize-publication/validation.md`.
 
 ## 2. Structural verification report
 
