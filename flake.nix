@@ -35,6 +35,7 @@
               pkgs.actionlint
               pkgs.shellcheck # actionlint runs it on `run:` blocks
               pkgs.zizmor
+              pkgs.lychee
             ];
             env = {
               UV_PYTHON = python.interpreter;

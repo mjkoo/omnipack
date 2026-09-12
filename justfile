@@ -55,6 +55,10 @@ lint-actions:
     actionlint
     zizmor --persona pedantic .github/workflows
 
+# Check documentation links without making network requests
+check-links:
+    lychee --offline docs/ README.md
+
 # Run every flake check
 flake-check:
     nix flake check
@@ -68,4 +72,4 @@ nix-fmt-check:
     nix fmt -- --ci
 
 # Everything CI runs
-check-all: lock-check format-check lint-check typecheck test verify check-py312 lint-actions nix-fmt-check flake-check
+check-all: lock-check format-check lint-check typecheck test verify check-py312 lint-actions check-links nix-fmt-check flake-check
