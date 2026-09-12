@@ -21,7 +21,7 @@
   - a failed new project that leaves no candidate;
   - `--force` rejected by argument parsing;
   - unchanged inputs reproducing the committed catalog byte for byte.
-- [ ] 1.3 Delete `validate_generation_output` and `ProjectRule.fingerprint` if nothing else reads them, and remove tests that only covered the gate, the state, the legacy bootstrap or fingerprints. Verify that `git grep` finds no remaining references and the generation tests pass.
+- [x] 1.3 Delete `validate_generation_output` and `ProjectRule.fingerprint` if nothing else reads them, and remove tests that only covered the gate, the state, the legacy bootstrap or fingerprints. Verify that `git grep` finds no remaining references and the generation tests pass.
 - [ ] 1.4 Delete `config/catalogs/codm.source.json` and `config/package-ids.json`, and drop their bindings from test fixtures, including the baseline index:
   - in `tests/test_cli.py`, `test_build_failure_does_not_mutate_resolution_state` stops writing a `package-ids.json` state file and asserts instead that a failed build leaves `config/catalogs/codm.json` unchanged, and is renamed to match; `test_build_runs_the_real_pipeline_with_transport_only_fixtures` drops `package-ids.json` from its fixture files and its final assertion that the file is unchanged, since the retained app already comes from the committed catalog;
   - in `tests/test_verification_integration.py`, the `inputs` fixture stops writing `config/package-ids.json`, so the protected-file snapshot covers only inputs that still exist.

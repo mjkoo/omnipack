@@ -68,17 +68,14 @@ def test_policy_rejects_invalid_documents(document: object) -> None:
         parse_project_policy(json.dumps(document).encode())
 
 
-def test_policy_normalizes_keys_and_has_format_independent_fingerprint() -> None:
+def test_policy_normalizes_keys_and_field_order() -> None:
     first = parse_project_policy(
         b'{"schemaVersion":1,"projects":{"https://www.github.com/A/B.git/":{"kind":"apk","name":"B","additionalSettings":{"includePrereleases":true}}}}'
     )
     second = parse_project_policy(
         b'{ "projects": { "github.com/a/b": { "additionalSettings": { "includePrereleases": true }, "name": "B", "kind": "apk" } }, "schemaVersion": 1 }'
     )
-    assert (
-        first.projects["github.com/a/b"].fingerprint
-        == second.projects["github.com/a/b"].fingerprint
-    )
+    assert first.projects["github.com/a/b"] == second.projects["github.com/a/b"]
 
 
 def test_empty_or_malformed_project_table_fails() -> None:

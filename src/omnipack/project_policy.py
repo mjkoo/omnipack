@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import re
 from dataclasses import dataclass
@@ -91,22 +90,6 @@ class ProjectRule:
     tracker_id: str | None = None
     rationale: str | None = None
     installation: str | None = None
-
-    @property
-    def fingerprint(self) -> str:
-        value = self.canonical()
-        value["additionalSettings"] = {
-            "includePrereleases": False,
-            "filterReleaseTitlesByRegEx": "",
-            "apkFilterRegEx": "",
-            "versionExtractionRegEx": "",
-            "matchGroupToUse": "",
-            "fallbackToOlderReleases": True,
-            **self.additional_settings,
-        }
-        return hashlib.sha256(
-            json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
-        ).hexdigest()
 
     def canonical(self) -> dict[str, Any]:
         result: dict[str, Any] = {
