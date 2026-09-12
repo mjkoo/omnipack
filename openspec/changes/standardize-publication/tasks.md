@@ -91,7 +91,7 @@
   - both checkout steps use `ref: ${{ github.sha }}`, and the guard step comparing prepare's `base` output with `GITHUB_SHA` precedes the download and every step that sets `GH_TOKEN`;
   - no `run:` contains a `needs.` or `steps.` expression, so outputs reach commands only through `env:`;
   - no status function (`always()`, `failure()`, `cancelled()` or `!cancelled()`) appears in `publish`'s condition or steps, and in `prepare` only on the diagnostics upload.
-- [ ] 3.6 Delete these modules and their tests, including the YAML substring checks in `tests/test_nightly_workflow.py`:
+- [x] 3.6 Delete these modules and their tests, including the YAML substring checks in `tests/test_nightly_workflow.py`:
   - `scripts/nightly_git.py`, `nightly_publish.py` and `nightly_release.py`;
   - `nightly_release_sync.py`, `nightly_release_transport.py` and `nightly_reporting.py`;
   - the old `nightly.py` bootstrap subcommand and HTTP client.

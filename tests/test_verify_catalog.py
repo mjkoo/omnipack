@@ -8,7 +8,6 @@ import pytest
 
 from omnipack import verify
 from omnipack.report import format_reports
-from scripts.nightly_publish import CandidateError, _validate_structural_evidence
 from tests.test_verify import copy_inputs
 
 
@@ -74,9 +73,7 @@ def test_readme_mutation_during_verification_fingerprints_the_captured_bytes(
     assert "Evidence: stale" in format_reports(tmp_path)
 
 
-def test_historical_reports_require_regeneration_and_cannot_authorize_publication(
-    tmp_path: Path,
-) -> None:
+def test_historical_reports_require_regeneration(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     result = verify.run_verification(tmp_path)
     assert result["status"] == "success"
@@ -87,5 +84,3 @@ def test_historical_reports_require_regeneration_and_cannot_authorize_publicatio
     (tmp_path / verify.VERIFY_PATH).write_text(json.dumps(result))
     with pytest.raises(ValueError, match="regenerate with `pack verify`"):
         format_reports(tmp_path)
-    with pytest.raises(CandidateError, match="regenerate with `pack verify`"):
-        _validate_structural_evidence(tmp_path)
