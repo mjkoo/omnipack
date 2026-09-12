@@ -23,8 +23,11 @@ from pathlib import Path
 
 from scripts.nightly_write import (
     CommandResult,
+    DiffParseError,
     GhRunner,
     SubprocessGhRunner,
+    _append_summary,
+    _diff_raw_entries,
     _remote_sha,
 )
 from scripts.nightly_write import _git as _hooked_git
@@ -375,11 +378,11 @@ def run_publish(
         if len(parents) != 2 or parents[1] != base_sha:
             raise PublishFailure(generic)
 
-        diff_text = _expect(
-            _hooked_git(root, "diff", "--raw", "--no-renames", base_sha, fetched_sha),
-            generic,
-        )
-        _require_catalog_only_diff(diff_text, generic)
+        try:
+            entries = _diff_raw_entries(root, base_sha, fetched_sha)
+        except DiffParseError:
+            raise PublishFailure(generic) from None
+        _require_catalog_only_diff(entries, generic)
 
         remote_branch_output = _expect(
             _hooked_git(
@@ -497,19 +500,12 @@ def _selected_pr_number(gh: GhRunner, failure_message: str) -> int | None:
     return number
 
 
-def _require_catalog_only_diff(diff_text: str, failure_message: str) -> None:
-    lines = [line for line in diff_text.splitlines() if line]
-    if len(lines) != 1:
+def _require_catalog_only_diff(
+    entries: Sequence[tuple[str, str, str]], failure_message: str
+) -> None:
+    if len(entries) != 1:
         raise PublishFailure(failure_message)
-    try:
-        meta, path = lines[0].split("\t", 1)
-    except ValueError:
-        raise PublishFailure(failure_message) from None
-    parts = meta.split()
-    if len(parts) < 4:
-        raise PublishFailure(failure_message)
-    old_mode = parts[0].lstrip(":")
-    new_mode = parts[1]
+    path, old_mode, new_mode = entries[0]
     if path != CATALOG_PATH or old_mode != "100644" or new_mode != "100644":
         raise PublishFailure(failure_message)
 
@@ -528,14 +524,6 @@ def _run_url(environ: Mapping[str, str]) -> str:
     repository = environ.get("GITHUB_REPOSITORY", CANONICAL_REPOSITORY)
     run_id = environ.get("GITHUB_RUN_ID", "unknown")
     return f"{server}/{repository}/actions/runs/{run_id}"
-
-
-def _append_summary(environ: Mapping[str, str], value: str) -> None:
-    summary = environ.get("GITHUB_STEP_SUMMARY")
-    if not summary:
-        return
-    with Path(summary).open("a", encoding="utf-8") as stream:
-        stream.write(value)
 
 
 def _write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -> None:

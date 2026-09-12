@@ -70,6 +70,10 @@ class PushFailure(RuntimeError):
         self.summary = summary
 
 
+class DiffParseError(RuntimeError):
+    """`git diff --raw` failed to run, or one of its lines did not parse."""
+
+
 class ReleaseFailure(RuntimeError):
     def __init__(self, reason: str, *, bootstrap: bool = False) -> None:
         super().__init__(reason)
@@ -130,10 +134,11 @@ def run_push(
         if len(parents) != 2 or parents[1] != base_sha:
             raise PushFailure(generic)
 
-        diff_text = _expect(
-            _git(root, "diff", "--raw", "--no-renames", base_sha, fetched_sha), generic
-        )
-        _require_allowed_diff(diff_text, generic)
+        try:
+            entries = _diff_raw_entries(root, base_sha, fetched_sha)
+        except DiffParseError:
+            raise PushFailure(generic) from None
+        _require_allowed_diff(entries, generic)
 
         auth_result = selected_gh.run(["auth", "setup-git"])
         if auth_result.returncode != 0:
@@ -321,20 +326,39 @@ def _parse_record(body: str) -> tuple[str, str, str] | None:
     return matches[0]
 
 
-def _require_allowed_diff(diff_text: str, failure_message: str) -> None:
-    lines = [line for line in diff_text.splitlines() if line]
-    if not lines:
-        raise PushFailure(failure_message)
-    for line in lines:
+def _diff_raw_entries(
+    root: Path, base_sha: str, candidate_sha: str
+) -> list[tuple[str, str, str]]:
+    """Run `git diff --raw --no-renames <base> <candidate>` and parse its lines.
+
+    Each entry is `(path, old_mode, new_mode)`. Raises `DiffParseError` when
+    git fails to run the diff, or when a line does not parse into a path and
+    two modes.
+    """
+    result = _git(root, "diff", "--raw", "--no-renames", base_sha, candidate_sha)
+    if result.returncode != 0:
+        raise DiffParseError(result.stderr)
+    entries: list[tuple[str, str, str]] = []
+    for line in result.stdout.splitlines():
+        if not line:
+            continue
         try:
             meta, path = line.split("\t", 1)
         except ValueError:
-            raise PushFailure(failure_message) from None
+            raise DiffParseError(line) from None
         parts = meta.split()
         if len(parts) < 4:
-            raise PushFailure(failure_message)
-        old_mode = parts[0].lstrip(":")
-        new_mode = parts[1]
+            raise DiffParseError(line)
+        entries.append((path, parts[0].lstrip(":"), parts[1]))
+    return entries
+
+
+def _require_allowed_diff(
+    entries: Sequence[tuple[str, str, str]], failure_message: str
+) -> None:
+    if not entries:
+        raise PushFailure(failure_message)
+    for path, old_mode, new_mode in entries:
         if path not in ALLOWED_PATHS or old_mode != "100644" or new_mode != "100644":
             raise PushFailure(failure_message)
 
