@@ -816,6 +816,54 @@ def test_remote_main_other_than_head_fails_without_bootstrap_guidance(
     assert gh.calls == [("auth", "setup-git")]
 
 
+def test_head_read_failure_fails_with_release_failed_reason(
+    tmp_path: Path,
+) -> None:
+    root = tmp_path / "empty-repo"
+    root.mkdir()
+    _git(root, "init", "-q", "--initial-branch=main")
+    (root / "dist").mkdir()
+    (root / "dist/single-screen.json").write_text('{"apps": []}')
+    (root / "dist/dual-screen.json").write_text('{"apps": [1]}')
+    gh = ScriptedGh(view=None, view_ok=False)
+
+    result = run_release(root, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary.startswith("release failed:")
+    assert "gh release create" not in result.summary
+    assert gh.calls == []
+
+
+def test_gh_auth_failure_fails_with_specific_reason_and_no_writes(
+    tmp_path: Path,
+) -> None:
+    root, _sha = _release_repo(tmp_path)
+    gh = ScriptedGh(view=None, view_ok=False, auth_ok=False)
+
+    result = run_release(root, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "release failed: gh auth setup-git failed"
+    assert "gh release create" not in result.summary
+    assert gh.calls == [("auth", "setup-git")]
+
+
+def test_ls_remote_command_failure_fails_with_specific_reason_and_no_writes(
+    tmp_path: Path,
+) -> None:
+    root, _sha = _release_repo(tmp_path)
+    _git(root, "remote", "remove", "origin")
+    gh = ScriptedGh(view=None, view_ok=False)
+
+    result = run_release(root, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "release failed: could not read remote main"
+    assert "gh release create" not in result.summary
+    assert gh.calls == [("auth", "setup-git")]
+
+
 def test_release_cli_exit_code_and_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

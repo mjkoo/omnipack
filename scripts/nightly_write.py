@@ -162,15 +162,21 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
         dual = (root / "dist/dual-screen.json").read_bytes()
         single_digest = sha256(single).hexdigest()
         dual_digest = sha256(dual).hexdigest()
-        head = _expect(_git(root, "rev-parse", "HEAD"), "main advanced").strip()
+
+        head_result = _git(root, "rev-parse", "HEAD")
+        if head_result.returncode != 0:
+            raise ReleaseFailure("could not read HEAD")
+        head = head_result.stdout.strip()
 
         auth_result = selected_gh.run(["auth", "setup-git"])
+        if auth_result.returncode != 0:
+            raise ReleaseFailure("gh auth setup-git failed")
+
         ls_remote_result = _git(root, "ls-remote", "origin", "refs/heads/main")
-        if (
-            auth_result.returncode != 0
-            or ls_remote_result.returncode != 0
-            or _remote_sha(ls_remote_result.stdout) != head
-        ):
+        if ls_remote_result.returncode != 0:
+            raise ReleaseFailure("could not read remote main")
+
+        if _remote_sha(ls_remote_result.stdout) != head:
             raise ReleaseFailure("main advanced")
 
         view_result = selected_gh.run(
