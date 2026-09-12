@@ -77,7 +77,7 @@
   - a `just check-py312` recipe imports the module and runs its test file under CPython 3.12, taken from `nix shell nixpkgs#python312` locally (for example through `uv run --no-project --python <interpreter> --with pytest`); `check-all` runs it, and CI's `check` job gains a step that runs the same tests under the runner's `python3`.
 
   The module's test file imports only the standard library, `pytest` and the module under test. Verify that `just check-py312` and `just lint-check` pass, that the import test fails on a planted `import omnipack`, and that `just check-py312` fails on a planted unquoted forward reference in an annotation once the future import is removed.
-- [ ] 3.5 Rewrite `.github/workflows/nightly.yml` as two jobs, keeping its guards:
+- [x] 3.5 Rewrite `.github/workflows/nightly.yml` as two jobs, keeping its guards:
   - workflow level: the `0 3 * * *` schedule with `timezone: America/New_York`, `workflow_dispatch`, `permissions: {}`, and concurrency group `omnipack-nightly-publisher` with `cancel-in-progress: false`;
   - both jobs: `if: github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'`, `runs-on: ubuntu-latest` and `timeout-minutes: 60`;
   - job `prepare`: `permissions: contents: read`; checkout with `ref: ${{ github.sha }}`, `fetch-depth: 0` and `persist-credentials: false`; `setup-uv` and `uv sync --locked`; `prepare` without a token; the bundle uploaded with one-day retention when `changed` is true; `.build/report.json` and `.build/verify.json` always uploaded with 14-day retention; job outputs `changed`, `sha` and `base`;

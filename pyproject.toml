@@ -33,6 +33,7 @@ lint = [
 test = [
     "pytest>=9",
     "pytest-cov>=7",
+    "pyyaml>=6.0.3",
 ]
 
 [build-system]
