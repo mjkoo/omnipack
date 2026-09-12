@@ -1,226 +1,264 @@
 # Nightly publishing
 
-The **Nightly publishing** workflow is scheduled daily at **3:00 AM Eastern**
-(`America/New_York`), following daylight saving time, and offers
-manual dispatch without inputs. Both paths run only in
-`mjkoo/omnipack` on `main`. Dispatches from another ref and
-fork copies skip the write-capable job. One shared publisher concurrency group
-serializes runs without canceling an executing publisher. Each job has a
-60-minute timeout. Scheduling is best effort: exact start time and execution
-of every queued trigger are not guaranteed.
+The **Nightly publishing** workflow is scheduled daily at 3:00 AM Eastern
+(`America/New_York`, so it follows daylight saving time) and can also be
+dispatched manually with no inputs. Both paths run only for `mjkoo/omnipack`
+on `main`; a dispatch from another ref, or a run in a fork, does not publish.
+One `omnipack-nightly-publisher` concurrency group serializes runs without
+canceling one already in progress. Each job has a 60-minute timeout, and
+scheduling is best effort: GitHub does not guarantee an exact start time or
+execution of every queued trigger.
 
-## Refresh and publication
+## Two-job flow and credential split
 
-Each run selects main once in the Actions checkout and captures that HEAD as its
-base. It rejects initial tracked modifications and uses that workspace throughout.
-The workflow synchronizes the locked Python environment once, then the publisher
-runs:
+The workflow has two jobs, `prepare` and `publish`, so that nothing which
+builds, generates or handles upstream data ever shares a job, a workspace or
+the write credential with the steps that push to `main` or write the release.
 
-```sh
-uv run --no-sync pack build
-uv run --no-sync pack verify
-```
-
-The structural gate requires complete, successful, fresh evidence matching the
-candidate inputs and verifier identity. Evidence validation runs in the selected
-revision's locked runtime, including its identity, input paths, and report schema. Development CI owns formatting,
-lint, types and the full suite; nightly does not repeat those checks
-or verify committed packs before building. Existing source warnings retain their
-current policy. Verification makes no network requests. Building fetches its
-ordinary pack sources but reads the accepted codm catalog without fetching its
-README, discovering APKs, or writing resolution state. A structurally invalid
-selected build blocks publication without choosing another project.
-Unavailable app release metadata after a successful build does not add a
-publication gate or trigger reselection.
-
-The only publishable paths are:
-
-- `dist/single-screen.json`
-- `dist/dual-screen.json`
-- `README.md` (generated catalog interior only)
-
-README must contain exactly one valid standalone catalog marker pair. Its prefix
-and suffix, including both marker lines, must match the selected base revision
-byte-for-byte. Candidate capture and final staged validation both enforce this
-boundary, so successful standalone verification cannot authorize handwritten
-README changes.
-
-The publisher checks verified bytes against the staged content and resulting
-commit. Missing files, symlink replacements, unrelated tracked modifications,
-and changed verified bytes reject the candidate. Any changed allowed bytes
-produce one bot commit with subject
-`chore(dist): nightly rebuild YYYY-MM-DD`. The date is UTC; the body identifies
-the run URL and base SHA. Reports and transient caches stay out of commits.
-A byte-identical refresh is a successful no-op and creates no commit, including
-file-mode-only changes. Byte changes preserve the base file modes. The full
-tracked-change allowlist is rechecked when staging finishes.
-
-Publication uses a normal fast-forward push to main. Before either pushing or
-recognizing a no-op, the publisher rechecks main. If main advanced, the run fails
-without another build or push. Rerun manually or wait for the next scheduled run
-to build the newer revision. It never rebases generated output, cherry-picks a
-stale candidate, retries the push, or force-pushes.
-
-A rejected or ambiguous push is reconciled by reading remote history. If the
-intended commit is in main's history, publication is confirmed even if a later
-commit has followed it. Confirmed absence fails the run. An unreadable remote
-result is reported as **uncertain**, without another blind push or a claim of non-publication.
-
-After confirmed main publication or a verified no-op, the run synchronizes `single-screen.json` and `dual-screen.json` to the owned prerelease
-at tag `continuous`. The release title is `omnipack revision N`. Both variants
-share that revision, and only a change to either JSON increments it. README-only
-changes do not advertise a pack update. The stable
-release downloads are:
-
-- <https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json>
-- <https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json>
-
-Synchronization records a pending target, replaces only changed assets, verifies
-both downloaded asset digests, then promotes the release title and completed
-state. A failed or uncertain main publication performs no release writes. A
-release failure preserves the independently confirmed main SHA and fails the run.
-Seed readiness gates only this release stage; valid main output can publish even
-when the seed is missing, malformed or unowned.
-
-## Permissions and repository prerequisites
-
-The workflow uses `GITHUB_TOKEN` with job-scoped `contents: write` for main and
-release publication. Checkout credential persistence is disabled. Push credentials
-are supplied only to the push process, and release requests use authorization
-headers. No PAT, automatic repository-setting changes, or ruleset bypass is
-provided.
-
-Before enabling operational publication, a maintainer must confirm that:
-
-- Actions is enabled, and organizational policy permits
-  the requested token permissions and pinned actions.
-- The workflow is on the default branch, and main is the intended published
-  branch.
-- Main's branch protections and rulesets permit the intended direct token push.
-  Required pull requests, signed commits, or status checks may reject it.
-- Artifact policy permits 14-day retention.
-- The `continuous` tag and prerelease are either absent, ready for the explicit
-  bootstrap below, or already owned by omnipack. A conflicting tag, unowned or
-  malformed release, immutable release, or inadequate release permission blocks
-  synchronization. Automation does not change protections or repository settings.
-
-### One-time rolling release bootstrap
-
-Bootstrap is an explicit, write-capable maintainer operation. Run it only after
-reviewing the repository and tag state and authorizing creation of the real seed:
+**`prepare`** holds `permissions: contents: read` and no step in it sets
+`GH_TOKEN` or otherwise receives a token beyond that read-only job token. It
+checks out `${{ github.sha }}` with `persist-credentials: false`, syncs the
+locked project environment, and runs:
 
 ```sh
-GITHUB_REPOSITORY=mjkoo/omnipack \
-GITHUB_TOKEN="<maintainer token>" \
-uv run --no-sync python -m scripts.nightly bootstrap-release
+uv run --no-sync python -m scripts.nightly prepare
 ```
 
-The command targets `main` and creates the owned `continuous` prerelease at
-revision zero with no assets. It refuses a conflicting tag, malformed or unowned
-release, or immutable release, and safely reports an existing valid seed. The
-token needs permission to read and create releases and tags in the canonical
-repository; branch or tag protections can still reject the operation. Routine
-publishing never invokes bootstrap. It checks seed existence and ownership using
-release discovery after confirmed main publication or a verified no-op. A missing,
-malformed or unowned seed fails release synchronization without release writes;
-main remains independently successful. Structural verification never queries the
-seed and can pass before bootstrap. Synchronization retains ownership and digest
-checks. After explicit bootstrap, a later freshly verified main no-op can publish
-the first asset pair at revision one.
+`prepare`:
 
-A token-authored push does not trigger ordinary push CI. Development CI checks
-code changes before landing; nightly checks the generated candidate and its exact
-publication bytes. There is no CI-status polling gate. These platform behaviors
-were checked against
-GitHub's [workflow-trigger documentation](https://docs.github.com/en/actions/how-tos/write-workflows/choose-when-workflows-run/trigger-a-workflow)
-and [protected-branch documentation](https://docs.github.com/en/repositories/configuring-branches-and-merges-in-your-repository/managing-protected-branches/about-protected-branches).
-Scheduling also requires the workflow on the default branch; GitHub documents
-schedule delays and dropped queued jobs in its
-[event reference](https://docs.github.com/en/actions/reference/workflows-and-actions/events-that-trigger-workflows#schedule).
+- requires `HEAD` to equal `GITHUB_SHA` and the checkout to be clean;
+- runs `pack build`;
+- rejects any tracked change outside `dist/single-screen.json`,
+  `dist/dual-screen.json` and `README.md`, and rejects any of those three that
+  is missing, a symlink, not a regular file, or executable;
+- requires the README's generated-catalog markers and everything outside them
+  to match the checked-out base revision byte for byte;
+- when any of the three files changed, commits them locally as
+  `github-actions[bot]` with hooks disabled;
+- runs `pack verify`;
+- requires the checkout to be clean again afterward;
+- when it committed, confirms `HEAD` is that commit and writes a
+  `git bundle create <dir>/candidate.bundle <base>..HEAD`.
 
-## Failure and recovery
+It writes `changed`, `sha` and `base` as job outputs, and its step summary
+line is `no-op at <sha>`, `prepared <sha>`, or the name of the stage that
+failed: `checkout`, `build`, `allowlist`, `README boundary`, `verify`,
+`drift after verify` or `bundle`.
 
-Use Actions step status, logs, summaries and available reports to investigate a
-failed run. Main confirmation and its SHA are logged and flushed before release
-work starts. A release or reporting failure cannot erase that earlier confirmation.
-A failed refresh does not publish partial pack or README output.
+**`publish`** needs `prepare`, holds `permissions: contents: write`, and runs
+no `setup-uv` and no `uv sync`. It checks out `${{ github.sha }}` shallowly
+with `persist-credentials: false`, then runs a guard step,
+`test "$BASE_SHA" = "$GITHUB_SHA"` with `BASE_SHA` mapped from
+`needs.prepare.outputs.base`, before anything that receives a token. Only its
+push and release steps set `GH_TOKEN: ${{ github.token }}`:
 
-Automation no longer creates, updates or closes issues. Existing issues are left
-untouched; any migration is a separate maintainer operation.
-Actions owns workspace disposal.
+```sh
+python3 -m scripts.nightly_write push --bundle <downloaded bundle path>
+python3 -m scripts.nightly_write release
+```
 
-Release diagnostics report completed and pending revisions separately from the
-main publication result. If an interruption occurs while replacing assets, the
-old completed revision stays advertised even though manual downloaders can see a
-missing asset or a mixed pair. A later run rediscovers and repairs the owned
-release from a freshly verified pair without duplicating a revision. Permission,
-immutability, ownership, or protection failures remain visible and are not
-worked around by changing repository settings.
+The push step runs only when `prepare` produced a change; the release step
+has no `if` condition, so Actions' implicit success gate runs it whenever
+`prepare` succeeded and the push step either succeeded or was skipped.
+
+### Bundle hand-off
+
+When `prepare` committed a candidate, it uploads the bundle as
+`nightly-handoff-<run-id>` with one-day retention. `publish` downloads that
+same artifact, with a SHA-pinned `actions/download-artifact`, only when
+`changed` is `true`. The bundle carries only the candidate commit, its trees
+and its changed blobs; it never carries the checked-out worktree or the
+project environment. `push` verifies the bundle, fetches its `HEAD`, and
+requires the fetched commit to equal `sha`, its only parent to equal `base`,
+and every changed path to be one of the three allowed files at mode `100644`
+on both sides, all before doing anything else.
+
+### The write job's runtime
+
+`publish` installs nothing from the project. `scripts/nightly_write.py`
+imports only the standard library and the `scripts` package, and runs on the
+runner's preinstalled `python3`, which is 3.12 on `ubuntu-latest` even though
+the project otherwise requires Python 3.14. The module starts with
+`from __future__ import annotations` so that no annotation is evaluated at
+import time, and `pyproject.toml` pins its ruff target to `py312`. `just
+check-py312` runs the module's own tests under a real CPython 3.12, both
+locally (from `nixpkgs#python312`) and in CI, since ruff alone cannot catch a
+3.13-or-later standard-library API or an annotation-evaluation difference.
+
+Every git command the write job's scripts run adds `-c core.hooksPath=/dev/null`,
+even though the write job's checkout is fresh and runs no project code before
+those scripts, as a defense against a future checkout option or runner image
+that installs a hook.
+
+## Permissions and direct-push prerequisites
+
+The workflow grants no permissions at workflow level; `prepare` holds
+`contents: read` and `publish` holds `contents: write`. `publish` pushes with
+the ordinary job token (`${{ github.token }}`), handed to `git` through
+`gh auth setup-git`, so there is no personal access token and no automatic
+change to repository settings.
+
+Before relying on nightly publishing, confirm that:
+
+- Actions is enabled for the repository, and organizational policy permits
+  the job token permissions and the pinned actions the workflow uses.
+- The workflow file is on the default branch.
+- `main`'s branch protections and rulesets permit a direct push from the
+  Actions job token. Required pull requests, required signed commits, or
+  required status checks on `main` will reject the nightly push.
+- Artifact retention policy permits the 14-day diagnostics retention and the
+  one-day bundle retention.
+- The `continuous` tag and prerelease are either absent and ready for the
+  bootstrap below, or already an owned, published, mutable prerelease.
+
+## One-time rolling release bootstrap
+
+Before the first nightly release synchronization, a maintainer creates the
+`continuous` prerelease by hand:
+
+```sh
+gh release create continuous --prerelease --title "omnipack revision 0" \
+  --notes-file <file>
+```
+
+where `<file>` holds:
+
+```
+<!-- omnipack:rolling-pack -->
+
+Initial pack publication is pending; JSON assets are not yet published.
+```
+
+The seed carries the ownership marker and no digest record. Routine
+publishing never creates or replaces this seed; it only checks it. The
+release must stay a published, mutable prerelease: not a draft, not
+immutable, and its title must keep matching `omnipack revision <N>`. The
+first successful synchronization replaces the seed's body outright with the
+canonical body below and advances the title from revision 0 to revision 1.
+
+## Release digest record and served-asset check
+
+After a successful main push, or a verified no-op, the release step reads
+`dist/single-screen.json` and `dist/dual-screen.json` at `HEAD`, hashes them
+with SHA-256, and requires `git ls-remote origin refs/heads/main` to still
+report `HEAD` before writing anything. It then reads the release with
+`gh release view continuous --json name,body,assets,isDraft,isPrerelease,isImmutable`
+and requires the ownership marker `<!-- omnipack:rolling-pack -->`, a title
+matching `omnipack revision <N>`, `isDraft` false, `isPrerelease` true and
+`isImmutable` false.
+
+It compares two things against the freshly hashed pair: the digest record
+line in the release body,
+
+```
+<!-- omnipack:digests single-screen.json=<sha256> dual-screen.json=<sha256> commit=<sha> -->
+```
+
+and the `digest` GitHub reports for each served asset. A missing asset, or an
+asset with no reported digest, counts as a mismatch.
+
+- When the record and both served digests already match the pair, it writes
+  nothing and summarizes `unchanged at revision N`.
+- When the record matches but a served digest does not, it re-uploads both
+  assets with `gh release upload continuous ... --clobber` and makes no edit,
+  so the title revision does not advance; it summarizes
+  `repaired at revision N`.
+- Otherwise (the record differs, or there is none) it uploads both assets and
+  then makes one `gh release edit continuous --title "omnipack revision N+1"
+  --notes-file <file>` whose body is the canonical template below, replacing
+  the previous body outright; it summarizes `revision N+1`.
+
+The canonical body, written on every edit:
+
+```
+<!-- omnipack:rolling-pack -->
+
+Download the current pack pair directly from the stable URLs:
+- https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json
+- https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json
+
+<!-- omnipack:digests single-screen.json=<sha256> dual-screen.json=<sha256> commit=<sha> -->
+```
+
+The stable download URLs above always serve the assets from the most
+recently completed edit.
+
+## Failure and rerun behavior
+
+A failed `prepare` publishes nothing: `publish` never runs its push or
+release steps unless `prepare` succeeded. Within `publish`, the base guard
+step fails before anything else if the checked-out revision is not the one
+`prepare` built.
+
+**Ambiguous push.** `push` treats a rejected or erroring `git push` the same
+way regardless of whether the push actually reached `main`: it summarizes
+`push failed for <sha>` and exits nonzero, without inspecting remote history
+to decide whether the commit landed. If the commit did land, the next run's
+`prepare` finds no difference from `main` (a no-op), and the release step
+still synchronizes the release from that already-published pair; recovery
+therefore lags by at most one run rather than needing a retry.
+
+**Served-asset repair.** A run whose record matches but whose served assets
+do not (for example, one asset was replaced or deleted by hand, or an
+earlier upload was interrupted after only one asset succeeded) re-uploads
+both assets without advancing the revision, as described above.
+
+**Main has moved past the run's base.** Before writing anything, `push`
+requires `git ls-remote origin refs/heads/main` to report the run's base SHA,
+and `release` requires it to report `HEAD` (the pushed commit, or the base
+for a no-op). Either check failing means another run's push landed on `main`
+after this run's `prepare` checked out its revision. In that case the write
+job fails without writing anything: `push` summarizes
+`push failed for <sha>: main advanced`, and `release` summarizes
+`release failed: main advanced` with no bootstrap guidance. Re-running that
+same failed job reuses the same stale checkout and stale `prepare` outputs,
+so it fails the same way again; a new workflow dispatch is what builds and
+verifies the newer `main` and lets that newer run publish or synchronize it.
+A rerun therefore never publishes an older pair over a newer one, and never
+moves the release backward.
+
+**Release prerequisites missing.** A missing release, a missing or duplicated
+ownership marker, a malformed title, a draft, a release that is not a
+prerelease, or an immutable release fails the release step with
+`release failed: <reason>` plus the bootstrap guidance above, without any
+release write. A failed release step never undoes a successful `main` push;
+the pushed commit stays on `main`.
+
+## Step summary lines
+
+Each summary line has one owner, so a run's Actions summary shows at most one
+line each from `prepare`, `push` and `release`:
+
+- `prepare`: `no-op at <sha>`, `prepared <sha>`, or the failing stage name.
+- `push`: `published <sha>`, `push failed for <sha>`, or
+  `push failed for <sha>: main advanced`.
+- `release`: `unchanged at revision N`, `repaired at revision N`,
+  `revision N+1`, or `release failed: <reason>` (with bootstrap guidance when
+  the release itself is the problem).
 
 ## Diagnostics
 
-The concise Actions summary and run result distinguish main publication, no-op,
-failure or uncertainty from release synchronization. They include available run,
-base, candidate and confirmed published identifiers, the failing stage, and
-completed or pending release revisions. Verification evidence is structural and
-offline; missing reports do not establish verification success.
-
-The `nightly-publishing-<run-id>` artifact offers available redacted
-`run-result.json`, `build-report.json` and `verify-report.json` for 14 days,
-after either success or failure. Its
-explicit file allowlist excludes APKs, raw HTTP caches, credentials and unrelated
-files. Diagnostics treat source text as data and redact credential values.
-Actions step status is the authority for artifact upload; the captured run result
-does not claim an upload outcome. Actual upload errors fail the step. Missing
-reports after early setup or helper failure are acceptable.
-
-Summary writes are best effort, and a write error remains a visible failure.
-Setup failures and unexpected helper failures may leave only Actions status and
-logs. There are no fallback-finalization commands, completion markers or result
-reload recovery. Hard cancellation or runner loss may prevent even those logs
-from arriving; an interrupted run never establishes successful publication.
-
-## Post-landing operational acceptance
-
-This is a **future maintainer operation**, not an implementation test already
-performed. It can push to main and modify the real rolling release.
-
-1. Check the repository prerequisites above after landing the workflow.
-2. In Actions, select **Nightly publishing**, choose **Run workflow**, explicitly
-   select **main**, and dispatch it.
-3. Inspect the summary and retained reports. Confirm the selected base and run
-   identifiers, complete successful candidate evidence, and structural/offline
-   verification mode.
-4. Confirm either the published SHA in main's history with only allowed paths,
-   or a verified no-op. A failed or uncertain result is not acceptance; inspect
-   its failing stage and remote history before deciding what to do next.
-5. Confirm release synchronization separately, including both stable JSON downloads
-   and the shared completed revision. If it failed, retain the main confirmation,
-   resolve the reported release prerequisite, and rerun with fresh verification.
-6. Check Obtainium import, unchanged polling, revision-change notification,
-   acknowledgement and re-import on devices.
-7. Record the run URL, base/published SHA or no-op, structural verification result,
-   release revision/outcome, diagnostic upload status and device observations in
-   the maintainer's operational record.
+`prepare` always uploads `.build/report.json` and `.build/verify.json` as
+`nightly-diagnostics-<run-id>`, with 14-day retention, whether or not the run
+succeeded; a missing file is ignored rather than failing the upload. When it
+committed a candidate, it also uploads the bundle as
+`nightly-handoff-<run-id>` with one-day retention. Actions' own step status,
+logs and these artifacts are the record of a run; there is no separate
+issue-tracking or notification mechanism.
 
 ## Rollback
 
-Disable **Nightly publishing** in Actions to stop new scheduled publication.
-Inspect any already-running publisher separately; disabling the workflow does
-not establish that an in-flight push was canceled. The existing raw dist URLs
-continue serving main. Reverting published content is a separate maintainer
-decision, not an automatic rollback performed by the helper.
+Disable **Nightly publishing** in Actions to stop new scheduled and manual
+runs; this does not cancel a run already in progress, which must be inspected
+separately. The raw `dist/` links on `main` keep serving whatever was last
+published. Reverting already-published content is a separate maintainer
+decision: restoring older JSON through the workflow is a new publication and
+receives a new, higher revision, not a rollback of the shared one. Do not
+delete the `continuous` release or the omnipack tracking entry as an implicit
+rollback; if a tracker is intentionally retired, users must remove its
+Obtainium entry by hand, since removing it from a later import does not
+guarantee on-device deletion.
 
-Do not delete the tracker or rolling release as an implicit rollback. First stop
-new nightly runs and inspect any in-flight run. Restoring older JSON through the
-publisher is a new content publication and receives a higher shared revision.
-If the tracker is intentionally retired, users must remove its Obtainium entry
-manually; removing it from a later import does not guarantee device deletion.
-
-See [nightly publication validation](../openspec/changes/archive/2026-09-11-simplify-nightly-publication/nightly-publication-validation.md) for current
-implementation checks
-and the distinction between controlled tests and operational acceptance.
-
-The separate [reviewed source workflow](source-generation.md) owns codm README
-discovery, APK identity resolution, its source-only branch and pull request, and
-the additional pull-request permission. Nightly cannot publish those source files.
+See [reviewed codm source generation](source-generation.md) for the separate
+workflow that proposes changes to the committed codm source catalog; nightly
+publishing never writes that catalog or any other configuration.
