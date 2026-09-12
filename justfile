@@ -40,6 +40,16 @@ test:
 verify:
     uv run pack verify
 
+# Run the write job's scripts and tests under CPython 3.12, matching the
+# oldest runner python3 they must run on, without the project environment
+check-py312:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    unset UV_LOCKED
+    python312="$(nix build --no-link --print-out-paths nixpkgs#python312)/bin/python3.12"
+    uv run --no-project --python "$python312" --with pytest \
+        pytest tests/test_nightly_write.py
+
 # Lint the workflows with actionlint and zizmor
 lint-actions:
     actionlint
@@ -58,4 +68,4 @@ nix-fmt-check:
     nix fmt -- --ci
 
 # Everything CI runs
-check-all: lock-check format-check lint-check typecheck test verify lint-actions nix-fmt-check flake-check
+check-all: lock-check format-check lint-check typecheck test verify check-py312 lint-actions nix-fmt-check flake-check
