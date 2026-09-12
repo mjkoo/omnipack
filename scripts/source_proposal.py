@@ -61,7 +61,8 @@ PR_BODY_LIMIT = 65536
 class StageOutcome:
     """The outcome of one guarded `stage` run.
 
-    `stage` names the failing stage on failure, or `"complete"` otherwise.
+    `stage` names the failing stage on failure, or `"complete"` otherwise, and
+    `reason` says what failed in fixed text that holds no upstream data.
     """
 
     status: str  # "unchanged", "changed" or "failed"
@@ -73,11 +74,12 @@ class StageOutcome:
     removed: tuple[str, ...] = ()
     changed_urls: tuple[str, ...] = ()
     retained_failures: tuple[tuple[str, str], ...] = ()
+    reason: str = ""
 
     @property
     def summary(self) -> str:
         if self.status == "failed":
-            return self.stage
+            return f"stage failed: {self.reason or self.stage}"
         return _render_report(
             base_sha=self.base_sha or "",
             run_url=None,
@@ -105,28 +107,31 @@ def run_stage(
     try:
         head = git_text(root, "rev-parse", "HEAD")
     except OSError:
-        return StageOutcome("failed", "checkout", None, None, False)
+        return _stage_failure("checkout", "could not read HEAD", None)
     if head != github_sha:
-        return StageOutcome("failed", "checkout", head, None, False)
+        return _stage_failure("checkout", "HEAD is not GITHUB_SHA", head)
     base_sha = head
 
     candidate_path = root / CANDIDATE_PATH
     catalog_path = root / CATALOG_PATH
     report_path = root / REPORT_PATH
 
-    if (
-        regular_file_problem(candidate_path) is not None
-        or regular_file_problem(catalog_path) is not None
-    ):
-        return StageOutcome("failed", "symlink", base_sha, None, False)
+    for relative in (CANDIDATE_PATH, CATALOG_PATH):
+        problem = regular_file_problem(root / relative)
+        if problem is not None:
+            return _stage_failure(
+                "files", f"{relative} is {_FILE_PROBLEMS[problem]}", base_sha
+            )
 
     try:
         report = json.loads(report_path.read_bytes())
         candidate_bytes = candidate_path.read_bytes()
     except (OSError, ValueError):
-        return StageOutcome("failed", "report", base_sha, None, False)
+        return _stage_failure(
+            "report", "could not read the generation report or candidate", base_sha
+        )
     if not isinstance(report, dict) or report.get("status") != "success":
-        return StageOutcome("failed", "report", base_sha, None, False)
+        return _stage_failure("report", "generation did not succeed", base_sha)
 
     added, removed, changed_urls = _report_changes(report)
     retained_failures = _report_retained_failures(report)
@@ -134,21 +139,26 @@ def run_stage(
     try:
         base_bytes = git_output(root, "show", f"{base_sha}:{CATALOG_PATH}")
     except OSError:
-        return StageOutcome("failed", "report", base_sha, None, False)
+        return _stage_failure("base", "could not read the base catalog", base_sha)
 
     try:
         catalog_path.write_bytes(candidate_bytes)
         catalog_path.chmod(0o644)
     except OSError:
-        return StageOutcome("failed", "write", base_sha, None, False)
+        return _stage_failure("write", "could not write the catalog", base_sha)
 
     changed = candidate_bytes != base_bytes
     sha = base_sha
     if changed:
         try:
             sha = _commit_candidate(root, base_sha, run_url)
+        except OSError:
+            return _stage_failure("commit", "could not commit the candidate", base_sha)
+        try:
             if git_text(root, "rev-parse", "HEAD") != sha:
-                return StageOutcome("failed", "bundle", base_sha, None, False)
+                return _stage_failure(
+                    "bundle", "HEAD is not the candidate commit", base_sha
+                )
             bundle_path.parent.mkdir(parents=True, exist_ok=True)
             git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
             body_text = _render_report(
@@ -162,7 +172,9 @@ def run_stage(
             body_path.parent.mkdir(parents=True, exist_ok=True)
             body_path.write_text(body_text, encoding="utf-8")
         except OSError:
-            return StageOutcome("failed", "bundle", base_sha, None, False)
+            return _stage_failure(
+                "bundle", "could not write the bundle or PR body", base_sha
+            )
 
     status = "changed" if changed else "unchanged"
     return StageOutcome(
@@ -176,6 +188,17 @@ def run_stage(
         changed_urls,
         retained_failures,
     )
+
+
+_FILE_PROBLEMS = {
+    "missing": "missing",
+    "symlink": "a symlink",
+    "irregular": "not a regular file",
+}
+
+
+def _stage_failure(stage: str, reason: str, base_sha: str | None) -> StageOutcome:
+    return StageOutcome("failed", stage, base_sha, None, False, reason=reason)
 
 
 def _report_changes(

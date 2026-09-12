@@ -118,6 +118,7 @@ def test_head_other_than_github_sha_fails_with_no_commit_or_bundle(
 
     assert outcome.status == "failed"
     assert outcome.stage == "checkout"
+    assert outcome.summary == "stage failed: HEAD is not GITHUB_SHA"
     assert not bundle_path.exists()
     assert not body_path.exists()
 
@@ -249,16 +250,39 @@ def test_changed_candidate_commits_only_the_catalog_as_the_bot(tmp_path: Path) -
         == CATALOG_PATH
     )
 
-    # Later working-tree changes (as later steps in the check job would make)
-    # do not affect the commit already made.
+
+def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    policy_path = root / "config/codm-projects.json"
+    policy_path.write_text('{"schemaVersion": 1, "projects": {}}\n')
+    _git(root, "add", "--", "config/codm-projects.json")
+    _git(root, "commit", "-qm", "policy")
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(
+        root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
+    )
+    # The reviewed policy, a pack and the README differ from HEAD in the
+    # working tree when `stage` runs.
+    policy_path.write_text('{"schemaVersion": 1, "projects": {"x": {}}}\n')
     (root / "dist/single-screen.json").write_text('{"apps": [1]}\n')
     (root / "README.md").write_text("changed guide\n")
 
+    outcome = run_stage(
+        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
+    )
+
+    assert outcome.status == "changed"
+    assert outcome.sha is not None
     assert (
-        _git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", sha)
+        _git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", outcome.sha)
         == CATALOG_PATH
     )
-    assert _git(root, "rev-parse", sha) == sha
+    assert _git(root, "diff", "--cached", "--name-only") == ""
+    assert _git(root, "diff", "--name-only").splitlines() == [
+        "README.md",
+        "config/codm-projects.json",
+        "dist/single-screen.json",
+    ]
 
 
 def test_symlinked_generated_candidate_fails_with_no_commit_or_bundle(
@@ -276,7 +300,10 @@ def test_symlinked_generated_candidate_fails_with_no_commit_or_bundle(
     outcome = run_stage(root, base, "run", bundle_path, body_path)
 
     assert outcome.status == "failed"
-    assert outcome.stage == "symlink"
+    assert outcome.stage == "files"
+    assert outcome.summary == (
+        f"stage failed: {CANDIDATE_DIR}/catalog.json is a symlink"
+    )
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
     assert not body_path.exists()
@@ -295,10 +322,26 @@ def test_symlinked_catalog_fails_with_no_commit_or_bundle(tmp_path: Path) -> Non
     outcome = run_stage(root, base, "run", bundle_path, body_path)
 
     assert outcome.status == "failed"
-    assert outcome.stage == "symlink"
+    assert outcome.stage == "files"
+    assert outcome.summary == f"stage failed: {CATALOG_PATH} is a symlink"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
     assert not body_path.exists()
+
+
+def test_missing_generated_candidate_fails_naming_it(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, '{"apps": [1]}\n', _report())
+    (root / CANDIDATE_DIR / "catalog.json").unlink()
+    bundle_path = tmp_path / "candidate.bundle"
+
+    outcome = run_stage(root, base, "run", bundle_path, tmp_path / "pr-body.md")
+
+    assert outcome.status == "failed"
+    assert outcome.summary == f"stage failed: {CANDIDATE_DIR}/catalog.json is missing"
+    assert _git(root, "rev-parse", "HEAD") == base
+    assert not bundle_path.exists()
 
 
 def test_base_sha_line_in_summary_names_the_branch_creation_commit(
@@ -426,6 +469,7 @@ def test_report_whose_status_is_not_success_fails_with_no_commit(
 
     assert outcome.status == "failed"
     assert outcome.stage == "report"
+    assert outcome.summary == "stage failed: generation did not succeed"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
     assert not body_path.exists()
@@ -792,6 +836,58 @@ def test_two_selected_same_repository_prs_fail_before_any_write(
         for call in gh.calls
     )
     assert _bare_branch_sha(bare) == ""
+
+
+@pytest.mark.parametrize(
+    ("cross_repo", "owner"),
+    [(True, "someoneelse"), (True, "mjkoo"), (False, "someoneelse")],
+)
+def test_fork_pr_sharing_the_branch_name_is_not_closed_when_unchanged(
+    tmp_path: Path, cross_repo: bool, owner: str
+) -> None:
+    seed = _repo(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    gh = ScriptedGh(pr_list=[_pr(11, cross_repo=cross_repo, owner=owner)])
+
+    result = run_publish(write_side, "false", base, base, None, None, gh=gh)
+
+    assert result.status == "unchanged"
+    assert result.summary == "publish made no change"
+    assert not any(
+        call[:2] in (("pr", "close"), ("pr", "edit"), ("pr", "create"))
+        for call in gh.calls
+    )
+
+
+def test_two_selected_same_repository_prs_fail_before_closing_either(
+    tmp_path: Path,
+) -> None:
+    seed = _repo(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    gh = ScriptedGh(pr_list=[_pr(1), _pr(2)])
+
+    result = run_publish(write_side, "false", base, base, None, None, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "publish failed: more than one source-update PR"
+    assert not any(call[:2] == ("pr", "close") for call in gh.calls)
+
+
+def test_repository_hooks_never_run_when_publishing(tmp_path: Path) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+    bare = _bare_from(seed, tmp_path)
+    write_side = _write_side(tmp_path, bare, base)
+    _install_failing_hooks(write_side, "pre-push", "reference-transaction")
+    gh = ScriptedGh(pr_list=[])
+
+    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
+
+    assert result.status == "published"
+    assert _bare_branch_sha(bare) == sha
 
 
 def _bot_catalog_commit(root: Path, catalog_text: str) -> str:

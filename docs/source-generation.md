@@ -169,8 +169,9 @@ the run ID, does not fail on a name an earlier attempt already used.
 `pull-requests: write`, and runs no `setup-uv` and no `uv`. It checks out
 `${{ github.sha }}` shallowly, then a guard step,
 `test "$BASE_SHA" = "$GITHUB_SHA"` with `BASE_SHA` mapped from
-`needs.check.outputs.base`, before anything token-bearing. It downloads the
-bundle and body file when `changed` is `true`, then runs, with `GH_TOKEN`:
+`needs.check.outputs.base`, before any step that receives `GH_TOKEN`. It
+downloads the bundle and body file when `changed` is `true`, then runs, with
+`GH_TOKEN`:
 
 ```sh
 python3 -m scripts.source_proposal publish \
@@ -208,6 +209,25 @@ the workflow run's URL, the base SHA and the catalog's added, removed and
 changed projects, plus any retained failures, with upstream-derived text
 HTML-escaped inside a `<pre>` block so upstream Markdown renders as literal
 text rather than markup.
+
+### Stage summary lines
+
+On success, `stage` writes the base SHA, the catalog changes and any
+retained failures to the step summary. On failure it writes one line naming
+what failed, and hands nothing off:
+
+- `stage failed: could not read HEAD`, or
+  `stage failed: HEAD is not GITHUB_SHA`;
+- `stage failed: <path> is missing`, `is a symlink` or
+  `is not a regular file`, for the generated candidate or
+  `config/catalogs/codm.json`;
+- `stage failed: could not read the generation report or candidate`, or
+  `stage failed: generation did not succeed`;
+- `stage failed: could not read the base catalog`;
+- `stage failed: could not write the catalog`;
+- `stage failed: could not commit the candidate`;
+- `stage failed: HEAD is not the candidate commit`, or
+  `stage failed: could not write the bundle or PR body`.
 
 ### Publish summary lines
 
@@ -263,7 +283,9 @@ changed automatically by any workflow.
 `check` performs no writes: its only token is the read-only job token
 (`contents: read`) that checkout uses, and no step in it receives a write
 token. Only `publish` holds `contents: write` and `pull-requests: write`,
-and only its one step receives `GH_TOKEN`. `scripts/source_proposal.py`
+and only its one step receives `GH_TOKEN`; its checkout uses the job token
+only to fetch the triggering revision, and `persist-credentials: false`
+keeps it out of `.git/config`. `scripts/source_proposal.py`
 serves both jobs and, like `scripts/nightly_write.py`, imports only the
 standard library and the shared helpers in `scripts/workflow_support.py`,
 and runs on the runner's preinstalled `python3` in the write job. Source

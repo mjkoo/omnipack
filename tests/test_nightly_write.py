@@ -124,6 +124,7 @@ def _write_side(
     _git(root, "remote", "add", "origin", f"file://{bare}")
     _git(root, "fetch", "-q", "--depth", "1", "origin", base)
     _git(root, "checkout", "-q", "--detach", "FETCH_HEAD")
+    assert _git(root, "rev-parse", "--is-shallow-repository") == "true"
     return root
 
 
@@ -134,7 +135,6 @@ def test_successful_round_trip_lands_commit_and_detaches(tmp_path: Path) -> None
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
-    assert _git(write_side, "rev-parse", "--is-shallow-repository") == "true"
 
     result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
 
@@ -857,6 +857,17 @@ def test_missing_or_absent_served_digest_repairs_without_edit(
     result = run_release(root, gh=gh)
 
     assert result.status == "repaired"
+    assert result.summary == "repaired at revision 3"
+    assert [call for call in gh.calls if call[:2] == ("release", "upload")] == [
+        (
+            "release",
+            "upload",
+            "continuous",
+            str(root / "dist/single-screen.json"),
+            str(root / "dist/dual-screen.json"),
+            "--clobber",
+        )
+    ]
     assert not any(call[:2] == ("release", "edit") for call in gh.calls)
 
 
@@ -883,6 +894,16 @@ def test_interrupted_upload_then_run_returning_to_recorded_pair_repairs(
 
     assert result.status == "repaired"
     assert result.summary == "repaired at revision 5"
+    assert [call for call in gh.calls if call[:2] == ("release", "upload")] == [
+        (
+            "release",
+            "upload",
+            "continuous",
+            str(root / "dist/single-screen.json"),
+            str(root / "dist/dual-screen.json"),
+            "--clobber",
+        )
+    ]
     assert not any(call[:2] == ("release", "edit") for call in gh.calls)
 
 
@@ -933,11 +954,15 @@ def test_missing_release_marker_or_title_fails_with_bootstrap_guidance(
 
 
 @pytest.mark.parametrize(
-    ("is_draft", "is_prerelease", "is_immutable"),
-    [(True, True, False), (False, False, False), (False, True, True)],
+    ("is_draft", "is_prerelease", "is_immutable", "reason"),
+    [
+        (True, True, False, "release is a draft"),
+        (False, False, False, "release is not a prerelease"),
+        (False, True, True, "release is immutable"),
+    ],
 )
 def test_draft_non_prerelease_or_immutable_fails_with_bootstrap_guidance(
-    tmp_path: Path, is_draft: bool, is_prerelease: bool, is_immutable: bool
+    tmp_path: Path, is_draft: bool, is_prerelease: bool, is_immutable: bool, reason: str
 ) -> None:
     root, sha = _release_repo(tmp_path)
     view = {
@@ -953,8 +978,29 @@ def test_draft_non_prerelease_or_immutable_fails_with_bootstrap_guidance(
     result = run_release(root, gh=gh)
 
     assert result.status == "failed"
-    assert "gh release create" in result.summary
+    assert result.summary == (
+        f"release failed: {reason}; {write_module.BOOTSTRAP_GUIDANCE}"
+    )
     assert not any(call[:2] == ("release", "upload") for call in gh.calls)
+    assert not any(call[:2] == ("release", "edit") for call in gh.calls)
+
+
+def test_symlinked_pack_file_fails_before_any_release_call(tmp_path: Path) -> None:
+    root, _sha = _release_repo(tmp_path)
+    runner_file = tmp_path / "runner-file"
+    runner_file.write_text("not a pack\n")
+    pack = root / "dist/single-screen.json"
+    pack.unlink()
+    pack.symlink_to(runner_file)
+    gh = ScriptedGh(view=None)
+
+    result = run_release(root, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == (
+        "release failed: dist/single-screen.json is not a regular file"
+    )
+    assert gh.calls == []
 
 
 def test_bootstrap_guidance_command_matches_the_publishing_guide() -> None:

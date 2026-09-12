@@ -29,14 +29,12 @@ from scripts.workflow_support import (
     git,
     log,
     ls_remote_sha,
+    regular_file_problem,
     verify_handoff,
 )
 
-ALLOWED_PATHS = (
-    "dist/single-screen.json",
-    "dist/dual-screen.json",
-    "README.md",
-)
+PACK_PATHS = ("dist/single-screen.json", "dist/dual-screen.json")
+ALLOWED_PATHS = (*PACK_PATHS, "README.md")
 ASSET_NAMES = ("single-screen.json", "dual-screen.json")
 TAG = "continuous"
 MARKER = "<!-- omnipack:rolling-pack -->"
@@ -140,6 +138,11 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
     """Synchronize the owned rolling release from the JSON pair at `HEAD`."""
     selected_gh = gh or SubprocessGhRunner()
     try:
+        # A symlinked pack file would upload whatever runner file it names.
+        # A missing one is left to the read below.
+        for relative in PACK_PATHS:
+            if regular_file_problem(root / relative) not in (None, "missing"):
+                raise ReleaseFailure(f"{relative} is not a regular file")
         try:
             single = (root / "dist/single-screen.json").read_bytes()
             dual = (root / "dist/dual-screen.json").read_bytes()
