@@ -439,6 +439,7 @@ def _write_side(
     _git(root, "remote", "add", "origin", f"file://{bare}")
     _git(root, "fetch", "-q", "--depth", "1", "origin", base)
     _git(root, "checkout", "-q", "--detach", "FETCH_HEAD")
+    assert _git(root, "rev-parse", "--is-shallow-repository") == "true"
     return root
 
 
