@@ -7,44 +7,6 @@ routine pack publication can consume accepted source data without APK discovery.
 
 ## Requirements
 
-### Requirement: README and reviewed project policy gate automatic generation
-
-The source-maintenance workflow SHALL compare the SHA-256 of fetched README
-bytes and the reviewed project-policy bytes with accepted metadata committed
-on main. Matching README, policy and configured URL SHALL skip
-release lookup, APK inspection and PR writes unless a manual forced refresh was
-requested. Metadata SHALL bind the configured source URL, README hash,
-project-policy hash and catalog digest. A different configured source URL or
-changed policy SHALL require generation even when the README is unchanged.
-The accepted state SHALL advance only through merge of a reviewed catalog PR.
-Missing initial state SHALL require successful generation before acceptance;
-malformed existing state SHALL fail visibly rather than be silently ignored.
-
-#### Scenario: Accepted README is unchanged
-
-- **WHEN** the URL, fetched README and valid policy match accepted source metadata without force
-- **THEN** the workflow reports a no-op without resolution or PR writes
-
-#### Scenario: Changed prose produces unchanged catalog
-
-- **WHEN** changed README bytes yield identical catalog bytes
-- **THEN** successful generation proposes the new source hash through a metadata update PR
-
-#### Scenario: Unmerged proposal is not acceptance
-
-- **WHEN** a prior catalog proposal is still open or was closed without merging
-- **THEN** its source hash does not replace the hash accepted on main
-
-#### Scenario: Discovery policy changes without a README edit
-
-- **WHEN** reviewed policy enables prereleases or changes a project's treatment while README bytes stay unchanged
-- **THEN** generation runs under that policy and proposes its hash only after successful complete validation
-
-#### Scenario: Policy formatting changes
-
-- **WHEN** policy bytes change without changing any effective project rule
-- **THEN** generation can reuse valid unchanged-release resolutions and propose the changed input hash without manufacturing catalog changes
-
 ### Requirement: Reviewed rules declare discovery and tracking treatment
 
 The system SHALL read committed per-project policy keyed by normalized GitHub
@@ -53,10 +15,10 @@ stable releases. Rules SHALL explicitly distinguish APK projects from
 track-only resources and support bounded prerelease, release-title, APK-filename
 and source-version settings. Invalid types, unsupported fields, invalid regexes,
 duplicate JSON object keys at any nesting level, duplicate normalized project
-keys and inconsistent rule combinations SHALL fail before
-the unchanged-input gate. Inactive rules whose project is absent from the
-README SHALL be reported without introducing that project or blocking a source
-removal. Neither generation nor its publisher SHALL write this policy.
+keys and inconsistent rule combinations SHALL fail before any network request.
+Inactive rules whose project is absent from the README SHALL be reported without
+introducing that project or blocking a source removal. Neither generation nor
+its publisher SHALL write this policy.
 
 Numeric version-extraction group selectors and `$N` references SHALL name
 existing groups in the configured regex, with group zero denoting the full
@@ -88,7 +50,7 @@ resolves.
 #### Scenario: Version extraction references an absent capture group
 
 - **WHEN** a rule selects group `2` or includes `$2` but its version-extraction regex contains only one capturing group
-- **THEN** policy validation fails before discovery or the unchanged-input gate, and no candidate catalog is emitted
+- **THEN** policy validation fails before discovery or any network request, and no candidate catalog is emitted
 
 #### Scenario: Policy JSON repeats a key
 
@@ -176,11 +138,10 @@ by publication time with release ID as a deterministic tie-breaker. Invalid
 selection metadata or no matching release within the bound SHALL fail visibly.
 Every direct asset in that selected release whose filename ends in `.apk`,
 case-insensitively, and matches the configured APK filename regex SHALL be
-inspected unless accepted state permits reuse. No filename filter means all
-direct APKs. Filtered-out asset names SHALL appear in diagnostics. Regex
-semantics SHALL be compatible with the supported Obtainium client.
-APK package IDs SHALL NOT be
-invented or supplied through a required manual-resolution step.
+inspected on every run. No filename filter means all direct APKs. Filtered-out
+asset names SHALL appear in diagnostics. Regex semantics SHALL be compatible
+with the supported Obtainium client. APK package IDs SHALL NOT be invented or
+supplied through a required manual-resolution step.
 
 No eligible APK, disagreement between APK package IDs, or any unreadable eligible
 APK SHALL fail that project's resolution without trying an older release.
@@ -194,7 +155,7 @@ follow its separate metadata-only contract.
 #### Scenario: All APKs agree
 
 - **WHEN** all policy-selected APK assets can be read and declare the same real package ID
-- **THEN** generation records that ID and the host-assigned release identifier
+- **THEN** generation records that ID and reports the host-assigned release identifier
 
 #### Scenario: One APK differs or is unreadable
 
@@ -209,7 +170,7 @@ follow its separate metadata-only contract.
 #### Scenario: Generator remains strict when Heimdall consumer fallback is enabled
 
 - **WHEN** Heimdall's newest matching release has no eligible APK and an older matching release is usable
-- **THEN** generation fails or uses permitted accepted-entry fallback without inspecting the older release as a new successful resolution
+- **THEN** resolution fails without inspecting the older release, and Heimdall's committed entry is kept as a retained failure only if its effective policy is unchanged
 - **AND** the generated consumer setting does not broaden generator release selection
 
 #### Scenario: Explicit asset filter selects the supported APK family
@@ -220,7 +181,7 @@ follow its separate metadata-only contract.
 #### Scenario: Newest matching release has a broken APK
 
 - **WHEN** the newest permitted release has an unreadable eligible APK but an older release is usable
-- **THEN** resolution fails or uses permitted accepted-entry fallback, without treating the older release as a new successful resolution
+- **THEN** resolution fails without treating the older release as a new successful resolution, and the project's committed entry is kept as a retained failure only if its effective policy is unchanged
 
 #### Scenario: Release scan reaches its bound
 
@@ -232,11 +193,11 @@ follow its separate metadata-only contract.
 Track-only generation SHALL require an explicit stable numeric-string resource
 ID and a documented manual installation path in reviewed policy. It SHALL
 validate a published release under the selected channel policy without APK or
-archive downloads, package-ID discovery or package-cache writes. It SHALL emit
-`trackOnly: true`, `versionDetection: false`, `includeZips: false` and disabled
-APK architecture filtering. The record SHALL contain no observed installed or
-latest version, fixed download URL or claim of an Android package identity.
-Tracking outcomes SHALL be separate from APK resolution in diagnostics.
+archive downloads or package-ID discovery. It SHALL emit `trackOnly: true`,
+`versionDetection: false`, `includeZips: false` and disabled APK architecture
+filtering. The record SHALL contain no observed installed or latest version,
+fixed download URL or claim of an Android package identity. Tracking outcomes
+SHALL be separate from APK resolution in diagnostics.
 
 Kanto Gear SHALL use resource ID `1845280017`, name `Kanto Gear (mod updates)`,
 its existing AverageConsumer/kanto-gear URL and stable release tags. It SHALL
@@ -249,15 +210,18 @@ install this Lua archive. The existing omnipack notification tracker SHALL
 retain its distinct identity and behavior.
 
 A new tracker whose selected release cannot be verified SHALL block the
-complete proposal. An accepted tracker may retain its complete entry on a
-lookup failure only with unchanged effective policy and a visible warning.
-Changing a project's kind SHALL require fresh validation for the destination
-kind with no cross-kind fallback or reuse of an APK package ID as a tracker ID.
+complete proposal. A tracker with a committed entry SHALL keep that entry on a
+lookup failure, with a visible warning, only under the same unchanged-policy
+rule as any other project: the current rule, rendered with the rule's tracker ID
+and the committed URL, SHALL reproduce the committed entry exactly, so a changed
+tracker ID blocks retention. A change of kind SHALL require fresh validation for
+the destination kind, with no cross-kind fallback, and an APK package ID SHALL
+NOT be reused as a tracker ID.
 
 #### Scenario: Kanto release contains only a mod ZIP
 
 - **WHEN** Kanto's published release is available and the reviewed rule is track-only
-- **THEN** generation emits the tracking entry without seeking an APK, downloading the ZIP or writing package-ID cache state
+- **THEN** generation emits the tracking entry without seeking an APK or downloading the ZIP
 
 #### Scenario: User acknowledges a Kanto notification
 
@@ -269,156 +233,256 @@ kind with no cross-kind fallback or reuse of an APK package ID as a tracker ID.
 - **WHEN** a new declared tracker has no verifiable permitted release
 - **THEN** the source proposal fails with tracking diagnostics instead of accepting an unchecked partial catalog
 
-### Requirement: Accepted resolution state supports reuse without accepting partial catalogs
+#### Scenario: A tracker's resource ID changes and its lookup fails
 
-Resolution state SHALL be keyed by normalized project URL and bind a package ID
-to its successfully inspected host-assigned release identifier and effective
-project-policy fingerprint, not its tag name alone. Equal release and policy
-identifiers SHALL reuse the accepted ID without APK reads; a different release
-or effective policy SHALL trigger resolution. Failed attempts SHALL leave the last
-successful ID and release identifier unchanged.
+- **WHEN** reviewed policy changes a committed tracker's resource ID and that tracker's release lookup fails
+- **THEN** generation fails with no candidate catalog, and the committed entry is not retained under its old resource ID
 
-For a project present in the accepted catalog, failed refresh SHALL retain its
-accepted entry and report the failure only when its effective project policy
-is unchanged. A policy change that fails fresh validation SHALL block the
-proposal, even for an accepted project. Accepted APK catalog and cache identities
-and effective-policy fingerprints SHALL agree; malformed or inconsistent state
-SHALL fail generation. Trackers SHALL NOT require package-cache entries. A newly
-eligible project without accepted catalog membership SHALL require successful
-resolution, even if a transient or historical cache contains an ID. Any unresolved
-new APK project SHALL fail the whole generation attempt, prohibit catalog PR writes
-for that attempt and leave accepted state unchanged. Successful resolutions from
-an incomplete attempt MAY be retained only as diagnostic work, not accepted
-catalog or source metadata. Later invocations SHALL retry while README content
-remains unaccepted. After merging a proposal with retained failures, unchanged
-README/policy runs SHALL skip resolution; another README or policy change or forced refresh is
-required to retry those failures.
+### Requirement: Resolution failures keep only unchanged committed entries
+
+Every generation SHALL resolve each eligible project from the README, the
+reviewed policy and fresh release data, without reusing identities recorded by
+earlier runs. A project that fails to resolve SHALL keep its entry from main's
+committed catalog, reported as a retained failure, only when the current policy
+would render that same entry for the committed APK package ID, or the rule's
+tracker ID, and the committed URL. The current rule is the authority for a
+tracker's identity, so a changed tracker ID is a changed effective policy. Any other failure,
+including one for a project without a committed entry or for a project whose
+effective policy changed, SHALL fail the whole generation, and no candidate
+catalog SHALL be offered. Later runs SHALL retry every failure without
+maintainer action. No package ID SHALL be invented, or taken from any entry
+other than the project's own committed entry.
 
 #### Scenario: Known project release cannot be fetched
 
-- **WHEN** an accepted project's release lookup or APK refresh fails
-- **THEN** its accepted entry and successful cache fields are retained with a visible warning
+- **WHEN** a project with a committed entry and unchanged effective policy fails release lookup or APK inspection
+- **THEN** the candidate keeps its committed entry unchanged and the report lists a retained failure
+
+#### Scenario: Policy formatting changes
+
+- **WHEN** policy bytes change without changing what the policy renders for a project, and that project fails to resolve
+- **THEN** its committed entry is retained as for any unchanged project
 
 #### Scenario: New project fails
 
-- **WHEN** one newly eligible project cannot be resolved while others succeed
-- **THEN** generation fails with no partial catalog PR and no accepted-hash update
+- **WHEN** a project without a committed entry cannot be resolved while others succeed
+- **THEN** generation fails with no candidate catalog and no proposal
 
-#### Scenario: Failed new project later becomes resolvable
+#### Scenario: Failed project later resolves
 
-- **WHEN** a later run sees the same unaccepted README and resolution now succeeds
-- **THEN** it can validate and propose the complete catalog
+- **WHEN** a later run resolves a project that previously failed
+- **THEN** its freshly resolved entry enters the candidate without maintainer action
 
-#### Scenario: Rolling tag gets a new release identifier
+#### Scenario: Changed policy fails to resolve
 
-- **WHEN** the tag name is unchanged but the host-assigned identifier changes
-- **THEN** generation inspects the new release before replacing accepted resolution fields
-
-#### Scenario: Asset policy changes at the same release
-
-- **WHEN** an accepted project's effective policy changes but the host-assigned release ID is unchanged
-- **THEN** generation freshly validates under the new policy and cannot reuse or retain the prior-policy identity on failure
+- **WHEN** a project's reviewed policy changes what would be rendered for it, and fresh resolution under that policy fails
+- **THEN** generation fails with no candidate catalog, and the committed catalog stays in place until the policy resolves or is corrected
 
 ### Requirement: Catalog changes are checked before PR publication
 
-The separate workflow SHALL validate source shape, IDs, deterministic rendering
-and metadata/catalog/state/policy consistency, then build and structurally verify both
-pack variants with the proposed source catalog and the selected main revision's
-configuration. Failures, including stale selectors and package collisions, SHALL
-block PR writes. Generated pack outputs and the pack README SHALL be diagnostics
-for this operation, not part of its source-update commit. The checked source bytes
-SHALL be the bytes proposed in the PR. Diagnostics SHALL identify the selected
-base revision and source revision, catalog changes, skipped links, resolution
-results, tracking-only outcomes, effective policy, retained failures and pack
-validation outcome. The selected-base policy SHALL be read-only and its exact
-bytes SHALL be bound into checked evidence; changed policy after checking SHALL
-block publication. Only catalog, metadata and resolution state SHALL enter the
-automated source commit.
+Before pushing the source-update branch, creating a PR or editing a PR's body,
+the source-maintenance workflow's read-only job SHALL validate the candidate
+catalog's shape, IDs and deterministic rendering, run the project's full test
+suite with the candidate catalog in place, and build and structurally verify
+both pack variants with the candidate catalog and main's configuration. Any failure, including
+stale selectors and package collisions, SHALL block those writes. When a
+successful generation reproduces main's committed catalog, closing an open PR
+from the source-update branch SHALL be the only permitted write, and it SHALL
+require no tests, build or verification. Generated pack outputs and the pack README SHALL be diagnostics for this
+run, not part of the proposal. The proposed catalog SHALL be byte-identical to
+the checked candidate: the read-only job SHALL commit the candidate before the
+checks and confirm afterwards that the workspace catalog still matches that
+commit, and the write job SHALL push only that exact commit, identified by its
+SHA, after confirming that its parent is the checked-out main revision and that
+it changes only the committed source catalog, which SHALL be a regular file of
+mode 100644 in both the base revision and the commit. The read-only job SHALL
+likewise reject a generated candidate or a workspace catalog that is not a
+regular file. The reviewed policy SHALL NOT be
+modified or staged. Diagnostics SHALL
+identify the base revision, catalog changes, skipped links, resolution results,
+tracking outcomes, effective policy, retained failures and pack validation
+outcome. The base revision SHALL appear in the run summary and in the PR body,
+and the pack validation outcome SHALL be the reported results of the run's test,
+build and verification steps.
 
 #### Scenario: Candidate changes a pinned identity
 
 - **WHEN** the proposed catalog makes an active composition selector stale
 - **THEN** validation fails and the workflow does not publish the invalid source proposal
 
+#### Scenario: Test suite fails with the candidate
+
+- **WHEN** the full test suite fails with the candidate catalog in place
+- **THEN** no branch or PR write occurs and the run fails visibly
+
 #### Scenario: Candidate is valid
 
-- **WHEN** source checks and composed-pack verification pass
-- **THEN** only the checked source catalog, source metadata and resolution state are eligible for a PR commit
+- **WHEN** the tests, source checks and composed-pack verification pass
+- **THEN** only the checked source catalog is eligible for the proposal commit
 
 #### Scenario: Bytes change after checking
 
-- **WHEN** proposed source bytes differ from the validated candidate
-- **THEN** PR publication is rejected
+- **WHEN** the workspace catalog no longer matches the checked commit after the checks ran
+- **THEN** the read-only job fails before handing the commit off, and no branch or PR write occurs
 
 #### Scenario: Policy changes after checking
 
-- **WHEN** the reviewed policy bytes differ from those used to validate the candidate
-- **THEN** publication is rejected and the automation does not stage the policy file
+- **WHEN** the reviewed policy file changes in the workspace during the run
+- **THEN** the proposal commit still contains only the source catalog and never stages the policy
+
+#### Scenario: Handed-off commit is not the checked commit
+
+- **WHEN** the commit the write job receives differs from the checked SHA, its parent is not the checked-out main revision, or it changes a file other than the source catalog
+- **THEN** the run fails before any branch push or PR write
+
+#### Scenario: Catalog is replaced by a symlink or changes mode
+
+- **WHEN** the generated candidate or the handed-off commit makes the source catalog a symbolic link, or changes its mode
+- **THEN** the run fails before any branch push or PR write
 
 ### Requirement: One separate workflow maintains source update proposals
 
 A daily scheduled workflow and manual dispatch SHALL operate from main in the
-canonical repository, independently of nightly publication. Runs for this
-source SHALL be serialized without canceling active runs and have a bounded
-runtime. A manually dispatched force option SHALL bypass only the unchanged
-README gate. Ineligible refs and forks SHALL perform no remote writes.
+canonical repository, independently of nightly publication. Runs SHALL be
+serialized without canceling active runs and have a bounded runtime. Ineligible
+refs and forks SHALL perform no remote writes.
 
-The workflow SHALL create or update at most one automation-owned source PR with
-base main and a dedicated source-update branch. It SHALL verify repository, base,
-head and ownership before updating an existing proposal, reject unrelated branch
-changes, and restrict commits to the source catalog and its metadata/resolution
-state. Identical candidate content already proposed SHALL cause no new commit or
-PR. Changed valid content SHALL update the existing proposal. A closed unmerged
-proposal SHALL NOT suppress a later proposal of still-unaccepted source content.
-No rejection ledger, automatic merge, direct-main write, failure issue lifecycle
-or release write SHALL be introduced.
+When the checked candidate differs from main's committed catalog, the workflow
+SHALL rebuild one dedicated source-update branch from the main revision that
+triggered the run as a single commit containing only the candidate catalog, replace the branch's
+previous contents, and create or update the one open PR from that branch to
+main. The source-update PR SHALL be an open PR whose head is that branch in the
+canonical repository and whose base is main. A PR from another repository whose
+branch has the same name SHALL be neither edited nor closed. If more than one
+such source-update PR is open, the run SHALL fail before any remote write.
+Content equality SHALL be judged on the branch's whole tree: a branch whose tree
+equals the rebuilt proposal's tree SHALL be left as it is, even when its commits
+differ from the rebuilt commit, and SHALL NOT be pushed again. Commits added to
+that branch by hand SHALL be overwritten by the next push. When
+the candidate equals main's committed catalog, the workflow SHALL make no
+proposal and SHALL close an open source-update PR, without running the tests,
+build or verification. README or policy edits that leave the generated catalog
+unchanged SHALL NOT produce a proposal. No automatic merge, direct-main write,
+failure issue lifecycle or release write SHALL be introduced.
 
-Each invocation SHALL use one generation/check attempt. Main or source-branch
-advancement that invalidates the checked base SHALL cause visible failure and a
-later rerun, without automatic regeneration. Failed or ambiguous remote writes
-SHALL be reported honestly; a later invocation SHALL discover any existing owned
-proposal before creating another. No success SHALL be claimed for an unknown
-external result.
+Retention uses main's committed entry, not the open proposal's. A transient
+resolution failure for a project whose update an open proposal carries can
+therefore drop that update from the rebuilt proposal, or close the proposal
+when that update was its only change. The next run that resolves the project
+SHALL propose the update again, updating the open PR or opening a new one.
+
+Each invocation SHALL make one generation and check attempt. A failed branch or
+PR write SHALL fail the run visibly, and the next run SHALL rebuild the branch
+and update the existing PR rather than open another. Before any branch push, PR
+creation, PR edit or PR close, the write job SHALL confirm that main is still
+the run's base revision. If main has advanced, the run SHALL fail visibly
+without those writes, so a rerun of an earlier run cannot close or replace a
+newer proposal, and a later run SHALL rebuild the proposal on the newer main.
+Main advancing after that confirmation SHALL NOT be fenced: the PR SHALL show
+as stale or conflicting until a later run rebuilds it.
+
+#### Scenario: Candidate matches main
+
+- **WHEN** a successful generation produces the committed catalog and main is still the run's base revision
+- **THEN** no tests, build or verification are required, and no branch push, PR creation or PR edit occurs
+- **AND** any open PR from the source-update branch is closed, which is the only write the run makes
 
 #### Scenario: Existing PR has the same candidate
 
-- **WHEN** successful generation matches the content already proposed by the owned PR
-- **THEN** no duplicate PR or incidental commit is created
+- **WHEN** the rebuilt proposal's tree equals the tree already on the source-update branch, whatever commits produced that tree
+- **THEN** no push occurs, the branch is left as it is, and no duplicate PR is created
 
 #### Scenario: README changes again before merge
 
-- **WHEN** another successful checked source revision differs from the open proposal
-- **THEN** the workflow updates that owned proposal instead of opening another
+- **WHEN** a later checked candidate differs from the open proposal
+- **THEN** the workflow rebuilds the branch and updates that PR instead of opening another
 
 #### Scenario: Main advances during checking
 
-- **WHEN** main no longer equals the selected validation base before PR publication
-- **THEN** the run fails without publishing its stale candidate and a later run starts fresh
+- **WHEN** main gains a commit after the run's checkout and before the write job's first write
+- **THEN** the run fails visibly without a branch push or any PR write, and a later run rebuilds the proposal on the newer main
 
 #### Scenario: Branch ownership is unexpected
 
-- **WHEN** the expected source branch or PR contains unrelated changes or lacks expected ownership
-- **THEN** automation fails without overwriting it
+- **WHEN** someone pushes a commit to the source-update branch, a later run has a changed candidate, and the branch's tree differs from the rebuilt proposal's tree
+- **THEN** the rebuilt branch replaces that commit
+
+#### Scenario: A fork PR shares the branch name
+
+- **WHEN** an open PR from another repository uses the source-update branch name
+- **THEN** the workflow neither edits nor closes it, and a changed candidate gets its own PR from the canonical repository's branch
+
+#### Scenario: A retained failure reverts a proposed update
+
+- **WHEN** an open proposal carries an update for a project with a committed entry, and a later run retains that entry after a transient resolution failure
+- **THEN** the rebuilt proposal drops that update, and the PR is closed if no other change remains
+- **AND** the next run that resolves the project proposes the update again, in the open PR or a new one
+
+#### Scenario: Write job rerun after main advanced
+
+- **WHEN** the write job of an earlier run is rerun after main has advanced past that run's base revision
+- **THEN** it fails visibly without a branch push or any PR write, so a newer proposal is neither closed nor replaced by the earlier catalog
 
 ### Requirement: Generation diagnostics and credentials remain scoped
 
-The workflow SHALL use only permissions needed for source-branch and PR writes,
-with repository read access for generation and checks and no issue or release
-operations. Source text SHALL be handled as data; credentials, downloaded APKs
-and raw HTTP caches SHALL be excluded from summaries and artifacts. Current-run
-reports SHALL be retained for 14 days on success and failure when available.
-Missing reports after early failure SHALL NOT imply successful validation.
-Actions SHALL expose failed generation, validation and PR-operation stages.
+The workflow SHALL grant no permissions at workflow level and SHALL perform no
+issue or release operations. Its read-only job SHALL run generation, staging,
+tests, building and verification; every step of that job, including checkout
+and runtime setup, SHALL run with a job token limited to reading repository
+contents, and none SHALL receive the write credential. The write credential
+SHALL be available only to the write job, which alone SHALL hold the contents
+and pull-request write access needed for the source-update branch and PR. The
+write job SHALL install no project dependencies and run no generation, tests,
+build or verification: it SHALL check out afresh the main revision that
+triggered the run, receive from the read-only job only the checked commit, as
+git objects, and the escaped PR body, and run only a publication script that
+imports nothing outside the standard library, on the runner's preinstalled
+Python, with repository hooks disabled on every git command. The triggering
+event SHALL fix the revision whose code the write job runs: no output of the
+read-only job SHALL select it, and the write job SHALL fail before any write
+unless the base revision the read-only job reports is that triggering revision.
+Outputs of the read-only job SHALL reach the publication script only through
+step environment variables, never interpolated into a command, and the script
+SHALL reject any commit identifier that is not a full 40-character hexadecimal
+SHA. No checkout SHALL persist a credential in the
+repository configuration. Source text SHALL be handled as data:
+upstream-derived text in the run summary and the PR body SHALL be HTML-escaped
+inside a preformatted block, so it renders as literal text rather than markup.
+Credentials, downloaded APKs and raw HTTP caches SHALL be excluded from
+summaries and artifacts. The current run's generation report SHALL be retained
+as an artifact for 14 days on success and failure when available, and the run
+summary SHALL list retained failures. Missing reports after early failure SHALL
+NOT imply successful validation. Actions SHALL expose failed generation, test,
+validation and PR-operation stages.
 
-Catalog checks SHALL execute explicitly within the source-maintenance workflow,
-without relying on a PR-created event to run them. Documentation SHALL explain
-any additional approval needed for repository-required PR checks and token/PR
-creation prerequisites, without automatically changing repository settings.
+Checks SHALL execute within the source-maintenance workflow, without relying on
+PR events to run them. Each PR body SHALL link the workflow run that checked its
+current content and SHALL be refreshed whenever the branch is updated.
+Documentation SHALL explain that PRs opened by the workflow do not trigger the
+project's PR checks, how a maintainer can run them when repository rules
+require them, and the token and PR-creation prerequisites, without
+automatically changing repository settings.
 
 #### Scenario: PR event does not run checks automatically
 
-- **WHEN** token or repository policy delays downstream PR checks
-- **THEN** source generation and pack validation already have explicit workflow results and no automatic merge occurs
+- **WHEN** a proposal is opened or updated
+- **THEN** its body links the run whose test, build and verification results cover its content, and no automatic merge occurs
+
+#### Scenario: Retained failures are visible
+
+- **WHEN** a run keeps a committed entry after a failed resolution
+- **THEN** the run summary lists the project and its failure
+
+#### Scenario: Checks run without the write credential
+
+- **WHEN** generation, staging, tests, building and verification run
+- **THEN** they run in the read-only job, whose token can only read repository contents, and the write credential is not present in their environment
+- **AND** no checkout has persisted a credential in the repository configuration
+
+#### Scenario: Check job names another revision
+
+- **WHEN** the read-only job's outputs name a base other than the triggering revision, or a commit identifier that is not a full SHA
+- **THEN** the write job fails before any branch push or PR write, having run only code from the triggering revision
 
 #### Scenario: Discovery is unavailable
 

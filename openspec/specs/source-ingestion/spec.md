@@ -15,7 +15,7 @@ configuration: the RJNY catalog from the configured path on the configured
 branch, the BBoi34 catalog from the single-screen and dual-screen JSON assets
 of the latest release of the configured repository, and the codm2000 catalog
 from its configured committed Obtainium JSON file. Routine ingestion SHALL NOT
-fetch the source README, inspect APKs or read or mutate resolution state.
+fetch the source README, inspect APKs or resolve package IDs.
 
 #### Scenario: BBoi34 assets come from the newest release
 
@@ -34,19 +34,20 @@ fetch the source README, inspect APKs or read or mutate resolution state.
 - **WHEN** committed codm2000 JSON is valid and other catalog sources are available
 - **THEN** ingestion succeeds without requesting README or APK data
 
-#
-
 ### Requirement: HTTP credentials are optional and scoped to exact hosts
 
-All pipeline HTTP requests SHALL use the shared standard-library HTTP helper,
-including catalog fetches and the vendored package-id resolver's release
-metadata requests, ranged APK reads and full asset downloads. GitHub default
-stable-release metadata SHALL be requested from
+All ingestion and source-discovery HTTP requests SHALL use the shared
+standard-library HTTP helper, including catalog fetches and the vendored
+package-id resolver's release metadata requests, ranged APK reads and full asset
+downloads. GitHub default stable-release metadata SHALL be requested from
 `https://api.github.com/repos/OWNER/REPO/releases/latest`. Explicit prerelease
 or release-title policy SHALL use
 `https://api.github.com/repos/OWNER/REPO/releases` with bounded listing under
 the source-generation contract. Track-only release checks SHALL use the same
-host-scoped helper without APK requests.
+host-scoped helper without APK requests. Publication operations are outside
+this helper: release and PR operations SHALL use the `gh` CLI and branch pushes
+SHALL use `git`, under the publication credential rules of the workflows that
+make them.
 
 The system SHALL read host-to-environment-variable registrations from the
 `credentials` object in dedicated `config/http.json`, whose committed default
@@ -66,8 +67,9 @@ that destination's exact registration.
 
 #### Scenario: Fresh GitHub resolution uses the API credential
 
-- **WHEN** a generated GitHub project has no reusable accepted package id, the
-  default HTTP configuration is loaded and `GITHUB_TOKEN` is nonempty
+- **WHEN** generation resolves a GitHub project, as every generation run does
+  for every eligible project, the default HTTP configuration is loaded and
+  `GITHUB_TOKEN` is nonempty
 - **THEN** its policy-selected release metadata request to `api.github.com` carries the
   bearer token through the shared helper, and its ranged APK reads and full
   asset download fallback use that same helper
@@ -92,13 +94,12 @@ that destination's exact registration.
   unregistered host
 - **THEN** the redirected request carries no Authorization header
 
-#
-
 ### Requirement: URLs are compared in a normalized form
 
 The same project is spelled differently by different hands across the upstream
-catalogs and the resolved-id cache, so two spellings of one project must not be
-treated as two projects. The system SHALL compare URLs in a normalized form
+catalogs, the source README, the reviewed project policy and the committed
+source catalog, so two spellings of one project must not be treated as two
+projects. The system SHALL compare URLs in a normalized form
 obtained by discarding the scheme, lowercasing the host, dropping a leading
 `www.` from the host, dropping a trailing slash and a trailing `.git` from the
 path, and reducing a GitHub project link to its owner and repository compared
@@ -108,7 +109,8 @@ folded only in the host and in a GitHub link's owner and repository; the case
 of any other path SHALL be preserved, so that two URLs on another host
 differing only in path case remain different projects. The pipeline SHALL use
 this form wherever it compares URLs: deciding whether another source already
-contributes a link, and keying the resolved package id cache.
+contributes a link, and matching a generated project to its reviewed rule and
+to its entry in the committed source catalog.
 
 #### Scenario: Two spellings of one project
 
@@ -140,7 +142,7 @@ SHALL abort the build when any source cannot be fetched or parsed, and SHALL
 NOT write either import file in that case. The build report SHALL still record the failure. The committed codm2000
 catalog is a required local source: missing, malformed or unreadable content
 SHALL fail the build without falling back to README generation. Builds SHALL
-NOT modify that catalog or package-ID resolution state.
+NOT modify that catalog.
 
 #### Scenario: One upstream is unreachable
 

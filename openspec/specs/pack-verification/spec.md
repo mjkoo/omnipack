@@ -157,22 +157,22 @@ installation, or absence of spurious update notifications.
 ### Requirement: Structural verification evidence belongs to an exact input snapshot
 
 Standalone verification SHALL write `.build/verify.json` separately from the
-build report. It SHALL identify structural/offline scope, schema and verifier
-versions, observation times, completion and status, exact input fingerprints,
-and errors with variant, entry and field context where applicable. Fingerprints
-SHALL cover both output files, denylist, both overlays, composition policy, pack
-settings and README. Missing and unreadable inputs SHALL be explicit. HTTP
-configuration and credentials SHALL NOT be required, read, or fingerprinted by
-structural verification. Reports SHALL NOT contain resolved versions, asset
-probes, compatibility classifications, or an Obtainium compatibility guarantee.
+build report, as a diagnostic. It SHALL identify structural/offline scope, schema
+and verifier versions, observation times, status, fingerprints of the exact
+input bytes it checked, and errors with variant, entry and field context where
+applicable. Fingerprints SHALL cover both output files, denylist, both overlays,
+composition policy, pack settings and README. Missing and unreadable inputs
+SHALL be explicit. HTTP configuration and credentials SHALL NOT be required,
+read, or fingerprinted by structural verification. Reports SHALL NOT contain
+resolved versions, asset probes, compatibility classifications, or an Obtainium
+compatibility guarantee.
 
-The system SHALL write an incomplete running record before validation and replace
-it atomically on completion, including failure. Independently discoverable errors
-SHALL be collected across both variants. Input changes during the run SHALL
-prevent success for the current files. Completion with no errors SHALL be
-required for success. Cached package IDs and previous reports SHALL NOT bypass
-these checks. Obsolete verification report schemas SHALL require regeneration
-and SHALL NOT authorize publication.
+Verification SHALL check and fingerprint one captured set of input bytes,
+collect independently discoverable errors across both variants, and succeed
+only when those bytes have no errors. The command's exit status SHALL be the
+verification outcome; the report SHALL NOT serve as authorization for
+publication. Previous reports SHALL NOT bypass these checks. Obsolete verification report schemas SHALL require regeneration with
+`pack verify`.
 
 #### Scenario: Independent errors in both variants
 
@@ -181,13 +181,13 @@ and SHALL NOT authorize publication.
 
 #### Scenario: Interrupted verification
 
-- **WHEN** verification stops after its running record and before completion
-- **THEN** its evidence remains incomplete and cannot be presented as success
+- **WHEN** verification stops before it finishes checking its captured inputs
+- **THEN** the command does not exit successfully, and any existing report describes only the inputs that report's run checked
 
 #### Scenario: Inputs change during verification
 
-- **WHEN** the composition policy, README, or another fingerprinted input changes during verification
-- **THEN** the result cannot be successful for the current files
+- **WHEN** an input file changes after verification captured it
+- **THEN** the report describes the captured bytes, and `pack report` labels it stale for the current files
 
 #### Scenario: Network configuration is absent
 
@@ -197,4 +197,4 @@ and SHALL NOT authorize publication.
 #### Scenario: Obsolete evidence
 
 - **WHEN** an old report uses the retired live-capable schema
-- **THEN** the user is instructed to regenerate it with `pack verify` and publication rejects it
+- **THEN** the user is instructed to regenerate it with `pack verify`

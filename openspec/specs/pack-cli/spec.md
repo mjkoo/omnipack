@@ -17,7 +17,7 @@ succeeds. Handwritten README content SHALL be preserved byte-for-byte. Missing
 or malformed catalog markers SHALL fail the build. The
 build SHALL NOT perform live verification. Network requests for upstream JSON catalogs SHALL remain part of building.
 The codm2000 source SHALL be read from committed JSON; README scraping, APK
-discovery and resolution-state mutation SHALL NOT occur during building.
+discovery and package-ID resolution SHALL NOT occur during building.
 
 #### Scenario: Successful build
 
@@ -58,7 +58,7 @@ The retired `--live` and `--probe-assets` flags SHALL be rejected as unsupported
 arguments with nonzero exit before verification runs. The command SHALL record
 structural evidence and exit zero only on a complete, error-free run. Report
 write failure SHALL cause nonzero exit with a concise stderr diagnostic.
-Verification SHALL NOT rebuild, update package IDs, alter distribution or
+Verification SHALL NOT rebuild, resolve package IDs, alter distribution or
 configuration files, or overwrite the build report.
 
 #### Scenario: No build report is available
@@ -130,7 +130,7 @@ previous bytes or absence. Successful replacement and recovery SHALL preserve
 existing file permission modes; new outputs SHALL use normal file creation
 permissions subject to the process umask. Before publication, a README changed
 since capture SHALL cause failure without overwriting that edit. Recovery covers handled
-exceptions, not process termination, runner loss or rollback storage failure. The build SHALL leave source catalogs and resolution state unchanged on success and failure.
+exceptions, not process termination, runner loss or rollback storage failure. The build SHALL leave committed source catalogs unchanged on success and failure.
 
 #### Scenario: Build fails after some output was rendered
 
@@ -273,30 +273,31 @@ unchanged rebuild look like a change.
 
 ### Requirement: A separate command generates the README source catalog
 
-The system SHALL provide `pack generate-source codm` and an optional `--force`
-flag. It SHALL compare fetched README bytes, configured URL and validated
-reviewed project-policy bytes to accepted source metadata, skip only when all
-inputs are unchanged unless forced, and produce a complete candidate catalog, source
-metadata, resolution state and diagnostic report under `.build/` on success.
-It SHALL NOT write committed source files, pack outputs, git history or PRs.
-It SHALL exit zero for successful generation or an unchanged-source no-op and
-nonzero for failed generation. The report SHALL distinguish those outcomes and
-identify unsupported links, inactive project rules, effective policy, resolved
-and reused APK IDs, successful track-only resources, retained failures and
-unresolved projects. It SHALL NOT modify the reviewed project policy. A complete
-catalog SHALL account for every eligible project as an APK or an explicitly
-declared tracker; lack of an APK SHALL NOT imply permission to skip or track it.
-Only artifacts produced by the current invocation SHALL be offered as its result.
+The system SHALL provide `pack generate-source codm`. Each invocation SHALL
+fetch the configured README, validate the reviewed project policy, resolve every
+eligible project, and on success write a complete candidate catalog and a
+diagnostic report under `.build/`. It SHALL NOT write committed source files,
+pack outputs, git history or PRs, and it SHALL NOT persist resolution state
+between invocations. It SHALL exit zero for successful generation and nonzero
+for failed generation. The report SHALL identify unsupported links, inactive
+project rules, effective policy, resolved APK IDs, successful track-only
+resources, retained failures, unresolved projects and catalog changes relative
+to the committed catalog. It SHALL NOT modify the reviewed project policy. A
+complete catalog SHALL account for every eligible project as an APK or an
+explicitly declared tracker; lack of an APK SHALL NOT imply permission to skip
+or track it. The retired `--force` flag SHALL be rejected as an unsupported
+argument. Only artifacts produced by the current invocation SHALL be offered as
+its result.
 
 #### Scenario: Unchanged source
 
-- **WHEN** the configured URL, fetched source hash and valid policy hash match accepted metadata and force is absent
-- **THEN** the command reports a no-op without release or APK requests
+- **WHEN** the README, the policy and every project's resolved identity match the committed catalog
+- **THEN** the command succeeds with a candidate catalog byte-identical to the committed catalog
 
 #### Scenario: Forced refresh
 
-- **WHEN** force is supplied and README and policy bytes are unchanged
-- **THEN** the command checks releases and generates or reports failure using the normal resolution contract
+- **WHEN** `--force` is supplied
+- **THEN** argument parsing fails before any network request, since every invocation already resolves every project
 
 #### Scenario: Incomplete generation
 
@@ -306,7 +307,7 @@ Only artifacts produced by the current invocation SHALL be offered as its result
 #### Scenario: Policy update needs generation
 
 - **WHEN** project policy changes while README bytes remain identical
-- **THEN** the command generates under the new policy instead of reporting an unchanged-source no-op
+- **THEN** the next invocation generates under the new policy
 
 #### Scenario: Kanto needs no APK resolution
 
