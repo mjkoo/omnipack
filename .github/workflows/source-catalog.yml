@@ -3,13 +3,7 @@ name: Reviewed source catalog
 on:
   schedule:
     - cron: "17 4 * * *"
-  workflow_dispatch:
-    inputs:
-      force:
-        description: Refresh releases even when README and policy bytes are accepted
-        required: false
-        default: false
-        type: boolean
+  workflow_dispatch: {}
 
 permissions: {}
 
@@ -52,80 +46,9 @@ jobs:
         name: Sync locked environment
         run: uv sync --locked
 
-      - id: observe
-        name: Capture selected main and source branch
-        run: uv run --no-sync python -m scripts.source_publication observe --base "$GITHUB_SHA"
-
-      - id: generate_scheduled
+      - id: generate
         name: Generate one source candidate
-        if: github.event_name == 'schedule' || !inputs.force
         run: uv run --no-sync pack generate-source codm
-
-      - id: generate_forced
-        name: Generate one forced source candidate
-        if: github.event_name == 'workflow_dispatch' && inputs.force
-        run: uv run --no-sync pack generate-source codm --force
-
-      - id: check
-        name: Build and structurally verify candidate
-        run: uv run --no-sync python -m scripts.source_publication check --base "$GITHUB_SHA"
-
-      - id: publish
-        name: Publish owned source proposal
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
-        run: uv run --no-sync python -m scripts.source_publication publish
-
-      - name: Record final current-run outcomes
-        if: always()
-        env:
-          DIAGNOSTIC_ROOT: ${{ runner.temp }}/source-catalog-diagnostics
-          CHECKOUT_OUTCOME: ${{ steps.checkout.outcome }}
-          SETUP_UV_OUTCOME: ${{ steps.setup_uv.outcome }}
-          SYNC_OUTCOME: ${{ steps.sync.outcome }}
-          OBSERVE_OUTCOME: ${{ steps.observe.outcome }}
-          SCHEDULED_OUTCOME: ${{ steps.generate_scheduled.outcome }}
-          FORCED_OUTCOME: ${{ steps.generate_forced.outcome }}
-          CHECK_OUTCOME: ${{ steps.check.outcome }}
-          PUBLISH_OUTCOME: ${{ steps.publish.outcome }}
-        run: |
-          python3 - <<'PYTHON'
-          import html, json, os
-          from pathlib import Path
-          directory = Path(os.environ["DIAGNOSTIC_ROOT"])
-          directory.mkdir(parents=True, exist_ok=True)
-          path = directory / "run-result.json"
-          try:
-              result = json.loads(path.read_text())
-          except (OSError, ValueError):
-              result = {"status": "failed", "stage": "setup"}
-          outcomes = {key.removesuffix("_OUTCOME").lower(): value for key, value in os.environ.items() if key.endswith("_OUTCOME")}
-          result["outcomes"] = outcomes
-          result.setdefault("baseSha", os.environ["GITHUB_SHA"])
-          failures = [key for key, value in outcomes.items() if value in {"failure", "cancelled"}]
-          if failures and result.get("status") not in {"uncertain", "failed"}:
-              result.update(status="failed", stage=failures[0])
-          if not failures and outcomes.get("publish") != "success" and result.get("status") != "uncertain":
-              result.update(status="failed", stage="incomplete")
-          report_path = Path(".build/source-generation/codm/report.json")
-          if any(outcomes.get(key) in {"success", "failure"} for key in ("scheduled", "forced")) and report_path.is_file():
-              def safe(value):
-                  if isinstance(value, dict):
-                      return {key: safe(item) for key, item in value.items() if key not in {"error", "detail"}}
-                  if isinstance(value, list):
-                      return [safe(item) for item in value]
-                  return value
-              try:
-                  from scripts.nightly_reporting import redact
-                  report = redact(safe(json.loads(report_path.read_text())))
-                  (directory / "report.json").write_text(json.dumps(report, indent=2, sort_keys=True) + "\n")
-              except (OSError, ValueError):
-                  result["generationReport"] = "unavailable"
-          rendered = json.dumps(result, indent=2, sort_keys=True)
-          path.write_text(rendered + "\n")
-          with Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a") as summary:
-              summary.write("<pre>" + html.escape(rendered) + "</pre>\n")
-          PYTHON
 
       - name: Upload available current-run diagnostics
         if: always()
