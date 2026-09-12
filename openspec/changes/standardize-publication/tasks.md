@@ -1,6 +1,6 @@
 ## 1. Stateless source generation
 
-- [ ] 1.1 Retire the old source publisher before anything it imports changes. Delete `scripts/source_publication.py`, `tests/test_source_publication.py` and `tests/test_source_workflow.py`. In `.github/workflows/source-catalog.yml`, remove:
+- [x] 1.1 Retire the old source publisher before anything it imports changes. Delete `scripts/source_publication.py`, `tests/test_source_publication.py` and `tests/test_source_workflow.py`. In `.github/workflows/source-catalog.yml`, remove:
   - the `observe`, `check` and `publish` steps;
   - the final record step that imports `scripts.nightly_reporting`;
   - the `force` input of `workflow_dispatch` and the `generate_forced` step that runs `pack generate-source codm --force`;
