@@ -23,29 +23,29 @@ codm` operation resolves only the explicitly configured codm source candidate;
 it does not extend structural verification or change committed files.
 
 Standalone verification writes schema 2 evidence to `.build/verify.json`, separately
-from the build report. It first writes an incomplete running record and atomically
-replaces it on completion, including failure. Reports contain offline mode,
-verifier identity, observation times, completion, status, contextual errors and
+from the build report. It reads every input once, checks and fingerprints exactly
+those captured bytes, and writes the report a single time, when the run completes;
+an interrupted run leaves no new report, so any report already on disk still
+describes only the inputs an earlier completed run checked. Reports contain offline
+mode, verifier identity, observation times, completion, status, contextual errors and
 SHA-256 fingerprints of both distribution files, the denylist, both overlays,
 composition policy, pack settings and README. Missing and unreadable inputs are
 explicit. HTTP configuration and environment credentials are not consulted or
 fingerprinted.
 
-Independent errors are collected across both variants. Input changes during a
-run prevent success. An interrupted run leaves incomplete evidence. Verification
-exits zero only for a complete run without errors; report persistence failure
-also causes a nonzero exit and a stderr diagnostic.
+Independent errors are collected across both variants. Verification exits zero
+only for a complete run without errors; report persistence failure also causes a
+nonzero exit and a stderr diagnostic.
 
-Verification never rebuilds or changes the packs, README, configuration,
-package-ID state or `.build/report.json`. Building performs source ingestion but
-does not discover package IDs; codm discovery belongs to source generation.
+Verification never rebuilds or changes the packs, README, configuration or
+`.build/report.json`. Building performs source ingestion but does not discover
+package IDs; codm discovery belongs to source generation.
 
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. Older verification schemas require regeneration with
-`pack verify` and cannot authorize publication. Existing build reports remain
-readable. One available report is enough; missing both, corrupt reports and
-unsupported schemas fail display. Displaying a recorded failed operation exits
-successfully.
+`pack verify`. Existing build reports remain readable. One available report is
+enough; missing both, corrupt reports and unsupported schemas fail display.
+Displaying a recorded failed operation exits successfully.
 
 ## Structural checks and limits
 
@@ -79,18 +79,22 @@ and [maintained curation](curation.md) for intended policies and their limitatio
 See [structural validation results](../openspec/changes/archive/2026-09-10-simplify-pack-verification/structural-verification-validation.md) for
 the retained test suite, publication boundaries and byte-preservation checks.
 
-Nightly publication requires fresh structural evidence for each built candidate,
-validated in the selected revision's runtime after one build. Nightly does not
-run pre-build verification or repeat development CI checks. Exact bytes, staging, publishable-path restrictions and the README
-handwritten-content boundary remain enforced. Structural failure blocks publication
-without selecting a different project. App release metadata becoming unavailable
-after a successful build does not add a verification gate or cause reselection.
+Nightly publication runs `pack verify` once per run, in the read-only job, against
+the exact candidate it committed locally beforehand; the write job trusts that job's
+success and the pushed commit's SHA rather than re-running verification or reading a
+report from a different run. Nightly does not run pre-build verification or repeat
+development CI checks. Exact bytes, staging, publishable-path restrictions and the
+README handwritten-content boundary remain enforced. A verification failure blocks
+publication without selecting a different project. App release metadata becoming
+unavailable after a successful build does not add a verification gate or cause
+reselection.
 
-The publisher separately checks the rolling release seed's existence and ownership
-after confirmed main publication or a verified no-op. A seed failure blocks only
-release synchronization. Verification itself never queries that release, including
-when the tracker is present. See [publishing](publishing.md) for explicit bootstrap,
-release synchronization and recovery.
+The publisher separately checks the rolling release's existence, ownership marker,
+title and published-prerelease state after a successful main push or a verified
+no-op. A release-prerequisite failure blocks only release synchronization.
+Verification itself never queries that release, including when the tracker is
+present. See [publishing](publishing.md) for the two-job flow, bootstrap, release
+synchronization and recovery.
 
 Dated observations in [verification validation](../openspec/changes/archive/2026-09-08-add-pack-verification/verification-validation.md),
 [curation validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md), and retained fixture provenance

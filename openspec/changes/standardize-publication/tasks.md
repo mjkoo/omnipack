@@ -137,7 +137,7 @@
 
 ## 5. Documentation
 
-- [ ] 5.1 Add `pkgs.lychee` to the flake devShell next to `pkgs.actionlint` and `pkgs.zizmor`, and a `just check-links` recipe that runs `lychee --offline` over `docs/` and `README.md`. Then rewrite `docs/publishing.md` to cover:
+- [x] 5.1 Add `pkgs.lychee` to the flake devShell next to `pkgs.actionlint` and `pkgs.zizmor`, and a `just check-links` recipe that runs `lychee --offline` over `docs/` and `README.md`. Then rewrite `docs/publishing.md` to cover:
   - the two-job nightly flow and credential split, the bundle hand-off, and the write job's runtime (no project environment, standard library only, the runner's `python3`);
   - permissions and the direct-push prerequisites;
   - the one-off `gh release create` bootstrap, with the exact command and seed body, and that the release must stay a published, mutable prerelease;
@@ -147,7 +147,7 @@
   - rollback.
 
   Verify with `just check-links`, a no-dash check and `nix flake check`.
-- [ ] 5.2 Rewrite `docs/source-generation.md` to cover:
+- [x] 5.2 Rewrite `docs/source-generation.md` to cover:
   - stateless generation and retained failures;
   - that a transient resolution failure for a project whose update an open proposal carries can close that proposal or drop that update from it, and that the next successful run restores it as a new or updated proposal;
   - that generation keeps no state between runs and has no forced-refresh mode, since every run resolves every project;
@@ -158,7 +158,7 @@
   - the PR-creation setting.
 
   Verify with `just check-links`.
-- [ ] 5.3 Update `docs/verification.md`, `docs/development.md`, `docs/curation.md` and any other guide that mentions the retired pieces. Verify with `just check-links`, and verify that a case-insensitive `git grep` over `docs/`, `README.md` and `AGENTS.md` finds none of these outside archived changes:
+- [x] 5.3 Update `docs/verification.md`, `docs/development.md`, `docs/curation.md` and any other guide that mentions the retired pieces. Verify with `just check-links`, and verify that a case-insensitive `git grep` over `docs/`, `README.md` and `AGENTS.md` finds none of these outside archived changes:
   - `codm.source.json`, `package-ids.json` and `package-ID state`;
   - the retired flag and input: `generate-source codm --force`, `--force` standing alone as a code span, and `inputs.force`. Other `--force` uses, such as the bot branch's `git push --force`, stay allowed;
   - `run-result.json`, `bootstrap-release` and `rolling-state`;
