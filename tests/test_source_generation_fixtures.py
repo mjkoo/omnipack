@@ -2,9 +2,10 @@ from __future__ import annotations
 
 import hashlib
 import json
-import re
 from pathlib import Path
 from typing import Any
+
+import pytest
 
 from omnipack.composition_policy import (
     apply_composition_policy,
@@ -12,6 +13,7 @@ from omnipack.composition_policy import (
 )
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
+from omnipack.package_id import _is_valid_package_id
 from omnipack.render import render
 from omnipack.sources import bboi, codm, rjny
 from omnipack.sources.common import normalize_record
@@ -120,95 +122,99 @@ def test_current_captured_baseline_reproduces_exact_exports_and_family_winners()
     assert derived_winners == index["familyWinners"]
 
 
-def test_committed_catalog_adds_only_reviewed_projects_to_frozen_exports(
-    tmp_path: Path,
-) -> None:
-    higher, _ = captured_pipeline()
+def _committed_codm_catalog() -> dict[str, Any]:
+    return load_json(ROOT / "config/catalogs/codm.json")
+
+
+def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
+    catalog = _committed_codm_catalog()
+    apps = list(catalog["apps"])
+    removed = apps.pop()
+    added = {
+        **removed,
+        "id": "com.example.testinvariant.added",
+        "url": "https://github.com/example/testinvariant-added",
+        "name": "Test Invariant Added",
+        "author": "example",
+    }
+    return {**catalog, "apps": [*apps, added]}
+
+
+@pytest.fixture(params=["committed", "one-added-one-removed"])
+def codm_catalog(request: pytest.FixtureRequest) -> dict[str, Any]:
+    if request.param == "committed":
+        return _committed_codm_catalog()
+    return _catalog_with_one_project_added_and_one_removed()
+
+
+def _compose_with_codm_catalog(
+    catalog: dict[str, Any], tmp_path: Path, higher: list[App]
+) -> CompositionResult:
     policy = parse_composition_policy(load_json(ROOT / "config/composition.json"))
     eligible_higher = apply_composition_policy(
         policy, higher, require_all=False
     ).candidates
-    captured_urls = {
-        normalize_project_url(url)
-        for url in re.findall(
-            r"\[[^\]]+\]\((https?://[^)\s]+)\)",
-            (ROOT / "tests/fixtures/codm-readme.md").read_text(),
-        )
-    }
-    catalog = load_json(ROOT / "config/catalogs/codm.json")
-    catalog["apps"] = [
-        app
-        for app in catalog["apps"]
-        if normalize_project_url(app["url"]) in captured_urls
-    ]
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "codm.json").write_text(json.dumps(catalog))
     generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, eligible_higher)
-    result = compose(
+    return compose(
         [*higher, *generated],
         load_json(ROOT / "config/deny.json"),
         load_json(ROOT / "config/overlay.json"),
         load_json(ROOT / "config/overlay.dual.json"),
         policy=policy,
     )
-    settings = load_json(ROOT / "config/settings.json")
-    baseline = {
-        variant: json.loads(
-            (FIXTURES / "baseline" / f"{variant.value}-screen.golden").read_bytes()
-        )
-        for variant in Variant
-    }
-    current = {
-        variant: json.loads(render(result.apps[variant], settings))
-        for variant in Variant
-    }
-    assert current[Variant.SINGLE] == baseline[Variant.SINGLE]
-    old_dual = {app["id"]: app for app in baseline[Variant.DUAL]["apps"]}
-    new_dual = {app["id"]: app for app in current[Variant.DUAL]["apps"]}
-    assert {key: new_dual[key] for key in old_dual} == old_dual
-    assert set(new_dual) - set(old_dual) == {
-        "dev.adrian.showdown",
-        "com.mastercook777.heimdall",
-        "1845280017",
-    }
-    assert len(current[Variant.SINGLE]["apps"]) == 92
-    assert len(current[Variant.DUAL]["apps"]) == 112
 
 
-def test_live_catalog_growth_is_separate_from_frozen_regression() -> None:
-    captured_urls = {
-        normalize_project_url(url)
-        for url in re.findall(
-            r"\[[^\]]+\]\((https?://[^)\s]+)\)",
-            (ROOT / "tests/fixtures/codm-readme.md").read_text(),
-        )
-    }
-    live_urls = {
-        normalize_project_url(app["url"])
-        for app in load_json(ROOT / "config/catalogs/codm.json")["apps"]
-    }
-    assert live_urls - captured_urls == {
-        "github.com/chimeragaming/pixelnavigator",
-        "github.com/darkaxt/dualscreendex",
-        "github.com/rexmont/pixel-guide-android",
-        "github.com/rsigristc/dw3-ds-android",
-    }
+def test_committed_catalog_entries_have_unique_ids_and_urls(
+    codm_catalog: dict[str, Any],
+) -> None:
+    ids = [app["id"] for app in codm_catalog["apps"]]
+    urls = [normalize_project_url(app["url"]) for app in codm_catalog["apps"]]
+    assert len(ids) == len(set(ids))
+    assert len(urls) == len(set(urls))
 
 
-def test_committed_catalog_and_state_are_bound_to_reviewed_policy() -> None:
-    catalog_bytes = (ROOT / "config/catalogs/codm.json").read_bytes()
-    catalog = json.loads(catalog_bytes)
-    metadata = load_json(ROOT / "config/catalogs/codm.source.json")
-    state = load_json(ROOT / "config/package-ids.json")
-    policy = load_json(ROOT / "config/codm-projects.json")["projects"]
-    by_url = {normalize_project_url(app["url"]): app for app in catalog["apps"]}
-    assert len(by_url) == 28 and len(state) == 27
-    assert metadata["catalogSha256"] == hashlib.sha256(catalog_bytes).hexdigest()
-    assert (
-        metadata["projectPolicySha256"]
-        == hashlib.sha256((ROOT / "config/codm-projects.json").read_bytes()).hexdigest()
+def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
+    codm_catalog: dict[str, Any],
+) -> None:
+    for app in codm_catalog["apps"]:
+        settings = json.loads(app["additionalSettings"])
+        if settings.get("trackOnly"):
+            assert app["id"].isdecimal()
+            assert settings["versionDetection"] is False
+            assert settings["includeZips"] is False
+            assert settings["autoApkFilterByArch"] is False
+        else:
+            assert settings.get("trackOnly", False) is False
+            assert _is_valid_package_id(app["id"])
+
+
+def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
+    codm_catalog: dict[str, Any], tmp_path: Path
+) -> None:
+    higher, _ = captured_pipeline()
+    result = _compose_with_codm_catalog(codm_catalog, tmp_path, higher)
+    assert result.apps[Variant.DUAL]
+
+
+def test_committed_catalog_leaves_the_single_screen_pack_unchanged(
+    tmp_path: Path,
+) -> None:
+    higher, _ = captured_pipeline()
+    committed = _compose_with_codm_catalog(
+        _committed_codm_catalog(), tmp_path / "committed", higher
     )
-    assert by_url["github.com/averageconsumer/kanto-gear"]["id"] == "1845280017"
-    assert "github.com/averageconsumer/kanto-gear" not in state
+    modified = _compose_with_codm_catalog(
+        _catalog_with_one_project_added_and_one_removed(),
+        tmp_path / "modified",
+        higher,
+    )
+    assert committed.apps[Variant.SINGLE] == modified.apps[Variant.SINGLE]
+
+
+def test_reviewed_policy_sets_fallback_for_named_projects() -> None:
+    policy = load_json(ROOT / "config/codm-projects.json")["projects"]
     assert (
         policy["github.com/emulnk/emulnk"]["additionalSettings"][
             "fallbackToOlderReleases"

@@ -27,7 +27,7 @@
   - in `tests/test_verification_integration.py`, the `inputs` fixture stops writing `config/package-ids.json`, so the protected-file snapshot covers only inputs that still exist.
 
   Verify that the captured 92/109 regression still passes and `git grep` finds no production or test reference to either file.
-- [ ] 1.5 Rewrite the three live-catalog pin tests in `tests/test_source_generation_fixtures.py` as invariants over the committed catalog, with no URL, count or ID pins:
+- [x] 1.5 Rewrite the three live-catalog pin tests in `tests/test_source_generation_fixtures.py` as invariants over the committed catalog, with no URL, count or ID pins:
   - unique IDs and URLs;
   - kind-appropriate IDs and flags;
   - error-free composition with the frozen captured sources;
