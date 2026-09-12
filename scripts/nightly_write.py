@@ -160,8 +160,11 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
     """Synchronize the owned rolling release from the JSON pair at `HEAD`."""
     selected_gh = gh or SubprocessGhRunner()
     try:
-        single = (root / "dist/single-screen.json").read_bytes()
-        dual = (root / "dist/dual-screen.json").read_bytes()
+        try:
+            single = (root / "dist/single-screen.json").read_bytes()
+            dual = (root / "dist/dual-screen.json").read_bytes()
+        except OSError:
+            raise ReleaseFailure("could not read release assets") from None
         single_digest = sha256(single).hexdigest()
         dual_digest = sha256(dual).hexdigest()
 

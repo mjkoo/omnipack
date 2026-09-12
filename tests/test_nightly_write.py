@@ -861,6 +861,20 @@ def test_head_read_failure_fails_with_release_failed_reason(
     assert gh.calls == []
 
 
+def test_missing_pack_file_fails_with_release_failed_reason_and_no_writes(
+    tmp_path: Path,
+) -> None:
+    root, _sha = _release_repo(tmp_path)
+    (root / "dist/single-screen.json").unlink()
+    gh = ScriptedGh(view=None, view_ok=False)
+
+    result = run_release(root, gh=gh)
+
+    assert result.status == "failed"
+    assert result.summary == "release failed: could not read release assets"
+    assert gh.calls == []
+
+
 def test_gh_auth_failure_fails_with_specific_reason_and_no_writes(
     tmp_path: Path,
 ) -> None:
