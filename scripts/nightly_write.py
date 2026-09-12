@@ -115,6 +115,9 @@ def run_push(
         if head != base_sha:
             raise PushFailure(generic)
 
+        if _expect(_git(root, "status", "--porcelain"), generic).strip():
+            raise PushFailure(generic)
+
         _expect(_git(root, "bundle", "verify", str(bundle_path)), generic)
         _expect(_git(root, "fetch", "--quiet", str(bundle_path), "HEAD"), generic)
         fetched_sha = _expect(_git(root, "rev-parse", "FETCH_HEAD"), generic).strip()
@@ -143,8 +146,6 @@ def run_push(
         if push_result.returncode != 0:
             raise PushFailure(generic)
 
-        if _expect(_git(root, "status", "--porcelain"), generic).strip():
-            raise PushFailure(generic)
         detach_result = _git(root, "checkout", "--detach", candidate_sha)
         if detach_result.returncode != 0:
             raise PushFailure(generic)

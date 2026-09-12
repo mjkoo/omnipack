@@ -314,7 +314,7 @@ def test_malformed_shas_are_rejected_before_any_fetch_or_push(
     assert _git(bare, "rev-parse", "main") == base
 
 
-def test_dirty_tree_before_detach_fails_without_detaching(tmp_path: Path) -> None:
+def test_dirty_tree_before_push_fails_without_pushing(tmp_path: Path) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
@@ -327,7 +327,7 @@ def test_dirty_tree_before_detach_fails_without_detaching(tmp_path: Path) -> Non
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == sha
+    assert _git(bare, "rev-parse", "main") == base
     assert _git(write_side, "rev-parse", "HEAD") == base
 
 
