@@ -35,7 +35,7 @@ def inputs(root: Path) -> dict[Path, bytes]:
             json.dumps({"apps": [app], "settings": {"categories": "{}"}})
         )
     (root / ".build").mkdir()
-    (root / ".build/report.json").write_text('{"schemaVersion":1,"status":"success"}')
+    (root / ".build/report.json").write_text('{"schemaVersion":3,"status":"success"}')
     (root / ".cache").mkdir()
     (root / ".cache/sentinel").write_bytes(b"cache bytes\x00")
     write_catalog(root)

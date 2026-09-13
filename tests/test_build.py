@@ -181,3 +181,41 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
         assert selection["family"] == "app:shared"
         assert selection["effective_id"] == "new.pkg"
         assert selection["url"] == current_url
+
+
+BUILD_REPORT_FIELDS = {
+    "schemaVersion",
+    "status",
+    "changes",
+    "sourceAdmissions",
+    "denylistRemovals",
+    "staleExclusions",
+    "selections",
+    "offlineVerification",
+}
+
+
+def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
+    from omnipack.report import write_report
+
+    write_config(tmp_path)
+    build_module.publish_build(tmp_path, composition("one"), IngestionReport())
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["schemaVersion"] == 3
+    assert set(report) == BUILD_REPORT_FIELDS
+    write_report(
+        tmp_path,
+        {},
+        None,
+        IngestionReport(),
+        stage="rendering",
+        error=ValueError("bad"),
+    )
+    failed = json.loads((tmp_path / ".build/report.json").read_text())
+    assert set(failed) == BUILD_REPORT_FIELDS | {"stage", "error"}
+    assert (failed["status"], failed["stage"], failed["error"], failed["changes"]) == (
+        "failed",
+        "rendering",
+        "bad",
+        None,
+    )

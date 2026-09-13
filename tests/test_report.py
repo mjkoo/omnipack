@@ -38,15 +38,52 @@ def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     assert "Evidence: stale" in format_reports(tmp_path)
 
 
-def test_build_only_legacy_failure_is_displayable(tmp_path: Path) -> None:
+def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
     path = tmp_path / ".build/report.json"
     path.parent.mkdir()
     path.write_text(
-        json.dumps({"status": "failed", "stage": "rendering", "error": "bad"})
+        json.dumps(
+            {
+                "schemaVersion": 3,
+                "status": "failed",
+                "stage": "rendering",
+                "error": "bad",
+            }
+        )
     )
     output = format_reports(tmp_path)
     assert "Build report\nStatus: failed" in output
+    assert "Stage: rendering" in output and "Error: bad" in output
     assert "No standalone verification recorded" in output
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"status": "success"},
+        {"schemaVersion": 1, "status": "success"},
+        {"schemaVersion": 2, "status": "success", "displacements": []},
+    ],
+    ids=["schemaless", "schema-1", "schema-2"],
+)
+def test_older_build_reports_require_regeneration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    document: dict[str, object],
+) -> None:
+    from omnipack.cli import main
+
+    path = tmp_path / ".build/report.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(document))
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 1
+    error = capsys.readouterr().err
+    assert (
+        f"unsupported build report schema {document.get('schemaVersion')!r}; "
+        "regenerate with `pack build`"
+    ) in error
 
 
 @pytest.mark.parametrize(
@@ -176,7 +213,7 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schemaVersion": 1,
+                "schemaVersion": 3,
                 "status": "success",
                 "offlineVerification": {"status": "success", "findings": []},
             }
@@ -210,11 +247,12 @@ def test_malformed_build_report_is_concise_cli_failure(
 
     path = tmp_path / ".build/report.json"
     path.parent.mkdir()
-    path.write_text(json.dumps({"status": "success", **mutation}))
+    document = {"schemaVersion": 3, "status": "success", **mutation}
+    path.write_text(json.dumps(document))
     monkeypatch.chdir(tmp_path)
     assert main(["report"]) == 1
     assert "Traceback" not in capsys.readouterr().err
-    assert json.loads(path.read_text()) == {"status": "success", **mutation}
+    assert json.loads(path.read_text()) == document
 
 
 def test_findings_display_location_field_and_effective_version(

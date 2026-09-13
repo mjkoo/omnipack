@@ -80,7 +80,7 @@
   - a selection in the new shape displayed by `pack report` with its reason and considered candidates.
 
   Also verify that the build, verify and report sequence test passes at this commit.
-- [ ] 3.2 Write build reports as schema 3 with exactly the fields in design decision 8. `pack report` accepts only schema 3, and for any other schema, including a report without one, exits nonzero with a diagnostic telling the user to regenerate with `pack build`. Verify with tests for:
+- [x] 3.2 Write build reports as schema 3 with exactly the fields in design decision 8. `pack report` accepts only schema 3, and for any other schema, including a report without one, exits nonzero with a diagnostic telling the user to regenerate with `pack build`. Verify with tests for:
   - the written key set;
   - schemaless, schema 1 and schema 2 reports each producing the regeneration diagnostic;
   - the family-switch case, where the report lists the old package removed, the new one added, and the new winner in the selection.

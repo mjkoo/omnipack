@@ -17,7 +17,7 @@ from omnipack.merge import (
 from omnipack.model import Variant
 from omnipack.sources import IngestionReport
 
-BUILD_SCHEMA_VERSION = 2
+BUILD_SCHEMA_VERSION = 3
 
 
 class ReportFormatError(ValueError):
@@ -55,27 +55,18 @@ def write_report(
                 "removed": sorted(before - current),
             }
         composition_report = composition.report
+    records = composition_report or CompositionReport()
     document: dict[str, Any] = {
         "schemaVersion": BUILD_SCHEMA_VERSION,
         "status": "failed" if error else "success",
         "changes": changes,
         "sourceAdmissions": ingestion.admitted,
-        "denylistRemovals": [],
-        "staleExclusions": [],
+        "denylistRemovals": [_record(item) for item in records.removals],
+        "staleExclusions": [_record(item) for item in records.stale_exclusions],
+        "selections": [_record(item) for item in records.selections],
         "offlineVerification": offline_verification
         or {"status": "not-run", "findings": []},
     }
-    document["selections"] = []
-    if composition_report is not None:
-        document["denylistRemovals"] = [
-            _record(item) for item in composition_report.removals
-        ]
-        document["staleExclusions"] = [
-            _record(item) for item in composition_report.stale_exclusions
-        ]
-        document["selections"] = [
-            _record(item) for item in composition_report.selections
-        ]
     if error is not None:
         document["stage"] = stage
         document["error"] = str(error)
@@ -96,10 +87,11 @@ def format_reports(root: Path) -> str:
     if build_path.exists():
         build = _read_document(build_path, "build")
         schema = build.get("schemaVersion")
-        if "schemaVersion" in build and (
-            type(schema) is not int or schema not in (1, BUILD_SCHEMA_VERSION)
-        ):
-            raise ReportFormatError(f"unsupported build report schema {schema!r}")
+        if type(schema) is not int or schema != BUILD_SCHEMA_VERSION:
+            raise ReportFormatError(
+                f"unsupported build report schema {schema!r}; "
+                "regenerate with `pack build`"
+            )
         if build.get("status") not in ("success", "failed"):
             raise ReportFormatError("malformed build report: status is required")
         if any(
