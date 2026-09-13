@@ -445,7 +445,7 @@ def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
                 original_id=data["id"],
             )
         )
-    return render(apps, {}).encode()
+    return render(apps).encode()
 
 
 def _validate_ids(entries: list[dict[str, Any]]) -> None:

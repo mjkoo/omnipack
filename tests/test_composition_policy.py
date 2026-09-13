@@ -100,7 +100,6 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
                     _import_data(result),
                 )
             ],
-            {},
         )
     )["apps"][0]
     assert rendered["id"] == "org.example.new"

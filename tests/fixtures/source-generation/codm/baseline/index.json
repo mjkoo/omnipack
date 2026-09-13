@@ -40,10 +40,6 @@
     {
       "file": "config/overlay.json",
       "sha256": "93f01e45d2c395f35829a8db83b1321cfbb9e4594c9078e5faf2b3cffedf13fc"
-    },
-    {
-      "file": "config/settings.json",
-      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
     }
   ],
   "outputs": [

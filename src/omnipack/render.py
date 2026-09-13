@@ -60,13 +60,12 @@ def hydrate_settings(source_type: str, values: dict[str, Any]) -> dict[str, Any]
     return result
 
 
-def render(apps: list[ComposedApp], settings: dict[str, Any]) -> str:
+def render(apps: list[ComposedApp]) -> str:
     """Return a deterministic Obtainium import document as JSON text."""
     _validate_unique_ids(apps)
     rendered_apps = [_render_app(app) for app in apps]
     rendered_apps.sort(key=_sort_key)
-    rendered_settings = _render_settings(settings, rendered_apps)
-    document = {"settings": rendered_settings, "apps": rendered_apps}
+    document = {"settings": _render_settings(rendered_apps), "apps": rendered_apps}
     try:
         encoded = json.dumps(
             document,
@@ -142,34 +141,16 @@ def _sort_key(app: dict[str, Any]) -> tuple[str, str, str]:
     return (categories[0] if categories else "", app["name"], app["id"])
 
 
-def _render_settings(
-    configured: dict[str, Any], apps: list[dict[str, Any]]
-) -> dict[str, Any]:
-    configured = deepcopy(configured)
-    category_config = configured.pop("categories", {})
-    if isinstance(category_config, str):
-        try:
-            category_config = json.loads(category_config)
-        except json.JSONDecodeError as error:
-            raise RenderError("settings categories must be a JSON object") from error
-    if not isinstance(category_config, dict):
-        raise RenderError("settings categories must be an object or encoded object")
-
+def _render_settings(apps: list[dict[str, Any]]) -> dict[str, str]:
+    """Map each category the apps use to a colour derived from its name alone."""
     observed = sorted({category for app in apps for category in app["categories"]})
-    categories: dict[str, int] = {}
-    for category in observed:
-        color = category_config.get(category)
-        if color is None:
-            color = int.from_bytes(
-                b"\xff" + hashlib.sha256(category.encode()).digest()[:3]
-            )
-        if not isinstance(color, int) or isinstance(color, bool):
-            raise RenderError(f"category {category!r} color must be an integer")
-        categories[category] = color
-
-    result = {key: _canonical_value(configured[key]) for key in sorted(configured)}
-    result["categories"] = json.dumps(categories, separators=(",", ":"))
-    return result
+    categories = {
+        category: int.from_bytes(
+            b"\xff" + hashlib.sha256(category.encode()).digest()[:3]
+        )
+        for category in observed
+    }
+    return {"categories": json.dumps(categories, separators=(",", ":"))}
 
 
 def _validate_unique_ids(apps: list[ComposedApp]) -> None:

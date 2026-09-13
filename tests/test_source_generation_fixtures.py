@@ -102,10 +102,9 @@ def test_current_captured_baseline_reproduces_exact_exports_and_family_winners()
 ):
     index = load_json(FIXTURES / "baseline/index.json")
     result = compose_captured_baseline()
-    settings = load_json(PRE_MIGRATION / "settings.json")
 
     for variant in Variant:
-        output = render(result.apps[variant], settings).encode()
+        output = render(result.apps[variant]).encode()
         expected = next(
             item for item in index["outputs"] if item["variant"] == variant.value
         )

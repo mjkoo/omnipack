@@ -65,7 +65,6 @@ def test_build_writes_both_variants_and_report(
         b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
     )
     (tmp_path / "config").mkdir()
-    (tmp_path / "config/settings.json").write_text("{}", encoding="utf-8")
     for name, value in (
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
@@ -158,7 +157,6 @@ def test_build_failure_does_not_mutate_committed_catalog(
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     dist = tmp_path / "dist"
@@ -219,7 +217,6 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
         "composition.json": {"schemaVersion": 1, "candidates": [], "pins": []},
         "deny.json": [],
         "overlay.json": [],
-        "settings.json": {},
     }
     for name, value in files.items():
         (config / name).write_text(json.dumps(value), encoding="utf-8")
@@ -331,8 +328,8 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
 
         real_render = build_module.render
 
-        def invalid_render(apps: list[ComposedApp], settings: dict) -> str:
-            rendered = json.loads(real_render(apps, settings))
+        def invalid_render(apps: list[ComposedApp]) -> str:
+            rendered = json.loads(real_render(apps))
             rendered["apps"][0]["preferredApkIndex"] = "first"
             return json.dumps(rendered)
 
@@ -407,7 +404,6 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         ("composition.json", policy_document),
         ("deny.json", []),
         ("overlay.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
     before = json.dumps(
@@ -585,7 +581,6 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
     dist = tmp_path / "dist"
@@ -645,7 +640,6 @@ def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
     for name, value in (
         ("deny.json", []),
         ("overlay.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
 

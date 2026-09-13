@@ -29,7 +29,7 @@ def _render_tracker(variant: Variant) -> str:
         overrideSource=tracker.source_type.value,
         additionalSettings=tracker.additional_settings,
     )
-    return render([ComposedApp(variant, tracker.provenance, data)], {})
+    return render([ComposedApp(variant, tracker.provenance, data)])
 
 
 def test_tracker_id_does_not_collide_with_any_source_or_output_fixture() -> None:
@@ -83,8 +83,8 @@ def test_observed_revision_is_not_rendered_state() -> None:
     records = {
         variant: ComposedApp(variant, tracker.provenance, data) for variant in Variant
     }
-    before = {variant: render([record], {}) for variant, record in records.items()}
-    after = {variant: render([record], {}) for variant, record in records.items()}
+    before = {variant: render([record]) for variant, record in records.items()}
+    after = {variant: render([record]) for variant, record in records.items()}
     assert data == original
     assert data["additionalSettings"] is tracker.additional_settings
     assert before == after

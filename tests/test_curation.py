@@ -51,7 +51,7 @@ def test_upstream_pack_tracker_stays_excluded_after_refresh():
         apps = rjny.fetch(FakeHttp({url: json.dumps({"apps": upstream})}), source)
         assert {a.id for a in apps} == {"904332840", "aenu.aps3e"}
         result = compose(apps, exclusions, [], policy=policy)
-        packs = {v: render(result.apps[v], {}).encode() for v in Variant}
+        packs = {v: render(result.apps[v]).encode() for v in Variant}
         for pack in packs.values():
             assert [a["id"] for a in json.loads(pack)["apps"]] == ["aenu.aps3e"]
         catalog = generate_catalog(packs[Variant.SINGLE], packs[Variant.DUAL], policy)
@@ -105,7 +105,7 @@ def curated():
             )
     overlay = parse_overlay(read(ROOT / "config/overlay.json"), "common overlay")
     return {
-        variant.value: json.loads(render(apply_overlay(apps, overlay), {}))["apps"]
+        variant.value: json.loads(render(apply_overlay(apps, overlay)))["apps"]
         for variant, apps in selected.items()
     }
 

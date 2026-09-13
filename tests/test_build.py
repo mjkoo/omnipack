@@ -63,7 +63,6 @@ def write_config(root: Path) -> None:
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("settings.json", {}),
     ):
         (root / "config" / name).write_text(json.dumps(value), encoding="utf-8")
 
@@ -80,9 +79,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     ingestion = IngestionReport(
         skipped=[{"source": "codm2000", "url": "https://covered"}]
     )
-    build_module.publish_build(
-        tmp_path, composition("kept.id", "new.id"), {}, ingestion
-    )
+    build_module.publish_build(tmp_path, composition("kept.id", "new.id"), ingestion)
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["changes"]["single"] == {"added": ["new.id"], "removed": ["old.id"]}
     assert report["changes"]["dual"] == {"added": ["new.id"], "removed": []}
@@ -95,9 +92,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
 
 def test_first_build_reports_every_app_added(tmp_path: Path) -> None:
     write_config(tmp_path)
-    build_module.publish_build(
-        tmp_path, composition("one", "two"), {}, IngestionReport()
-    )
+    build_module.publish_build(tmp_path, composition("one", "two"), IngestionReport())
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["changes"]["single"]["added"] == ["one", "two"]
     assert report["changes"]["dual"]["added"] == ["one", "two"]
@@ -119,7 +114,6 @@ def test_policy_byte_change_during_build_prevents_publication(
         build_module.publish_build(
             tmp_path,
             composition("one"),
-            {},
             IngestionReport(),
             composition_bytes=consumed,
             on_stage=mutate,
@@ -174,7 +168,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     (tmp_path / "config/composition.json").write_bytes(policy_bytes)
     current = compose([candidate], [], [], policy=parse_composition_policy(policy_data))
     build_module.publish_build(
-        tmp_path, current, {}, IngestionReport(), composition_bytes=policy_bytes
+        tmp_path, current, IngestionReport(), composition_bytes=policy_bytes
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
     for variant in Variant:

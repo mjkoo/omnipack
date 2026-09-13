@@ -640,13 +640,13 @@ def test_extras_composition_fields_stay_out_of_the_rendered_record() -> None:
         "provenance",
     }
     [rendered] = json.loads(
-        render([ComposedApp(Variant.DUAL, app.provenance, _import_data(app))], {})
+        render([ComposedApp(Variant.DUAL, app.provenance, _import_data(app))])
     )["apps"]
     assert "dualScreen" not in rendered
     assert "dualScreen" not in json.loads(rendered["additionalSettings"])
 
 
-def test_settings_json_string_must_decode_to_object() -> None:
+def test_additional_settings_string_must_decode_to_object() -> None:
     with pytest.raises(SourceError, match="extras.*Settings"):
         extras.fetch(
             [

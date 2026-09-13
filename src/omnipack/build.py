@@ -54,7 +54,6 @@ def previous_ids(root: Path) -> dict[Variant, list[dict[str, str]]]:
 def publish_build(
     root: Path,
     composition: CompositionResult,
-    settings: dict[str, Any],
     ingestion: IngestionReport,
     composition_bytes: bytes | None = None,
     *,
@@ -71,8 +70,7 @@ def publish_build(
         on_stage("rendering")
     before = previous_ids(root)
     rendered = {
-        variant: render(composition.apps[variant], settings).encode()
-        for variant in Variant
+        variant: render(composition.apps[variant]).encode() for variant in Variant
     }
     from omnipack.offline import OfflineInputs, validate_offline
     from omnipack.report import write_report

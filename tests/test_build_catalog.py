@@ -112,7 +112,7 @@ def test_concurrent_readme_edit_is_preserved_before_publication(
 
     with pytest.raises(build.OfflineVerificationError) as failure:
         build.publish_build(
-            tmp_path, composition("one"), {}, IngestionReport(), on_stage=mutate
+            tmp_path, composition("one"), IngestionReport(), on_stage=mutate
         )
     assert failure.value.findings[0]["code"] == "input_changed"
     assert readme.read_bytes() == MARKED + b"edit"
@@ -136,7 +136,7 @@ def test_invalid_readme_fails_offline_gate_without_publishing(
     if content is not None:
         readme.write_bytes(content)
     with pytest.raises(build.OfflineVerificationError) as failure:
-        build.publish_build(tmp_path, composition("one"), {}, IngestionReport())
+        build.publish_build(tmp_path, composition("one"), IngestionReport())
     assert failure.value.findings[0]["stage"] == "catalog"
     assert not (tmp_path / "dist").exists()
     assert (readme.read_bytes() if readme.exists() else None) == content
@@ -151,7 +151,7 @@ def test_build_catalog_matches_published_exports_and_preserves_surrounding_bytes
     write_config(tmp_path)
     readme = tmp_path / "README.md"
     readme.write_bytes(MARKED)
-    build.publish_build(tmp_path, composition("one"), {}, IngestionReport())
+    build.publish_build(tmp_path, composition("one"), IngestionReport())
     prefix, interior, suffix = split_catalog(readme.read_bytes())
     before_prefix, _, before_suffix = split_catalog(MARKED)
     assert (prefix, suffix) == (before_prefix, before_suffix)
@@ -186,7 +186,7 @@ def test_readme_replacement_failure_restores_published_pack_bytes(
 
     monkeypatch.setattr(Path, "replace", replace)
     with pytest.raises(OSError, match="README replacement failed"):
-        build.publish_build(tmp_path, composition("one"), {}, IngestionReport())
+        build.publish_build(tmp_path, composition("one"), IngestionReport())
     assert readme.read_bytes() == before
     for output in outputs:
         assert (output.read_bytes() if output.exists() else None) == (
@@ -207,7 +207,7 @@ def test_policy_snapshot_is_rechecked_when_caller_does_not_supply_one(
 
     with pytest.raises(build.OfflineVerificationError) as failure:
         build.publish_build(
-            tmp_path, composition("one"), {}, IngestionReport(), on_stage=mutate
+            tmp_path, composition("one"), IngestionReport(), on_stage=mutate
         )
     assert failure.value.findings[0]["code"] == "input_changed"
     assert not (tmp_path / "dist").exists()
@@ -250,7 +250,7 @@ def test_input_edit_during_staging_preserves_inputs_outputs_and_cleans_temps(
 
     monkeypatch.setattr(Path, "write_bytes", mutate_during_write)
     with pytest.raises(build.OfflineVerificationError) as failure:
-        build.publish_build(tmp_path, composition("one"), {}, IngestionReport())
+        build.publish_build(tmp_path, composition("one"), IngestionReport())
 
     assert staged == 3
     assert failure.value.findings[0]["code"] == "input_changed"

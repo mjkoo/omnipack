@@ -169,8 +169,8 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
     assert "user-supplied" in curated.data["additionalSettings"]["about"]
     assert curated.variant is Variant.DUAL
     catalog = generate_catalog(
-        render([], {}).encode(),
-        render([curated], {}).encode(),
+        render([]).encode(),
+        render([curated]).encode(),
         parse_composition_policy(read(ROOT / "config/composition.json")),
     )
     assert name.encode() in catalog
@@ -217,8 +217,8 @@ def test_hollow_knight_source_composition_preserves_dual_only_catalog():
                 "Android 15 is unsupported" in app.data["additionalSettings"]["about"]
             )
     catalog = generate_catalog(
-        render(result.apps[Variant.SINGLE], {}).encode(),
-        render(result.apps[Variant.DUAL], {}).encode(),
+        render(result.apps[Variant.SINGLE]).encode(),
+        render(result.apps[Variant.DUAL]).encode(),
         policy,
     ).decode()
     for _, name in expected.values():

@@ -164,7 +164,7 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
                     )
                     == "extras"
                 )
-                [rendered_metroid] = json.loads(render([metroid[0]], {}))["apps"]
+                [rendered_metroid] = json.loads(render([metroid[0]]))["apps"]
                 settings = json.loads(rendered_metroid["additionalSettings"])
                 assert settings["versionDetection"] is False
                 assert settings["trackOnly"] is False
@@ -213,7 +213,7 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
             assert ctr_app.original_id == observation["original_id"]
             assert ctr_app.url == observation["source"]
-            [rendered_ctr] = json.loads(render([ctr_app], {}))["apps"]
+            [rendered_ctr] = json.loads(render([ctr_app]))["apps"]
             settings = json.loads(rendered_ctr["additionalSettings"])
             assert settings["versionDetection"] is False
             assert settings["versionExtractionRegEx"] == ""

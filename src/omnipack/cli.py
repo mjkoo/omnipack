@@ -59,7 +59,6 @@ def build(_args: argparse.Namespace) -> int:
         publish_build(
             root,
             composition,
-            _object(root / "config/settings.json", "settings"),
             ingestion_report,
             composition_bytes,
             on_stage=record_stage,
@@ -102,13 +101,6 @@ def _ingest_for_build(
     policy = load_composition_policy(policy_bytes)
     result = ingest_all(root, http, source_config, extras_config, policy, report)
     return IngestionResult(result.apps, result.report, result.policy, policy_bytes)
-
-
-def _object(path: Path, source: str) -> dict[str, Any]:
-    value = load_json(path, source)
-    if not isinstance(value, dict):
-        raise SourceError(source, "configuration must be an object")
-    return value
 
 
 def _object_list(path: Path, source: str) -> list[dict[str, str]]:
