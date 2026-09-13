@@ -103,7 +103,7 @@ def curated():
             selected[variant].append(
                 ComposedApp(variant, app.provenance, deepcopy(data))
             )
-    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "common overlay")
+    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     return {
         variant.value: json.loads(render(apply_overlay(apps, overlay)))["apps"]
         for variant, apps in selected.items()

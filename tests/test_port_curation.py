@@ -238,7 +238,7 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
         "additionalSettings": {},
     }
     app = ComposedApp(Variant.DUAL, Provenance("codm2000", url), original)
-    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "common overlay")
+    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     [curated] = apply_overlay([app], overlay)
     assert curated.data["id"] == package_id
     assert curated.data["url"] == url
