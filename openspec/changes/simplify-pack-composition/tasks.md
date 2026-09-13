@@ -134,4 +134,4 @@
   - the implementation and test line deltas against 6,731 and 12,031;
   - the comparison from 7.2;
   - what remains unestablished, such as any device check.
-- [ ] 7.4 Run an independent review of the branch diff against the delta specs and design, fix its findings, and re-run 7.1. Verify that the review's final pass reports no unresolved findings.
+- [x] 7.4 Run an independent review of the branch diff against the delta specs and design, fix its findings, and re-run 7.1. Verify that the review's final pass reports no unresolved findings.

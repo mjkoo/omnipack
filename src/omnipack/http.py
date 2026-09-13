@@ -57,7 +57,7 @@ class Transport(Protocol):
 
 
 class RetryingClient:
-    """Retry configuration and dispatch shared by every plain-GET HTTP client.
+    """Retry configuration and dispatch shared by every retrying HTTP client.
 
     A subclass owns its own `transport` attribute, since each accepts a
     differently shaped transport callable, and calls `_retry` from its `get`.
