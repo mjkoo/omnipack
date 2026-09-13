@@ -93,7 +93,6 @@ def compose_captured_baseline() -> CompositionResult:
         [*higher, *generated],
         load_json(PRE_MIGRATION / "deny.json"),
         load_json(PRE_MIGRATION / "overlay.json"),
-        load_json(PRE_MIGRATION / "overlay.dual.json"),
         policy=parse_composition_policy(load_json(PRE_MIGRATION / "composition.json")),
     )
 
@@ -174,7 +173,6 @@ def _compose_with_codm_catalog(
         [*higher, *generated],
         load_json(ROOT / "config/deny.json"),
         load_json(ROOT / "config/overlay.json"),
-        load_json(ROOT / "config/overlay.dual.json"),
         policy=policy,
     )
 

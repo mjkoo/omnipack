@@ -42,10 +42,6 @@
       "sha256": "93f01e45d2c395f35829a8db83b1321cfbb9e4594c9078e5faf2b3cffedf13fc"
     },
     {
-      "file": "config/overlay.dual.json",
-      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
-    },
-    {
       "file": "config/settings.json",
       "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
     }

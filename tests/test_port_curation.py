@@ -108,7 +108,6 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
         [*maintained, *duplicates],
         [],
         [],
-        [],
         policy=parse_composition_policy(unpinned),
     )
     assert all(
@@ -117,7 +116,6 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
     assert all(app.provenance.source == "bboi" for app in ordinary.apps[Variant.DUAL])
     result = compose(
         [*maintained, *duplicates],
-        [],
         [],
         [],
         policy=parse_composition_policy(document),
@@ -197,7 +195,7 @@ def test_hollow_knight_source_composition_preserves_dual_only_catalog():
     overlays = [
         rule for rule in read(ROOT / "config/overlay.json") if rule["id"] in ids
     ]
-    result = compose(selected, [], overlays, [], policy=policy)
+    result = compose(selected, [], overlays, policy=policy)
     assert result.apps[Variant.SINGLE] == []
     assert len(result.apps[Variant.DUAL]) == 2
     expected = {

@@ -50,7 +50,7 @@ def test_upstream_pack_tracker_stays_excluded_after_refresh():
         upstream[0]["name"] += f" refresh {refresh}"
         apps = rjny.fetch(FakeHttp({url: json.dumps({"apps": upstream})}), source)
         assert {a.id for a in apps} == {"904332840", "aenu.aps3e"}
-        result = compose(apps, exclusions, [], [], policy=policy)
+        result = compose(apps, exclusions, [], policy=policy)
         packs = {v: render(result.apps[v], {}).encode() for v in Variant}
         for pack in packs.values():
             assert [a["id"] for a in json.loads(pack)["apps"]] == ["aenu.aps3e"]

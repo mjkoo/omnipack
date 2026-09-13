@@ -105,8 +105,7 @@ class _Exclusion:
 def compose(
     candidates: list[App],
     denylist: list[dict[str, str]],
-    common_overlay: object,
-    dual_overlay: object,
+    overlay: object,
     *,
     policy: CompositionPolicy,
     report: CompositionReport | None = None,
@@ -122,12 +121,10 @@ def compose(
     pins = {(pin.family, pin.variant): pin.match for pin in policy.pins}
     selected = _select(candidates, exclusions, pins, report)
     try:
-        common = parse_overlay(common_overlay, "common overlay")
-        dual = parse_overlay(dual_overlay, "dual-screen overlay")
-        _validate_overlay_targets(selected, common, dual)
+        patches = parse_overlay(overlay, "overlay")
+        _validate_overlay_targets(selected, patches)
         for variant in Variant:
-            selected[variant] = apply_overlay(selected[variant], common)
-        selected[Variant.DUAL] = apply_overlay(selected[Variant.DUAL], dual)
+            selected[variant] = apply_overlay(selected[variant], patches)
     except OverlayError as error:
         raise CompositionError(str(error)) from error
     _validate_unique_packages(selected)
@@ -387,24 +384,15 @@ def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:
 
 
 def _validate_overlay_targets(
-    apps: dict[Variant, list[ComposedApp]],
-    common: tuple[OverlayPatch, ...],
-    dual: tuple[OverlayPatch, ...],
+    apps: dict[Variant, list[ComposedApp]], patches: tuple[OverlayPatch, ...]
 ) -> None:
-    all_keys = {
+    """Require each record to match a selected entry in at least one variant."""
+    selected = {
         rendered_key(app.id, app.url) for values in apps.values() for app in values
     }
-    dual_keys = {rendered_key(app.id, app.url) for app in apps[Variant.DUAL]}
-    missing_common = sorted(item.key for item in common if item.key not in all_keys)
-    missing_dual = sorted(item.key for item in dual if item.key not in dual_keys)
-    if missing_common:
-        raise OverlayError(
-            f"common overlay has no selected target for {missing_common!r}"
-        )
-    if missing_dual:
-        raise OverlayError(
-            f"dual-screen overlay has no selected target for {missing_dual!r}"
-        )
+    missing = sorted(item.key for item in patches if item.key not in selected)
+    if missing:
+        raise OverlayError(f"overlay has no selected target for {missing!r}")
 
 
 def _import_data(app: App) -> dict[str, Any]:

@@ -70,7 +70,6 @@ def test_build_writes_both_variants_and_report(
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
     ):
         (tmp_path / "config" / name).write_text(json.dumps(value), encoding="utf-8")
     app = ComposedApp(
@@ -159,7 +158,6 @@ def test_build_failure_does_not_mutate_committed_catalog(
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
@@ -221,7 +219,6 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
         "composition.json": {"schemaVersion": 1, "candidates": [], "pins": []},
         "deny.json": [],
         "overlay.json": [],
-        "overlay.dual.json": [],
         "settings.json": {},
     }
     for name, value in files.items():
@@ -410,7 +407,6 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         ("composition.json", policy_document),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
@@ -521,7 +517,6 @@ def test_composition_failure_preserves_collected_diagnostics(
                 }
             ],
         ),
-        ("overlay.dual.json", []),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     apps = [
@@ -590,7 +585,6 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
@@ -651,7 +645,6 @@ def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
     for name, value in (
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
@@ -688,7 +681,7 @@ def test_winning_tie_reports_original_selectors(
     )
     config = tmp_path / "config"
     config.mkdir()
-    for name in ("deny.json", "overlay.json", "overlay.dual.json"):
+    for name in ("deny.json", "overlay.json"):
         (config / name).write_text("[]")
     candidates = [
         App(

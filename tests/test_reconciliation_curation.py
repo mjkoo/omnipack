@@ -133,7 +133,6 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             candidates(refresh),
             deny,
             read(ROOT / "config/overlay.json"),
-            read(ROOT / "config/overlay.dual.json"),
             policy=policy,
         )
         for variant in Variant:

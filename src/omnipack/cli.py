@@ -52,7 +52,6 @@ def build(_args: argparse.Namespace) -> int:
             ingested.apps,
             _object_list(root / "config/deny.json", "denylist"),
             load_json(root / "config/overlay.json", "overlay"),
-            load_json(root / "config/overlay.dual.json", "dual overlay"),
             policy=ingested.policy,
             report=composition_report,
         )

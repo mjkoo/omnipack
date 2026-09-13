@@ -193,7 +193,6 @@ def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
         apps,
         [],
         [],
-        [],
         policy=parse_composition_policy(
             {"schemaVersion": 1, "candidates": [], "pins": []}
         ),

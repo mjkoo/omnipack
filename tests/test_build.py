@@ -63,7 +63,6 @@ def write_config(root: Path) -> None:
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
         ("settings.json", {}),
     ):
         (root / "config" / name).write_text(json.dumps(value), encoding="utf-8")
@@ -169,13 +168,11 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     ]
     policy_data = {"schemaVersion": 1, "candidates": rules, "pins": []}
     with pytest.raises(CompositionError, match="old.pkg"):
-        compose([candidate], [], [], [], policy=parse_composition_policy(policy_data))
+        compose([candidate], [], [], policy=parse_composition_policy(policy_data))
     rules.pop(0)
     policy_bytes = json.dumps(policy_data).encode()
     (tmp_path / "config/composition.json").write_bytes(policy_bytes)
-    current = compose(
-        [candidate], [], [], [], policy=parse_composition_policy(policy_data)
-    )
+    current = compose([candidate], [], [], policy=parse_composition_policy(policy_data))
     build_module.publish_build(
         tmp_path, current, {}, IngestionReport(), composition_bytes=policy_bytes
     )
