@@ -82,8 +82,8 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
         ).intersection(patch)
         if protected:
             raise OverlayError(
-                f"{item_label}.patch contains protected field "
-                + ", ".join(sorted(protected))
+                f"{item_label}.patch for selector {(package_id, url)!r} "
+                "contains protected field " + ", ".join(sorted(protected))
             )
         record = OverlayPatch(package_id, url, deepcopy(patch))
         if record.key in keys:

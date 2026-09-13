@@ -536,6 +536,7 @@ def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
         compose([candidate], [], [{**record, "patch": None}])
 
 
+@pytest.mark.parametrize("value", [None, "assigned"], ids=["deleted", "assigned"])
 @pytest.mark.parametrize(
     "field",
     [
@@ -549,12 +550,17 @@ def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
         "dualScreen",
     ],
 )
-def test_overlay_rejects_identity_and_composition_fields_even_when_null(
-    field: str,
+def test_overlay_rejects_assigning_or_deleting_identity_and_composition_fields(
+    field: str, value: object
 ) -> None:
     candidate = app("x")
-    with pytest.raises(CompositionError, match=r"protected field"):
-        compose([candidate], [], overlays((candidate.id, candidate.url, {field: None})))
+    with pytest.raises(CompositionError, match=r"protected field") as raised:
+        compose(
+            [candidate], [], overlays((candidate.id, candidate.url, {field: value}))
+        )
+    message = str(raised.value)
+    assert repr(rendered_key(candidate.id, candidate.url)) in message
+    assert message.endswith(f"protected field {field}")
 
 
 def test_selection_report_preserves_corrected_identity_and_origin() -> None:
