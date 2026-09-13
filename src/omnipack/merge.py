@@ -189,6 +189,7 @@ def _resolve_pins(
 ) -> dict[PinKey, App]:
     """Validate every pin against the admitted candidates before any selection."""
     resolved: dict[PinKey, App] = {}
+    # Sorted so the first failing pin reported does not depend on policy order.
     for pin in sorted(pins, key=lambda item: (item.family, item.variant.value)):
         label = f"pin for family {pin.family!r} target {pin.variant.value!r}"
         matches = [item for item in candidates if _matches_pin(item, pin.match)]
