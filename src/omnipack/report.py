@@ -77,36 +77,9 @@ def format_reports(root: Path) -> str:
     sections: list[str] = []
     if build_path.exists():
         build = _read_document(build_path, "build")
-        schema = build.get("schemaVersion")
-        if type(schema) is not int or schema != BUILD_SCHEMA_VERSION:
-            raise ReportFormatError(
-                f"unsupported build report schema {schema!r}; "
-                "regenerate with `pack build`"
-            )
-        if build.get("status") not in ("success", "failed"):
-            raise ReportFormatError("malformed build report: status is required")
-        if any(
-            key in build and build[key] is not None and not isinstance(build[key], str)
-            for key in ("stage", "error")
-        ):
-            raise ReportFormatError("malformed build report diagnostics")
-        if "offlineVerification" in build:
-            offline = build["offlineVerification"]
-            if (
-                not isinstance(offline, dict)
-                or offline.get("status") not in ("not-run", "success", "failed")
-                or not isinstance(offline.get("findings"), list)
-                or not all(_valid_finding(item) for item in offline["findings"])
-            ):
-                raise ReportFormatError("malformed build offline verification")
+        _validate_build_report(build)
         lines = ["Build report", f"Status: {build['status']}"]
-        selections = build.get("selections", [])
-        if selections is not None and (
-            not isinstance(selections, list)
-            or not all(isinstance(item, dict) for item in selections)
-        ):
-            raise ReportFormatError("malformed build family selections")
-        for item in selections or []:
+        for item in build["selections"]:
             if not isinstance(item.get("considered"), list) or not _strings(
                 item, ("family", "variant")
             ):
@@ -123,10 +96,9 @@ def format_reports(root: Path) -> str:
             lines.append(f"Stage: {build['stage']}")
         if build.get("error"):
             lines.append(f"Error: {build['error']}")
-        offline = build.get("offlineVerification")
-        if isinstance(offline, dict):
-            lines.append(f"Offline verification: {offline.get('status', 'unknown')}")
-            lines.extend(_format_findings(offline.get("findings", [])))
+        offline = build["offlineVerification"]
+        lines.append(f"Offline verification: {offline['status']}")
+        lines.extend(_format_findings(offline["findings"]))
         sections.append("\n".join(lines))
     else:
         sections.append("Build report\nNo build report recorded")
@@ -225,6 +197,77 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
         context = f" [{' / '.join(location)}]" if location else ""
         lines.append(f"{label}:{context} {message}")
     return lines
+
+
+_BUILD_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "status",
+        "changes",
+        "sourceAdmissions",
+        "denylistRemovals",
+        "staleExclusions",
+        "selections",
+        "offlineVerification",
+    }
+)
+_BUILD_FAILURE_FIELDS = frozenset({"stage", "error"})
+_BUILD_RECORD_FIELDS = (
+    "sourceAdmissions",
+    "denylistRemovals",
+    "staleExclusions",
+    "selections",
+)
+
+
+def _validate_build_report(value: dict[str, Any]) -> None:
+    schema = value.get("schemaVersion")
+    if type(schema) is not int or schema != BUILD_SCHEMA_VERSION:
+        raise ReportFormatError(
+            f"unsupported build report schema {schema!r}; regenerate with `pack build`"
+        )
+    status = value.get("status")
+    if status not in ("success", "failed"):
+        raise ReportFormatError("malformed build report: status is required")
+    expected = (
+        _BUILD_FIELDS | _BUILD_FAILURE_FIELDS if status == "failed" else _BUILD_FIELDS
+    )
+    if set(value) != expected:
+        raise ReportFormatError("malformed build report fields")
+    if any(
+        value.get(key) is not None and not isinstance(value[key], str)
+        for key in _BUILD_FAILURE_FIELDS
+    ):
+        raise ReportFormatError("malformed build report diagnostics")
+    changes = value["changes"]
+    if changes is not None and not (
+        isinstance(changes, dict)
+        and set(changes) == {variant.value for variant in Variant}
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"added", "removed"}
+            and all(
+                isinstance(ids, list) and all(isinstance(id_, str) for id_ in ids)
+                for ids in item.values()
+            )
+            for item in changes.values()
+        )
+    ):
+        raise ReportFormatError("malformed build package changes")
+    for key in _BUILD_RECORD_FIELDS:
+        records = value[key]
+        if not isinstance(records, list) or not all(
+            isinstance(item, dict) for item in records
+        ):
+            raise ReportFormatError(f"malformed build report {key}")
+    offline = value["offlineVerification"]
+    if (
+        not isinstance(offline, dict)
+        or offline.get("status") not in ("not-run", "success", "failed")
+        or not isinstance(offline.get("findings"), list)
+        or not all(_valid_finding(item) for item in offline["findings"])
+    ):
+        raise ReportFormatError("malformed build offline verification")
 
 
 def _validate_verification_report(value: dict[str, Any]) -> None:

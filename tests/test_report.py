@@ -3,12 +3,30 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from omnipack.report import format_reports
+from omnipack.report import format_reports, write_report
+from omnipack.sources import IngestionReport
 from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
 from tests.test_verify import historical_composition
+
+
+def build_report(
+    root: Path, *, drop: tuple[str, ...] = (), **fields: object
+) -> dict[str, Any]:
+    """Write a writer-shaped build report with fields replaced or dropped."""
+    write_report(root, {}, None, IngestionReport())
+    path = root / ".build/report.json"
+    document = {
+        key: value
+        for key, value in json.loads(path.read_text()).items()
+        if key not in drop
+    }
+    document.update(fields)
+    path.write_text(json.dumps(document))
+    return document
 
 
 def copy_inputs(root: Path) -> None:
@@ -39,18 +57,7 @@ def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
 
 
 def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps(
-            {
-                "schemaVersion": 3,
-                "status": "failed",
-                "stage": "rendering",
-                "error": "bad",
-            }
-        )
-    )
+    build_report(tmp_path, status="failed", stage="rendering", error="bad")
     output = format_reports(tmp_path)
     assert "Build report\nStatus: failed" in output
     assert "Stage: rendering" in output and "Error: bad" in output
@@ -208,17 +215,7 @@ def test_corrupt_or_unsupported_verification_report_fails(
 
 
 def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps(
-            {
-                "schemaVersion": 3,
-                "status": "success",
-                "offlineVerification": {"status": "success", "findings": []},
-            }
-        )
-    )
+    build_report(tmp_path, offlineVerification={"status": "success", "findings": []})
     assert "Offline verification: success" in format_reports(tmp_path)
 
 
@@ -236,8 +233,17 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
         {"offlineVerification": {"status": [], "findings": []}},
         {"offlineVerification": {"status": "success", "findings": {}}},
         {"offlineVerification": {"status": "failed", "findings": [{}]}},
-        {"error": []},
-        {"stage": {}},
+        {"status": "failed", "stage": "rendering", "error": []},
+        {"status": "failed", "stage": {}, "error": "bad"},
+        {"status": "failed", "stage": "rendering"},
+        {"stage": "rendering", "error": "bad"},
+        {"displacements": []},
+        {"changes": {"single": {"added": []}}},
+        {"changes": {"single": {"added": [], "removed": [1]}, "dual": {}}},
+        {"sourceAdmissions": None},
+        {"denylistRemovals": ["removed"]},
+        {"staleExclusions": {}},
+        {"selections": None},
     ],
 )
 def test_malformed_build_report_is_concise_cli_failure(
@@ -245,14 +251,28 @@ def test_malformed_build_report_is_concise_cli_failure(
 ) -> None:
     from omnipack.cli import main
 
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    document = {"schemaVersion": 3, "status": "success", **mutation}
-    path.write_text(json.dumps(document))
+    document = build_report(tmp_path, **mutation)
     monkeypatch.chdir(tmp_path)
     assert main(["report"]) == 1
     assert "Traceback" not in capsys.readouterr().err
-    assert json.loads(path.read_text()) == document
+    assert json.loads((tmp_path / ".build/report.json").read_text()) == document
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "changes",
+        "sourceAdmissions",
+        "denylistRemovals",
+        "staleExclusions",
+        "selections",
+        "offlineVerification",
+    ],
+)
+def test_build_report_missing_a_field_is_rejected(tmp_path: Path, field: str) -> None:
+    build_report(tmp_path, drop=(field,))
+    with pytest.raises(ValueError, match="malformed build report fields"):
+        format_reports(tmp_path)
 
 
 def test_findings_display_location_field_and_effective_version(
@@ -374,10 +394,6 @@ WINNER = {
 def test_malformed_selection_records_are_rejected(
     tmp_path: Path, selection: dict[str, object], message: str
 ) -> None:
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps({"schemaVersion": 3, "status": "success", "selections": [selection]})
-    )
+    build_report(tmp_path, selections=[selection])
     with pytest.raises(ValueError, match=message):
         format_reports(tmp_path)

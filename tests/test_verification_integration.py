@@ -7,7 +7,9 @@ import pytest
 
 from omnipack import cli
 from omnipack.http import HttpClient
+from omnipack.report import write_report
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.sources import IngestionReport
 from tests.catalog_support import write_catalog
 
 
@@ -34,8 +36,7 @@ def inputs(root: Path) -> dict[Path, bytes]:
         (root / "dist" / f"{variant}-screen.json").write_text(
             json.dumps({"apps": [app], "settings": {"categories": "{}"}})
         )
-    (root / ".build").mkdir()
-    (root / ".build/report.json").write_text('{"schemaVersion":3,"status":"success"}')
+    write_report(root, {}, None, IngestionReport())
     (root / ".cache").mkdir()
     (root / ".cache/sentinel").write_bytes(b"cache bytes\x00")
     write_catalog(root)
