@@ -164,13 +164,16 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             assert app.data["additionalSettings"] == expected[app.data["id"]]
 
 
-def single_selections(
+def curated_single_mismatches(
     extras_config: list[dict[str, object]], tmp_path: Path
-) -> dict[str, tuple[str, str, str, str]]:
-    """Compose the committed configuration over the captured upstream catalogs."""
+) -> set[str]:
+    """Name each curated family whose single-screen winner is not its extra.
+
+    Composes the committed configuration over the captured upstream catalogs.
+    """
     higher = captured_higher(extras_config)
     result = _compose_with_codm_catalog(_committed_codm_catalog(), tmp_path, higher)
-    return {
+    selections = {
         selection.family: (
             selection.effective_id,
             normalize_project_url(selection.url),
@@ -180,36 +183,31 @@ def single_selections(
         for selection in result.report.selections
         if selection.variant is Variant.SINGLE
     }
+    return {
+        family
+        for family, (package_id, url) in CURATED_SINGLE_WINNERS.items()
+        if selections.get(family)
+        != (package_id, normalize_project_url(url), "source", "extras")
+    }
 
 
 def test_committed_configuration_selects_each_curated_extra_in_single(
     tmp_path: Path,
 ) -> None:
-    selections = single_selections(read(ROOT / "config/extras.json"), tmp_path)
-    for family, (package_id, url) in CURATED_SINGLE_WINNERS.items():
-        assert selections.get(family) == (
-            package_id,
-            normalize_project_url(url),
-            "source",
-            "extras",
-        ), family
-
-
-@pytest.mark.parametrize(
-    "family", sorted(CURATED_SINGLE_WINNERS), ids=lambda family: family
-)
-def test_curated_single_guard_fails_when_its_extra_becomes_dual_screen(
-    tmp_path: Path, family: str
-) -> None:
-    package_id, url = CURATED_SINGLE_WINNERS[family]
     extras_config = read(ROOT / "config/extras.json")
-    [entry] = [item for item in extras_config if item["id"] == package_id]
-    entry["dualScreen"] = True
-    selected = single_selections(extras_config, tmp_path).get(family)
-    assert (
-        selected is None
-        or selected[:2] != (package_id, normalize_project_url(url))
-        or selected[3] != "extras"
+    assert curated_single_mismatches(extras_config, tmp_path) == set()
+
+
+def test_curated_single_guard_fails_when_the_extras_become_dual_screen(
+    tmp_path: Path,
+) -> None:
+    curated = {package_id for package_id, _ in CURATED_SINGLE_WINNERS.values()}
+    extras_config = read(ROOT / "config/extras.json")
+    for entry in extras_config:
+        if entry["id"] in curated:
+            entry["dualScreen"] = True
+    assert curated_single_mismatches(extras_config, tmp_path) == set(
+        CURATED_SINGLE_WINNERS
     )
 
 
