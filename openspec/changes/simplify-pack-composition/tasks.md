@@ -24,7 +24,7 @@
   - `dualScreen` absent from the rendered record.
 
   Also verify that the captured baseline regression passes with byte-identical exports, with MetroidArch still in dual only, and that the MetroidArch curation tests pass.
-- [ ] 1.4 Make denials package-only and both-variant. `parse_exclusions` accepts exactly `id` and `reason`; `_Exclusion` and `StaleExclusion` lose `family` and `variant`; `_validate_coverage` and the offline coverage check lose their exemption branch. Rewrite existing tests that use family or variant-scoped denials to use package denials, including the pin-failure diagnostic regression, whose unrelated denial becomes a package denial recorded as a removal from every variant its candidate is eligible for. Verify with tests for:
+- [x] 1.4 Make denials package-only and both-variant. `parse_exclusions` accepts exactly `id` and `reason`; `_Exclusion` and `StaleExclusion` lose `family` and `variant`; `_validate_coverage` and the offline coverage check lose their exemption branch. Rewrite existing tests that use family or variant-scoped denials to use package denials, including the pin-failure diagnostic regression, whose unrelated denial becomes a package denial recorded as a removal from every variant its candidate is eligible for. Verify with tests for:
   - a denylist entry with a `family` or `variant` field failing with the entry and field identified;
   - a denial matching no candidate reported stale without failing;
   - a package denial leaving a different-package alternative selectable in dual;

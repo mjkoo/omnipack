@@ -443,26 +443,25 @@ def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
     ).ok
 
 
-@pytest.mark.parametrize("variant", [{}, [], True, 1])
-def test_malformed_deny_variant_is_reported(variant: object) -> None:
-    result = validate_offline(
-        inputs(
-            deny=[{"id": "org.example.app", "reason": "excluded", "variant": variant}]
-        )
-    )
+@pytest.mark.parametrize(
+    "entry",
+    [
+        {"id": "org.example.app", "reason": "excluded", "variant": "dual"},
+        {"id": "org.example.app", "reason": "excluded", "family": "app:example"},
+        {"family": "app:example", "reason": "excluded"},
+    ],
+)
+def test_retired_denial_selectors_are_reported(entry: dict[str, str]) -> None:
+    result = validate_offline(inputs(deny=[entry]))
     assert "invalid_composition_config" in codes(result)
 
 
-def test_stale_denial_is_allowed_and_dual_denial_exempts_coverage() -> None:
+def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_gap() -> None:
     assert validate_offline(inputs(deny=[{"id": "stale", "reason": "gone"}])).ok
     result = validate_offline(
-        inputs(
-            [app("single")],
-            [],
-            deny=[{"id": "single", "variant": "dual", "reason": "excluded"}],
-        )
+        inputs([app("single")], [], deny=[{"id": "dual", "reason": "excluded"}])
     )
-    assert result.ok
+    assert codes(result) == {"dual_coverage_gap"}
 
 
 def test_unexempted_dual_coverage_gap_fails() -> None:
@@ -521,7 +520,7 @@ def test_family_projection_and_pin_are_distinct() -> None:
             [],
             [],
             composition=policy,
-            deny=[{"family": "app:shared", "reason": "retired"}],
+            deny=[{"id": "dual.pkg", "reason": "retired"}],
         )
     )
     assert "pin_mismatch" in codes(denied)
@@ -532,31 +531,18 @@ def test_family_projection_and_pin_are_distinct() -> None:
     assert "pin_mismatch" in codes(result)
 
 
-def test_family_denial_exempts_coverage_but_cannot_remain_selected() -> None:
-    policy = {
-        "schemaVersion": 1,
-        "candidates": [
-            {
-                "match": {
-                    "source": "extras",
-                    "origin": "extras",
-                    "id": "one",
-                    "url": "https://example.com/app",
-                },
-                "family": "app:one",
-                "rationale": "fixture",
-            }
-        ],
-        "pins": [],
+def test_package_denial_neither_exempts_coverage_nor_remains_selected() -> None:
+    denial = [{"id": "one", "reason": "unsupported"}]
+    single_only = validate_offline(inputs([app("one")], [], deny=denial))
+    assert {("single", "denied_output_present"), ("dual", "dual_coverage_gap")} <= {
+        (finding.variant, finding.code) for finding in single_only.findings
     }
-    denial = [{"family": "app:one", "variant": "dual", "reason": "unsupported"}]
-    assert validate_offline(
-        inputs([app("one")], [], deny=denial, composition=policy)
-    ).ok
-    result = validate_offline(
-        inputs([app("one")], [app("one")], deny=denial, composition=policy)
-    )
-    assert "denied_output_present" in codes(result)
+    both = validate_offline(inputs([app("one")], [app("one")], deny=denial))
+    assert {
+        finding.variant
+        for finding in both.findings
+        if finding.code == "denied_output_present"
+    } == {"single", "dual"}
 
 
 def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None:

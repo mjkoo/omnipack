@@ -682,12 +682,9 @@ def _validate_composition(
             )
 
     for exclusion in exclusions:
-        applicable = (
-            tuple(Variant) if exclusion.variant is None else (exclusion.variant,)
-        )
-        for target in applicable:
+        for target in Variant:
             for family, package_id in family_ids[target.value].items():
-                if package_id == exclusion.package_id or family == exclusion.family:
+                if package_id == exclusion.package_id:
                     findings.append(
                         Finding(
                             "composition",
@@ -722,22 +719,15 @@ def _validate_composition(
             )
 
     for family in families["single"] - families["dual"]:
-        package_id = family_ids["single"][family]
-        exempt = any(
-            (rule.variant is None or rule.variant is Variant.DUAL)
-            and (rule.family == family or rule.package_id == package_id)
-            for rule in exclusions
-        )
-        if not exempt:
-            findings.append(
-                Finding(
-                    "composition",
-                    "dual_coverage_gap",
-                    f"dual variant is missing family {family!r}",
-                    "dual",
-                    package_id,
-                )
+        findings.append(
+            Finding(
+                "composition",
+                "dual_coverage_gap",
+                f"dual variant is missing family {family!r}",
+                "dual",
+                family_ids["single"][family],
             )
+        )
 
 
 def _add(

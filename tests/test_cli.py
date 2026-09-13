@@ -534,9 +534,7 @@ def test_composition_failure_preserves_collected_diagnostics(
         }
         for variant in Variant
     ]
-    assert report["staleExclusions"] == [
-        {"id": "stale.app", "variant": None, "reason": "obsolete", "family": None}
-    ]
+    assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
 

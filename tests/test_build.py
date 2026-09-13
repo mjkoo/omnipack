@@ -42,7 +42,7 @@ def composition(*ids: str) -> CompositionResult:
         CompositionReport(
             [Displacement("old.id", Variant.SINGLE, "extras", "rjny", ("url",))],
             [Removal("denied.id", Variant.DUAL, "curated")],
-            [StaleExclusion("stale.id", None, "gone")],
+            [StaleExclusion("stale.id", "gone")],
         ),
     )
 

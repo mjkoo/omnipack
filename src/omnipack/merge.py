@@ -49,10 +49,8 @@ class Removal:
 
 @dataclass(frozen=True, slots=True)
 class StaleExclusion:
-    package_id: str | None
-    variant: Variant | None
+    package_id: str
     reason: str
-    family: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -100,15 +98,8 @@ class CompositionResult:
 
 @dataclass(frozen=True, slots=True)
 class _Exclusion:
-    package_id: str | None
-    family: str | None
-    variant: Variant | None
+    package_id: str
     reason: str
-
-    def applies(self, candidate: App, variant: Variant) -> bool:
-        return (self.variant is None or self.variant is variant) and (
-            candidate.id == self.package_id or candidate.family == self.family
-        )
 
 
 def compose(
@@ -140,45 +131,29 @@ def compose(
     except OverlayError as error:
         raise CompositionError(str(error)) from error
     _validate_unique_packages(selected)
-    _validate_coverage(selected, exclusions)
+    _validate_coverage(selected)
     return CompositionResult(selected, report)
 
 
 def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
+    """Parse package denials, each of which applies to both variants."""
     result: list[_Exclusion] = []
     for index, entry in enumerate(entries):
         if not isinstance(entry, dict):
             raise CompositionError(f"denylist[{index}] must be an object")
-        unknown = set(entry) - {"id", "family", "variant", "reason"}
+        unknown = set(entry) - {"id", "reason"}
         if unknown:
             raise CompositionError(
                 f"denylist[{index}] has unknown field {min(unknown)!r}"
             )
-        package_id, family = entry.get("id"), entry.get("family")
-        if (("id" in entry) + ("family" in entry)) != 1:
-            raise CompositionError(
-                f"denylist[{index}] must contain exactly one of id or family"
-            )
-        selector, reason = (
-            package_id if package_id is not None else family,
-            entry.get("reason"),
-        )
-        if not isinstance(selector, str) or not selector.strip():
-            raise CompositionError(
-                f"denylist[{index}] selector must be a nonempty string"
-            )
+        package_id, reason = entry.get("id"), entry.get("reason")
+        if not isinstance(package_id, str) or not package_id.strip():
+            raise CompositionError(f"denylist[{index}].id must be a nonempty string")
         if not isinstance(reason, str) or not reason.strip():
             raise CompositionError(
                 f"denylist[{index}].reason must be a nonempty string"
             )
-        variant_value = entry.get("variant")
-        try:
-            variant = None if variant_value is None else Variant(variant_value)
-        except ValueError as error:
-            raise CompositionError(
-                f"denylist entry {selector!r} has unknown variant {variant_value!r}"
-            ) from error
-        result.append(_Exclusion(package_id, family, variant, reason))
+        result.append(_Exclusion(package_id, reason))
     return tuple(result)
 
 
@@ -200,19 +175,17 @@ def _select(
     for rule in exclusions:
         matched = False
         for candidate in candidates:
+            if candidate.id != rule.package_id:
+                continue
             for variant in Variant:
-                if variant in candidate.eligibility and rule.applies(
-                    candidate, variant
-                ):
+                if variant in candidate.eligibility:
                     matched = True
                     denied[(id(candidate), variant)] = rule.reason
                     report.removals.append(
                         Removal(candidate.id, variant, rule.reason, candidate.family)
                     )
         if not matched:
-            report.stale_exclusions.append(
-                StaleExclusion(rule.package_id, rule.variant, rule.reason, rule.family)
-            )
+            report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
     result = {variant: [] for variant in Variant}
     processed_pins: set[PinKey] = set()
     for family in sorted(families):
@@ -399,21 +372,13 @@ def _validate_unique_packages(apps: dict[Variant, list[ComposedApp]]) -> None:
             seen[app.id] = app.family
 
 
-def _validate_coverage(
-    apps: dict[Variant, list[ComposedApp]], exclusions: tuple[_Exclusion, ...]
-) -> None:
+def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:
     dual_families = {app.family for app in apps[Variant.DUAL]}
-    missing = []
-    for single in apps[Variant.SINGLE]:
-        if single.family in dual_families:
-            continue
-        if any(
-            rule.variant in (None, Variant.DUAL)
-            and (rule.family == single.family or rule.package_id == single.id)
-            for rule in exclusions
-        ):
-            continue
-        missing.append(single.family or single.id)
+    missing = [
+        single.family or single.id
+        for single in apps[Variant.SINGLE]
+        if single.family not in dual_families
+    ]
     if missing:
         raise CompositionError(
             "dual-screen variant is missing app family/families: "

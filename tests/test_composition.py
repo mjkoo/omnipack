@@ -17,6 +17,7 @@ from omnipack.merge import (
     CompositionError,
     CompositionReport,
     CompositionResult,
+    StaleExclusion,
 )
 from omnipack.merge import (
     compose as compose_apps,
@@ -164,7 +165,7 @@ def test_pin_wins_and_denied_or_ineligible_pin_fails() -> None:
     with pytest.raises(CompositionError, match=r"pin.*denied"):
         compose(
             [high, pinned],
-            [{"id": "pinned", "variant": "dual", "reason": "bad"}],
+            [{"id": "pinned", "reason": "bad"}],
             [],
             [],
             policy=policy,
@@ -191,11 +192,11 @@ def test_pin_uses_original_provenance_when_rendered_identity_is_shared() -> None
     assert result.apps[Variant.DUAL][0].provenance.source == "bboi"
 
 
-def test_family_denial_cannot_hide_missing_pin() -> None:
+def test_package_denial_cannot_hide_missing_pin() -> None:
     missing = app("missing", family="app:gone")
     policy = pin_policy(missing, "app:gone", Variant.DUAL)
     with pytest.raises(CompositionError, match=r"selector.*missing"):
-        compose([], [{"family": "app:gone", "reason": "gone"}], [], [], policy=policy)
+        compose([], [{"id": "missing", "reason": "gone"}], [], [], policy=policy)
 
 
 @pytest.mark.parametrize("present", [False, True], ids=["missing", "ineligible"])
@@ -225,7 +226,7 @@ def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) 
         compose(
             [app("removed"), *([pinned] if present else [])],
             [
-                {"id": "removed", "variant": "dual", "reason": "unsupported"},
+                {"id": "removed", "reason": "unsupported"},
                 {"id": "retired", "reason": "obsolete"},
             ],
             [],
@@ -235,7 +236,10 @@ def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) 
         )
     assert [
         (item.package_id, item.variant, item.reason) for item in report.removals
-    ] == [("removed", Variant.DUAL, "unsupported")]
+    ] == [
+        ("removed", Variant.SINGLE, "unsupported"),
+        ("removed", Variant.DUAL, "unsupported"),
+    ]
     assert [(item.package_id, item.reason) for item in report.stale_exclusions] == [
         ("retired", "obsolete")
     ]
@@ -250,28 +254,101 @@ def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal()
         [denied, alternative],
         [
             {"id": "same", "reason": "broken"},
-            {"family": "app:old", "variant": "dual", "reason": "obsolete"},
+            {"id": "old.package", "reason": "obsolete"},
         ],
         [],
         [],
     )
     assert ids(result, Variant.SINGLE) == {"other"}
     assert ids(result, Variant.DUAL) == {"other"}
-    assert result.report.stale_exclusions[0].family == "app:old"
+    assert result.report.stale_exclusions == [StaleExclusion("old.package", "obsolete")]
     assert result.report.selections[0].alternatives[0].excluded_reason == "broken"
 
 
 @pytest.mark.parametrize(
-    "entry",
+    ("entry", "message"),
     [
-        {"reason": "x"},
-        {"id": "x", "family": "app:x", "reason": "x"},
-        {"id": None, "family": "app:x", "reason": "x"},
+        ({"reason": "x"}, r"denylist\[0\]\.id must be a nonempty string"),
+        ({"id": None, "reason": "x"}, r"denylist\[0\]\.id must be a nonempty string"),
+        ({"id": "x"}, r"denylist\[0\]\.reason must be a nonempty string"),
+        (
+            {"id": "x", "family": "app:x", "reason": "x"},
+            r"denylist\[0\] has unknown field 'family'",
+        ),
+        (
+            {"family": "app:x", "reason": "x"},
+            r"denylist\[0\] has unknown field 'family'",
+        ),
+        (
+            {"id": "x", "variant": "dual", "reason": "x"},
+            r"denylist\[0\] has unknown field 'variant'",
+        ),
     ],
 )
-def test_exclusion_requires_exactly_one_selector(entry: dict[str, str]) -> None:
-    with pytest.raises(CompositionError, match="exactly one"):
+def test_denylist_entries_hold_exactly_a_package_id_and_reason(
+    entry: dict[str, str], message: str
+) -> None:
+    with pytest.raises(CompositionError, match=message):
         compose([], [entry], [], [])
+
+
+def test_package_denial_leaves_a_different_package_alternative_selectable() -> None:
+    standard = app("standard", "extras", family="app:x")
+    preferred = app(
+        "dual.denied",
+        "bboi",
+        family="app:x",
+        eligibility=frozenset({Variant.DUAL}),
+        dual_preferred=True,
+    )
+    result = compose(
+        [standard, preferred], [{"id": "dual.denied", "reason": "broken"}], [], []
+    )
+    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"standard"}
+    assert [(item.package_id, item.variant) for item in result.report.removals] == [
+        ("dual.denied", Variant.DUAL)
+    ]
+
+
+def shared_package_builds() -> tuple[App, App]:
+    """A family's baseline and dual-screen builds carrying one package id."""
+    standard = app("shared.pkg", "bboi", family="app:x")
+    dual = replace(
+        app(
+            "shared.pkg",
+            "bboi",
+            family="app:x",
+            eligibility=frozenset({Variant.DUAL}),
+            dual_preferred=True,
+        ),
+        origin="bboi-dual-asset",
+    )
+    return standard, dual
+
+
+def test_denied_shared_package_removes_a_family_with_no_other_build() -> None:
+    result = compose(
+        list(shared_package_builds()),
+        [{"id": "shared.pkg", "reason": "broken"}],
+        [],
+        [],
+    )
+    assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
+    assert sorted(
+        (item.package_id, item.variant.value) for item in result.report.removals
+    ) == [("shared.pkg", "dual"), ("shared.pkg", "dual"), ("shared.pkg", "single")]
+    assert result.report.stale_exclusions == []
+
+
+def test_denied_shared_package_leaves_the_family_s_other_package_selected() -> None:
+    other = app("other.pkg", "rjny", family="app:x")
+    result = compose(
+        [*shared_package_builds(), other],
+        [{"id": "shared.pkg", "reason": "broken"}],
+        [],
+        [],
+    )
+    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"other.pkg"}
 
 
 def test_winning_rank_tie_fails_but_losing_tier_tie_does_not() -> None:
@@ -313,22 +390,23 @@ def test_cross_package_family_coverage_passes_and_package_collision_fails() -> N
     assert ids(compose([single, dual], [], [], []), Variant.DUAL) == {"dual"}
     collision = app("single", "bboi", family="app:y")
     with pytest.raises(CompositionError, match="distinct families"):
-        compose(
-            [single, collision],
-            [{"family": "app:x", "variant": "dual", "reason": "no dual"}],
-            [],
-            [],
-        )
+        compose([single, collision], [], [], [])
 
 
-def test_ineligibility_does_not_waive_coverage_but_exact_dual_denial_does() -> None:
-    single = app("single", eligibility=frozenset({Variant.SINGLE}))
+def test_neither_ineligibility_nor_a_denied_only_dual_build_waives_coverage() -> None:
+    single = app("single", family="app:x", eligibility=frozenset({Variant.SINGLE}))
     with pytest.raises(CompositionError, match="missing app family"):
         compose([single], [], [], [])
-    result = compose(
-        [single], [{"id": "single", "variant": "dual", "reason": "unsupported"}], [], []
+    dual = app(
+        "dual",
+        "bboi",
+        family="app:x",
+        eligibility=frozenset({Variant.DUAL}),
+        dual_preferred=True,
     )
-    assert ids(result, Variant.SINGLE) == {"single"}
+    assert ids(compose([single, dual], [], [], []), Variant.DUAL) == {"dual"}
+    with pytest.raises(CompositionError, match="missing app family.*app:x"):
+        compose([single, dual], [{"id": "dual", "reason": "unsupported"}], [], [])
 
 
 def test_overlays_bind_to_id_and_normalized_url_and_layer_common_then_dual() -> None:
