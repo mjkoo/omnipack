@@ -31,11 +31,14 @@ class OfflineVerificationError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class BuildInputs:
-    """The local inputs a build reads, captured once when it starts.
+    """The five configuration files and the optional README, captured once
+    when a build starts.
 
     Composition, the offline gate and catalog generation all use these bytes,
     so a file edited while the build runs is overwritten by, or missing from,
-    that build's outputs instead of being read part way through.
+    that build's outputs instead of being read part way through. Other
+    on-disk inputs, such as the committed codm catalog, are read separately
+    during ingestion.
     """
 
     sources: bytes
@@ -67,25 +70,25 @@ class BuildInputs:
         )
 
 
-def previous_ids(root: Path) -> dict[Variant, list[dict[str, str]]]:
-    """Read rendered identities from the output pair before publication begins."""
-    result: dict[Variant, list[dict[str, str]]] = {}
+def previous_ids(root: Path) -> dict[Variant, set[str]]:
+    """Read rendered package ids from the output pair before publication begins."""
+    result: dict[Variant, set[str]] = {}
     for variant, name in OUTPUTS.items():
         path = root / "dist" / name
         if not path.exists():
-            result[variant] = []
+            result[variant] = set()
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
         except OSError, json.JSONDecodeError:
-            result[variant] = []
+            result[variant] = set()
             continue
         apps = document.get("apps", []) if isinstance(document, dict) else []
-        result[variant] = [
-            {"id": item["id"], "url": item.get("url", "")}
+        result[variant] = {
+            item["id"]
             for item in apps
             if isinstance(item, dict) and isinstance(item.get("id"), str)
-        ]
+        }
     return result
 
 

@@ -36,7 +36,7 @@ class Removal:
     package_id: str
     variant: Variant
     reason: str
-    family: str | None = None
+    family: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -170,6 +170,9 @@ def _exclude(
         for candidate in candidates:
             if candidate.id != rule.package_id:
                 continue
+            # Composition policy assigns every candidate a family before
+            # exclusions are resolved.
+            assert candidate.family is not None
             for variant in Variant:
                 if variant in candidate.eligibility:
                     matched = True

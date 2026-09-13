@@ -213,7 +213,7 @@ def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
 
     assert parsed.projections[key] == Projection("app:example")
     assert parsed.projected_pins[("app:example", Variant.DUAL)] == key
-    assert applied.projected_pins[("app:example", Variant.DUAL)] == key
+    assert applied.candidates[0].id == "org.example.new"
 
 
 def test_policy_application_requires_every_rule_selector() -> None:

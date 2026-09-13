@@ -85,7 +85,6 @@ class CompositionPolicy:
 @dataclass(frozen=True, slots=True)
 class AppliedPolicy:
     candidates: tuple[App, ...]
-    projected_pins: dict[PinKey, RenderedKey]
 
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
@@ -196,7 +195,7 @@ def apply_composition_policy(
             )
         result.append(updated)
 
-    return AppliedPolicy(tuple(result), dict(policy.projected_pins))
+    return AppliedPolicy(tuple(result))
 
 
 def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:

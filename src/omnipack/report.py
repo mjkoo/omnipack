@@ -26,7 +26,7 @@ class ReportFormatError(ValueError):
 
 def write_report(
     root: Path,
-    previous: Mapping[Variant, set[str] | list[dict[str, str]]],
+    previous: Mapping[Variant, set[str]],
     composition: CompositionResult | None,
     ingestion: IngestionReport,
     *,
@@ -40,16 +40,7 @@ def write_report(
         changes = {}
         for variant in Variant:
             current = {app.id for app in composition.apps[variant]}
-            raw_before = previous.get(variant, set())
-            before = (
-                set(raw_before)
-                if isinstance(raw_before, set)
-                else {
-                    item["id"]
-                    for item in raw_before
-                    if isinstance(item, dict) and isinstance(item.get("id"), str)
-                }
-            )
+            before = previous.get(variant, set())
             changes[variant.value] = {
                 "added": sorted(current - before),
                 "removed": sorted(before - current),
