@@ -32,7 +32,8 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
-def captured_pipeline() -> tuple[list[App], list[App]]:
+def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
+    """Ingest the captured upstream catalogs with the frozen or the given extras."""
     sources = load_json(PRE_MIGRATION / "sources.json")
     release = load_json(CAPTURED / "bboi-release.json")
     standard_url, dual_url = (
@@ -57,12 +58,18 @@ def captured_pipeline() -> tuple[list[App], list[App]]:
             ).read_text(),
         }
     )
-    policy = parse_composition_policy(load_json(PRE_MIGRATION / "composition.json"))
-    higher = [
+    return [
         *rjny.fetch(http, sources["rjny"]),
         *bboi.fetch(http, sources["bboi"]),
-        *fetch_extras(load_json(PRE_MIGRATION / "extras.json")),
+        *fetch_extras(
+            load_json(PRE_MIGRATION / "extras.json") if extras is None else extras
+        ),
     ]
+
+
+def captured_pipeline() -> tuple[list[App], list[App]]:
+    higher = captured_higher()
+    policy = parse_composition_policy(load_json(PRE_MIGRATION / "composition.json"))
     eligible_higher = list(
         apply_composition_policy(policy, higher, require_all=False).candidates
     )

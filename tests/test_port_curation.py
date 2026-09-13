@@ -14,6 +14,12 @@ from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.sources import codm
 from omnipack.sources.extras import fetch
+from omnipack.urls import normalize_project_url
+from tests.test_source_generation_fixtures import (
+    _committed_codm_catalog,
+    _compose_with_codm_catalog,
+    captured_higher,
+)
 
 ROOT = Path(__file__).parents[1]
 PORT_IDS = {
@@ -22,6 +28,36 @@ PORT_IDS = {
     "is.xyz.vcmi",
     "com.github.bvschaik.julius",
     "su.xash.engine.test",
+}
+# Each curated extra is the only extra in its family and wins the single-screen
+# pack by source precedence. No build or offline check fails if single stops
+# serving one, so these expectations are that guard.
+CURATED_SINGLE_WINNERS = {
+    "package:com.aurora.store": (
+        "com.aurora.store",
+        "https://gitlab.com/AuroraOSS/AuroraStore",
+    ),
+    "package:com.karin.idTech4Amm": (
+        "com.karin.idTech4Amm",
+        "https://github.com/glKarin/com.n0n3m4.diii4a",
+    ),
+    "package:is.xyz.vcmi": ("is.xyz.vcmi", "https://github.com/vcmi/vcmi"),
+    "package:com.github.bvschaik.julius": (
+        "com.github.bvschaik.julius",
+        "https://github.com/bvschaik/julius",
+    ),
+    "package:su.xash.engine.test": (
+        "su.xash.engine.test",
+        "https://github.com/FWGS/xash3d-fwgs",
+    ),
+    "app:ghostship": (
+        "dev.net64.ghostship",
+        "https://github.com/HarbourMasters/Ghostship",
+    ),
+    "app:gen1recomp": (
+        "com.theboisclub.pokemonred",
+        "https://github.com/bryanthaboi/gen1recomp",
+    ),
 }
 
 
@@ -127,6 +163,49 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
         expected = {app.id: app.additional_settings for app in maintained}
         for app in chosen:
             assert app.data["additionalSettings"] == expected[app.data["id"]]
+
+
+def single_selections(
+    extras_config: list[dict[str, object]], tmp_path: Path
+) -> dict[str, tuple[str, str, str]]:
+    """Compose the committed configuration over the captured upstream catalogs."""
+    higher = captured_higher(extras_config)
+    result = _compose_with_codm_catalog(_committed_codm_catalog(), tmp_path, higher)
+    return {
+        selection.family: (
+            selection.effective_id,
+            normalize_project_url(selection.url),
+            selection.reason,
+        )
+        for selection in result.report.selections
+        if selection.variant is Variant.SINGLE
+    }
+
+
+def test_committed_configuration_selects_each_curated_extra_in_single(
+    tmp_path: Path,
+) -> None:
+    selections = single_selections(read(ROOT / "config/extras.json"), tmp_path)
+    for family, (package_id, url) in CURATED_SINGLE_WINNERS.items():
+        assert selections.get(family) == (
+            package_id,
+            normalize_project_url(url),
+            "source",
+        ), family
+
+
+@pytest.mark.parametrize(
+    "family", sorted(CURATED_SINGLE_WINNERS), ids=lambda family: family
+)
+def test_curated_single_guard_fails_when_its_extra_becomes_dual_screen(
+    tmp_path: Path, family: str
+) -> None:
+    package_id, url = CURATED_SINGLE_WINNERS[family]
+    extras_config = read(ROOT / "config/extras.json")
+    [entry] = [item for item in extras_config if item["id"] == package_id]
+    entry["dualScreen"] = True
+    selected = single_selections(extras_config, tmp_path).get(family)
+    assert selected is None or selected[:2] != (package_id, normalize_project_url(url))
 
 
 @pytest.mark.parametrize(
