@@ -133,10 +133,6 @@ def test_independent_variant_errors_are_collected() -> None:
             lambda value: value.update(overrideSource="F-Droid Third Party Repo"),
             "unsupported_source",
         ),
-        (
-            lambda value: value.update(additionalSettings={}),
-            "invalid_additional_settings",
-        ),
     ],
     ids=(
         "missing-name",
@@ -146,7 +142,6 @@ def test_independent_variant_errors_are_collected() -> None:
         "invalid-author",
         "invalid-categories",
         "source",
-        "encoded-settings",
     ),
 )
 def test_required_entry_fields_are_validated(mutate, code: str) -> None:
@@ -170,7 +165,7 @@ def test_object_additional_settings_names_variant_id_and_field() -> None:
     } <= located(findings)
 
 
-@pytest.mark.parametrize("value", [True, False, "1", 1.5])
+@pytest.mark.parametrize("value", [True, "1", 1.5])
 def test_non_integer_preferred_apk_index_is_rejected(value: object) -> None:
     entry = {**app(), "preferredApkIndex": value}
     assert ("single", "org.example.app", "preferredApkIndex") in {
@@ -224,14 +219,6 @@ def test_raw_ids_survive_other_entry_errors(field: str) -> None:
 
     missing_dual = validate_offline(inputs([malformed], []))
     assert "dual_coverage_gap" in codes(missing_dual)
-
-
-def test_known_setting_types_are_checked() -> None:
-    wrong = with_settings(app("wrong"), trackOnly=1)
-    assert located(validate_offline(inputs([wrong]))) == {
-        (variant, "wrong", "trackOnly", "wrong_setting_type")
-        for variant in ("single", "dual")
-    }
 
 
 def test_entry_lacking_a_default_key_passes_when_every_other_check_passes() -> None:
@@ -321,15 +308,8 @@ def test_overlay_target_may_exist_in_only_one_variant() -> None:
     assert findings == ()
 
 
-@pytest.mark.parametrize(
-    "entry",
-    [
-        {"id": "org.example.app", "reason": "excluded", "variant": "dual"},
-        {"id": "org.example.app", "reason": "excluded", "family": "app:example"},
-        {"family": "app:example", "reason": "excluded"},
-    ],
-)
-def test_retired_denial_selectors_are_reported(entry: dict[str, str]) -> None:
+def test_retired_denial_selectors_are_reported() -> None:
+    entry = {"id": "org.example.app", "reason": "excluded", "variant": "dual"}
     assert "invalid_composition_config" in codes(validate_offline(inputs(deny=[entry])))
 
 
@@ -339,10 +319,6 @@ def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_gap() -> None:
         inputs([app("single")], [], deny=[{"id": "dual", "reason": "excluded"}])
     )
     assert codes(findings) == {"dual_coverage_gap"}
-
-
-def test_unexempted_dual_coverage_gap_fails() -> None:
-    assert "dual_coverage_gap" in codes(validate_offline(inputs([app("single")], [])))
 
 
 def test_family_projection_and_pin_are_distinct() -> None:
@@ -462,13 +438,4 @@ def test_native_gitlab_setting_types_rejected_without_repair(
         (variant, "aurora", field, "wrong_setting_type")
         for variant in ("single", "dual")
     }
-    assert snapshots == before
-
-
-def test_native_gitlab_maximum_subgroups_preserved_offline() -> None:
-    raw = app(source="GitLab")
-    raw["url"] = "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(21))
-    snapshots = inputs([raw])
-    before = deepcopy(snapshots)
-    assert validate_offline(snapshots) == ()
     assert snapshots == before

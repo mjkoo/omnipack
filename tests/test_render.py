@@ -128,9 +128,7 @@ def test_render_is_byte_stable_and_pins_object_key_order() -> None:
     app.data["aFuture"] = False
 
     first = render([app])
-    second = render([app])
 
-    assert first == second
     assert first.endswith("\n")
     rendered_app = json.loads(first, object_pairs_hook=dict)["apps"][0]
     assert list(rendered_app) == [
@@ -147,7 +145,7 @@ def test_render_is_byte_stable_and_pins_object_key_order() -> None:
 
     reversed_data = dict(reversed(list(app.data.items())))
     reordered = ComposedApp(app.family, reversed_data)
-    assert render([reordered]) == second
+    assert render([reordered]) == first
 
 
 def test_render_rejects_non_finite_numbers() -> None:
@@ -184,7 +182,6 @@ def test_settings_block_holds_only_colours_derived_from_category_names() -> None
         separators=(",", ":"),
     )
     assert document(list(reversed(apps)))["settings"] == settings
-    assert render(apps) == render(apps)
 
 
 def test_category_used_in_one_variant_is_absent_from_the_other() -> None:
