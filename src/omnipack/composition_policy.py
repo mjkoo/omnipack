@@ -64,27 +64,18 @@ class Pin:
 
 
 @dataclass(frozen=True, slots=True)
-class Projection:
-    family: str
-
-
-@dataclass(frozen=True, slots=True)
 class CompositionPolicy:
     candidate_rules: tuple[CandidateRule, ...]
     pins: tuple[Pin, ...]
-    projections: dict[RenderedKey, Projection]
+    # The family each rule assigns, by the rendered key its builds end up with.
+    projections: dict[RenderedKey, str]
     projected_pins: dict[PinKey, RenderedKey]
 
     def rendered_family(self, package_id: str, url: str) -> str:
         """Interpret a current rendered entry without build-report state."""
-        key = rendered_key(package_id, url)
-        projection = self.projections.get(key)
-        return projection.family if projection else f"package:{package_id}"
-
-
-@dataclass(frozen=True, slots=True)
-class AppliedPolicy:
-    candidates: tuple[App, ...]
+        return self.projections.get(
+            rendered_key(package_id, url), f"package:{package_id}"
+        )
 
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
@@ -103,7 +94,7 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
         _parse_rule(value, index) for index, value in enumerate(candidates_raw)
     )
     selectors: set[tuple[str, str, str, str]] = set()
-    projections: dict[RenderedKey, Projection] = {}
+    projections: dict[RenderedKey, str] = {}
     for rule in rules:
         if rule.match.key in selectors:
             raise CompositionPolicyError(
@@ -113,12 +104,10 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
         effective_id = rule.package_id or rule.match.id
         family = rule.family or f"package:{effective_id}"
         key = rendered_key(effective_id, rule.match.url)
-        previous = projections.get(key)
-        if previous is not None and previous.family != family:
+        if projections.setdefault(key, family) != family:
             raise CompositionPolicyError(
                 f"rendered key {key!r} has conflicting projections"
             )
-        projections[key] = Projection(family)
 
     pins = tuple(_parse_pin(value, index) for index, value in enumerate(pins_raw))
     pin_keys: set[PinKey] = set()
@@ -132,9 +121,8 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
         pin_keys.add(key)
         rule = next((item for item in rules if item.match == pin.match), None)
         effective_id = rule.package_id if rule and rule.package_id else pin.match.id
-        projection = projections.get(rendered_key(effective_id, pin.match.url))
-        effective_family = (
-            projection.family if projection is not None else f"package:{effective_id}"
+        effective_family = projections.get(
+            rendered_key(effective_id, pin.match.url), f"package:{effective_id}"
         )
         if pin.family != effective_family:
             raise CompositionPolicyError(
@@ -158,14 +146,14 @@ def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
 
 def apply_composition_policy(
     policy: CompositionPolicy, candidates: list[App] | tuple[App, ...]
-) -> AppliedPolicy:
+) -> tuple[App, ...]:
     """Apply identity and family rules once, requiring every rule selector.
 
     Pins are left to composition, which validates them after processing
     exclusions so that a failed pin still leaves the exclusion diagnostics.
     """
     collapsed = _collapse(candidates)
-    by_selector = {_candidate_selector(app).key: app for app in collapsed}
+    by_selector = {candidate_selector(app).key: app for app in collapsed}
     rules = {rule.match.key: rule for rule in policy.candidate_rules}
     for selector in rules:
         if selector not in by_selector:
@@ -176,7 +164,7 @@ def apply_composition_policy(
 
     result: list[App] = []
     for app in collapsed:
-        selector = _candidate_selector(app)
+        selector = candidate_selector(app)
         rule = rules.get(selector.key)
         if rule is None:
             updated = replace(app, family=f"package:{app.id}")
@@ -187,21 +175,21 @@ def apply_composition_policy(
                 id=effective_id,
                 family=rule.family or f"package:{effective_id}",
             )
-        projection = policy.projections.get(rendered_key(updated.id, updated.url))
-        if projection is not None and updated.family != projection.family:
+        projected = policy.projections.get(rendered_key(updated.id, updated.url))
+        if projected is not None and updated.family != projected:
             kind = "unruled candidate" if rule is None else "candidate"
             raise CompositionPolicyError(
                 f"{kind} {_show(selector)} conflicts with rendered projection"
             )
         result.append(updated)
 
-    return AppliedPolicy(tuple(result))
+    return tuple(result)
 
 
 def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:
     unique: dict[tuple[str, str, str, str], App] = {}
     for app in candidates:
-        selector = _candidate_selector(app)
+        selector = candidate_selector(app)
         previous = unique.get(selector.key)
         if previous is not None and previous != app:
             raise CompositionPolicyError(
@@ -211,11 +199,12 @@ def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:
     return tuple(unique.values())
 
 
-def _candidate_selector(app: App) -> CandidateSelector:
+def candidate_selector(app: App) -> CandidateSelector:
+    """The original identity a rule or pin names this candidate by."""
     return CandidateSelector(
         app.provenance.source,
-        app.origin or app.provenance.source,
-        app.original_id or app.id,
+        app.origin,
+        app.original_id,
         normalize_project_url(app.url),
     )
 

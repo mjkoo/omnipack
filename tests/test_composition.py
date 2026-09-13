@@ -6,10 +6,9 @@ import pytest
 
 from omnipack.composition_policy import (
     CandidateRule,
-    CandidateSelector,
     CompositionPolicy,
     Pin,
-    Projection,
+    candidate_selector,
     parse_composition_policy,
     rendered_key,
 )
@@ -73,21 +72,12 @@ def pin_policy(
     variant: Variant,
     *alternatives: App,
 ) -> CompositionPolicy:
-    def selector(item: App) -> CandidateSelector:
-        return CandidateSelector(
-            item.provenance.source,
-            item.origin or item.provenance.source,
-            item.original_id or item.id,
-            rendered_key(item.id, item.url)[1],
-        )
-
-    pinned_selector = selector(candidate)
+    pinned_selector = candidate_selector(candidate)
     candidates = (candidate, *alternatives)
-    projections = {
-        rendered_key(item.id, item.url): Projection(family) for item in candidates
-    }
+    projections = {rendered_key(item.id, item.url): family for item in candidates}
     rules = tuple(
-        CandidateRule(selector(item), "test", family=family) for item in candidates
+        CandidateRule(candidate_selector(item), "test", family=family)
+        for item in candidates
     )
     key = rendered_key(candidate.id, candidate.url)
     return CompositionPolicy(
@@ -112,20 +102,14 @@ def compose(
 ) -> CompositionResult:
     if policy is None:
         rules: list[CandidateRule] = []
-        projections: dict[tuple[str, str], Projection] = {}
+        projections: dict[tuple[str, str], str] = {}
         for candidate in candidates:
             family = candidate.family or f"package:{candidate.id}"
             if family.startswith("app:"):
-                selector = CandidateSelector(
-                    candidate.provenance.source,
-                    candidate.origin or candidate.provenance.source,
-                    candidate.original_id or candidate.id,
-                    rendered_key(candidate.id, candidate.url)[1],
+                rules.append(
+                    CandidateRule(candidate_selector(candidate), "test", family=family)
                 )
-                rules.append(CandidateRule(selector, "test", family=family))
-                projections[rendered_key(candidate.id, candidate.url)] = Projection(
-                    family
-                )
+                projections[rendered_key(candidate.id, candidate.url)] = family
         policy = CompositionPolicy(tuple(rules), (), projections, {})
     return compose_apps(
         candidates,

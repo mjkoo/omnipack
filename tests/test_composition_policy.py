@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-from dataclasses import fields, replace
+from dataclasses import replace
 
 import pytest
 
 from omnipack.composition_policy import (
     CompositionPolicyError,
-    Projection,
     apply_composition_policy,
     load_composition_policy,
     parse_composition_policy,
@@ -78,8 +77,7 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
     parsed = parse_composition_policy(
         policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
-    applied = apply_composition_policy(parsed, [candidate()])
-    result = applied.candidates[0]
+    [result] = apply_composition_policy(parsed, [candidate()])
 
     assert result.id == "org.example.new"
     assert result.original_id == "org.example.old"
@@ -112,10 +110,7 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
 
 def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
     parsed = parse_composition_policy(policy())
-    assert (
-        len(apply_composition_policy(parsed, [candidate(), candidate()]).candidates)
-        == 1
-    )
+    assert len(apply_composition_policy(parsed, [candidate(), candidate()])) == 1
 
     with pytest.raises(
         CompositionPolicyError, match="ambiguous original candidate identity"
@@ -208,12 +203,12 @@ def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
             ],
         )
     )
-    applied = apply_composition_policy(parsed, [candidate()])
+    [applied] = apply_composition_policy(parsed, [candidate()])
     key = ("org.example.new", "github.com/example/app")
 
-    assert parsed.projections[key] == Projection("app:example")
+    assert parsed.projections[key] == "app:example"
     assert parsed.projected_pins[("app:example", Variant.DUAL)] == key
-    assert applied.candidates[0].id == "org.example.new"
+    assert applied.id == "org.example.new"
 
 
 def test_policy_application_requires_every_rule_selector() -> None:
@@ -238,8 +233,8 @@ def test_policy_application_leaves_pins_to_composition() -> None:
         )
     )
     single_only = candidate(eligibility=frozenset({Variant.SINGLE}))
-    assert apply_composition_policy(parsed, []).candidates == ()
-    assert apply_composition_policy(parsed, [single_only]).candidates == (
+    assert apply_composition_policy(parsed, []) == ()
+    assert apply_composition_policy(parsed, [single_only]) == (
         replace(single_only, family="package:org.example.old"),
     )
 
@@ -279,7 +274,7 @@ def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:
         apply_composition_policy(parsed, [candidate(), unruled])
 
 
-def test_agreeing_rules_share_a_projection_that_carries_only_the_family() -> None:
+def test_agreeing_rules_share_one_projected_family() -> None:
     other = rule(
         match={
             "source": "bboi",
@@ -297,10 +292,9 @@ def test_agreeing_rules_share_a_projection_that_carries_only_the_family() -> Non
             ]
         )
     )
-    assert parsed.projections[
-        ("org.example.new", "github.com/example/app")
-    ] == Projection("app:example")
-    assert [field.name for field in fields(Projection)] == ["family"]
+    assert parsed.projections == {
+        ("org.example.new", "github.com/example/app"): "app:example"
+    }
 
 
 def test_pin_family_must_match_its_projected_candidate_family() -> None:

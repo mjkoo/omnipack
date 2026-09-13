@@ -7,12 +7,12 @@ from dataclasses import dataclass, field
 from typing import Any
 
 from omnipack.composition_policy import (
-    CandidateSelector,
     CompositionPolicy,
     CompositionPolicyError,
     Pin,
     PinKey,
     apply_composition_policy,
+    candidate_selector,
     rendered_key,
 )
 from omnipack.model import App, Variant
@@ -105,7 +105,7 @@ def compose(
     report = report or CompositionReport()
     exclusions = parse_exclusions(denylist)
     try:
-        candidates = list(apply_composition_policy(policy, candidates).candidates)
+        candidates = list(apply_composition_policy(policy, candidates))
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
     families = _families(candidates)
@@ -197,7 +197,7 @@ def _resolve_pins(
     # Sorted so the first failing pin reported does not depend on policy order.
     for pin in sorted(pins, key=lambda item: (item.family, item.variant.value)):
         label = f"pin for family {pin.family!r} target {pin.variant.value!r}"
-        matches = [item for item in candidates if _matches_pin(item, pin.match)]
+        matches = [item for item in candidates if candidate_selector(item) == pin.match]
         if len(matches) != 1:
             raise CompositionError(f"{label} is missing or ambiguous")
         [winner] = matches
@@ -245,12 +245,11 @@ def _select(
                 winners = [
                     item for item in tier if _PRECEDENCE[item.provenance.source] == rank
                 ]
-                if len({_identity(item) for item in winners}) != 1:
+                identities = {candidate_selector(item).key for item in winners}
+                if len(identities) != 1:
                     selectors = "; ".join(
                         f"source={source!r}, origin={origin!r}, original_id={original_id!r}, url={url!r}"
-                        for source, origin, original_id, url in sorted(
-                            {_identity(item) for item in winners}
-                        )
+                        for source, origin, original_id, url in sorted(identities)
                     )
                     raise CompositionError(
                         f"family {family!r} target {variant.value!r} has ambiguous winning candidates: {selectors}"
@@ -262,20 +261,22 @@ def _select(
                 FamilySelection(
                     family,
                     variant,
-                    winner.original_id or winner.id,
+                    winner.original_id,
                     winner.id,
                     winner.url,
                     winner.provenance.source,
-                    winner.origin or winner.provenance.source,
+                    winner.origin,
                     reason,
                     tuple(
                         ConsideredCandidate(
                             item.provenance.source,
-                            item.origin or item.provenance.source,
-                            item.original_id or item.id,
+                            item.origin,
+                            item.original_id,
                             item.url,
                         )
-                        for item in sorted(available, key=_identity)
+                        for item in sorted(
+                            available, key=lambda item: candidate_selector(item).key
+                        )
                         if item is not winner
                     ),
                 )
@@ -284,24 +285,6 @@ def _select(
     for values in result.values():
         values.sort(key=lambda item: (item.family, item.id, item.url))
     return result
-
-
-def _identity(app: App) -> tuple[str, str, str, str]:
-    return (
-        app.provenance.source,
-        app.origin or app.provenance.source,
-        app.original_id or app.id,
-        rendered_key(app.id, app.url)[1],
-    )
-
-
-def _matches_pin(app: App, selector: CandidateSelector) -> bool:
-    return (
-        app.provenance.source == selector.source
-        and (app.origin or app.provenance.source) == selector.origin
-        and (app.original_id or app.id) == selector.id
-        and rendered_key(app.id, app.url)[1] == selector.url
-    )
 
 
 def _validate_unique_packages(apps: dict[Variant, list[ComposedApp]]) -> None:

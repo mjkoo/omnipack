@@ -107,7 +107,7 @@ def normalize_record(
     source: str,
     eligibility: frozenset[Variant],
     derive_type: bool = False,
-    origin: str | None = None,
+    origin: str = "",
     default_label: str = "unnamed entry",
 ) -> App:
     if not isinstance(record, dict):
