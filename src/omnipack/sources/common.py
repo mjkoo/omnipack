@@ -4,7 +4,6 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
@@ -14,14 +13,7 @@ from omnipack.urls import gitlab_project_path
 
 
 class HttpGetter(Protocol):
-    def get(
-        self,
-        url: str,
-        *,
-        headers: Mapping[str, str] | None = None,
-        max_bytes: int | None = None,
-        method: str = "GET",
-    ) -> HttpResponse: ...
+    def get(self, url: str) -> HttpResponse: ...
 
 
 class SourceError(RuntimeError):

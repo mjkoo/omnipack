@@ -6,13 +6,13 @@ from pathlib import Path
 import pytest
 
 from omnipack.cli import main
-from omnipack.http import HttpClient, HttpConfig
 from omnipack.project_policy import PolicyError, default_apk_rule, parse_project_policy
 from omnipack.source_generation import (
     generate_codm,
     parse_project_table,
     select_release,
 )
+from omnipack.source_http import HttpConfig, SourceHttpClient
 from tests.test_package_id import AssetTransport, apk
 from tests.test_source_generation import JsonHttp, MappingHttp, tracking_root
 
@@ -129,7 +129,7 @@ def test_fresh_resolution_sends_the_api_credential_only_to_the_api_host(
             ASSET: apk("org.example.app"),
         }
     )
-    http = HttpClient(
+    http = SourceHttpClient(
         HttpConfig.from_path("config/http.json"), retries=0, transport=transport
     )
     assert generate_codm(tmp_path, http=http)["status"] == "success"
@@ -704,7 +704,8 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
             }
         )
         monkeypatch.setattr(
-            "omnipack.source_generation.HttpClient", lambda config, client=http: client
+            "omnipack.source_generation.SourceHttpClient",
+            lambda config, client=http: client,
         )
         assert main(["generate-source", "codm"]) == int(late_failure)
         output = tmp_path / ".build/source-generation/codm"
@@ -748,7 +749,9 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
     monkeypatch.setattr(
         "omnipack.source_generation.HttpConfig.from_path", lambda path: None
     )
-    monkeypatch.setattr("omnipack.source_generation.HttpClient", lambda config: http)
+    monkeypatch.setattr(
+        "omnipack.source_generation.SourceHttpClient", lambda config: http
+    )
     assert main(["generate-source", "codm"]) == 0
     output = tmp_path / ".build/source-generation/codm"
     app = json.loads((output / "catalog.json").read_text())["apps"][0]

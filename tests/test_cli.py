@@ -216,7 +216,6 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
     }
     files: dict[str, object] = {
         "sources.json": source_config,
-        "http.json": {"credentials": {}},
         "extras.json": [],
         "composition.json": {"schemaVersion": 1, "candidates": [], "pins": []},
         "deny.json": [],
@@ -276,9 +275,9 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
 
 def fixture_transport(
     responses: dict[str, str],
-) -> Callable[[HttpClient, Request, float, int | None], HttpResponse]:
+) -> Callable[[HttpClient, Request, float], HttpResponse]:
     def transport(
-        _client: HttpClient, request: Request, _timeout: float, _max_bytes: int | None
+        _client: HttpClient, request: Request, _timeout: float
     ) -> HttpResponse:
         body = responses[request.full_url].encode()
         return HttpResponse(request.full_url, 200, Message(), body)
@@ -321,7 +320,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     requested: list[str] = []
 
     def transport(
-        _client: HttpClient, request: Request, _timeout: float, _max_bytes: int | None
+        _client: HttpClient, request: Request, _timeout: float
     ) -> HttpResponse:
         requested.append(request.full_url)
         body = responses[request.full_url].encode()
@@ -742,3 +741,29 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
     assert b"Edited guide" not in readme and b"Fixture" in readme
     if edited != "README.md":
         assert (tmp_path / edited).read_bytes() == edits[edited]
+
+
+@pytest.mark.parametrize(
+    "http_config", [None, b"not json"], ids=["absent", "unreadable"]
+)
+def test_build_fetches_catalogs_without_credentials_or_http_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, http_config: bytes | None
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    if http_config is not None:
+        (tmp_path / "config/http.json").write_bytes(http_config)
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    requests: list[Request] = []
+
+    def transport(
+        _client: HttpClient, request: Request, _timeout: float
+    ) -> HttpResponse:
+        requests.append(request)
+        body = responses[request.full_url].encode()
+        return HttpResponse(request.full_url, 200, Message(), body)
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    assert {request.full_url for request in requests} == set(responses)
+    assert all(request.get_header("Authorization") is None for request in requests)

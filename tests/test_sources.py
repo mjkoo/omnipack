@@ -704,7 +704,7 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
     requests: list[str] = []
 
     def transport(
-        _client: HttpClient, request: Request, timeout: float, max_bytes: int | None
+        _client: HttpClient, request: Request, timeout: float
     ) -> HttpResponse:
         requests.append(request.full_url)
         if failure == "unreachable":

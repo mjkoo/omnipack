@@ -10,7 +10,7 @@ from typing import Any
 
 from omnipack.build import BuildInputs, previous_ids, publish_build
 from omnipack.composition_policy import load_composition_policy
-from omnipack.http import HttpClient, HttpConfig
+from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.report import format_reports, write_report
 from omnipack.source_generation import generate_codm
@@ -91,8 +91,7 @@ def _ingest_for_build(
     if not isinstance(source_config, dict):
         raise SourceError("sources", "configuration must be an object")
     extras_config = parse_json(inputs.extras, "extras")
-    http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
-    return ingest_all(root, http, source_config, extras_config, report)
+    return ingest_all(root, HttpClient(), source_config, extras_config, report)
 
 
 def _object_list(data: bytes, source: str) -> list[dict[str, str]]:

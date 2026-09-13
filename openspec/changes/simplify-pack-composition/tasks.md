@@ -97,7 +97,7 @@
 
 ## 5. Credential-free build HTTP
 
-- [ ] 5.1 Split the HTTP client (design decision 9). `http.py` keeps the retrying plain `get` and `redact_url`. `omnipack/source_http.py` holds the credential-scoped client with `HttpConfig`, the redirect handler and bounded reads, used by `source_generation.py` and `package_id.py`. `pack build` constructs the plain client and never reads `config/http.json`. Move the credential, redirect and bounded-read tests with the code, keeping their assertions. Verify with:
+- [x] 5.1 Split the HTTP client (design decision 9). `http.py` keeps the retrying plain `get` and `redact_url`. `omnipack/source_http.py` holds the credential-scoped client with `HttpConfig`, the redirect handler and bounded reads, used by `source_generation.py` and `package_id.py`. `pack build` constructs the plain client and never reads `config/http.json`. Move the credential, redirect and bounded-read tests with the code, keeping their assertions. Verify with:
   - a test that a build fetch with `GITHUB_TOKEN` set and no `config/http.json` present sends no Authorization header and succeeds;
   - the generation credential tests passing;
   - `git grep -n "http.json" src` finding only the generation side.
