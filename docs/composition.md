@@ -43,8 +43,8 @@ the Zelda 3, Minish Cap and Harvest Moon 64 builds do, where a denial could not
 remove one without the other. A package denial removes every build carrying that
 package id from both packs and leaves the family's builds with other package ids
 selectable, so an app is absent from a pack only when no selectable build of its
-family remains there. Those three families have no other build, so a denial of their shared
-package id removes each of those apps from both packs.
+family remains there. Those three families have no other build, so a denial of
+their shared package id removes each of those apps from both packs.
 
 A committed codm entry is dropped at ingestion when a higher-precedence candidate
 that its own source makes eligible for dual covers the same project, so a baseline

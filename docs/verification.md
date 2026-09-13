@@ -69,8 +69,9 @@ package uniqueness, family coverage and overlay targets. They do not check
 eligibility, which no candidate rule declares and rendered entries cannot reveal.
 Rendered output omits losing candidates, so verification cannot reconstruct
 provenance, candidate presence, preference or source ranking, or prove that a
-patch produced the rendered values. Fixture-driven composition and rendering tests protect
-maintained IDs, URLs, variant membership and override values across refreshes.
+patch produced the rendered values. Fixture-driven composition and rendering
+tests protect maintained IDs, URLs, variant membership and override values
+across refreshes.
 
 Catalog verification compares the generated marker interior against the captured
 packs and policy. Missing, unreadable, malformed or stale catalogs fail. Handwritten

@@ -175,9 +175,9 @@ without checking those selected APK manifests. Some known mismatches, including
 Symphony and Shipwright, were explicitly deferred during version-policy work.
 The dual preference correctly selected igawa6 CTR, a dual-screen build from the
 codm catalog, but that choice did not establish signing continuity with an
-existing Simon installation. These are limits in our curation and acceptance process as well as
-upstream metadata quality, not evidence that the conflict resolver randomly
-chose the wrong repository.
+existing Simon installation. These are limits in our curation and acceptance
+process as well as upstream metadata quality, not evidence that the conflict
+resolver randomly chose the wrong repository.
 
 Maintained provenance-aware corrections, explicit official-source pins, and
 package denials now preserve the decisions through refreshes. The bounded
