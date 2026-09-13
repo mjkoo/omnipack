@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any
 
 from omnipack.build import BuildInputs, previous_ids, publish_build
-from omnipack.composition_policy import load_composition_policy
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App
@@ -37,14 +36,13 @@ def build(_args: argparse.Namespace) -> int:
 
     try:
         inputs = BuildInputs.read(root)
-        policy = load_composition_policy(inputs.composition)
         ingested = _ingest_for_build(root, inputs, ingestion_report)
         stage = "composition"
         composition = compose(
             ingested,
             _object_list(inputs.deny, "denylist"),
             parse_json(inputs.overlay, "overlay"),
-            policy=policy,
+            policy=inputs.policy,
             report=composition_report,
         )
         stage = "rendering"

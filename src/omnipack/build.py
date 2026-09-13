@@ -10,6 +10,7 @@ from stat import S_IMODE
 from typing import Any
 from uuid import uuid4
 
+from omnipack.composition_policy import CompositionPolicy, load_composition_policy
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
 from omnipack.render import render
@@ -32,7 +33,7 @@ class OfflineVerificationError(ValueError):
 @dataclass(frozen=True, slots=True)
 class BuildInputs:
     """The five configuration files and the optional README, captured once
-    when a build starts.
+    when a build starts, with the composition policy parsed from its bytes.
 
     Composition, the offline gate and catalog generation all use these bytes,
     so a file edited while the build runs is overwritten by, or missing from,
@@ -46,6 +47,7 @@ class BuildInputs:
     deny: bytes
     overlay: bytes
     composition: bytes
+    policy: CompositionPolicy
     readme: bytes | None
 
     @classmethod
@@ -60,12 +62,18 @@ class BuildInputs:
             readme = (root / "README.md").read_bytes()
         except OSError:
             readme = None
+        sources = required("config/sources.json", "sources")
+        extras = required("config/extras.json", "extras")
+        deny = required("config/deny.json", "denylist")
+        overlay = required("config/overlay.json", "overlay")
+        composition = required("config/composition.json", "composition policy")
         return cls(
-            sources=required("config/sources.json", "sources"),
-            extras=required("config/extras.json", "extras"),
-            deny=required("config/deny.json", "denylist"),
-            overlay=required("config/overlay.json", "overlay"),
-            composition=required("config/composition.json", "composition policy"),
+            sources=sources,
+            extras=extras,
+            deny=deny,
+            overlay=overlay,
+            composition=composition,
+            policy=load_composition_policy(composition),
             readme=readme,
         )
 
@@ -127,7 +135,6 @@ def publish_build(
         for item in offline_findings
     ]
     from omnipack.catalog import generate_catalog, replace_catalog
-    from omnipack.composition_policy import load_composition_policy
 
     readme_rendered = None
     if not findings:
@@ -135,9 +142,7 @@ def publish_build(
             if inputs.readme is None:
                 raise ValueError("README input is missing or unreadable")
             catalog = generate_catalog(
-                rendered[Variant.SINGLE],
-                rendered[Variant.DUAL],
-                load_composition_policy(inputs.composition),
+                rendered[Variant.SINGLE], rendered[Variant.DUAL], inputs.policy
             )
             readme_rendered = replace_catalog(inputs.readme, catalog)
         except ValueError as error:
