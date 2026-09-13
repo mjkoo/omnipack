@@ -85,6 +85,7 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
             "variants",
             "dualPreferred",
             "dual_preferred",
+            "dualScreen",
             "provenance",
             "selectionReason",
             "selection_reason",

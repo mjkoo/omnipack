@@ -16,8 +16,10 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.http import HttpClient, HttpError, HttpResponse
-from omnipack.merge import compose
+from omnipack.merge import _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.overlay import ComposedApp
+from omnipack.render import render
 from omnipack.sources import (
     IngestionReport,
     SourceError,
@@ -550,92 +552,99 @@ def test_ingestion_requires_generated_policy_selectors_after_resolution(
 
 
 @pytest.mark.parametrize("missing", ["id", "url", "name"])
-@pytest.mark.parametrize("variants", [None, []])
-def test_extras_requires_named_fields(missing: str, variants: list[str] | None) -> None:
+@pytest.mark.parametrize("dual_screen", [None, True])
+def test_extras_requires_named_fields(missing: str, dual_screen: bool | None) -> None:
     entry: dict[str, Any] = {
         "id": "app.id",
         "url": "https://example.test/app",
         "name": "Example",
     }
-    if variants is not None:
-        entry["variants"] = variants
+    if dual_screen is not None:
+        entry["dualScreen"] = dual_screen
     del entry[missing]
     with pytest.raises(SourceError, match="extras.*(Example|app.id|entry 1)"):
         extras.fetch([entry])
 
 
-def test_extras_defaults_variants_derives_source_and_validates_subset() -> None:
+def test_extras_dual_screen_flag_decides_eligibility_and_preference() -> None:
     apps = extras.fetch(
         [
             {"id": "a", "url": "https://github.com/o/r", "name": "GitHub"},
             {
                 "id": "b",
                 "url": "https://elsewhere/app",
-                "name": "HTML",
-                "variants": ["single"],
+                "name": "Dual",
+                "dualScreen": True,
+            },
+            {
+                "id": "c",
+                "url": "https://elsewhere/other",
+                "name": "Explicit",
+                "dualScreen": False,
             },
         ]
     )
-    assert {(app.id, app.eligibility, app.source_type) for app in apps} == {
-        ("a", frozenset(Variant), SourceType.GITHUB),
-        ("b", frozenset({Variant.SINGLE}), SourceType.HTML),
+    assert {
+        (app.id, app.eligibility, app.dual_preferred, app.source_type) for app in apps
+    } == {
+        ("a", frozenset(Variant), False, SourceType.GITHUB),
+        ("b", frozenset({Variant.DUAL}), True, SourceType.HTML),
+        ("c", frozenset(Variant), False, SourceType.HTML),
     }
-    with pytest.raises(SourceError, match="extras.*Bad.*wide"):
+
+
+@pytest.mark.parametrize("value", [1, "true", None, []])
+def test_extras_rejects_non_boolean_dual_screen(value: object) -> None:
+    with pytest.raises(SourceError, match="extras.*Typed.*dualScreen must be boolean"):
         extras.fetch(
-            [{"id": "c", "url": "https://x", "name": "Bad", "variants": ["wide"]}]
+            [{"id": "b", "url": "https://x", "name": "Typed", "dualScreen": value}]
         )
 
 
-def test_extras_rejects_empty_variants_and_invalid_dual_preference() -> None:
-    with pytest.raises(SourceError, match="extras.*Empty.*must not be empty"):
-        extras.fetch([{"id": "a", "url": "https://x", "name": "Empty", "variants": []}])
-    with pytest.raises(SourceError, match="extras.*Typed.*must be boolean"):
-        extras.fetch(
-            [
-                {
-                    "id": "b",
-                    "url": "https://x",
-                    "name": "Typed",
-                    "dualPreferred": 1,
-                }
-            ]
-        )
-    with pytest.raises(SourceError, match="extras.*Single.*requires dual"):
-        extras.fetch(
-            [
-                {
-                    "id": "c",
-                    "url": "https://x",
-                    "name": "Single",
-                    "variants": ["single"],
-                    "dualPreferred": True,
-                }
-            ]
-        )
-    preferred = extras.fetch(
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("variants", ["single", "dual"]),
+        ("variants", ["dual"]),
+        ("dualPreferred", True),
+        ("dualPreferred", False),
+    ],
+)
+def test_extras_rejects_retired_fields_naming_entry_and_field(
+    field: str, value: object
+) -> None:
+    with pytest.raises(SourceError, match=f"extras.*Retired.*unknown field '{field}'"):
+        extras.fetch([{"id": "r", "url": "https://x", "name": "Retired", field: value}])
+
+
+def test_extras_composition_fields_stay_out_of_the_rendered_record() -> None:
+    [app] = extras.fetch(
         [
             {
                 "id": "d",
                 "url": "https://x",
                 "name": "Preferred",
-                "variants": ["dual"],
-                "dualPreferred": True,
+                "dualScreen": True,
                 "family": "app:ignored",
                 "origin": "ignored",
                 "originalId": "ignored",
                 "provenance": {"source": "ignored"},
             }
         ]
-    )[0]
-    assert preferred.dual_preferred
-    assert not preferred.raw.keys() & {
-        "dualPreferred",
+    )
+    assert app.dual_preferred
+    assert not app.raw.keys() & {
+        "dualScreen",
         "family",
         "origin",
         "originalId",
         "provenance",
-        "variants",
     }
+    [rendered] = json.loads(
+        render([ComposedApp(Variant.DUAL, app.provenance, _import_data(app))], {})
+    )["apps"]
+    assert "dualScreen" not in rendered
+    assert "dualScreen" not in json.loads(rendered["additionalSettings"])
 
 
 def test_settings_json_string_must_decode_to_object() -> None:

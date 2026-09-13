@@ -7,47 +7,40 @@ from collections.abc import Sequence
 from omnipack.model import App, Variant
 from omnipack.sources.common import SourceError, normalize_record
 
+_RETIRED_FIELDS = frozenset({"variants", "dualPreferred"})
+
 
 def fetch(entries: Sequence[object]) -> list[App]:
-    """Return the hand-added entries, normalized."""
+    """Return the hand-added entries, normalized.
+
+    An entry is a baseline build, a candidate for both packs, unless it sets
+    `dualScreen` to true. That makes it a dual-screen build: a candidate for
+    the dual-screen pack only, and preferred there, as every other source marks
+    its dual-only builds.
+    """
     result: list[App] = []
     for index, entry in enumerate(entries, 1):
         if not isinstance(entry, dict):
             raise SourceError("extras", f"entry {index} must be an object")
         label = entry.get("name") or entry.get("id") or f"entry {index}"
-        variants = entry.get("variants", [variant.value for variant in Variant])
-        if not isinstance(variants, list):
-            raise SourceError("extras", f"entry {label!r} variants must be a list")
-        eligibility: set[Variant] = set()
-        for value in variants:
-            try:
-                variant = Variant(value)
-            except (TypeError, ValueError) as error:
-                raise SourceError(
-                    "extras", f"entry {label!r} has unknown variant {value!r}"
-                ) from error
-            eligibility.add(variant)
-        if not eligibility:
-            raise SourceError("extras", f"entry {label!r} variants must not be empty")
-        preferred = entry.get("dualPreferred", False)
-        if type(preferred) is not bool:
+        retired = _RETIRED_FIELDS & entry.keys()
+        if retired:
             raise SourceError(
-                "extras", f"entry {label!r} dualPreferred must be boolean"
+                "extras", f"entry {label!r} has unknown field {min(retired)!r}"
             )
-        if preferred and Variant.DUAL not in eligibility:
-            raise SourceError(
-                "extras", f"entry {label!r} dualPreferred requires dual eligibility"
-            )
+        dual_screen = entry.get("dualScreen", False)
+        if type(dual_screen) is not bool:
+            raise SourceError("extras", f"entry {label!r} dualScreen must be boolean")
         result.append(
             normalize_record(
                 entry,
                 source="extras",
-                variant=(
-                    Variant.SINGLE if Variant.SINGLE in eligibility else Variant.DUAL
-                ),
+                variant=Variant.DUAL if dual_screen else Variant.SINGLE,
                 derive_type=True,
-                eligibility=frozenset(eligibility),
-                dual_preferred=preferred,
+                eligibility=(
+                    frozenset({Variant.DUAL}) if dual_screen else frozenset(Variant)
+                ),
+                dual_preferred=dual_screen,
                 origin="extras",
             )
         )

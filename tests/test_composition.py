@@ -383,7 +383,16 @@ def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
 
 @pytest.mark.parametrize(
     "field",
-    ["id", "url", "overrideSource", "family", "origin", "eligibility", "dualPreferred"],
+    [
+        "id",
+        "url",
+        "overrideSource",
+        "family",
+        "origin",
+        "eligibility",
+        "dualPreferred",
+        "dualScreen",
+    ],
 )
 def test_overlay_rejects_identity_and_composition_fields_even_when_null(
     field: str,

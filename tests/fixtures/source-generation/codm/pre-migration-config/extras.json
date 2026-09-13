@@ -7,9 +7,7 @@
     "categories": [
       "Emulator"
     ],
-    "variants": [
-      "dual"
-    ],
+    "dualScreen": true,
     "additionalSettings": {
       "includePrereleases": false,
       "fallbackToOlderReleases": false,
@@ -30,10 +28,6 @@
     "categories": [
       "PC Ports"
     ],
-    "variants": [
-      "single",
-      "dual"
-    ],
     "additionalSettings": {
       "includePrereleases": false,
       "versionDetection": true,
@@ -47,7 +41,6 @@
     "name": "Ghostship",
     "author": "HarbourMasters",
     "categories": ["PC Ports"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": false,
       "fallbackToOlderReleases": true,
@@ -65,7 +58,6 @@
     "name": "Pokémon Red/Blue Recomp",
     "author": "bryanthaboi",
     "categories": ["Decomps/Recomps"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": false,
       "fallbackToOlderReleases": true,
@@ -85,7 +77,6 @@
     "name": "Aurora Store",
     "author": "AuroraOSS",
     "categories": ["Utilities"],
-    "variants": ["single", "dual"],
     "overrideSource": "GitLab",
     "additionalSettings": {
       "apkFilterRegEx": "^AuroraStore-[0-9]+(?:\\.[0-9]+)+\\.apk$",
@@ -100,7 +91,6 @@
     "name": "idTech4A++",
     "author": "glKarin",
     "categories": ["PC Ports"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": false,
       "apkFilterRegEx": "^idTech4A\\+\\+_[^_]+\\.apk$",
@@ -116,7 +106,6 @@
     "name": "VCMI",
     "author": "VCMI",
     "categories": ["PC Ports"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": false,
       "apkFilterRegEx": "^VCMI-Android-.*\\.apk$",
@@ -132,7 +121,6 @@
     "name": "Julius",
     "author": "bvschaik",
     "categories": ["PC Ports"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": false,
       "apkFilterRegEx": "^julius-.*-android\\.apk$",
@@ -148,7 +136,6 @@
     "name": "Xash3D FWGS",
     "author": "FWGS",
     "categories": ["PC Ports"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": true,
       "fallbackToOlderReleases": true,
@@ -169,7 +156,6 @@
     "name": "omnipack updates",
     "author": "mjkoo",
     "categories": ["Utilities"],
-    "variants": ["single", "dual"],
     "additionalSettings": {
       "includePrereleases": true,
       "fallbackToOlderReleases": true,

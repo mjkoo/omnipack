@@ -152,6 +152,7 @@ def normalize_record(
         "variants",
         "dualPreferred",
         "dual_preferred",
+        "dualScreen",
         "eligible",
         "eligibility",
         "family",
