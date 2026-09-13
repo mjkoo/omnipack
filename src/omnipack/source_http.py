@@ -10,17 +10,17 @@ from __future__ import annotations
 
 import json
 import os
-import time
 import urllib.request
-from collections.abc import Callable, Mapping
+from collections.abc import Mapping
 from dataclasses import dataclass
 from http.client import HTTPMessage
 from io import BytesIO
 from pathlib import Path
-from typing import IO, Any, Protocol
+from typing import IO, Any, Protocol, Unpack
 from urllib.parse import urlsplit
 
 from omnipack.http import (
+    ClientSettings,
     HttpError,
     HttpResponse,
     RetryingClient,
@@ -121,20 +121,10 @@ class SourceHttpClient(RetryingClient):
         self,
         config: HttpConfig,
         *,
-        timeout: float = 30.0,
-        user_agent: str = "omnipack/0.1",
-        retries: int = 2,
-        backoff: float = 0.5,
-        sleep: Callable[[float], None] = time.sleep,
         transport: Transport | None = None,
+        **settings: Unpack[ClientSettings],
     ) -> None:
-        super().__init__(
-            timeout=timeout,
-            user_agent=user_agent,
-            retries=retries,
-            backoff=backoff,
-            sleep=sleep,
-        )
+        super().__init__(**settings)
         self.config = config
         self.transport = transport or self._urllib_transport
 

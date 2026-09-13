@@ -16,7 +16,7 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
 from http.client import HTTPException, IncompleteRead
-from typing import Any, Protocol
+from typing import Any, Protocol, TypedDict, Unpack
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 _FORBIDDEN_CALLER_HEADERS = frozenset({"authorization", "cookie"})
@@ -56,11 +56,23 @@ class Transport(Protocol):
     ) -> HttpResponse: ...
 
 
+class ClientSettings(TypedDict, total=False):
+    """Request and retry settings every retrying client accepts."""
+
+    timeout: float
+    user_agent: str
+    retries: int
+    backoff: float
+    sleep: Callable[[float], None]
+
+
 class RetryingClient:
     """Retry configuration and dispatch shared by every retrying HTTP client.
 
-    A subclass owns its own `transport` attribute, since each accepts a
-    differently shaped transport callable, and calls `_retry` from its `get`.
+    Subclasses pass their `ClientSettings` keywords through unchanged, so the
+    defaults live here only. A subclass owns its own `transport` attribute,
+    since each accepts a differently shaped transport callable, and calls
+    `_retry` from its `get`.
     """
 
     timeout: float
@@ -87,13 +99,22 @@ class RetryingClient:
         self.sleep = sleep
 
     def _retry(self, url: str, attempt: Callable[[], HttpResponse]) -> HttpResponse:
-        return retrying(
-            url,
-            attempt,
-            retries=self.retries,
-            backoff=self.backoff,
-            sleep=self.sleep,
-        )
+        """Run one request attempt, retrying transient failures with backoff."""
+        attempts = self.retries + 1
+        for number in range(attempts):
+            try:
+                return attempt()
+            except (OSError, HTTPException) as error:
+                if isinstance(error, urllib.error.HTTPError):
+                    error.close()
+                if not _is_transient(error) or number + 1 == attempts:
+                    if _is_transient(error):
+                        raise TransientHttpError(url, number + 1) from error
+                    raise HttpError(
+                        f"request to {redact_url(url)} failed after {number + 1} attempts"
+                    ) from error
+                self.sleep(self.backoff * (2**number))
+        raise AssertionError("request loop did not return or raise")
 
 
 class HttpClient(RetryingClient):
@@ -102,20 +123,10 @@ class HttpClient(RetryingClient):
     def __init__(
         self,
         *,
-        timeout: float = 30.0,
-        user_agent: str = "omnipack/0.1",
-        retries: int = 2,
-        backoff: float = 0.5,
-        sleep: Callable[[float], None] = time.sleep,
         transport: Transport | None = None,
+        **settings: Unpack[ClientSettings],
     ) -> None:
-        super().__init__(
-            timeout=timeout,
-            user_agent=user_agent,
-            retries=retries,
-            backoff=backoff,
-            sleep=sleep,
-        )
+        super().__init__(**settings)
         self.transport = transport or self._urllib_transport
 
     def get(self, url: str) -> HttpResponse:
@@ -169,32 +180,6 @@ def complete_response(stream: Any, body: bytes) -> HttpResponse:
     return HttpResponse(
         url=stream.url, status=status, headers=stream.headers, body=body
     )
-
-
-def retrying(
-    url: str,
-    attempt: Callable[[], HttpResponse],
-    *,
-    retries: int,
-    backoff: float,
-    sleep: Callable[[float], None],
-) -> HttpResponse:
-    """Run one request attempt, retrying transient failures with backoff."""
-    attempts = retries + 1
-    for number in range(attempts):
-        try:
-            return attempt()
-        except (OSError, HTTPException) as error:
-            if isinstance(error, urllib.error.HTTPError):
-                error.close()
-            if not _is_transient(error) or number + 1 == attempts:
-                if _is_transient(error):
-                    raise TransientHttpError(url, number + 1) from error
-                raise HttpError(
-                    f"request to {redact_url(url)} failed after {number + 1} attempts"
-                ) from error
-            sleep(backoff * (2**number))
-    raise AssertionError("request loop did not return or raise")
 
 
 def _is_transient(error: OSError | HTTPException) -> bool:
