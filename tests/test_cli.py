@@ -13,7 +13,7 @@ from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import CompositionReport, CompositionResult
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
-from omnipack.sources import IngestionReport, IngestionResult, SourceError
+from omnipack.sources import IngestionReport, SourceError
 
 EMPTY_POLICY = '{"schemaVersion":1,"candidates":[],"pins":[]}'
 
@@ -88,13 +88,7 @@ def test_build_writes_both_variants_and_report(
         },
         CompositionReport(),
     )
-    monkeypatch.setattr(
-        cli,
-        "_ingest_for_build",
-        lambda root, inputs, report=None: IngestionResult(
-            [], report or IngestionReport()
-        ),
-    )
+    monkeypatch.setattr(cli, "_ingest_for_build", lambda root, inputs, report: [])
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.chdir(tmp_path)
 
@@ -134,7 +128,7 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, inputs, report=None: (_ for _ in ()).throw(
+        lambda root, inputs, report: (_ for _ in ()).throw(
             SourceError("rjny", "HTTP 503")
         ),
     )
@@ -181,9 +175,9 @@ def test_build_failure_does_not_mutate_committed_catalog(
     (config / "catalogs/codm.json").write_bytes(catalog)
 
     def resolved(
-        _root: Path, _inputs: BuildInputs, report: IngestionReport | None = None
-    ) -> IngestionResult:
-        return IngestionResult([], report or IngestionReport())
+        _root: Path, _inputs: BuildInputs, report: IngestionReport
+    ) -> list[App]:
+        return []
 
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
@@ -427,7 +421,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, inputs, report: IngestionResult([candidate], report),
+        lambda root, inputs, report: [candidate],
     )
     if stage == "rendering":
         from omnipack import build as build_module
@@ -534,7 +528,7 @@ def test_composition_failure_preserves_collected_diagnostics(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, inputs, report: IngestionResult(apps, report),
+        lambda root, inputs, report: apps,
     )
     monkeypatch.chdir(tmp_path)
 
@@ -563,7 +557,6 @@ def test_composition_failure_preserves_collected_diagnostics(
         }
         for variant in Variant
     ]
-    assert "displacements" not in report
     assert report["denylistRemovals"] == [
         {
             "id": "removed.app",
@@ -608,7 +601,7 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, inputs, report: IngestionResult([], report),
+        lambda root, inputs, report: [],
     )
     monkeypatch.setattr(cli, "compose", lambda *_args, **_kwargs: composed)
     calls = 0
@@ -673,8 +666,8 @@ def test_winning_tie_reports_original_selectors(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, inputs, report: IngestionResult(
-            list(reversed(candidates)) if reverse else candidates, report
+        lambda root, inputs, report: (
+            list(reversed(candidates)) if reverse else candidates
         ),
     )
     monkeypatch.chdir(tmp_path)
@@ -740,8 +733,8 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
     real_ingest = cli._ingest_for_build
 
     def ingest_then_edit(
-        root: Path, inputs: BuildInputs, report: IngestionReport | None = None
-    ) -> IngestionResult:
+        root: Path, inputs: BuildInputs, report: IngestionReport
+    ) -> list[App]:
         (root / edited).write_bytes(edits[edited])
         return real_ingest(root, inputs, report)
 
@@ -762,7 +755,20 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
 
 
 @pytest.mark.parametrize(
-    "http_config", [None, b"not json"], ids=["absent", "unreadable"]
+    "http_config",
+    [
+        None,
+        b"not json",
+        json.dumps(
+            {
+                "credentials": {
+                    "raw.githubusercontent.com": "GITHUB_TOKEN",
+                    "codeberg.org": "GITHUB_TOKEN",
+                }
+            }
+        ).encode(),
+    ],
+    ids=["absent", "unreadable", "registered"],
 )
 def test_build_fetches_catalogs_without_credentials_or_http_config(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, http_config: bytes | None
@@ -791,6 +797,7 @@ def test_build_fetches_catalogs_without_credentials_or_http_config(
     ("missing", "source"),
     [
         ("config/sources.json", "sources"),
+        ("config/extras.json", "extras"),
         ("config/deny.json", "denylist"),
         ("config/overlay.json", "overlay"),
         ("config/composition.json", "composition policy"),

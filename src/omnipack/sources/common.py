@@ -8,7 +8,7 @@ from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpResponse
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import COMPOSITION_ONLY_FIELDS, App, Provenance, SourceType, Variant
 from omnipack.urls import gitlab_project_path
 
 
@@ -108,10 +108,11 @@ def normalize_record(
     eligibility: frozenset[Variant],
     derive_type: bool = False,
     origin: str | None = None,
+    default_label: str = "unnamed entry",
 ) -> App:
     if not isinstance(record, dict):
         raise SourceError(source, "catalog entry must be an object")
-    label = record.get("name") or record.get("id") or "unnamed entry"
+    label = record.get("name") or record.get("id") or default_label
     for field in ("id", "url", "name"):
         if not isinstance(record.get(field), str) or not record[field].strip():
             raise SourceError(source, f"entry {label!r} is missing {field}")
@@ -139,18 +140,7 @@ def normalize_record(
         "categories",
         "additionalSettings",
         "meta",
-        "variants",
-        "dualPreferred",
-        "dual_preferred",
-        "dualScreen",
-        "eligible",
-        "eligibility",
-        "family",
-        "origin",
-        "originalId",
-        "original_id",
-        "provenance",
-    }
+    } | COMPOSITION_ONLY_FIELDS
     return App(
         id=record["id"],
         url=url,

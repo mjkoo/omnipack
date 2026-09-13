@@ -22,6 +22,26 @@ class SourceType(str, Enum):
     GITLAB = "GitLab"
 
 
+# Fields a catalog or extras record carries for composition's use, never for
+# an Obtainium record: normalization strips them and an overlay may not touch
+# them.
+COMPOSITION_ONLY_FIELDS = frozenset(
+    {
+        "variants",
+        "dualPreferred",
+        "dual_preferred",
+        "dualScreen",
+        "eligible",
+        "eligibility",
+        "family",
+        "origin",
+        "originalId",
+        "original_id",
+        "provenance",
+    }
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Where an entry came from, for the build report."""

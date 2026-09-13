@@ -166,7 +166,7 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
 
 def single_selections(
     extras_config: list[dict[str, object]], tmp_path: Path
-) -> dict[str, tuple[str, str, str]]:
+) -> dict[str, tuple[str, str, str, str]]:
     """Compose the committed configuration over the captured upstream catalogs."""
     higher = captured_higher(extras_config)
     result = _compose_with_codm_catalog(_committed_codm_catalog(), tmp_path, higher)
@@ -175,6 +175,7 @@ def single_selections(
             selection.effective_id,
             normalize_project_url(selection.url),
             selection.reason,
+            selection.source,
         )
         for selection in result.report.selections
         if selection.variant is Variant.SINGLE
@@ -190,6 +191,7 @@ def test_committed_configuration_selects_each_curated_extra_in_single(
             package_id,
             normalize_project_url(url),
             "source",
+            "extras",
         ), family
 
 
@@ -204,7 +206,11 @@ def test_curated_single_guard_fails_when_its_extra_becomes_dual_screen(
     [entry] = [item for item in extras_config if item["id"] == package_id]
     entry["dualScreen"] = True
     selected = single_selections(extras_config, tmp_path).get(family)
-    assert selected is None or selected[:2] != (package_id, normalize_project_url(url))
+    assert (
+        selected is None
+        or selected[:2] != (package_id, normalize_project_url(url))
+        or selected[3] != "extras"
+    )
 
 
 @pytest.mark.parametrize(

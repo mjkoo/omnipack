@@ -12,15 +12,10 @@ from omnipack.build import BuildInputs, previous_ids, publish_build
 from omnipack.composition_policy import load_composition_policy
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
+from omnipack.model import App
 from omnipack.report import format_reports, write_report
 from omnipack.source_generation import generate_codm
-from omnipack.sources import (
-    IngestionReport,
-    IngestionResult,
-    SourceError,
-    ingest_all,
-    parse_json,
-)
+from omnipack.sources import IngestionReport, SourceError, ingest_all, parse_json
 from omnipack.verify import VerificationReportError, run_verification
 
 
@@ -46,7 +41,7 @@ def build(_args: argparse.Namespace) -> int:
         ingested = _ingest_for_build(root, inputs, ingestion_report)
         stage = "composition"
         composition = compose(
-            ingested.apps,
+            ingested,
             _object_list(inputs.deny, "denylist"),
             parse_json(inputs.overlay, "overlay"),
             policy=policy,
@@ -85,8 +80,8 @@ def build(_args: argparse.Namespace) -> int:
 
 
 def _ingest_for_build(
-    root: Path, inputs: BuildInputs, report: IngestionReport | None = None
-) -> IngestionResult:
+    root: Path, inputs: BuildInputs, report: IngestionReport
+) -> list[App]:
     source_config = parse_json(inputs.sources, "sources")
     if not isinstance(source_config, dict):
         raise SourceError("sources", "configuration must be an object")

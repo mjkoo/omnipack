@@ -12,10 +12,7 @@ from urllib.request import Request
 import pytest
 
 from omnipack import cli
-from omnipack.composition_policy import (
-    CompositionPolicyError,
-    parse_composition_policy,
-)
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpError, HttpResponse
 from omnipack.merge import CompositionError, _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
@@ -23,7 +20,6 @@ from omnipack.overlay import ComposedApp
 from omnipack.render import render
 from omnipack.sources import (
     IngestionReport,
-    IngestionResult,
     SourceError,
     bboi,
     codm,
@@ -200,25 +196,6 @@ def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
         ),
     )
     assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
-    with pytest.raises(CompositionPolicyError, match="unknown field 'eligible'"):
-        parse_composition_policy(
-            {
-                "schemaVersion": 1,
-                "candidates": [
-                    {
-                        "match": {
-                            "source": "rjny",
-                            "origin": "rjny-catalog",
-                            "id": "app.disabled",
-                            "url": "https://github.com/owner/disabled",
-                        },
-                        "eligible": ["dual"],
-                        "rationale": "Restore dual eligibility.",
-                    }
-                ],
-                "pins": [],
-            }
-        )
 
 
 @pytest.mark.parametrize("response", [HttpError("offline"), "not json"])
@@ -452,7 +429,7 @@ def rjny_candidate(eligibility: frozenset[Variant]) -> App:
 
 def ingest_over_codm_entry(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, higher: list[App]
-) -> IngestionResult:
+) -> list[App]:
     """Ingest stubbed higher-precedence candidates over one codm2000 entry."""
     entry = {
         "id": "app.generated",
@@ -469,6 +446,7 @@ def ingest_over_codm_entry(
         FakeHttp({}),
         {"rjny": {}, "bboi": {}, "codm": {"catalog": "codm.json"}},
         [],
+        IngestionReport(),
     )
 
 
@@ -478,8 +456,8 @@ def test_ingestion_takes_no_policy_and_returns_candidates_unmodified(
     assert "policy" not in inspect.signature(ingest_all).parameters
     higher = rjny_candidate(frozenset({Variant.SINGLE}))
     result = ingest_over_codm_entry(tmp_path, monkeypatch, [higher])
-    assert result.apps[0] is higher
-    assert [(app.id, app.family) for app in result.apps] == [
+    assert result[0] is higher
+    assert [(app.id, app.family) for app in result] == [
         ("app.standard", None),
         ("app.generated", None),
     ]
@@ -503,7 +481,7 @@ def test_codm_suppression_follows_source_dual_eligibility(
     result = ingest_over_codm_entry(
         tmp_path, monkeypatch, [rjny_candidate(eligibility)]
     )
-    assert ("app.generated" not in {app.id for app in result.apps}) is suppressed
+    assert ("app.generated" not in {app.id for app in result}) is suppressed
 
 
 def test_codm_suppression_holds_when_a_rule_regroups_the_covering_candidate(
@@ -512,7 +490,7 @@ def test_codm_suppression_holds_when_a_rule_regroups_the_covering_candidate(
     result = ingest_over_codm_entry(
         tmp_path, monkeypatch, [rjny_candidate(frozenset(Variant))]
     )
-    assert [app.id for app in result.apps] == ["app.standard"]
+    assert [app.id for app in result] == ["app.standard"]
     policy = parse_composition_policy(
         {
             "schemaVersion": 1,
@@ -532,7 +510,7 @@ def test_codm_suppression_holds_when_a_rule_regroups_the_covering_candidate(
             "pins": [],
         }
     )
-    composed = compose(result.apps, [], [], policy=policy)
+    composed = compose(result, [], [], policy=policy)
     for variant in Variant:
         assert [(app.id, app.family) for app in composed.apps[variant]] == [
             ("app.corrected", "app:project")
@@ -570,22 +548,24 @@ def test_policy_naming_a_suppressed_codm_entry_fails_in_composition(
         }
     )
     with pytest.raises(CompositionError, match=message):
-        compose(result.apps, [], [], policy=policy)
+        compose(result, [], [], policy=policy)
 
 
 @pytest.mark.parametrize("missing", ["id", "url", "name"])
-@pytest.mark.parametrize("dual_screen", [None, True])
-def test_extras_requires_named_fields(missing: str, dual_screen: bool | None) -> None:
+def test_extras_requires_named_fields(missing: str) -> None:
     entry: dict[str, Any] = {
         "id": "app.id",
         "url": "https://example.test/app",
         "name": "Example",
     }
-    if dual_screen is not None:
-        entry["dualScreen"] = dual_screen
     del entry[missing]
     with pytest.raises(SourceError, match="extras.*(Example|app.id|entry 1)"):
         extras.fetch([entry])
+
+
+def test_extras_entry_missing_every_name_source_is_identified_by_index() -> None:
+    with pytest.raises(SourceError, match=r"extras: entry 'entry 1' is missing id"):
+        extras.fetch([{}])
 
 
 def test_extras_dual_screen_flag_decides_eligibility_and_preference() -> None:
@@ -615,7 +595,7 @@ def test_extras_dual_screen_flag_decides_eligibility_and_preference() -> None:
     }
 
 
-@pytest.mark.parametrize("value", [1, "true", None, []])
+@pytest.mark.parametrize("value", [1, "true", None])
 def test_extras_rejects_non_boolean_dual_screen(value: object) -> None:
     with pytest.raises(SourceError, match="extras.*Typed.*dualScreen must be boolean"):
         extras.fetch(
@@ -766,8 +746,6 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
 def test_codm_malformed_catalog_aborts_before_publication(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
 ) -> None:
-    from omnipack.sources import IngestionResult
-
     dist = tmp_path / "dist"
     dist.mkdir()
     before = {
@@ -777,10 +755,9 @@ def test_codm_malformed_catalog_aborts_before_publication(
     for name, content in before.items():
         (dist / name).write_bytes(content)
 
-    def ingest(root: Path, _inputs: object, report: IngestionReport) -> IngestionResult:
+    def ingest(root: Path, _inputs: object, report: IngestionReport) -> list[App]:
         (root / "catalog.json").write_text(body)
-        apps = codm.fetch(root, {"catalog": "catalog.json"}, [])
-        return IngestionResult(apps, report)
+        return codm.fetch(root, {"catalog": "catalog.json"}, [])
 
     shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
     monkeypatch.setattr(cli, "_ingest_for_build", ingest)

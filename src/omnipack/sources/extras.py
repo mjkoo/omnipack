@@ -40,6 +40,7 @@ def fetch(entries: Sequence[object]) -> list[App]:
                     frozenset({Variant.DUAL}) if dual_screen else frozenset(Variant)
                 ),
                 origin="extras",
+                default_label=label,
             )
         )
     return result

@@ -24,19 +24,13 @@ class IngestionReport:
 __all__ = ["IngestionReport", "SourceError"]
 
 
-@dataclass(frozen=True, slots=True)
-class IngestionResult:
-    apps: list[App]
-    report: IngestionReport
-
-
 def ingest_all(
     root: Path,
     http: HttpGetter,
     source_config: Mapping[str, object],
     extras_config: object,
-    report: IngestionReport | None = None,
-) -> IngestionResult:
+    report: IngestionReport,
+) -> list[App]:
     """Fetch every source in precedence order and retain structured outcomes.
 
     Candidates come back as their sources describe them; composition applies
@@ -53,22 +47,21 @@ def ingest_all(
 
     if not isinstance(extras_config, list):
         raise SourceError("extras", "configuration must be a list")
-    report = report or IngestionReport()
     rjny_apps = rjny.fetch(http, section("rjny"))
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)
     higher = [*extra_apps, *rjny_apps, *bboi_apps]
     generated = codm.fetch(root, section("codm"), higher, report)
-    return IngestionResult([*rjny_apps, *bboi_apps, *generated, *extra_apps], report)
+    return [*rjny_apps, *bboi_apps, *generated, *extra_apps]
 
 
 def load_json(path: str | PathLike[str], source: str) -> object:
     """Read a JSON source configuration with a source-named error."""
     try:
-        with open(path, encoding="utf-8") as stream:
-            return json.load(stream)
-    except Exception as error:
+        data = Path(path).read_bytes()
+    except OSError as error:
         raise SourceError(source, str(error)) from error
+    return parse_json(data, source)
 
 
 def parse_json(data: bytes, source: str) -> object:
@@ -79,4 +72,4 @@ def parse_json(data: bytes, source: str) -> object:
         raise SourceError(source, str(error)) from error
 
 
-__all__ += ["IngestionResult", "ingest_all", "load_json", "parse_json"]
+__all__ += ["ingest_all", "load_json", "parse_json"]

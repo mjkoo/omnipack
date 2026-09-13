@@ -6,6 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
+from omnipack.model import COMPOSITION_ONLY_FIELDS
 from omnipack.urls import normalize_project_url
 
 
@@ -68,25 +69,17 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
             ) from error
         if not isinstance(patch, dict):
             raise OverlayError(f"{item_label}.patch must be an object")
-        protected = {
-            "id",
-            "url",
-            "overrideSource",
-            "family",
-            "originalId",
-            "original_id",
-            "origin",
-            "eligibility",
-            "eligible",
-            "variant",
-            "variants",
-            "dualPreferred",
-            "dual_preferred",
-            "dualScreen",
-            "provenance",
-            "selectionReason",
-            "selection_reason",
-        }.intersection(patch)
+        protected = (
+            {
+                "id",
+                "url",
+                "overrideSource",
+                "variant",
+                "selectionReason",
+                "selection_reason",
+            }
+            | COMPOSITION_ONLY_FIELDS
+        ).intersection(patch)
         if protected:
             raise OverlayError(
                 f"{item_label}.patch contains protected field "
