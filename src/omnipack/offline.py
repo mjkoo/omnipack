@@ -481,7 +481,7 @@ def _validate_composition(
             findings.append(
                 Finding(
                     "composition",
-                    "stale_common_overlay",
+                    "stale_overlay",
                     f"overlay has no target for {patch.key!r}",
                     entry_id=patch.package_id,
                 )

@@ -215,7 +215,7 @@ def test_raw_ids_survive_other_entry_errors(field: str) -> None:
         ("single", "denied_output_present"),
         ("dual", "denied_output_present"),
     } <= {(finding.variant, finding.code) for finding in findings}
-    assert not {"stale_common_overlay", "dual_coverage_gap"} & codes(findings)
+    assert not {"stale_overlay", "dual_coverage_gap"} & codes(findings)
 
     missing_dual = validate_offline(inputs([malformed], []))
     assert "dual_coverage_gap" in codes(missing_dual)
@@ -289,7 +289,7 @@ def test_nested_html_steps_and_headers_are_validated(
                     }
                 ]
             },
-            "stale_common_overlay",
+            "stale_overlay",
         ),
         ({"deny": [{"id": "org.example.app", "reason": "x"}]}, "denied_output_present"),
     ],
