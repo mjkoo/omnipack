@@ -15,7 +15,7 @@ def copy_inputs(root: Path) -> None:
     for relative in INPUT_PATHS.values():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if relative.name in {"overlay.json", "overlay.dual.json"}:
+        if relative.name == "overlay.json":
             target.write_text("[]")
         elif relative.name == "composition.json" and relative.exists():
             target.write_text(historical_composition())
@@ -27,7 +27,7 @@ def copy_inputs(root: Path) -> None:
 
 def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
-    run_verification(tmp_path)
+    assert run_verification(tmp_path)["schemaVersion"] == 3
     output = format_reports(tmp_path)
     assert "No build report recorded" in output
     assert "Evidence: current" in output
@@ -71,7 +71,7 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "verifier": verifier_identity(),
                 "mode": "offline",
                 "startedAt": "2026-09-01T00:00:00+00:00",
@@ -137,10 +137,26 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    assert report["schemaVersion"] == 2
+    assert report["schemaVersion"] == 3
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
+
+
+def test_schema_2_verification_report_requires_regeneration(tmp_path: Path) -> None:
+    copy_inputs(tmp_path)
+    report = run_verification(tmp_path)
+    inputs = dict(report["inputs"])
+    inputs["common_overlay"] = inputs.pop("overlay")
+    inputs["dual_overlay"] = inputs["settings"] = {"state": "missing"}
+    report.update(schemaVersion=2, inputs=inputs)
+    report["verifier"]["version"] = "1.0.0"
+    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    with pytest.raises(
+        ValueError,
+        match=r"unsupported verification report schema 2; regenerate with `pack verify`",
+    ):
+        format_reports(tmp_path)
 
 
 @pytest.mark.parametrize("value", ["not json", "[]", '{"schemaVersion":99}'])

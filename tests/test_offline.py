@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from copy import deepcopy
 from pathlib import Path
@@ -8,7 +7,7 @@ from typing import Any
 
 import pytest
 
-from omnipack.offline import OfflineInputs, validate_offline
+from omnipack.offline import Finding, OfflineInputs, validate_offline
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 ROOT = Path(__file__).parents[1]
@@ -35,45 +34,17 @@ def inputs(
     dual_apps: list[dict[str, Any]] | None = None,
     *,
     deny: object = None,
-    common: object = None,
-    dual_overlay: object = None,
-    settings: object = None,
+    overlay: object = None,
     composition: object = None,
 ) -> OfflineInputs:
     single_apps = [app()] if single_apps is None else single_apps
     dual_apps = deepcopy(single_apps) if dual_apps is None else dual_apps
-    configured = (
-        {"categories": {"Emulator": 0xFF010203}} if settings is None else settings
-    )
-
-    def rendered(apps: list[dict[str, Any]]) -> dict[str, str]:
-        names = sorted(
-            {
-                name
-                for item in apps
-                for name in item.get("categories", [])
-                if isinstance(name, str)
-            }
-        )
-        configured_colors = (
-            configured.get("categories", {}) if isinstance(configured, dict) else {}
-        )
-        colors = {
-            name: configured_colors.get(
-                name,
-                int.from_bytes(b"\xff" + hashlib.sha256(name.encode()).digest()[:3]),
-            )
-            for name in names
-        }
-        return {"categories": json.dumps(colors, separators=(",", ":"))}
-
+    settings = {"categories": "{}"}
     return OfflineInputs(
-        single=encoded({"settings": rendered(single_apps), "apps": single_apps}),
-        dual=encoded({"settings": rendered(dual_apps), "apps": dual_apps}),
+        single=encoded({"settings": settings, "apps": single_apps}),
+        dual=encoded({"settings": settings, "apps": dual_apps}),
         deny=encoded([] if deny is None else deny),
-        common_overlay=encoded([] if common is None else common),
-        dual_overlay=encoded([] if dual_overlay is None else dual_overlay),
-        settings=encoded(configured),
+        overlay=encoded([] if overlay is None else overlay),
         composition=encoded(
             {"schemaVersion": 1, "candidates": [], "pins": []}
             if composition is None
@@ -82,44 +53,41 @@ def inputs(
     )
 
 
-def codes(result) -> set[str]:
-    return {finding.code for finding in result.findings}
+def codes(findings: tuple[Finding, ...]) -> set[str]:
+    return {finding.code for finding in findings}
 
 
-def test_valid_entries_retain_raw_objects_and_decoded_settings() -> None:
-    raw = app("release-notes")
+def located(findings: tuple[Finding, ...]) -> set[tuple[object, ...]]:
+    return {
+        (finding.variant, finding.entry_id, finding.field, finding.code)
+        for finding in findings
+    }
+
+
+def with_settings(value: dict[str, Any], **changes: object) -> dict[str, Any]:
+    settings = json.loads(value["additionalSettings"])
+    settings.update(changes)
+    return {**value, "additionalSettings": json.dumps(settings)}
+
+
+def test_unknown_fields_and_settings_are_accepted_without_repair() -> None:
+    raw = with_settings(
+        app("release-notes"),
+        futureSetting={"retained": True},
+        versionExtractionRegEx="[",
+    )
     raw["futureField"] = {"retained": True}
-    additional = json.loads(raw["additionalSettings"])
-    additional["futureSetting"] = {"retained": True}
-    additional["versionExtractionRegEx"] = "["
-    raw["additionalSettings"] = json.dumps(additional)
-    result = validate_offline(inputs([raw]))
-
-    assert result.ok
-    entry = result.entries["single"][0]
-    assert entry.raw is raw or entry.raw == raw
-    assert entry.raw["futureField"] == {"retained": True}
-    assert entry.settings["futureSetting"] == {"retained": True}
-    assert entry.settings["versionExtractionRegEx"] == "["
+    snapshots = inputs([raw])
+    before = deepcopy(snapshots)
+    assert validate_offline(snapshots) == ()
+    assert snapshots == before
 
 
-@pytest.mark.parametrize(
-    "field",
-    [
-        "single",
-        "dual",
-        "deny",
-        "common_overlay",
-        "dual_overlay",
-        "settings",
-        "composition",
-    ],
-)
+@pytest.mark.parametrize("field", ["single", "dual", "deny", "overlay", "composition"])
 def test_missing_snapshots_are_reported(field: str) -> None:
     snapshots = inputs()
     object.__setattr__(snapshots, field, None)
-    result = validate_offline(snapshots)
-    assert "input_missing" in codes(result)
+    assert "input_missing" in codes(validate_offline(snapshots))
 
 
 @pytest.mark.parametrize(
@@ -145,13 +113,10 @@ def test_malformed_serialized_documents_are_rejected(
 
 def test_independent_variant_errors_are_collected() -> None:
     duplicate = app("same")
-    wrong = app("other")
-    values = json.loads(wrong["additionalSettings"])
-    values["trackOnly"] = "yes"
-    wrong["additionalSettings"] = json.dumps(values)
-    result = validate_offline(inputs([duplicate, deepcopy(duplicate)], [wrong]))
+    wrong = with_settings(app("other"), trackOnly="yes")
+    findings = validate_offline(inputs([duplicate, deepcopy(duplicate)], [wrong]))
     assert {("single", "duplicate_id"), ("dual", "wrong_setting_type")} <= {
-        (finding.variant, finding.code) for finding in result.findings
+        (finding.variant, finding.code) for finding in findings
     }
 
 
@@ -172,10 +137,6 @@ def test_independent_variant_errors_are_collected() -> None:
             lambda value: value.update(additionalSettings={}),
             "invalid_additional_settings",
         ),
-        (
-            lambda value: value.update(preferredApkIndex=True),
-            "invalid_preferred_apk_index",
-        ),
     ],
     ids=(
         "missing-name",
@@ -186,7 +147,6 @@ def test_independent_variant_errors_are_collected() -> None:
         "invalid-categories",
         "source",
         "encoded-settings",
-        "preferred-index",
     ),
 )
 def test_required_entry_fields_are_validated(mutate, code: str) -> None:
@@ -195,12 +155,38 @@ def test_required_entry_fields_are_validated(mutate, code: str) -> None:
     assert code in codes(validate_offline(inputs([value], [])))
 
 
+def test_object_additional_settings_names_variant_id_and_field() -> None:
+    value = app()
+    value["additionalSettings"] = SETTINGS_DEFAULTS["GitHub"]
+    findings = validate_offline(inputs([value]))
+    assert {
+        (
+            variant,
+            "org.example.app",
+            "additionalSettings",
+            "invalid_additional_settings",
+        )
+        for variant in ("single", "dual")
+    } <= located(findings)
+
+
+@pytest.mark.parametrize("value", [True, False, "1", 1.5])
+def test_non_integer_preferred_apk_index_is_rejected(value: object) -> None:
+    entry = {**app(), "preferredApkIndex": value}
+    assert ("single", "org.example.app", "preferredApkIndex") in {
+        (finding.variant, finding.entry_id, finding.field)
+        for finding in validate_offline(inputs([entry], []))
+        if finding.code == "invalid_preferred_apk_index"
+    }
+
+
+def test_integer_preferred_apk_index_is_accepted() -> None:
+    assert validate_offline(inputs([{**app(), "preferredApkIndex": 0}])) == ()
+
+
 def test_track_only_id_need_not_be_an_android_package_name() -> None:
-    value = app("Release Notes")
-    settings = json.loads(value["additionalSettings"])
-    settings["trackOnly"] = True
-    value["additionalSettings"] = json.dumps(settings)
-    assert validate_offline(inputs([value])).ok
+    value = with_settings(app("Release Notes"), trackOnly=True)
+    assert validate_offline(inputs([value])) == ()
 
 
 @pytest.mark.parametrize("source", [{}, [], None, 1, True])
@@ -211,28 +197,21 @@ def test_malformed_source_produces_findings_without_stopping_other_entries(
     malformed["overrideSource"] = source
     other = app("other")
     other.pop("name")
-    result = validate_offline(inputs([malformed], [other]))
     assert {
         ("single", "malformed", "overrideSource", "unsupported_source"),
         ("dual", "other", "name", "missing_field"),
-    } <= {
-        (finding.variant, finding.entry_id, finding.field, finding.code)
-        for finding in result.findings
-    }
+    } <= located(validate_offline(inputs([malformed], [other])))
 
 
 @pytest.mark.parametrize("field", ["overrideSource", "additionalSettings"])
-def test_raw_ids_and_categories_survive_other_entry_errors(field: str) -> None:
+def test_raw_ids_survive_other_entry_errors(field: str) -> None:
     malformed = app("present")
     malformed[field] = None
-    result = validate_offline(
+    findings = validate_offline(
         inputs(
             [malformed, deepcopy(malformed)],
             [deepcopy(malformed)],
-            common=[{"id": "present", "url": "https://example.com/app", "patch": {}}],
-            dual_overlay=[
-                {"id": "present", "url": "https://example.com/app", "patch": {}}
-            ],
+            overlay=[{"id": "present", "url": "https://example.com/app", "patch": {}}],
             deny=[{"id": "present", "reason": "excluded"}],
         )
     )
@@ -240,153 +219,63 @@ def test_raw_ids_and_categories_survive_other_entry_errors(field: str) -> None:
         ("single", "duplicate_id"),
         ("single", "denied_output_present"),
         ("dual", "denied_output_present"),
-    } <= {(finding.variant, finding.code) for finding in result.findings}
-    assert not {
-        "stale_common_overlay",
-        "stale_dual_overlay",
-        "category_mapping_mismatch",
-        "dual_coverage_gap",
-    } & codes(result)
-    assert result.entries == {"single": (), "dual": ()}
+    } <= {(finding.variant, finding.code) for finding in findings}
+    assert not {"stale_common_overlay", "dual_coverage_gap"} & codes(findings)
 
     missing_dual = validate_offline(inputs([malformed], []))
     assert "dual_coverage_gap" in codes(missing_dual)
 
 
-def test_defaults_are_required_and_known_types_are_checked() -> None:
-    missing = app("missing")
-    missing_settings = json.loads(missing["additionalSettings"])
-    missing_settings.pop("about")
-    missing["additionalSettings"] = json.dumps(missing_settings)
-    wrong = app("wrong")
-    wrong_settings = json.loads(wrong["additionalSettings"])
-    wrong_settings["trackOnly"] = 1
-    wrong["additionalSettings"] = json.dumps(wrong_settings)
-    result = validate_offline(inputs([missing, wrong], []))
-    assert {"missing_setting_default", "wrong_setting_type"} <= codes(result)
+def test_known_setting_types_are_checked() -> None:
+    wrong = with_settings(app("wrong"), trackOnly=1)
+    assert located(validate_offline(inputs([wrong]))) == {
+        (variant, "wrong", "trackOnly", "wrong_setting_type")
+        for variant in ("single", "dual")
+    }
+
+
+def test_entry_lacking_a_default_key_passes_when_every_other_check_passes() -> None:
+    value = app()
+    settings = json.loads(value["additionalSettings"])
+    del settings["about"]
+    value["additionalSettings"] = json.dumps(settings)
+    assert validate_offline(inputs([value])) == ()
 
 
 def test_complete_native_gitlab_entry_passes_offline_validation() -> None:
     value = app("aurora", source="GitLab")
     value["url"] = "https://gitlab.com/AuroraOSS/AuroraStore"
-    result = validate_offline(inputs([value], [dict(value)]))
-    assert result.ok
-    assert [entry.source for entry in result.entries["single"]] == ["GitLab"]
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "http://gitlab.com/a/b",
-        "https://other.test/a/b",
-        "https://gitlab.com/one",
-        "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22)),
-        "https://gitlab.com:invalid/a/b",
-    ],
-)
-def test_native_gitlab_url_boundary_is_checked_offline(url: str) -> None:
-    value = app(source="GitLab")
-    value["url"] = url
-    assert "invalid_gitlab_url" in codes(validate_offline(inputs([value], [])))
+    assert validate_offline(inputs([value], [dict(value)])) == ()
 
 
 @pytest.mark.parametrize(
     ("field", "nested", "code"),
     [
         ("intermediateLink", [{"customLinkFilterRegex": 1}], "invalid_html_step"),
+        ("intermediateLink", ["not an object"], "invalid_html_step"),
         ("requestHeader", [{"requestHeader": False}], "invalid_request_header"),
+        ("requestHeader", [{"future": "no header"}], "invalid_request_header"),
     ],
 )
 def test_nested_html_steps_and_headers_are_validated(
     field: str, nested: object, code: str
 ) -> None:
-    value = app(source="HTML")
-    settings = json.loads(value["additionalSettings"])
-    settings[field] = nested
-    value["additionalSettings"] = json.dumps(settings)
-    result = validate_offline(inputs([value], []))
-    assert ("single", "org.example.app", field, code) in {
-        (finding.variant, finding.entry_id, finding.field, finding.code)
-        for finding in result.findings
-    }
-
-
-def test_categories_must_exactly_match_observed_names_and_valid_colors() -> None:
-    snapshots = inputs()
-    assert snapshots.single is not None
-    single = json.loads(snapshots.single)
-    single["settings"]["categories"] = json.dumps(
-        {"Extra": 0xFF000000, "Emulator": True}
+    value = with_settings(app(source="HTML"), **{field: nested})
+    assert ("single", "org.example.app", field, code) in located(
+        validate_offline(inputs([value], []))
     )
-    object.__setattr__(snapshots, "single", encoded(single))
-    result = validate_offline(snapshots)
-    assert {"category_mapping_mismatch", "invalid_category_color"} <= codes(result)
-
-
-def test_configured_argb_color_rejects_boolean_and_out_of_range_values() -> None:
-    result = validate_offline(inputs(settings={"categories": {"Unused": True}}))
-    assert "invalid_category_color" in codes(result)
-
-
-def test_configured_and_derived_category_colors_and_other_settings_agree() -> None:
-    configured = {"categories": {"Configured": 0xFF123456}, "groupByCategory": True}
-    apps = [app("a"), app("b")]
-    apps[0]["categories"] = ["Configured"]
-    apps[1]["categories"] = ["Derived"]
-    snapshots = inputs(apps, settings=configured)
-    derived = int.from_bytes(b"\xff" + hashlib.sha256(b"Derived").digest()[:3])
-    rendered = {
-        "categories": json.dumps(
-            {"Configured": 0xFF123456, "Derived": derived}, separators=(",", ":")
-        ),
-        "groupByCategory": False,
-    }
-    for field in ("single", "dual"):
-        document = json.loads(getattr(snapshots, field))
-        document["settings"] = rendered
-        object.__setattr__(snapshots, field, encoded(document))
-    assert "configured_setting_mismatch" in codes(validate_offline(snapshots))
-
-
-@pytest.mark.parametrize(
-    ("configured", "rendered", "mismatch"),
-    [
-        ({}, {"unexpected": True}, "unexpected"),
-        ({"nullable": None}, {}, "nullable"),
-        (
-            {"futureSetting": {"enabled": True}},
-            {"futureSetting": {"enabled": True}},
-            None,
-        ),
-    ],
-)
-def test_non_category_pack_settings_match_configured_keys_and_values(
-    configured: dict[str, Any], rendered: dict[str, Any], mismatch: str | None
-) -> None:
-    snapshots = inputs(settings=configured)
-    assert snapshots.single is not None
-    document = json.loads(snapshots.single)
-    document["settings"].update(rendered)
-    object.__setattr__(snapshots, "single", encoded(document))
-    result = validate_offline(snapshots)
-    mismatched_fields = {
-        finding.field
-        for finding in result.findings
-        if finding.variant == "single" and finding.code == "configured_setting_mismatch"
-    }
-    assert mismatched_fields == ({mismatch} if mismatch is not None else set())
 
 
 @pytest.mark.parametrize(
     ("kwargs", "code"),
     [
         (
-            {"common": [{"id": "x", "url": "https://example.com/app", "patch": None}]},
+            {"overlay": [{"id": "x", "url": "https://example.com/app", "patch": None}]},
             "invalid_composition_config",
         ),
         (
             {
-                "common": [
+                "overlay": [
                     {
                         "id": "x",
                         "url": "https://example.com/app",
@@ -398,7 +287,7 @@ def test_non_category_pack_settings_match_configured_keys_and_values(
         ),
         (
             {
-                "common": [
+                "overlay": [
                     {
                         "id": "missing",
                         "url": "https://example.com/missing",
@@ -408,18 +297,6 @@ def test_non_category_pack_settings_match_configured_keys_and_values(
             },
             "stale_common_overlay",
         ),
-        (
-            {
-                "dual_overlay": [
-                    {
-                        "id": "missing",
-                        "url": "https://example.com/missing",
-                        "patch": {"name": "x"},
-                    }
-                ]
-            },
-            "stale_dual_overlay",
-        ),
         ({"deny": [{"id": "org.example.app", "reason": "x"}]}, "denied_output_present"),
     ],
 )
@@ -427,12 +304,12 @@ def test_local_composition_constraints(kwargs: dict[str, Any], code: str) -> Non
     assert code in codes(validate_offline(inputs(**kwargs)))
 
 
-def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
-    assert validate_offline(
+def test_overlay_target_may_exist_in_only_one_variant() -> None:
+    findings = validate_offline(
         inputs(
             [],
             [app()],
-            common=[
+            overlay=[
                 {
                     "id": "org.example.app",
                     "url": "https://example.com/app",
@@ -440,7 +317,8 @@ def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
                 }
             ],
         )
-    ).ok
+    )
+    assert findings == ()
 
 
 @pytest.mark.parametrize(
@@ -452,21 +330,19 @@ def test_common_overlay_target_may_exist_in_only_one_variant() -> None:
     ],
 )
 def test_retired_denial_selectors_are_reported(entry: dict[str, str]) -> None:
-    result = validate_offline(inputs(deny=[entry]))
-    assert "invalid_composition_config" in codes(result)
+    assert "invalid_composition_config" in codes(validate_offline(inputs(deny=[entry])))
 
 
 def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_gap() -> None:
-    assert validate_offline(inputs(deny=[{"id": "stale", "reason": "gone"}])).ok
-    result = validate_offline(
+    assert validate_offline(inputs(deny=[{"id": "stale", "reason": "gone"}])) == ()
+    findings = validate_offline(
         inputs([app("single")], [], deny=[{"id": "dual", "reason": "excluded"}])
     )
-    assert codes(result) == {"dual_coverage_gap"}
+    assert codes(findings) == {"dual_coverage_gap"}
 
 
 def test_unexempted_dual_coverage_gap_fails() -> None:
-    result = validate_offline(inputs([app("single")], []))
-    assert "dual_coverage_gap" in codes(result)
+    assert "dual_coverage_gap" in codes(validate_offline(inputs([app("single")], [])))
 
 
 def test_family_projection_and_pin_are_distinct() -> None:
@@ -512,7 +388,7 @@ def test_family_projection_and_pin_are_distinct() -> None:
     single = app("single.pkg")
     dual = app("dual.pkg")
     dual["url"] = "https://example.com/dual/"
-    assert validate_offline(inputs([single], [dual], composition=policy)).ok
+    assert validate_offline(inputs([single], [dual], composition=policy)) == ()
     missing = validate_offline(inputs([], [], composition=policy))
     assert "pin_mismatch" in codes(missing)
     denied = validate_offline(
@@ -535,13 +411,11 @@ def test_package_denial_neither_exempts_coverage_nor_remains_selected() -> None:
     denial = [{"id": "one", "reason": "unsupported"}]
     single_only = validate_offline(inputs([app("one")], [], deny=denial))
     assert {("single", "denied_output_present"), ("dual", "dual_coverage_gap")} <= {
-        (finding.variant, finding.code) for finding in single_only.findings
+        (finding.variant, finding.code) for finding in single_only
     }
     both = validate_offline(inputs([app("one")], [app("one")], deny=denial))
     assert {
-        finding.variant
-        for finding in both.findings
-        if finding.code == "denied_output_present"
+        finding.variant for finding in both if finding.code == "denied_output_present"
     } == {"single", "dual"}
 
 
@@ -555,62 +429,46 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
         single=(ROOT / "dist/single-screen.json").read_bytes(),
         dual=(ROOT / "dist/dual-screen.json").read_bytes(),
         deny=(ROOT / "config/deny.json").read_bytes(),
-        common_overlay=(ROOT / "config/overlay.json").read_bytes(),
-        dual_overlay=(ROOT / "config/overlay.dual.json").read_bytes(),
-        settings=(ROOT / "config/settings.json").read_bytes(),
+        overlay=(ROOT / "config/overlay.json").read_bytes(),
         composition=(ROOT / "config/composition.json").read_bytes(),
     )
     before = snapshots.single, snapshots.dual
-    result = validate_offline(snapshots)
-    assert result.ok, result.findings
+    findings = validate_offline(snapshots)
+    assert findings == (), findings
     assert (snapshots.single, snapshots.dual) == before
 
 
-def test_request_header_unknown_fields_are_preserved() -> None:
-    raw = app(source="HTML")
-    settings = json.loads(raw["additionalSettings"])
-    settings["requestHeader"] = [{"requestHeader": "X-Channel: stable", "future": True}]
-    raw["additionalSettings"] = json.dumps(settings)
-    result = validate_offline(inputs([raw]))
-    assert result.ok
-    assert result.entries["single"][0].settings["requestHeader"][0]["future"] is True
+def test_request_header_unknown_fields_are_accepted() -> None:
+    raw = with_settings(
+        app(source="HTML"),
+        requestHeader=[{"requestHeader": "X-Channel: stable", "future": True}],
+    )
+    assert validate_offline(inputs([raw])) == ()
 
 
 @pytest.mark.parametrize(
-    "field,value,code",
-    [
-        ("fallbackToOlderReleases", None, "missing_setting_default"),
-        ("fallbackToOlderReleases", 1, "wrong_setting_type"),
-        ("apkFilterRegEx", False, "wrong_setting_type"),
-    ],
+    ("field", "value"),
+    [("fallbackToOlderReleases", 1), ("apkFilterRegEx", False)],
 )
-def test_native_gitlab_defaults_rejected_without_repair(
-    field: str, value: object, code: str
+def test_native_gitlab_setting_types_rejected_without_repair(
+    field: str, value: object
 ) -> None:
     raw = app("aurora", source="GitLab")
     raw["url"] = "https://gitlab.com/AuroraOSS/AuroraStore"
-    settings = json.loads(raw["additionalSettings"])
-    if value is None:
-        del settings[field]
-    else:
-        settings[field] = value
-    raw["additionalSettings"] = json.dumps(settings)
+    raw = with_settings(raw, **{field: value})
     snapshots = inputs([raw])
     before = deepcopy(snapshots)
-    result = validate_offline(snapshots)
-    assert not result.ok
-    assert {
-        (finding.variant, finding.entry_id, finding.field, finding.code)
-        for finding in result.findings
-    } == {(variant, "aurora", field, code) for variant in ("single", "dual")}
+    assert located(validate_offline(snapshots)) == {
+        (variant, "aurora", field, "wrong_setting_type")
+        for variant in ("single", "dual")
+    }
     assert snapshots == before
 
 
 def test_native_gitlab_maximum_subgroups_preserved_offline() -> None:
     raw = app(source="GitLab")
     raw["url"] = "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(21))
-    result = validate_offline(inputs([raw]))
-    assert result.ok
-    assert all(
-        entries[0].raw["url"] == raw["url"] for entries in result.entries.values()
-    )
+    snapshots = inputs([raw])
+    before = deepcopy(snapshots)
+    assert validate_offline(snapshots) == ()
+    assert snapshots == before

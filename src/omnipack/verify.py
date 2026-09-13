@@ -11,16 +11,14 @@ from typing import Any
 
 from omnipack.offline import Finding, OfflineInputs, validate_offline
 
-SCHEMA_VERSION = 2
-VERIFIER_VERSION = "1.0.0"
+SCHEMA_VERSION = 3
+VERIFIER_VERSION = "2.0.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),
     "dual": Path("dist/dual-screen.json"),
     "deny": Path("config/deny.json"),
-    "common_overlay": Path("config/overlay.json"),
-    "dual_overlay": Path("config/overlay.dual.json"),
-    "settings": Path("config/settings.json"),
+    "overlay": Path("config/overlay.json"),
     "composition": Path("config/composition.json"),
     "readme": Path("README.md"),
 }
@@ -71,18 +69,16 @@ def run_verification(root: Path) -> dict[str, Any]:
     snapshots, fingerprints = capture_inputs(root)
     errors: list[dict[str, Any]] = []
 
-    offline_result = validate_offline(
+    findings = validate_offline(
         OfflineInputs(
             snapshots["single"],
             snapshots["dual"],
             snapshots["deny"],
-            snapshots["common_overlay"],
-            snapshots["dual_overlay"],
-            snapshots["settings"],
+            snapshots["overlay"],
             snapshots["composition"],
         )
     )
-    errors.extend(_finding(item) for item in offline_result.findings)
+    errors.extend(_finding(item) for item in findings)
     from omnipack.catalog import generate_catalog, split_catalog
     from omnipack.composition_policy import load_composition_policy
 

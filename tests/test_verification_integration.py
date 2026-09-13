@@ -16,9 +16,7 @@ def inputs(root: Path) -> dict[Path, bytes]:
     for name, value in [
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
-        ("settings.json", {}),
         ("http.json", {"credentials": {}}),
     ]:
         (root / "config" / name).write_text(json.dumps(value))

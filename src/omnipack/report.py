@@ -269,8 +269,10 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
 
 
 def _validate_verification_report(value: dict[str, Any]) -> None:
+    from omnipack.verify import INPUT_PATHS, SCHEMA_VERSION
+
     schema = value.get("schemaVersion")
-    if type(schema) is not int or schema != 2:
+    if type(schema) is not int or schema != SCHEMA_VERSION:
         raise ReportFormatError(
             f"unsupported verification report schema {schema!r}; regenerate with `pack verify`"
         )
@@ -286,17 +288,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
         or set(verifier) != {"version", "scope"}
         or verifier.get("scope") != "structural"
         or not isinstance(inputs, dict)
-        or set(inputs)
-        != {
-            "single",
-            "dual",
-            "deny",
-            "common_overlay",
-            "dual_overlay",
-            "settings",
-            "composition",
-            "readme",
-        }
+        or set(inputs) != set(INPUT_PATHS)
         or set(value)
         != {
             "schemaVersion",

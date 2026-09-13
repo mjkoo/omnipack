@@ -82,27 +82,24 @@ def publish_build(
     config_paths = (
         "config/deny.json",
         "config/overlay.json",
-        "config/overlay.dual.json",
         "config/composition.json",
     )
     snapshots = [(root / path).read_bytes() for path in config_paths]
     consumed_policy = (
-        composition_bytes if composition_bytes is not None else snapshots[3]
+        composition_bytes if composition_bytes is not None else snapshots[2]
     )
-    result = validate_offline(
+    offline_findings = validate_offline(
         OfflineInputs(
             rendered[Variant.SINGLE],
             rendered[Variant.DUAL],
             snapshots[0],
             snapshots[1],
-            snapshots[2],
-            (root / "config/settings.json").read_bytes(),
             consumed_policy,
         )
     )
     findings = [
         {key: value for key, value in asdict(item).items() if value is not None}
-        for item in result.findings
+        for item in offline_findings
     ]
     from omnipack.catalog import generate_catalog, replace_catalog
     from omnipack.composition_policy import load_composition_policy

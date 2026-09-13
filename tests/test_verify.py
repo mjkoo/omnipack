@@ -25,7 +25,7 @@ def copy_inputs(root: Path) -> None:
     for relative in verify.INPUT_PATHS.values():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if relative.name in {"overlay.json", "overlay.dual.json"}:
+        if relative.name == "overlay.json":
             target.write_text("[]")
         elif relative.name == "composition.json" and relative.exists():
             target.write_text(historical_composition())
@@ -41,7 +41,16 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     assert result["status"] == "success"
     assert result["complete"] is True
     assert result["mode"] == "offline"
-    assert set(result["inputs"]) == set(verify.INPUT_PATHS)
+    assert result["schemaVersion"] == 3
+    assert result["verifier"] == {"version": "2.0.0", "scope": "structural"}
+    assert set(result["inputs"]) == {
+        "single",
+        "dual",
+        "deny",
+        "overlay",
+        "composition",
+        "readme",
+    }
     for name, relative in verify.INPUT_PATHS.items():
         expected = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
         assert result["inputs"][name] == {"state": "present", "sha256": expected}
@@ -90,19 +99,19 @@ def test_report_fingerprints_the_bytes_captured_before_a_later_edit(
 ) -> None:
     copy_inputs(tmp_path)
     real = verify.capture_inputs
-    captured_settings = (tmp_path / "config/settings.json").read_bytes()
+    captured_overlay = (tmp_path / "config/overlay.json").read_bytes()
 
     def capture(root: Path):
         snapshots, fingerprints = real(root)
-        (root / "config/settings.json").write_bytes(b'{"changed":true}\n')
+        (root / "config/overlay.json").write_bytes(b'[{"changed":true}]\n')
         return snapshots, fingerprints
 
     monkeypatch.setattr(verify, "capture_inputs", capture)
     result = verify.run_verification(tmp_path)
     assert result["status"] == "success"
-    assert result["inputs"]["settings"] == {
+    assert result["inputs"]["overlay"] == {
         "state": "present",
-        "sha256": hashlib.sha256(captured_settings).hexdigest(),
+        "sha256": hashlib.sha256(captured_overlay).hexdigest(),
     }
     from omnipack.report import format_reports
 

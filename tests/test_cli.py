@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
 from urllib.request import Request
@@ -197,15 +198,12 @@ def test_build_failure_does_not_mutate_committed_catalog(
         assert json.loads((dist / name).read_text()) == before
 
 
-@pytest.mark.parametrize("existing", [False, True])
-@pytest.mark.parametrize("invalid_gate", [False, True])
-def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, invalid_gate: bool
-) -> None:
-    (tmp_path / "README.md").write_bytes(
+def write_fixture_pipeline(root: Path) -> dict[str, str]:
+    """Write a fixture configuration and return the upstream responses it needs."""
+    (root / "README.md").write_bytes(
         b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
     )
-    config = tmp_path / "config"
+    config = root / "config"
     config.mkdir()
     source_config = {
         "rjny": {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
@@ -255,12 +253,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "name": "Fixture",
         "overrideSource": "HTML",
     }
-    if existing:
-        (tmp_path / "dist").mkdir()
-        (tmp_path / "dist/dual-screen.json").write_text(
-            json.dumps({"apps": [{"id": "app.generated"}]})
-        )
-    responses = {
+    return {
         "https://raw.githubusercontent.com/fixture/rjny/main/apps.json": json.dumps(
             {"apps": [record]}
         ),
@@ -281,6 +274,52 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "https://fixture.test/single": '{"apps":[]}',
         "https://fixture.test/dual": '{"apps":[]}',
     }
+
+
+def fixture_transport(
+    responses: dict[str, str],
+) -> Callable[[HttpClient, Request, float, int | None], HttpResponse]:
+    def transport(
+        _client: HttpClient, request: Request, _timeout: float, _max_bytes: int | None
+    ) -> HttpResponse:
+        body = responses[request.full_url].encode()
+        return HttpResponse(request.full_url, 200, Message(), body)
+
+    return transport
+
+
+def test_build_verify_and_report_sequence_records_no_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 0
+    build_report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert build_report["offlineVerification"] == {"status": "success", "findings": []}
+    assert main(["verify"]) == 0
+    verification = json.loads((tmp_path / ".build/verify.json").read_text())
+    assert (verification["status"], verification["errors"]) == ("success", [])
+    capsys.readouterr()
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    for variant in Variant:
+        assert f"Selection: {variant.value} package:app.fixture -> " in output
+    assert "Evidence: current" in output
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("invalid_gate", [False, True])
+def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, invalid_gate: bool
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    if existing:
+        (tmp_path / "dist").mkdir()
+        (tmp_path / "dist/dual-screen.json").write_text(
+            json.dumps({"apps": [{"id": "app.generated"}]})
+        )
     requested: list[str] = []
 
     def transport(
@@ -297,7 +336,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
 
         def invalid_render(apps: list[ComposedApp], settings: dict) -> str:
             rendered = json.loads(real_render(apps, settings))
-            rendered["settings"]["categories"] = "not JSON"
+            rendered["apps"][0]["preferredApkIndex"] = "first"
             return json.dumps(rendered)
 
         monkeypatch.setattr(build_module, "render", invalid_render)
