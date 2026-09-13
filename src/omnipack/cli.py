@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from omnipack.build import previous_ids, publish_build
+from omnipack.build import BuildInputs, previous_ids, publish_build
 from omnipack.composition_policy import load_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import CompositionReport, CompositionResult, compose
@@ -19,7 +19,7 @@ from omnipack.sources import (
     IngestionResult,
     SourceError,
     ingest_all,
-    load_json,
+    parse_json,
 )
 from omnipack.verify import VerificationReportError, run_verification
 
@@ -41,14 +41,14 @@ def build(_args: argparse.Namespace) -> int:
         offline_verification = value
 
     try:
-        policy_bytes = (root / "config/composition.json").read_bytes()
-        policy = load_composition_policy(policy_bytes)
-        ingested = _ingest_for_build(root, ingestion_report)
+        inputs = BuildInputs.read(root)
+        policy = load_composition_policy(inputs.composition)
+        ingested = _ingest_for_build(root, inputs, ingestion_report)
         stage = "composition"
         composition = compose(
             ingested.apps,
-            _object_list(root / "config/deny.json", "denylist"),
-            load_json(root / "config/overlay.json", "overlay"),
+            _object_list(inputs.deny, "denylist"),
+            parse_json(inputs.overlay, "overlay"),
             policy=policy,
             report=composition_report,
         )
@@ -57,7 +57,7 @@ def build(_args: argparse.Namespace) -> int:
             root,
             composition,
             ingestion_report,
-            policy_bytes,
+            inputs,
             on_stage=record_stage,
             on_verification=record_verification,
         )
@@ -85,20 +85,18 @@ def build(_args: argparse.Namespace) -> int:
 
 
 def _ingest_for_build(
-    root: Path, report: IngestionReport | None = None
+    root: Path, inputs: BuildInputs, report: IngestionReport | None = None
 ) -> IngestionResult:
-    source_config = load_json(root / "config/sources.json", "sources")
+    source_config = parse_json(inputs.sources, "sources")
     if not isinstance(source_config, dict):
-        from omnipack.sources import SourceError
-
         raise SourceError("sources", "configuration must be an object")
-    extras_config = load_json(root / "config/extras.json", "extras")
+    extras_config = parse_json(inputs.extras, "extras")
     http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
     return ingest_all(root, http, source_config, extras_config, report)
 
 
-def _object_list(path: Path, source: str) -> list[dict[str, str]]:
-    value = load_json(path, source)
+def _object_list(data: bytes, source: str) -> list[dict[str, str]]:
+    value = parse_json(data, source)
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise SourceError(source, "configuration must be a list of objects")
     return value

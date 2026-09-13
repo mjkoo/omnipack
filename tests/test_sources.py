@@ -777,7 +777,7 @@ def test_codm_malformed_catalog_aborts_before_publication(
     for name, content in before.items():
         (dist / name).write_bytes(content)
 
-    def ingest(root: Path, report: IngestionReport) -> IngestionResult:
+    def ingest(root: Path, _inputs: object, report: IngestionReport) -> IngestionResult:
         (root / "catalog.json").write_text(body)
         apps = codm.fetch(root, {"catalog": "catalog.json"}, [])
         return IngestionResult(apps, report)

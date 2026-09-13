@@ -89,7 +89,7 @@
 
 ## 4. One check per command
 
-- [ ] 4.1 Read the build's local inputs once (design decision 5). The CLI reads `sources.json`, `extras.json`, `deny.json`, `overlay.json`, `composition.json` and `README.md` into one snapshot at the start of `pack build`, and composition, the offline gate and catalog generation use those bytes. Remove `require_current_inputs` and its call sites. Verify with tests for:
+- [x] 4.1 Read the build's local inputs once (design decision 5). The CLI reads `sources.json`, `extras.json`, `deny.json`, `overlay.json`, `composition.json` and `README.md` into one snapshot at the start of `pack build`, and composition, the offline gate and catalog generation use those bytes. Remove `require_current_inputs` and its call sites. Verify with tests for:
   - a configuration or README file changed on disk after the snapshot, through a test hook, not failing the build, with the outputs reflecting the snapshot;
   - a failed README replacement still restoring both JSON files.
 

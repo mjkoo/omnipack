@@ -71,4 +71,12 @@ def load_json(path: str | PathLike[str], source: str) -> object:
         raise SourceError(source, str(error)) from error
 
 
-__all__ += ["IngestionResult", "ingest_all", "load_json"]
+def parse_json(data: bytes, source: str) -> object:
+    """Decode captured JSON configuration bytes with a source-named error."""
+    try:
+        return json.loads(data)
+    except Exception as error:
+        raise SourceError(source, str(error)) from error
+
+
+__all__ += ["IngestionResult", "ingest_all", "load_json", "parse_json"]
