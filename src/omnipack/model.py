@@ -22,9 +22,9 @@ class SourceType(str, Enum):
     GITLAB = "GitLab"
 
 
-# Fields a catalog or extras record carries for composition's use, never for
-# an Obtainium record: normalization strips them and an overlay may not touch
-# them.
+# Composition field names, current and retired, that never belong in an
+# Obtainium record: normalization strips them from a source record, and an
+# overlay may neither assign nor delete them.
 COMPOSITION_ONLY_FIELDS = frozenset(
     {
         "variants",

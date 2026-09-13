@@ -10,7 +10,7 @@ import pytest
 from omnipack import verify
 
 
-def historical_composition() -> str:
+def composition_without_extras() -> str:
     document = json.loads(Path("config/composition.json").read_text())
     document["candidates"] = [
         rule for rule in document["candidates"] if rule["match"]["source"] != "extras"
@@ -28,7 +28,7 @@ def copy_inputs(root: Path) -> None:
         if relative.name == "overlay.json":
             target.write_text("[]")
         elif relative.name == "composition.json" and relative.exists():
-            target.write_text(historical_composition())
+            target.write_text(composition_without_extras())
         elif relative.exists():
             shutil.copyfile(relative, target)
         elif relative.name == "composition.json":

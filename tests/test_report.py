@@ -10,7 +10,7 @@ import pytest
 from omnipack.report import format_reports, write_report
 from omnipack.sources import IngestionReport
 from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
-from tests.test_verify import historical_composition
+from tests.test_verify import composition_without_extras
 
 
 def build_report(
@@ -36,7 +36,7 @@ def copy_inputs(root: Path) -> None:
         if relative.name == "overlay.json":
             target.write_text("[]")
         elif relative.name == "composition.json" and relative.exists():
-            target.write_text(historical_composition())
+            target.write_text(composition_without_extras())
         elif relative.exists():
             shutil.copyfile(relative, target)
         elif relative.name == "composition.json":
@@ -275,9 +275,7 @@ def test_build_report_missing_a_field_is_rejected(tmp_path: Path, field: str) ->
         format_reports(tmp_path)
 
 
-def test_findings_display_location_field_and_effective_version(
-    tmp_path, monkeypatch, capsys
-) -> None:
+def test_findings_display_location_and_field(tmp_path, monkeypatch, capsys) -> None:
     from omnipack.cli import main
 
     copy_inputs(tmp_path)
