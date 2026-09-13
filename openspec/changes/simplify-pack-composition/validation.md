@@ -11,14 +11,16 @@ lint, Ty, the full test suite, structural verification of the committed packs,
 the Python 3.12 check, workflow lint, the offline link check, Nix formatting and
 the flake checks. Nix omitted incompatible systems, so the flake checks ran for
 aarch64-darwin only. `openspec validate simplify-pack-composition --strict`
-reported the change valid.
+reported the change valid. After the review fixes described below, both passed
+again at the branch head, with the flake checks again limited to
+aarch64-darwin.
 
-The suite has 761 tests, against 732 at the start of this change.
+The suite has 782 tests, against 732 at the start of this change.
 
 | Measure | Start | Now | Removed | Added | Net |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Implementation (`src/` and `scripts/` Python) | 6,731 | 6,151 | 1,332 | 752 | -580 |
-| Tests (`tests/` Python) | 12,031 | 12,118 | 1,705 | 1,792 | +87 |
+| Implementation (`src/` and `scripts/` Python) | 6,731 | 6,145 | 1,426 | 840 | -586 |
+| Tests (`tests/` Python) | 12,031 | 12,173 | 1,770 | 1,912 | +142 |
 
 The proposal estimated about 850 implementation lines removed and 80 added, and
 about 1,000 test lines removed and 200 added. The implementation removed more
@@ -58,6 +60,17 @@ committed copies, while `dist/single-screen.json` matches. The base and the
 branch build the same bytes, so the difference is upstream change since the
 last committed nightly output, not this change. This change does not update the
 committed packs.
+
+## Review fixes
+
+An independent review of the branch was followed by fixes on it. `pack report`
+reads build reports strictly. A denial whose builds are eligible for neither
+pack is no longer reported stale. Protected-field overlay failures name their
+selector. The offline stale overlay finding is renamed `stale_overlay`. New tests
+cover the remaining composition scenarios, and the curated single-screen guard's
+mutation test now exercises the guard's own check. None of these fixes changes
+rendered output: the captured-baseline regression still reproduces the exact
+exports. The live comparison above ran before these fixes and was not repeated.
 
 ## Not established
 
