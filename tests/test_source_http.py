@@ -262,7 +262,7 @@ def test_caller_user_agent_is_preserved() -> None:
 
 
 @pytest.mark.parametrize("name", ["Authorization", "authorization", "Cookie"])
-def test_pack_credentials_are_rejected(name: str) -> None:
+def test_caller_credential_headers_are_rejected(name: str) -> None:
     client = SourceHttpClient(HttpConfig({}), transport=RecordingTransport([]))
 
     with pytest.raises(ValueError, match="credential header"):

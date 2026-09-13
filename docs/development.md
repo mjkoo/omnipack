@@ -11,13 +11,16 @@ pack sources, including the committed codm catalog, and writes both import files
 to `dist/` and regenerates the README catalog after validating their serialized
 bytes offline. It does not fetch the codm README or release APKs. Keep exactly
 one standalone pair of catalog markers in README; the build preserves all bytes
-outside them. An optional `GITHUB_TOKEN` authenticates requests to
-`api.github.com` through `config/http.json`.
+outside them. The build fetches public catalogs without credentials and never
+reads `config/http.json`. Only source generation reads it, so that an optional
+`GITHUB_TOKEN` authenticates its requests to `api.github.com`.
 
-The JSON diagnostics are in `.build/report.json`, including family selections
-and alternatives, selection reasons, identity transitions, exclusions, and
-changes from the previous output. A failed build returns a nonzero status and
-preserves the previous packs and README.
+The JSON diagnostics are in `.build/report.json` (schema 3), including each
+family's selection with the candidates it was chosen over and the selection
+reason, original and effective package ids, denylist removals and stale
+exclusions, and the package ids added and removed since the previous output. A
+failed build returns a nonzero status and preserves the previous packs and
+README.
 
 ## Verify and inspect
 
@@ -40,7 +43,8 @@ the exact verified commit to a separate write job that pushes it. Formatting,
 lint, types and the full suite remain development CI responsibilities. Main
 advancing past a run's base fails that run without another attempt; release
 synchronization is checked separately, after the main outcome. Old
-verification report schemas require regeneration with `uv run pack verify`.
+verification report schemas require regeneration with `uv run pack verify`, and
+old build report schemas with `uv run pack build`.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
