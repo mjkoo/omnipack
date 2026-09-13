@@ -280,6 +280,14 @@ def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal()
     assert result.report.stale_exclusions == [StaleExclusion("old.package", "obsolete")]
 
 
+def test_denial_of_a_build_eligible_for_neither_pack_is_not_stale() -> None:
+    unexported = app("unexported", eligibility=frozenset())
+    result = compose([unexported], [{"id": "unexported", "reason": "retired"}], [])
+    assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
+    assert result.report.removals == []
+    assert result.report.stale_exclusions == []
+
+
 @pytest.mark.parametrize(
     ("entry", "message"),
     [

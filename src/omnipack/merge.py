@@ -109,7 +109,7 @@ def compose(
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
     families = _families(candidates)
-    denied = _exclude(candidates, exclusions, report)
+    denied = _exclude(families, exclusions, report)
     pinned = _resolve_pins(candidates, policy.pins, denied)
     selected = _select(families, denied, pinned, report)
     try:
@@ -159,27 +159,29 @@ def _families(candidates: list[App]) -> dict[str, list[App]]:
 
 
 def _exclude(
-    candidates: list[App],
+    families: dict[str, list[App]],
     exclusions: tuple[_Exclusion, ...],
     report: CompositionReport,
 ) -> dict[tuple[int, Variant], str]:
-    """Record each candidate a denial removes, keyed by candidate and variant."""
+    """Record each candidate a denial removes, keyed by candidate and variant.
+
+    A denial is stale only when no candidate carries its package id. One whose
+    candidates are eligible for neither pack removes nothing but still applies.
+    """
     denied: dict[tuple[int, Variant], str] = {}
     for rule in exclusions:
         matched = False
-        for candidate in candidates:
-            if candidate.id != rule.package_id:
-                continue
-            # Composition policy assigns every candidate a family before
-            # exclusions are resolved.
-            assert candidate.family is not None
-            for variant in Variant:
-                if variant in candidate.eligibility:
-                    matched = True
-                    denied[(id(candidate), variant)] = rule.reason
-                    report.removals.append(
-                        Removal(candidate.id, variant, rule.reason, candidate.family)
-                    )
+        for family, members in families.items():
+            for candidate in members:
+                if candidate.id != rule.package_id:
+                    continue
+                matched = True
+                for variant in Variant:
+                    if variant in candidate.eligibility:
+                        denied[(id(candidate), variant)] = rule.reason
+                        report.removals.append(
+                            Removal(candidate.id, variant, rule.reason, family)
+                        )
         if not matched:
             report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
     return denied
