@@ -13,10 +13,10 @@ import pytest
 from omnipack import cli
 from omnipack.composition_policy import (
     CompositionPolicyError,
-    apply_composition_policy,
     parse_composition_policy,
 )
 from omnipack.http import HttpClient, HttpError, HttpResponse
+from omnipack.merge import compose
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.sources import (
     IngestionReport,
@@ -162,7 +162,7 @@ def test_explicit_gitlab_extra_rejects_urls_outside_public_boundary(url: str) ->
         )
 
 
-def test_rjny_policy_can_revive_target_flags_but_not_export_exclusions() -> None:
+def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
     url = "https://raw.githubusercontent.com/r/main/p"
     records = [
         {
@@ -187,26 +187,35 @@ def test_rjny_policy_can_revive_target_flags_but_not_export_exclusions() -> None
     assert [(app.id, app.eligibility) for app in apps] == [
         ("app.disabled", frozenset())
     ]
-    policy = parse_composition_policy(
-        {
-            "schemaVersion": 1,
-            "candidates": [
-                {
-                    "match": {
-                        "source": "rjny",
-                        "origin": "rjny-catalog",
-                        "id": "app.disabled",
-                        "url": "https://github.com/owner/disabled",
-                    },
-                    "eligible": ["dual"],
-                    "rationale": "Explicitly restore dual eligibility.",
-                }
-            ],
-            "pins": [],
-        }
+    result = compose(
+        apps,
+        [],
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
     )
-    revived = apply_composition_policy(policy, apps).candidates
-    assert revived[0].eligibility == frozenset({Variant.DUAL})
+    assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
+    with pytest.raises(CompositionPolicyError, match="unknown field 'eligible'"):
+        parse_composition_policy(
+            {
+                "schemaVersion": 1,
+                "candidates": [
+                    {
+                        "match": {
+                            "source": "rjny",
+                            "origin": "rjny-catalog",
+                            "id": "app.disabled",
+                            "url": "https://github.com/owner/disabled",
+                        },
+                        "eligible": ["dual"],
+                        "rationale": "Restore dual eligibility.",
+                    }
+                ],
+                "pins": [],
+            }
+        )
 
 
 @pytest.mark.parametrize("response", [HttpError("offline"), "not json"])
@@ -425,6 +434,7 @@ def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
 def test_ingestion_applies_policy_before_coverage_and_after_generation(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
+    # An RJNY entry that upstream leaves out of its dual-screen export.
     higher = App(
         "app.standard",
         "https://www.github.com/owner/project.git/",
@@ -433,7 +443,7 @@ def test_ingestion_applies_policy_before_coverage_and_after_generation(
         (),
         Variant.SINGLE,
         Provenance("rjny", "catalog"),
-        eligibility=frozenset(Variant),
+        eligibility=frozenset({Variant.SINGLE}),
         origin="rjny-catalog",
     )
     generated = App(
@@ -452,16 +462,6 @@ def test_ingestion_applies_policy_before_coverage_and_after_generation(
         {
             "schemaVersion": 1,
             "candidates": [
-                {
-                    "match": {
-                        "source": "rjny",
-                        "origin": "rjny-catalog",
-                        "id": "app.standard",
-                        "url": "https://github.com/owner/project",
-                    },
-                    "eligible": ["single"],
-                    "rationale": "Generate the dual-specific candidate.",
-                },
                 {
                     "match": {
                         "source": "codm2000",

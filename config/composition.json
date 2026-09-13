@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "candidates": [
-    {"match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"family":"app:super-metroid","eligible":["dual"],"rationale":"Keep the vetted Super Metroid companion separate from normal RetroArch."},
+    {"match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"family":"app:super-metroid","rationale":"Keep the vetted Super Metroid companion separate from normal RetroArch."},
     {
       "match": {
         "source": "bboi",

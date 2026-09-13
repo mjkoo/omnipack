@@ -82,7 +82,7 @@ def pin_policy(
     pinned_selector = selector(candidate)
     candidates = (candidate, *alternatives)
     projections = {
-        rendered_key(item.id, item.url): Projection(family, None) for item in candidates
+        rendered_key(item.id, item.url): Projection(family) for item in candidates
     }
     rules = tuple(
         CandidateRule(selector(item), "test", family=family) for item in candidates
@@ -123,7 +123,7 @@ def compose(
                 )
                 rules.append(CandidateRule(selector, "test", family=family))
                 projections[rendered_key(candidate.id, candidate.url)] = Projection(
-                    family, None
+                    family
                 )
         policy = CompositionPolicy(tuple(rules), (), projections, {})
     return compose_apps(

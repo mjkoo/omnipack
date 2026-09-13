@@ -52,7 +52,7 @@ def policy(*projections: tuple[str, str, str]) -> CompositionPolicy:
         (),
         (),
         {
-            rendered_key(package_id, url): Projection(family, None)
+            rendered_key(package_id, url): Projection(family)
             for package_id, url, family in projections
         },
         {},

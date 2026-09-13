@@ -470,7 +470,7 @@ def test_unexempted_dual_coverage_gap_fails() -> None:
     assert "dual_coverage_gap" in codes(result)
 
 
-def test_family_projection_pin_and_eligibility_are_distinct() -> None:
+def test_family_projection_and_pin_are_distinct() -> None:
     policy = {
         "schemaVersion": 1,
         "candidates": [
@@ -483,7 +483,6 @@ def test_family_projection_pin_and_eligibility_are_distinct() -> None:
                 },
                 "family": "app:shared",
                 "packageId": "single.pkg",
-                "eligible": ["single"],
                 "rationale": "fixture",
             },
             {
@@ -494,7 +493,6 @@ def test_family_projection_pin_and_eligibility_are_distinct() -> None:
                     "url": "https://example.com/dual",
                 },
                 "family": "app:shared",
-                "eligible": ["dual"],
                 "rationale": "fixture",
             },
         ],

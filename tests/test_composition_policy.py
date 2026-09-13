@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import json
-from dataclasses import replace
+from dataclasses import fields, replace
 
 import pytest
 
 from omnipack.composition_policy import (
     CompositionPolicyError,
+    Projection,
     apply_composition_policy,
     load_composition_policy,
     parse_composition_policy,
@@ -76,16 +77,7 @@ def test_policy_applies_one_original_selector_without_recursive_matching() -> No
 
 def test_policy_correction_retains_original_identity_and_internal_fields() -> None:
     parsed = parse_composition_policy(
-        policy(
-            candidates=[
-                rule(
-                    packageId="org.example.new",
-                    family="app:example",
-                    eligible=["dual"],
-                    dualPreferred=True,
-                )
-            ]
-        )
+        policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
     applied = apply_composition_policy(parsed, [candidate()])
     result = applied.candidates[0]
@@ -93,8 +85,8 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
     assert result.id == "org.example.new"
     assert result.original_id == "org.example.old"
     assert result.family == "app:example"
-    assert result.eligibility == frozenset({Variant.DUAL})
-    assert result.dual_preferred is True
+    assert result.eligibility == frozenset(Variant)
+    assert result.dual_preferred is False
     assert set(result.raw).isdisjoint(
         {"family", "eligible", "eligibility", "dualPreferred", "origin", "originalId"}
     )
@@ -150,11 +142,13 @@ def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
         (policy(candidates=[rule(extra=True)]), "unknown field"),
         (policy(candidates=[rule(family="package:forbidden")]), "family"),
         (policy(candidates=[rule(family="app:bad family")]), "family"),
-        (policy(candidates=[rule(eligible=[])]), "eligible"),
-        (policy(candidates=[rule(eligible=["tablet"])]), "unknown target"),
         (
-            policy(candidates=[rule(eligible=["single"], dualPreferred=True)]),
-            "dualPreferred",
+            policy(candidates=[rule(), rule(eligible=["dual"])]),
+            r"candidates\[1\] has unknown field 'eligible'",
+        ),
+        (
+            policy(candidates=[rule(), rule(dualPreferred=True)]),
+            r"candidates\[1\] has unknown field 'dualPreferred'",
         ),
         (policy(candidates=[rule(rationale="  ")]), "rationale"),
         (
@@ -225,8 +219,7 @@ def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
     applied = apply_composition_policy(parsed, [candidate()])
     key = ("org.example.new", "github.com/example/app")
 
-    assert parsed.projections[key].family == "app:example"
-    assert parsed.projections[key].eligibility is None
+    assert parsed.projections[key] == Projection("app:example")
     assert parsed.projected_pins[("app:example", Variant.DUAL)] == key
     assert applied.projected_pins[("app:example", Variant.DUAL)] == key
 
@@ -322,7 +315,7 @@ def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:
         apply_composition_policy(parsed, [candidate(), unruled])
 
 
-def test_projection_adopts_the_only_explicit_eligibility() -> None:
+def test_agreeing_rules_share_a_projection_that_carries_only_the_family() -> None:
     other = rule(
         match={
             "source": "bboi",
@@ -331,7 +324,6 @@ def test_projection_adopts_the_only_explicit_eligibility() -> None:
             "url": "https://github.com/example/app",
         },
         family="app:example",
-        eligible=["dual"],
     )
     parsed = parse_composition_policy(
         policy(
@@ -343,7 +335,8 @@ def test_projection_adopts_the_only_explicit_eligibility() -> None:
     )
     assert parsed.projections[
         ("org.example.new", "github.com/example/app")
-    ].eligibility == frozenset({Variant.DUAL})
+    ] == Projection("app:example")
+    assert [field.name for field in fields(Projection)] == ["family"]
 
 
 def test_pin_family_must_match_its_projected_candidate_family() -> None:

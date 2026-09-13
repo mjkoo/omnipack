@@ -669,22 +669,6 @@ def _validate_composition(
             families[variant].add(family)
             keys[variant].add(key)
             family_ids[variant][family] = package_id
-            projection = policy.projections.get(key)
-            target = Variant(variant)
-            if (
-                projection
-                and projection.eligibility is not None
-                and target not in projection.eligibility
-            ):
-                findings.append(
-                    Finding(
-                        "composition",
-                        "ineligible_output",
-                        f"family {family!r} is ineligible for {variant}",
-                        variant,
-                        package_id,
-                    )
-                )
     for (family, target), pinned in policy.projected_pins.items():
         if pinned not in keys[target.value]:
             findings.append(
