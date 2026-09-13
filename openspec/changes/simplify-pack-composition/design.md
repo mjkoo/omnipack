@@ -266,8 +266,8 @@ Kept:
 - the composition checks: duplicate family, pin mismatch, denied package
   present, stale overlay and coverage gap.
 
-Kept checks keep their finding codes. The setting value checks stay because
-nothing else checks those values before publication:
+The setting value checks stay because nothing else checks those values before
+publication:
 
 - render's `hydrate_settings` copies an entry-supplied value for a known key
   without checking its type;

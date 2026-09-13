@@ -21,7 +21,7 @@ object with a string `requestHeader`. Optional `preferredApkIndex`, when
 present, SHALL be an integer, not a boolean. These values reach the packs from
 upstream catalog records and overlay patches, and rendering copies them without
 checking their types, so offline verification is their only check before
-publication. They SHALL keep their existing finding codes.
+publication.
 
 Default-key completeness, the rendered pack settings and category colours, and
 GitLab project URL rules SHALL be outside offline verification. Rendering fills
