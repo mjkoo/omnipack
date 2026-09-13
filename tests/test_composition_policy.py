@@ -25,7 +25,6 @@ def candidate(**changes: object) -> App:
         "Example",
         SourceType.GITHUB,
         (),
-        Variant.SINGLE,
         Provenance("rjny", "catalog"),
         eligibility=frozenset(Variant),
         origin="rjny-catalog",
@@ -93,13 +92,7 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
 
     rendered = json.loads(
         render(
-            [
-                ComposedApp(
-                    Variant.DUAL,
-                    result.provenance,
-                    _import_data(result),
-                )
-            ],
+            [ComposedApp("app:example", _import_data(result))],
         )
     )["apps"][0]
     assert rendered["id"] == "org.example.new"

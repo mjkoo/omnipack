@@ -35,12 +35,10 @@ def fetch(entries: Sequence[object]) -> list[App]:
             normalize_record(
                 entry,
                 source="extras",
-                variant=Variant.DUAL if dual_screen else Variant.SINGLE,
                 derive_type=True,
                 eligibility=(
                     frozenset({Variant.DUAL}) if dual_screen else frozenset(Variant)
                 ),
-                dual_preferred=dual_screen,
                 origin="extras",
             )
         )

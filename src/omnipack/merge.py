@@ -305,18 +305,9 @@ def _select(
                     alternatives,
                 )
             )
-            result[variant].append(
-                ComposedApp(
-                    variant,
-                    winner.provenance,
-                    deepcopy(winner_data),
-                    family,
-                    winner.original_id,
-                    winner.origin,
-                )
-            )
+            result[variant].append(ComposedApp(family, deepcopy(winner_data)))
     for values in result.values():
-        values.sort(key=lambda item: (item.family or "", item.id, item.url))
+        values.sort(key=lambda item: (item.family, item.id, item.url))
     return result
 
 
@@ -374,7 +365,7 @@ def _alternative(
 
 def _validate_unique_packages(apps: dict[Variant, list[ComposedApp]]) -> None:
     for variant, values in apps.items():
-        seen: dict[str, str | None] = {}
+        seen: dict[str, str] = {}
         for app in values:
             if app.id in seen and seen[app.id] != app.family:
                 raise CompositionError(
@@ -386,7 +377,7 @@ def _validate_unique_packages(apps: dict[Variant, list[ComposedApp]]) -> None:
 def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:
     dual_families = {app.family for app in apps[Variant.DUAL]}
     missing = [
-        single.family or single.id
+        single.family
         for single in apps[Variant.SINGLE]
         if single.family not in dual_families
     ]

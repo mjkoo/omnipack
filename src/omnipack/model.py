@@ -4,9 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, cast
-
-_ELIGIBILITY_UNSET = cast(frozenset["Variant"], object())
+from typing import Any
 
 
 class Variant(str, Enum):
@@ -39,7 +37,8 @@ class App:
     `additional_settings` is always a dict here; sources.render is
     responsible for the Obtainium export's string-encoded form.
     `raw` carries any Obtainium fields not otherwise modeled, keyed by
-    their Obtainium field name.
+    their Obtainium field name. `eligibility` holds the packs the build's
+    source offers it to.
     """
 
     id: str
@@ -47,22 +46,21 @@ class App:
     name: str
     source_type: SourceType
     categories: tuple[str, ...]
-    variant: Variant
     provenance: Provenance
+    eligibility: frozenset[Variant]
     additional_settings: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
-    eligibility: frozenset[Variant] = field(default=_ELIGIBILITY_UNSET)
-    dual_preferred: bool = False
     origin: str | None = None
     original_id: str | None = None
     family: str | None = None
 
     def __post_init__(self) -> None:
-        # Adapters migrate to source-derived, multi-target eligibility separately.
-        # These defaults keep the existing per-variant normalized record contract.
-        if self.eligibility is _ELIGIBILITY_UNSET:
-            object.__setattr__(self, "eligibility", frozenset({self.variant}))
         if self.origin is None:
             object.__setattr__(self, "origin", self.provenance.source)
         if self.original_id is None:
             object.__setattr__(self, "original_id", self.id)
+
+    @property
+    def dual_preferred(self) -> bool:
+        """A dual-screen build: eligible for dual only, and preferred there."""
+        return self.eligibility == frozenset({Variant.DUAL})

@@ -69,8 +69,7 @@ def test_build_writes_both_variants_and_report(
     ):
         (tmp_path / "config" / name).write_text(json.dumps(value), encoding="utf-8")
     app = ComposedApp(
-        Variant.SINGLE,
-        Provenance("extras", "https://example.test/app"),
+        "package:app.test",
         {
             "id": "app.test",
             "url": "https://example.test/app",
@@ -82,7 +81,7 @@ def test_build_writes_both_variants_and_report(
     composed = CompositionResult(
         {
             Variant.SINGLE: [app],
-            Variant.DUAL: [ComposedApp(Variant.DUAL, app.provenance, dict(app.data))],
+            Variant.DUAL: [ComposedApp(app.family, dict(app.data))],
         },
         CompositionReport(),
     )
@@ -384,7 +383,6 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         "Current",
         SourceType.HTML,
         (),
-        Variant.SINGLE,
         Provenance("extras", "fixture"),
         eligibility=frozenset(Variant),
     )
@@ -505,7 +503,6 @@ def test_composition_failure_preserves_collected_diagnostics(
             source,
             SourceType.HTML,
             (),
-            Variant.SINGLE,
             Provenance(source, "https://example.test/catalog"),
             eligibility=frozenset(Variant),
         )
@@ -664,7 +661,6 @@ def test_winning_tie_reports_original_selectors(
             "Candidate",
             SourceType.HTML,
             (),
-            Variant.SINGLE,
             Provenance("bboi", "fixture"),
             eligibility=frozenset(Variant),
             origin=origin,

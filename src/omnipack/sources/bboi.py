@@ -49,7 +49,6 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
             normalize_record(
                 record,
                 source="bboi",
-                variant=Variant.SINGLE,
                 eligibility=frozenset(Variant),
                 origin="bboi-standard-asset",
             )
@@ -59,9 +58,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
             normalize_record(
                 record,
                 source="bboi",
-                variant=Variant.DUAL,
                 eligibility=frozenset({Variant.DUAL}),
-                dual_preferred=True,
                 origin="bboi-dual-asset",
             )
             for record in dual

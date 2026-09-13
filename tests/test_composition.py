@@ -31,7 +31,6 @@ def app(
     *,
     family: str | None = None,
     eligibility: frozenset[Variant] = frozenset(Variant),
-    dual_preferred: bool = False,
     url: str | None = None,
     name: str | None = None,
     original_id: str | None = None,
@@ -49,10 +48,8 @@ def app(
         name or f"{source} {package_id}",
         SourceType.HTML,
         (),
-        Variant.SINGLE,
         Provenance(source, url),
         eligibility=eligibility,
-        dual_preferred=dual_preferred,
         origin=origins[source],
         original_id=original_id or package_id,
         family=family or f"package:{package_id}",
@@ -142,7 +139,6 @@ def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
         "bboi",
         family="app:shared",
         eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
     )
     result = compose([ordinary, preferred], [], [])
     assert ids(result, Variant.SINGLE) == {"ordinary"}
@@ -185,7 +181,9 @@ def test_pin_uses_original_provenance_when_rendered_identity_is_shared() -> None
     )
     policy = pin_policy(pinned, "app:shared", Variant.DUAL, high)
     result = compose([high, pinned], [], [], policy=policy)
-    assert result.apps[Variant.DUAL][0].provenance.source == "bboi"
+    assert [
+        item.source for item in result.report.selections if item.variant is Variant.DUAL
+    ] == ["bboi"]
 
 
 def test_package_denial_cannot_hide_missing_pin() -> None:
@@ -293,7 +291,6 @@ def test_package_denial_leaves_a_different_package_alternative_selectable() -> N
         "bboi",
         family="app:x",
         eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
     )
     result = compose(
         [standard, preferred], [{"id": "dual.denied", "reason": "broken"}], []
@@ -313,7 +310,6 @@ def shared_package_builds() -> tuple[App, App]:
             "bboi",
             family="app:x",
             eligibility=frozenset({Variant.DUAL}),
-            dual_preferred=True,
         ),
         origin="bboi-dual-asset",
     )
@@ -387,7 +383,6 @@ def test_cross_package_family_coverage_passes_and_package_collision_fails() -> N
         "bboi",
         family="app:x",
         eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
     )
     assert ids(compose([single, dual], [], []), Variant.DUAL) == {"dual"}
     collision = app("single", "bboi", family="app:y")
@@ -404,7 +399,6 @@ def test_neither_ineligibility_nor_a_denied_only_dual_build_waives_coverage() ->
         "bboi",
         family="app:x",
         eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
     )
     assert ids(compose([single, dual], [], []), Variant.DUAL) == {"dual"}
     with pytest.raises(CompositionError, match="missing app family.*app:x"):
@@ -437,7 +431,6 @@ def test_overlay_selector_matching_only_dual_applies_only_there() -> None:
         "bboi",
         family="app:x",
         eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
     )
     result = compose(
         [single, dual], [], overlays((dual.id, dual.url, {"name": "patched"}))

@@ -9,7 +9,7 @@ import pytest
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import compose
-from omnipack.model import Provenance, Variant
+from omnipack.model import Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.sources import rjny
@@ -77,13 +77,7 @@ def curated():
             data = deepcopy(record)
             data["additionalSettings"] = json.loads(data["additionalSettings"])
             data["id"] = effective_id(data)
-            selected[variant].append(
-                ComposedApp(
-                    variant,
-                    Provenance("fixture", data["url"]),
-                    data,
-                )
-            )
+            selected[variant].append(ComposedApp(f"package:{data['id']}", data))
     historical_extras = [
         entry
         for entry in read(ROOT / "config/extras.json")
@@ -100,9 +94,7 @@ def curated():
             additionalSettings=deepcopy(app.additional_settings),
         )
         for variant in app.eligibility:
-            selected[variant].append(
-                ComposedApp(variant, app.provenance, deepcopy(data))
-            )
+            selected[variant].append(ComposedApp(f"package:{app.id}", deepcopy(data)))
     overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     return {
         variant.value: json.loads(render(apply_overlay(apps, overlay)))["apps"]

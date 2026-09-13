@@ -121,13 +121,10 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             "upstream duplicate",
             app.source_type,
             app.categories,
-            Variant.DUAL,
             Provenance("bboi", app.url),
-            {"apkFilterRegEx": "wrong.apk", "versionDetection": True},
-            {},
             frozenset({Variant.DUAL}),
-            True,
-            "bboi-dual-asset",
+            {"apkFilterRegEx": "wrong.apk", "versionDetection": True},
+            origin="bboi-dual-asset",
         )
         for app in maintained
     ]
@@ -146,10 +143,10 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
         [],
         policy=parse_composition_policy(unpinned),
     )
-    assert all(
-        app.provenance.source == "extras" for app in ordinary.apps[Variant.SINGLE]
-    )
-    assert all(app.provenance.source == "bboi" for app in ordinary.apps[Variant.DUAL])
+    assert {(item.variant, item.source) for item in ordinary.report.selections} == {
+        (Variant.SINGLE, "extras"),
+        (Variant.DUAL, "bboi"),
+    }
     result = compose(
         [*maintained, *duplicates],
         [],
@@ -159,7 +156,9 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
     for variant in Variant:
         chosen = [app for app in result.apps[variant] if app.data["id"] in PORT_IDS]
         assert len(chosen) == len(PORT_IDS)
-        assert all(app.provenance.source == "extras" for app in chosen)
+        assert {
+            item.source for item in result.report.selections if item.variant is variant
+        } == {"extras"}
         expected = {app.id: app.additional_settings for app in maintained}
         for app in chosen:
             assert app.data["additionalSettings"] == expected[app.data["id"]]
@@ -237,7 +236,7 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
         "categories": ["Games"],
         "additionalSettings": {},
     }
-    app = ComposedApp(Variant.DUAL, Provenance("codm2000", url), original)
+    app = ComposedApp(f"package:{package_id}", original)
     overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     [curated] = apply_overlay([app], overlay)
     assert curated.data["id"] == package_id
@@ -246,7 +245,6 @@ def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
     assert curated.data["categories"] == ["PC Ports"]
     assert limitation in curated.data["additionalSettings"]["about"]
     assert "user-supplied" in curated.data["additionalSettings"]["about"]
-    assert curated.variant is Variant.DUAL
     catalog = generate_catalog(
         render([]).encode(),
         render([curated]).encode(),

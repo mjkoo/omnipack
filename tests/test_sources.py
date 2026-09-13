@@ -64,9 +64,9 @@ def test_rjny_applies_export_flags_and_ignores_presentation_overrides() -> None:
         },
     )
     cemu = [app for app in apps if app.id == "info.cemu.cemu"]
-    assert {(app.variant, app.url) for app in cemu} == {
-        (Variant.SINGLE, "https://github.com/SSimco/Cemu"),
-        (Variant.DUAL, "https://github.com/sapphirerhodonite/cemu"),
+    assert {(app.eligibility, app.url) for app in cemu} == {
+        (frozenset({Variant.SINGLE}), "https://github.com/SSimco/Cemu"),
+        (frozenset({Variant.DUAL}), "https://github.com/sapphirerhodonite/cemu"),
     }
     assert all(app.name == "Citra" for app in apps if app.id == "org.citra.emu")
     assert not any("Dev build" in app.name for app in apps)
@@ -318,8 +318,8 @@ def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
             "x",
             SourceType.GITHUB,
             (),
-            Variant.DUAL,
             Provenance("x", "x"),
+            eligibility=frozenset({Variant.DUAL}),
         ),
         App(
             "y",
@@ -327,8 +327,8 @@ def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
             "y",
             SourceType.GITHUB,
             (),
-            Variant.DUAL,
             Provenance("x", "x"),
+            eligibility=frozenset({Variant.DUAL}),
         ),
         App(
             "z",
@@ -336,8 +336,8 @@ def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
             "z",
             SourceType.GITHUB,
             (),
-            Variant.SINGLE,
             Provenance("x", "x"),
+            eligibility=frozenset({Variant.SINGLE}),
         ),
     ]
     catalog = {
@@ -444,7 +444,6 @@ def rjny_candidate(eligibility: frozenset[Variant]) -> App:
         "Standard",
         SourceType.GITHUB,
         (),
-        Variant.SINGLE,
         Provenance("rjny", "catalog"),
         eligibility=eligibility,
         origin="rjny-catalog",
@@ -664,7 +663,7 @@ def test_extras_composition_fields_stay_out_of_the_rendered_record() -> None:
         "provenance",
     }
     [rendered] = json.loads(
-        render([ComposedApp(Variant.DUAL, app.provenance, _import_data(app))])
+        render([ComposedApp(f"package:{app.id}", _import_data(app))])
     )["apps"]
     assert "dualScreen" not in rendered
     assert "dualScreen" not in json.loads(rendered["additionalSettings"])
@@ -809,3 +808,129 @@ def test_explicit_null_extra_source_is_not_inferred():
                 }
             ]
         )
+
+
+def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> None:
+    [extra] = extras.fetch(
+        [
+            {
+                "id": "com.example.companion",
+                "url": "https://github.com/example/companion",
+                "name": "Companion",
+                "dualScreen": True,
+            }
+        ]
+    )
+    fork = App(
+        "com.example.fork",
+        "https://github.com/fork/companion",
+        "Fork",
+        SourceType.GITHUB,
+        (),
+        Provenance("bboi", "asset"),
+        frozenset({Variant.DUAL}),
+        origin="bboi-dual-asset",
+    )
+    rules = [
+        {
+            "match": {"source": source, "origin": origin, "id": app.id, "url": app.url},
+            "family": "app:companion",
+            "rationale": "Builds of one companion app.",
+        }
+        for source, origin, app in (
+            ("extras", "extras", extra),
+            ("bboi", "bboi-dual-asset", fork),
+        )
+    ]
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": rules, "pins": []}
+    )
+    result = compose([extra, fork], [], [], policy=policy)
+    assert result.apps[Variant.SINGLE] == []
+    [selection] = result.report.selections
+    assert (selection.variant, selection.effective_id, selection.reason) == (
+        Variant.DUAL,
+        "com.example.companion",
+        "dual-preferred",
+    )
+
+
+def test_each_source_prefers_exactly_its_dual_only_builds(tmp_path: Path) -> None:
+    rjny_url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
+    rjny_apps = rjny.fetch(
+        FakeHttp({rjny_url: fixture("rjny-applications.json")}),
+        {
+            "repo": "RJNY/Obtainium-Emulation-Pack",
+            "branch": "main",
+            "path": "src/applications.json",
+        },
+    )
+    flags = {
+        (record["id"], record["url"]): record.get("meta", {})
+        for record in json.loads(fixture("rjny-applications.json"))["apps"]
+    }
+    api = "https://codeberg.org/api/v1/repos/BBoi34/Obtainium-Recomp-Decomp/releases/latest"
+    release = json.loads(fixture("codeberg-release.json"))
+    single_url, dual_url = (
+        asset["browser_download_url"] for asset in release["assets"]
+    )
+    bboi_apps = bboi.fetch(
+        FakeHttp(
+            {
+                api: json.dumps(release),
+                single_url: fixture("bboi-single.json"),
+                dual_url: fixture("bboi-dual.json"),
+            }
+        ),
+        {
+            "codeberg_repo": "BBoi34/Obtainium-Recomp-Decomp",
+            "single_asset_pattern": "Decomp-Recomp.V*.json",
+            "dual_asset_pattern": "Dual-Screen-Decomp-Recomp.V*.json",
+        },
+    )
+    (tmp_path / "catalog.json").write_text(
+        json.dumps(
+            {
+                "apps": [
+                    {
+                        "id": "app.generated",
+                        "url": "https://github.com/owner/generated",
+                        "name": "Generated",
+                        "overrideSource": "GitHub",
+                    }
+                ]
+            }
+        )
+    )
+    codm_apps = codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
+    extra_apps = extras.fetch(
+        [
+            {"id": "baseline", "url": "https://github.com/o/baseline", "name": "B"},
+            {
+                "id": "dual",
+                "url": "https://github.com/o/dual",
+                "name": "D",
+                "dualScreen": True,
+            },
+        ]
+    )
+    dual_screen = {
+        "rjny": lambda app: flags[(app.id, app.url)].get("includeInStandard") is False,
+        "bboi": lambda app: app.origin == "bboi-dual-asset",
+        "codm2000": lambda app: True,
+        "extras": lambda app: app.id == "dual",
+    }
+    for source, apps in (
+        ("rjny", rjny_apps),
+        ("bboi", bboi_apps),
+        ("codm2000", codm_apps),
+        ("extras", extra_apps),
+    ):
+        kinds = {dual_screen[source](app) for app in apps}
+        assert kinds == ({True} if source == "codm2000" else {True, False}), source
+        for app in apps:
+            assert app.dual_preferred is dual_screen[source](app), (source, app.id)
+            if app.dual_preferred:
+                assert app.eligibility == frozenset({Variant.DUAL})
+            else:
+                assert Variant.SINGLE in app.eligibility

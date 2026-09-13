@@ -13,7 +13,6 @@ from typing import Any, Protocol, cast
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpClient, HttpConfig, HttpError
-from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.package_id import resolve_release_assets
 from omnipack.project_policy import (
@@ -436,15 +435,7 @@ def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
         if not isinstance(settings, dict):
             raise TypeError(f"entry {data.get('id')!r} has invalid additionalSettings")
         data["additionalSettings"] = settings
-        apps.append(
-            ComposedApp(
-                Variant.DUAL,
-                Provenance("codm2000", data["url"]),
-                data,
-                origin="codm-generated",
-                original_id=data["id"],
-            )
-        )
+        apps.append(ComposedApp(f"package:{data['id']}", data))
     return render(apps).encode()
 
 

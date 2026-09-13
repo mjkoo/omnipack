@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import (
     RenderError,
@@ -39,11 +38,7 @@ def composed(
     }
     if author is not None:
         data["author"] = author
-    return ComposedApp(
-        Variant.SINGLE,
-        Provenance("test", "fixture"),
-        data,
-    )
+    return ComposedApp(f"package:{package_id}", data)
 
 
 def document(apps: list[ComposedApp]):
@@ -151,7 +146,7 @@ def test_render_is_byte_stable_and_pins_object_key_order() -> None:
     ]
 
     reversed_data = dict(reversed(list(app.data.items())))
-    reordered = ComposedApp(app.variant, app.provenance, reversed_data)
+    reordered = ComposedApp(app.family, reversed_data)
     assert render([reordered]) == second
 
 

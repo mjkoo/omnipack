@@ -113,10 +113,8 @@ def normalize_record(
     record: object,
     *,
     source: str,
-    variant: Variant,
+    eligibility: frozenset[Variant],
     derive_type: bool = False,
-    eligibility: frozenset[Variant] | None = None,
-    dual_preferred: bool = False,
     origin: str | None = None,
 ) -> App:
     if not isinstance(record, dict):
@@ -167,14 +165,12 @@ def normalize_record(
         name=record["name"],
         source_type=kind,
         categories=tuple(categories),
-        variant=variant,
         provenance=Provenance(source, url),
+        eligibility=eligibility,
         additional_settings=settings(
             record.get("additionalSettings"), source=source, entry=str(label)
         ),
         raw={key: value for key, value in record.items() if key not in modeled},
-        eligibility=(frozenset({variant}) if eligibility is None else eligibility),
-        dual_preferred=dual_preferred,
         origin=origin,
     )
 

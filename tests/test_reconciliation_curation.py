@@ -111,10 +111,8 @@ def candidates(refresh: int):
         normalize_record(
             record,
             source="codm2000",
-            variant=Variant.DUAL,
             derive_type=True,
             eligibility=frozenset({Variant.DUAL}),
-            dual_preferred=True,
             origin="codm-generated",
         )
         for record in admitted
@@ -211,7 +209,8 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             )
             observation = expected_ctr[variant.value]
             assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
-            assert ctr_app.original_id == observation["original_id"]
+            [ctr_selection] = [item for item in ctr if item.variant is variant]
+            assert ctr_selection.original_id == observation["original_id"]
             assert ctr_app.url == observation["source"]
             [rendered_ctr] = json.loads(render([ctr_app]))["apps"]
             settings = json.loads(rendered_ctr["additionalSettings"])

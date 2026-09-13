@@ -19,10 +19,9 @@ from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport
 
 
-def app(package_id: str, variant: Variant) -> ComposedApp:
+def app(package_id: str) -> ComposedApp:
     return ComposedApp(
-        variant,
-        Provenance("extras", f"https://example.test/{package_id}"),
+        f"package:{package_id}",
         {
             "id": package_id,
             "url": f"https://example.test/{package_id}",
@@ -35,10 +34,7 @@ def app(package_id: str, variant: Variant) -> ComposedApp:
 
 def composition(*ids: str) -> CompositionResult:
     return CompositionResult(
-        {
-            variant: [app(package_id, variant) for package_id in ids]
-            for variant in Variant
-        },
+        {variant: [app(package_id) for package_id in ids] for variant in Variant},
         CompositionReport(
             [Displacement("old.id", Variant.SINGLE, "extras", "rjny", ("url",))],
             [Removal("denied.id", Variant.DUAL, "curated")],
@@ -146,7 +142,6 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
         "Replacement",
         SourceType.HTML,
         (),
-        Variant.SINGLE,
         Provenance("extras", current_url),
         eligibility=frozenset(Variant),
     )

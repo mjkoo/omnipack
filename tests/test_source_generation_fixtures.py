@@ -75,10 +75,8 @@ def captured_pipeline() -> tuple[list[App], list[App]]:
         normalize_record(
             record,
             source="codm2000",
-            variant=Variant.DUAL,
             derive_type=True,
             eligibility=frozenset({Variant.DUAL}),
-            dual_preferred=True,
             origin="codm-generated",
         )
         for record in load_json(PRE_MIGRATION / "admitted-catalog.json")["apps"]

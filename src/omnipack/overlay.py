@@ -6,7 +6,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from omnipack.model import Provenance, Variant
 from omnipack.urls import normalize_project_url
 
 
@@ -16,12 +15,10 @@ class OverlayError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ComposedApp:
-    variant: Variant
-    provenance: Provenance
+    """A selected entry: its app family and the import data rendered for it."""
+
+    family: str
     data: dict[str, Any]
-    family: str | None = None
-    original_id: str | None = None
-    origin: str | None = None
 
     @property
     def id(self) -> str:
@@ -127,14 +124,5 @@ def apply_overlay(
             patched = merge_patch(data, patch)
             assert isinstance(patched, dict)
             data = patched
-        result.append(
-            ComposedApp(
-                app.variant,
-                app.provenance,
-                data,
-                app.family,
-                app.original_id,
-                app.origin,
-            )
-        )
+        result.append(ComposedApp(app.family, data))
     return result

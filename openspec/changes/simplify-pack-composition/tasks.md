@@ -64,7 +64,7 @@
   - the pin-failure diagnostic regression still passing. A missing pin, and a pin whose candidate is ineligible for its target, each fail after exclusions, with a package denial of an unrelated candidate recorded as a removal and an unmatched denial recorded as stale.
 
   Also verify that `git grep -n "apply_composition_policy(" src` finds exactly one call outside `composition_policy.py`, and that `ingest_all` has no policy parameter.
-- [ ] 2.2 Finish the app model (design decision 10). Remove `App.variant` and the unset-eligibility default, and make `eligibility` required. Replace the stored `dual_preferred` with a property derived from eligibility, true exactly when the build is eligible for dual only. Drop the `variant` and `dual_preferred` parameters from `normalize_record` and the adapters, and reduce `ComposedApp` to a family plus a data dict. Update overlay application, rendering and `source_generation._render_catalog`. Verify with tests for:
+- [x] 2.2 Finish the app model (design decision 10). Remove `App.variant` and the unset-eligibility default, and make `eligibility` required. Replace the stored `dual_preferred` with a property derived from eligibility, true exactly when the build is eligible for dual only. Drop the `variant` and `dual_preferred` parameters from `normalize_record` and the adapters, and reduce `ComposedApp` to a family plus a data dict. Update overlay application, rendering and `source_generation._render_catalog`. Verify with tests for:
   - a dual-only extra (`"dualScreen": true`) being preferred in dual: it wins dual over a dual-preferred lower-source candidate of its family when no pin applies;
   - each source's dual-only builds, and no other builds, being dual-preferred.
 
