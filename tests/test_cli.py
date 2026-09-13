@@ -355,19 +355,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     )
     config = tmp_path / "config"
     config.mkdir()
-    policy_document = {
-        "schemaVersion": 1,
-        "candidates": [],
-        "pins": [],
-        "history": [
-            {
-                "id": "before.id",
-                "url": "https://example.test/old",
-                "family": "package:current.id",
-                "rationale": "Previous published identity",
-            }
-        ],
-    }
+    policy_document = {"schemaVersion": 1, "candidates": [], "pins": []}
     consumed_policy = parse_composition_policy(policy_document)
     candidate = App(
         "current.id",
@@ -452,38 +440,6 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         else:
             assert not path.exists()
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    for variant in Variant:
-        changes = report["familyChanges"][variant.value]
-        assert changes["retained"] == (
-            [
-                {
-                    "family": "package:current.id",
-                    "previous": [
-                        {"id": "before.id", "url": "https://example.test/old"}
-                    ],
-                    "current": {
-                        "id": "current.id",
-                        "url": "https://example.test/current",
-                    },
-                }
-            ]
-            if existing
-            else []
-        )
-        assert changes["unmappedPrevious"] == (
-            [
-                {
-                    "id": "unknown.id",
-                    "url": "https://example.test/unknown",
-                }
-            ]
-            if existing
-            else []
-        )
-        assert changes["unknownReason"] == (
-            "previous entries lack historical family mappings" if existing else None
-        )
-        assert changes["added"] == ([] if existing else ["package:current.id"])
     assert report["stage"] == stage
     assert report["error"] == f"injected {stage} failure"
     assert report["offlineVerification"] == {
@@ -638,7 +594,6 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     )
     assert verify_path.read_bytes() == b'{"keep":true}\n'
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["familyChanges"] is not None
     assert report["stage"] == "offline verification"
     assert report["offlineVerification"]["status"] == "failed"
     assert report["changes"] == {
@@ -738,7 +693,6 @@ def test_winning_tie_reports_original_selectors(
     )
     assert report["stage"] == "composition"
     assert report["changes"] is None
-    assert report["familyChanges"] is None
     assert report["error"] == expected
     assert expected in capsys.readouterr().err
     assert main(["report"]) == 0

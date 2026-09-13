@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 from omnipack.build import previous_ids, publish_build
-from omnipack.composition_policy import CompositionPolicy, load_composition_policy
+from omnipack.composition_policy import load_composition_policy
 from omnipack.http import HttpClient, HttpConfig
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.report import format_reports, write_report
@@ -29,7 +29,6 @@ def build(_args: argparse.Namespace) -> int:
     ingestion_report = IngestionReport()
     composition_report = CompositionReport()
     composition: CompositionResult | None = None
-    consumed_policy: CompositionPolicy | None = None
     stage = "ingestion"
     offline_verification: dict[str, Any] = {"status": "not-run", "findings": []}
 
@@ -46,7 +45,6 @@ def build(_args: argparse.Namespace) -> int:
         stage = "composition"
         if ingested.policy is None:
             raise ValueError("ingestion result is missing composition policy")
-        consumed_policy = ingested.policy
         composition_bytes = ingested.policy_bytes
         if composition_bytes is None:
             raise ValueError("ingestion result is missing composition policy snapshot")
@@ -76,7 +74,6 @@ def build(_args: argparse.Namespace) -> int:
                 composition,
                 ingestion_report,
                 composition_report=composition_report,
-                policy=consumed_policy,
                 stage=stage,
                 error=error,
                 offline_verification=offline_verification,

@@ -75,7 +75,6 @@ class Projection:
 class CompositionPolicy:
     candidate_rules: tuple[CandidateRule, ...]
     pins: tuple[Pin, ...]
-    history: dict[RenderedKey, str]
     projections: dict[RenderedKey, Projection]
     projected_pins: dict[PinKey, RenderedKey]
 
@@ -84,10 +83,6 @@ class CompositionPolicy:
         key = rendered_key(package_id, url)
         projection = self.projections.get(key)
         return projection.family if projection else f"package:{package_id}"
-
-    def historical_family(self, package_id: str, url: str) -> str | None:
-        """Classify a previous output only from explicit retained history."""
-        return self.history.get(rendered_key(package_id, url))
 
 
 @dataclass(frozen=True, slots=True)
@@ -102,12 +97,11 @@ def rendered_key(package_id: str, url: str) -> RenderedKey:
 
 def parse_composition_policy(document: object) -> CompositionPolicy:
     root = _object(document, "composition policy")
-    _fields(root, {"schemaVersion", "candidates", "pins", "history"}, "policy")
+    _fields(root, {"schemaVersion", "candidates", "pins"}, "policy")
     if type(root.get("schemaVersion")) is not int or root["schemaVersion"] != 1:
         raise CompositionPolicyError("schemaVersion must be integer 1")
     candidates_raw = _array(root.get("candidates"), "candidates")
     pins_raw = _array(root.get("pins"), "pins")
-    history_raw = _array(root.get("history", []), "history")
 
     rules = tuple(
         _parse_rule(value, index) for index, value in enumerate(candidates_raw)
@@ -161,25 +155,7 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
                 f"{effective_family!r}"
             )
         projected_pins[key] = rendered_key(effective_id, pin.match.url)
-
-    history: dict[RenderedKey, str] = {}
-    for index, value in enumerate(history_raw):
-        record = _object(value, f"history[{index}]")
-        _fields(record, {"id", "url", "family", "rationale"}, f"history[{index}]")
-        package_id = _text(record.get("id"), f"history[{index}].id")
-        url = _url(record.get("url"), f"history[{index}].url")
-        family = _family(record.get("family"), explicit_only=False)
-        _text(record.get("rationale"), f"history[{index}].rationale")
-        key = rendered_key(package_id, url)
-        if key in history:
-            raise CompositionPolicyError(f"duplicate history key {key!r}")
-        projection = projections.get(key)
-        if projection is not None and projection.family != family:
-            raise CompositionPolicyError(
-                f"history key {key!r} conflicts with active projection"
-            )
-        history[key] = family
-    return CompositionPolicy(rules, pins, history, projections, projected_pins)
+    return CompositionPolicy(rules, pins, projections, projected_pins)
 
 
 def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:

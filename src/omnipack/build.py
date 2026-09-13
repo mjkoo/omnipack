@@ -161,7 +161,6 @@ def publish_build(
         composition,
         ingestion,
         offline_verification=verdict,
-        policy=load_composition_policy(consumed_policy),
     )
     if on_stage is not None:
         on_stage("publication")

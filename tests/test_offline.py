@@ -470,7 +470,7 @@ def test_unexempted_dual_coverage_gap_fails() -> None:
     assert "dual_coverage_gap" in codes(result)
 
 
-def test_family_projection_pin_eligibility_and_history_are_distinct() -> None:
+def test_family_projection_pin_and_eligibility_are_distinct() -> None:
     policy = {
         "schemaVersion": 1,
         "candidates": [
@@ -509,14 +509,6 @@ def test_family_projection_pin_eligibility_and_history_are_distinct() -> None:
                     "url": "https://example.com/dual",
                 },
                 "rationale": "fixture",
-            }
-        ],
-        "history": [
-            {
-                "id": "retired",
-                "url": "https://example.com/retired",
-                "family": "app:shared",
-                "rationale": "published",
             }
         ],
     }

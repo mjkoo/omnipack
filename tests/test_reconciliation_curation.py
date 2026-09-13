@@ -52,10 +52,6 @@ def test_reconciliation_evidence_is_real_and_configuration_is_complete():
         ]
         assert matches
         assert {rule.get("packageId") for rule in matches} == {effective}
-        assert any(
-            record["id"] == original and record["url"] == url
-            for record in document["history"]
-        )
 
     ghost = evidence["ghostship"]
     assert len(ghost["asset_sha256"]) == len(ghost["member_sha256"]) == 64

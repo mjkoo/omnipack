@@ -91,7 +91,6 @@ def pin_policy(
     return CompositionPolicy(
         rules,
         (Pin(family, variant, pinned_selector, "test"),),
-        {},
         projections,
         {(family, variant): key},
     )
@@ -126,7 +125,7 @@ def compose(
                 projections[rendered_key(candidate.id, candidate.url)] = Projection(
                     family, None
                 )
-        policy = CompositionPolicy(tuple(rules), (), {}, projections, {})
+        policy = CompositionPolicy(tuple(rules), (), projections, {})
     return compose_apps(
         candidates,
         denylist,

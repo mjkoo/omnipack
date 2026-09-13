@@ -102,7 +102,6 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
     document["pins"] = [
         pin for pin in document["pins"] if pin["match"]["id"] in PORT_IDS
     ]
-    document["history"] = []
     unpinned = deepcopy(document)
     unpinned["pins"] = []
     ordinary = compose(
