@@ -697,7 +697,14 @@ def test_winning_tie_reports_original_selectors(
 
 @pytest.mark.parametrize(
     "edited",
-    ["README.md", "config/overlay.json", "config/deny.json", "config/composition.json"],
+    [
+        "README.md",
+        "config/overlay.json",
+        "config/deny.json",
+        "config/composition.json",
+        "config/sources.json",
+        "config/extras.json",
+    ],
 )
 def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edited: str
@@ -719,6 +726,16 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
             [{"id": "app.fixture", "reason": "edited"}]
         ).encode(),
         "config/composition.json": b"not json",
+        "config/sources.json": b"not json",
+        "config/extras.json": json.dumps(
+            [
+                {
+                    "id": "edited.extra",
+                    "url": "https://example.test/edited",
+                    "name": "Edited Extra",
+                }
+            ]
+        ).encode(),
     }
     real_ingest = cli._ingest_for_build
 
@@ -737,6 +754,7 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
         assert [app["name"] for app in apps if app["id"] == "app.fixture"] == [
             "Fixture"
         ]
+        assert "edited.extra" not in {app["id"] for app in apps}
     readme = (tmp_path / "README.md").read_bytes()
     assert b"Edited guide" not in readme and b"Fixture" in readme
     if edited != "README.md":
@@ -767,3 +785,30 @@ def test_build_fetches_catalogs_without_credentials_or_http_config(
     assert main(["build"]) == 0
     assert {request.full_url for request in requests} == set(responses)
     assert all(request.get_header("Authorization") is None for request in requests)
+
+
+@pytest.mark.parametrize(
+    ("missing", "source"),
+    [
+        ("config/sources.json", "sources"),
+        ("config/deny.json", "denylist"),
+        ("config/overlay.json", "overlay"),
+        ("config/composition.json", "composition policy"),
+    ],
+)
+def test_missing_local_input_fails_at_ingestion_before_any_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str, source: str
+) -> None:
+    write_fixture_pipeline(tmp_path)
+    (tmp_path / missing).unlink()
+
+    def fetch(*_args: object) -> HttpResponse:
+        pytest.fail("the build fetched a catalog after a missing input")
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fetch)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "ingestion"
+    assert report["error"].startswith(f"{source}: ")
+    assert not (tmp_path / "dist").exists()
