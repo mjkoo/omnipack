@@ -72,7 +72,7 @@
 
 ## 3. Selection records and report schemas
 
-- [ ] 3.1 Slim selection records (design decision 7). `FamilySelection` keeps the family, variant, winner identity, reason and `considered`. Remove `Displacement`, `SelectionAlternative`, the loss reasons, the differing-field computation and the `displacements` report field. In the same commit, `pack report` reads the new selection shape: it displays each selection's winner, reason and considered candidates, and no longer requires `alternatives`, eligibility or preference on a selection. Verify with tests for:
+- [x] 3.1 Slim selection records (design decision 7). `FamilySelection` keeps the family, variant, winner identity, reason and `considered`. Remove `Displacement`, `SelectionAlternative`, the loss reasons, the differing-field computation and the `displacements` report field. In the same commit, `pack report` reads the new selection shape: it displays each selection's winner, reason and considered candidates, and no longer requires `alternatives`, eligibility or preference on a selection. Verify with tests for:
   - each of the four reasons: pin, dual-preferred, ordinary-fallback and source;
   - `considered` excluding the winner and denied candidates;
   - an identity-corrected winner recording both original and effective ids;

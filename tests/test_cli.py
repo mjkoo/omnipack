@@ -523,16 +523,28 @@ def test_composition_failure_preserves_collected_diagnostics(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == "composition"
     assert "missing.app" in report["error"]
-    assert report["displacements"] == [
+    assert report["selections"] == [
         {
-            "id": "collision.app",
+            "family": "package:collision.app",
             "variant": variant.value,
-            "winner_source": "extras",
-            "loser_source": "rjny",
-            "differing_fields": ["name"],
+            "original_id": "collision.app",
+            "effective_id": "collision.app",
+            "url": "https://example.test/app",
+            "source": "extras",
+            "origin": "extras",
+            "reason": "source" if variant is Variant.SINGLE else "ordinary-fallback",
+            "considered": [
+                {
+                    "source": "rjny",
+                    "origin": "rjny",
+                    "original_id": "collision.app",
+                    "url": "https://example.test/app",
+                }
+            ],
         }
         for variant in Variant
     ]
+    assert "displacements" not in report
     assert report["denylistRemovals"] == [
         {
             "id": "removed.app",

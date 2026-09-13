@@ -32,15 +32,6 @@ class CompositionError(ValueError):
 
 
 @dataclass(frozen=True, slots=True)
-class Displacement:
-    package_id: str
-    variant: Variant
-    winner_source: str
-    loser_source: str
-    differing_fields: tuple[str, ...]
-
-
-@dataclass(frozen=True, slots=True)
 class Removal:
     package_id: str
     variant: Variant
@@ -55,21 +46,24 @@ class StaleExclusion:
 
 
 @dataclass(frozen=True, slots=True)
-class SelectionAlternative:
-    original_id: str
-    effective_id: str
-    url: str
+class ConsideredCandidate:
+    """A candidate that was available for a selection and did not win it."""
+
     source: str
     origin: str
-    eligibility: tuple[Variant, ...]
-    dual_preferred: bool
-    differing_fields: tuple[str, ...]
-    loss_reason: str
-    excluded_reason: str | None = None
+    original_id: str
+    url: str
 
 
 @dataclass(frozen=True, slots=True)
 class FamilySelection:
+    """One family's winner for one variant, why it won and what it beat.
+
+    `reason` is `pin`, `dual-preferred`, `ordinary-fallback` or `source`.
+    `considered` holds the family's other candidates that were eligible for
+    the variant and not denied; denied ones appear among the removals.
+    """
+
     family: str
     variant: Variant
     original_id: str
@@ -77,15 +71,12 @@ class FamilySelection:
     url: str
     source: str
     origin: str
-    eligibility: tuple[Variant, ...]
-    dual_preferred: bool
     reason: str
-    alternatives: tuple[SelectionAlternative, ...]
+    considered: tuple[ConsideredCandidate, ...]
 
 
 @dataclass(slots=True)
 class CompositionReport:
-    displacements: list[Displacement] = field(default_factory=list)
     removals: list[Removal] = field(default_factory=list)
     stale_exclusions: list[StaleExclusion] = field(default_factory=list)
     selections: list[FamilySelection] = field(default_factory=list)
@@ -227,17 +218,11 @@ def _select(
     for family in sorted(families):
         family_candidates = families[family]
         for variant in Variant:
-            eligible = [
-                item for item in family_candidates if variant in item.eligibility
+            available = [
+                item
+                for item in family_candidates
+                if variant in item.eligibility and (id(item), variant) not in denied
             ]
-            excluded: list[tuple[App, str]] = []
-            available: list[App] = []
-            for candidate in eligible:
-                denied_reason = denied.get((id(candidate), variant))
-                if denied_reason is not None:
-                    excluded.append((candidate, denied_reason))
-                else:
-                    available.append(candidate)
             pinned_winner = pinned.get((family, variant))
             if pinned_winner is not None:
                 winner, reason = pinned_winner, "pin"
@@ -267,29 +252,6 @@ def _select(
                 winner = winners[0]
             else:
                 continue
-            winner_data = _import_data(winner)
-            loser_pairs = [
-                (item, None)
-                for item in family_candidates
-                if item is not winner and all(item is not x for x, _ in excluded)
-            ] + excluded
-            alternatives = tuple(
-                _alternative(item, winner, winner_data, denied, variant, reason)
-                for item, denied in sorted(
-                    loser_pairs, key=lambda pair: _identity(pair[0])
-                )
-            )
-            for alternative in alternatives:
-                if alternative.excluded_reason is None:
-                    report.displacements.append(
-                        Displacement(
-                            winner.id,
-                            variant,
-                            winner.provenance.source,
-                            alternative.source,
-                            alternative.differing_fields,
-                        )
-                    )
             report.selections.append(
                 FamilySelection(
                     family,
@@ -299,13 +261,20 @@ def _select(
                     winner.url,
                     winner.provenance.source,
                     winner.origin or winner.provenance.source,
-                    tuple(sorted(winner.eligibility, key=lambda item: item.value)),
-                    winner.dual_preferred,
                     reason,
-                    alternatives,
+                    tuple(
+                        ConsideredCandidate(
+                            item.provenance.source,
+                            item.origin or item.provenance.source,
+                            item.original_id or item.id,
+                            item.url,
+                        )
+                        for item in sorted(available, key=_identity)
+                        if item is not winner
+                    ),
                 )
             )
-            result[variant].append(ComposedApp(family, deepcopy(winner_data)))
+            result[variant].append(ComposedApp(family, _import_data(winner)))
     for values in result.values():
         values.sort(key=lambda item: (item.family, item.id, item.url))
     return result
@@ -326,40 +295,6 @@ def _matches_pin(app: App, selector: CandidateSelector) -> bool:
         and (app.origin or app.provenance.source) == selector.origin
         and (app.original_id or app.id) == selector.id
         and rendered_key(app.id, app.url)[1] == selector.url
-    )
-
-
-def _alternative(
-    app: App,
-    winner: App,
-    winner_data: dict[str, Any],
-    denied: str | None,
-    variant: Variant,
-    selection_reason: str,
-) -> SelectionAlternative:
-    if variant not in app.eligibility:
-        loss_reason = "ineligible"
-    elif denied is not None:
-        loss_reason = "excluded"
-    elif selection_reason == "pin":
-        loss_reason = "not-pinned"
-    elif selection_reason == "dual-preferred" and not app.dual_preferred:
-        loss_reason = "outside-preferred-tier"
-    elif _PRECEDENCE[app.provenance.source] < _PRECEDENCE[winner.provenance.source]:
-        loss_reason = "lower-source-precedence"
-    else:
-        loss_reason = "duplicate-winning-identity"
-    return SelectionAlternative(
-        app.original_id or app.id,
-        app.id,
-        app.url,
-        app.provenance.source,
-        app.origin or app.provenance.source,
-        tuple(sorted(app.eligibility, key=lambda item: item.value)),
-        app.dual_preferred,
-        _differing_fields(winner_data, _import_data(app)),
-        loss_reason,
-        denied,
     )
 
 
@@ -413,14 +348,3 @@ def _import_data(app: App) -> dict[str, Any]:
         }
     )
     return data
-
-
-def _differing_fields(left: dict[str, Any], right: dict[str, Any]) -> tuple[str, ...]:
-    keys = left.keys() | right.keys()
-    return tuple(
-        sorted(
-            key
-            for key in keys
-            if key not in left or key not in right or left[key] != right[key]
-        )
-    )

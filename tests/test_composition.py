@@ -17,6 +17,7 @@ from omnipack.merge import (
     CompositionError,
     CompositionReport,
     CompositionResult,
+    ConsideredCandidate,
     StaleExclusion,
 )
 from omnipack.merge import (
@@ -254,7 +255,7 @@ def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal()
     assert ids(result, Variant.SINGLE) == {"other"}
     assert ids(result, Variant.DUAL) == {"other"}
     assert result.report.stale_exclusions == [StaleExclusion("old.package", "obsolete")]
-    assert result.report.selections[0].alternatives[0].excluded_reason == "broken"
+    assert result.report.selections[0].considered == ()
 
 
 @pytest.mark.parametrize(
@@ -452,8 +453,7 @@ def test_stale_losing_overlay_fails_after_selection_diagnostics_survive() -> Non
             overlays((loser.id, loser.url, {"name": "stale"})),
             report=report,
         )
-    assert report.selections
-    assert report.displacements
+    assert [item.original_id for item in report.selections[0].considered] == ["loser"]
 
 
 @pytest.mark.parametrize("document", [{}, {"x": {"name": "old"}}])
@@ -492,35 +492,69 @@ def test_overlay_rejects_identity_and_composition_fields_even_when_null(
         compose([candidate], [], overlays((candidate.id, candidate.url, {field: None})))
 
 
-def test_selection_report_preserves_corrected_identity_origin_and_differences() -> None:
+def test_selection_report_preserves_corrected_identity_and_origin() -> None:
     winner = app("effective", "extras", family="app:x", original_id="original")
     loser = app("other", "rjny", family="app:x", name="different")
-    report = compose([winner, loser], [], []).report
-    selection = report.selections[0]
-    assert (selection.original_id, selection.effective_id, selection.origin) == (
-        "original",
-        "effective",
-        "extras",
+    selection = compose([winner, loser], [], []).report.selections[0]
+    assert (
+        selection.original_id,
+        selection.effective_id,
+        selection.origin,
+        selection.reason,
+    ) == ("original", "effective", "extras", "source")
+    assert selection.considered == (
+        ConsideredCandidate("rjny", "rjny-catalog", "other", loser.url),
     )
-    assert selection.alternatives[0].effective_id == "other"
-    assert {"id", "name", "url"}.issubset(selection.alternatives[0].differing_fields)
-    assert selection.reason == "source"
-    assert selection.alternatives[0].loss_reason == "lower-source-precedence"
 
 
-def test_selection_report_includes_target_ineligible_alternatives() -> None:
-    winner = app("winner", family="app:x")
-    ineligible = app(
-        "single",
+def test_selection_reasons_name_pin_preference_fallback_and_source() -> None:
+    ordinary = app("ordinary", "extras", family="app:preferred")
+    preferred = app(
+        "preferred",
         "bboi",
+        family="app:preferred",
+        eligibility=frozenset({Variant.DUAL}),
+    )
+    fallback = app("fallback", family="app:fallback")
+    reasons = {
+        (item.family, item.variant): item.reason
+        for item in compose([ordinary, preferred, fallback], [], []).report.selections
+    }
+    assert reasons == {
+        ("app:preferred", Variant.SINGLE): "source",
+        ("app:preferred", Variant.DUAL): "dual-preferred",
+        ("app:fallback", Variant.SINGLE): "source",
+        ("app:fallback", Variant.DUAL): "ordinary-fallback",
+    }
+    high = app("high", "extras", family="app:pinned")
+    pinned = app("pinned", "bboi", family="app:pinned")
+    policy = pin_policy(pinned, "app:pinned", Variant.DUAL, high)
+    assert {
+        item.variant: item.reason
+        for item in compose([high, pinned], [], [], policy=policy).report.selections
+    } == {Variant.SINGLE: "source", Variant.DUAL: "pin"}
+
+
+def test_considered_lists_only_other_available_candidates() -> None:
+    winner = app("winner", "extras", family="app:x")
+    loser = app("loser", "rjny", family="app:x")
+    denied = app("denied", "bboi", family="app:x")
+    single_only = app(
+        "single.only",
+        "codm2000",
         family="app:x",
         eligibility=frozenset({Variant.SINGLE}),
     )
-    selection = next(
-        item
-        for item in compose([winner, ineligible], [], []).report.selections
-        if item.variant is Variant.DUAL
+    result = compose(
+        [winner, loser, denied, single_only],
+        [{"id": "denied", "reason": "broken"}],
+        [],
     )
-    assert selection.reason == "ordinary-fallback"
-    assert selection.alternatives[0].effective_id == "single"
-    assert selection.alternatives[0].loss_reason == "ineligible"
+    considered = {
+        item.variant: [candidate.original_id for candidate in item.considered]
+        for item in result.report.selections
+    }
+    assert considered == {
+        Variant.SINGLE: ["single.only", "loser"],
+        Variant.DUAL: ["loser"],
+    }

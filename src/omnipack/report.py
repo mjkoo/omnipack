@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
 from omnipack.merge import (
     CompositionReport,
@@ -60,7 +60,6 @@ def write_report(
         "status": "failed" if error else "success",
         "changes": changes,
         "sourceAdmissions": ingestion.admitted,
-        "displacements": [],
         "denylistRemovals": [],
         "staleExclusions": [],
         "offlineVerification": offline_verification
@@ -68,9 +67,6 @@ def write_report(
     }
     document["selections"] = []
     if composition_report is not None:
-        document["displacements"] = [
-            _record(item) for item in composition_report.displacements
-        ]
         document["denylistRemovals"] = [
             _record(item) for item in composition_report.removals
         ]
@@ -136,33 +132,20 @@ def format_reports(root: Path) -> str:
                 "source",
                 "origin",
                 "reason",
-                "alternatives",
+                "considered",
             )
             if not all(key in item for key in required) or not isinstance(
-                item["alternatives"], list
+                item["considered"], list
             ):
                 raise ReportFormatError("malformed build family selection")
             lines.append(
                 f"Selection: {item['variant']} {item['family']} -> "
-                f"{_format_candidate(item)}; reason: {item['reason']}"
+                f"{_format_winner(item)}; reason: {item['reason']}"
             )
-            for alternative in item["alternatives"]:
-                if (
-                    not isinstance(alternative, dict)
-                    or not isinstance(alternative.get("loss_reason"), str)
-                    or not _string_list(alternative.get("differing_fields"))
-                    or (
-                        alternative.get("excluded_reason") is not None
-                        and not isinstance(alternative["excluded_reason"], str)
-                    )
-                ):
-                    raise ReportFormatError("malformed build selection alternative")
-                lines.append(
-                    f"  Alternative: {_format_candidate(alternative)}; "
-                    f"lost: {alternative['loss_reason']}; "
-                    f"exclusion: {alternative.get('excluded_reason') or 'none'}; "
-                    f"differing fields: {', '.join(alternative['differing_fields']) or 'none'}"
-                )
+            lines.extend(
+                f"  Considered: {_format_considered(considered)}"
+                for considered in item["considered"]
+            )
         if build.get("stage"):
             lines.append(f"Stage: {build['stage']}")
         if build.get("error"):
@@ -202,25 +185,29 @@ def format_reports(root: Path) -> str:
     return "\n\n".join(sections) + "\n"
 
 
-def _string_list(value: object) -> bool:
-    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+def _strings(item: object, keys: tuple[str, ...]) -> TypeGuard[dict[str, Any]]:
+    return isinstance(item, dict) and all(
+        isinstance(item.get(key), str) for key in keys
+    )
 
 
-def _format_candidate(item: dict[str, Any]) -> str:
-    if (
-        not all(
-            isinstance(item.get(key), str)
-            for key in ("original_id", "effective_id", "url", "source", "origin")
-        )
-        or not _string_list(item.get("eligibility"))
-        or type(item.get("dual_preferred")) is not bool
+def _format_winner(item: dict[str, Any]) -> str:
+    if not _strings(
+        item, ("original_id", "effective_id", "url", "source", "origin", "reason")
     ):
-        raise ReportFormatError("malformed build selection candidate")
-    preference = "dual-preferred" if item["dual_preferred"] else "ordinary"
+        raise ReportFormatError("malformed build selection winner")
     return (
         f"original id: {item['original_id']}; effective id: {item['effective_id']}; "
-        f"URL: {item['url']}; source: {item['source']}/{item['origin']}; "
-        f"eligible: {', '.join(item['eligibility'])}; preference: {preference}"
+        f"URL: {item['url']}; source: {item['source']}/{item['origin']}"
+    )
+
+
+def _format_considered(item: object) -> str:
+    if not _strings(item, ("original_id", "url", "source", "origin")):
+        raise ReportFormatError("malformed build selection considered candidate")
+    return (
+        f"original id: {item['original_id']}; URL: {item['url']}; "
+        f"source: {item['source']}/{item['origin']}"
     )
 
 

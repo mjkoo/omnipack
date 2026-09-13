@@ -10,7 +10,6 @@ from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import (
     CompositionReport,
     CompositionResult,
-    Displacement,
     Removal,
     StaleExclusion,
 )
@@ -36,9 +35,8 @@ def composition(*ids: str) -> CompositionResult:
     return CompositionResult(
         {variant: [app(package_id) for package_id in ids] for variant in Variant},
         CompositionReport(
-            [Displacement("old.id", Variant.SINGLE, "extras", "rjny", ("url",))],
-            [Removal("denied.id", Variant.DUAL, "curated")],
-            [StaleExclusion("stale.id", "gone")],
+            removals=[Removal("denied.id", Variant.DUAL, "curated")],
+            stale_exclusions=[StaleExclusion("stale.id", "gone")],
         ),
     )
 
@@ -87,7 +85,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         {"generated", "unresolved", "retainedFailures", "skipped"} & report.keys()
     )
     assert report["sourceAdmissions"] == [admitted]
-    assert report["displacements"][0]["id"] == "old.id"
+    assert "displacements" not in report
     assert report["denylistRemovals"][0]["id"] == "denied.id"
     assert report["staleExclusions"][0]["id"] == "stale.id"
 

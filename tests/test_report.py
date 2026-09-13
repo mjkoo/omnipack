@@ -250,10 +250,10 @@ def test_findings_display_location_field_and_effective_version(
     assert path.read_bytes() == before
 
 
-def test_human_report_explains_corrected_winner_and_rejected_alternative(
+def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
     tmp_path: Path,
 ) -> None:
-    from omnipack.merge import CompositionReport, FamilySelection, SelectionAlternative
+    from omnipack.merge import CompositionReport, ConsideredCandidate, FamilySelection
     from omnipack.model import Variant
     from omnipack.report import write_report
     from omnipack.sources import IngestionReport
@@ -266,21 +266,13 @@ def test_human_report_explains_corrected_winner_and_rejected_alternative(
         "https://example.test/winner",
         "extras",
         "extras",
-        (Variant.SINGLE, Variant.DUAL),
-        False,
         "ordinary-fallback",
         (
-            SelectionAlternative(
-                "old.manifest",
-                "preferred.pkg",
-                "https://example.test/preferred",
+            ConsideredCandidate(
                 "bboi",
-                "bboi-dual-asset",
-                (Variant.DUAL,),
-                True,
-                ("url", "additionalSettings"),
-                "excluded",
-                "incompatible release",
+                "bboi-standard-asset",
+                "old.manifest",
+                "https://example.test/other",
             ),
         ),
     )
@@ -295,15 +287,13 @@ def test_human_report_explains_corrected_winner_and_rejected_alternative(
     )
     output = format_reports(tmp_path)
     assert "Status: failed" in output
-    assert "original id: manifest.wrong; effective id: correct.pkg" in output
-    assert "https://example.test/winner" in output
-    assert "eligible: single, dual; preference: ordinary" in output
-    assert "ordinary-fallback" in output
     assert (
-        "Alternative: original id: old.manifest; effective id: preferred.pkg" in output
-    )
-    assert "https://example.test/preferred" in output
-    assert "bboi/bboi-dual-asset" in output
-    assert "eligible: dual; preference: dual-preferred" in output
-    assert "lost: excluded; exclusion: incompatible release" in output
-    assert "differing fields: url, additionalSettings" in output
+        "Selection: dual app:shared -> original id: manifest.wrong; "
+        "effective id: correct.pkg; URL: https://example.test/winner; "
+        "source: extras/extras; reason: ordinary-fallback"
+    ) in output
+    assert (
+        "  Considered: original id: old.manifest; URL: https://example.test/other; "
+        "source: bboi/bboi-standard-asset"
+    ) in output
+    assert "lost:" not in output and "eligible:" not in output
