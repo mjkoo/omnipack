@@ -35,6 +35,8 @@ def app(
     url: str | None = None,
     name: str | None = None,
     original_id: str | None = None,
+    origin: str | None = None,
+    additional_settings: dict[str, object] | None = None,
 ) -> App:
     url = url or f"https://example.com/{source}/{package_id}"
     origins = {
@@ -51,9 +53,10 @@ def app(
         (),
         Provenance(source, url),
         eligibility=eligibility,
-        origin=origins[source],
+        origin=origin or origins[source],
         original_id=original_id or package_id,
         family=family or f"package:{package_id}",
+        additional_settings=additional_settings or {},
     )
 
 
@@ -148,6 +151,26 @@ def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
         "source",
         "dual-preferred",
     ]
+
+
+def test_dual_preferred_bboi_reports_the_ordinary_rjny_entry_as_considered() -> None:
+    ordinary = app("ordinary.app", "rjny", family="app:shared")
+    preferred = app(
+        "dual.app",
+        "bboi",
+        family="app:shared",
+        eligibility=frozenset({Variant.DUAL}),
+        origin="bboi-dual-asset",
+    )
+    result = compose([ordinary, preferred], [], [])
+    [dual_selection] = [
+        item for item in result.report.selections if item.variant is Variant.DUAL
+    ]
+    assert dual_selection.reason == "dual-preferred"
+    assert dual_selection.effective_id == "dual.app"
+    assert dual_selection.considered == (
+        ConsideredCandidate("rjny", "rjny-catalog", "ordinary.app", ordinary.url),
+    )
 
 
 def test_pin_wins_and_denied_or_ineligible_pin_fails() -> None:
@@ -255,7 +278,6 @@ def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal()
     assert ids(result, Variant.SINGLE) == {"other"}
     assert ids(result, Variant.DUAL) == {"other"}
     assert result.report.stale_exclusions == [StaleExclusion("old.package", "obsolete")]
-    assert result.report.selections[0].considered == ()
 
 
 @pytest.mark.parametrize(
@@ -407,7 +429,12 @@ def test_neither_ineligibility_nor_a_denied_only_dual_build_waives_coverage() ->
 
 
 def test_one_overlay_record_patches_its_pair_in_both_variants() -> None:
-    first = app("same", family="app:first", url="https://github.com/Owner/One/")
+    first = app(
+        "same",
+        family="app:first",
+        url="https://github.com/Owner/One/",
+        additional_settings={"remove": "was set", "keep": 0},
+    )
     second = app("other", family="app:second", url="https://github.com/Owner/Two")
     patches = overlays(
         (
@@ -440,6 +467,36 @@ def test_overlay_selector_matching_only_dual_applies_only_there() -> None:
     assert [item.data["name"] for item in result.apps[Variant.SINGLE]] == [
         "rjny single"
     ]
+
+
+def test_overlay_selector_url_distinguishes_a_shared_package_id() -> None:
+    single_only = app(
+        "shared.pkg",
+        "extras",
+        family="app:shared",
+        eligibility=frozenset({Variant.SINGLE}),
+        url="https://github.com/Owner/A",
+    )
+    dual_only = app(
+        "shared.pkg",
+        "bboi",
+        family="app:shared",
+        eligibility=frozenset({Variant.DUAL}),
+        url="https://github.com/Owner/B",
+    )
+    patches = overlays((single_only.id, single_only.url, {"name": "patched"}))
+    result = compose([single_only, dual_only], [], patches)
+    [single_entry] = result.apps[Variant.SINGLE]
+    [dual_entry] = result.apps[Variant.DUAL]
+    assert single_entry.data["name"] == "patched"
+    assert dual_entry.data["name"] != "patched"
+
+
+def test_overlay_for_a_replaced_fork_s_old_url_fails_as_stale() -> None:
+    current = app("pkg", family="app:x", url="https://github.com/Owner/New")
+    patches = overlays(("pkg", "https://github.com/Owner/Old", {"name": "stale"}))
+    with pytest.raises(CompositionError, match="no selected target"):
+        compose([current], [], patches)
 
 
 def test_stale_losing_overlay_fails_after_selection_diagnostics_survive() -> None:
