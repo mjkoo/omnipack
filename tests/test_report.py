@@ -335,3 +335,49 @@ def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
         "source: bboi/bboi-standard-asset"
     ) in output
     assert "lost:" not in output and "eligible:" not in output
+
+
+WINNER = {
+    "family": "app:x",
+    "variant": "dual",
+    "original_id": "winner",
+    "effective_id": "winner",
+    "url": "https://example.test/winner",
+    "source": "extras",
+    "origin": "extras",
+    "reason": "source",
+    "considered": [],
+}
+
+
+@pytest.mark.parametrize(
+    ("selection", "message"),
+    [
+        ({**WINNER, "family": None}, "malformed build family selection"),
+        ({**WINNER, "considered": {}}, "malformed build family selection"),
+        (
+            {key: value for key, value in WINNER.items() if key != "original_id"},
+            "malformed build selection winner",
+        ),
+        (
+            {
+                **WINNER,
+                "considered": [
+                    {"source": "rjny", "origin": "rjny-catalog", "original_id": "b"}
+                ],
+            },
+            "malformed build selection considered candidate",
+        ),
+    ],
+    ids=["no-family", "considered-not-list", "no-original-id", "considered-no-url"],
+)
+def test_malformed_selection_records_are_rejected(
+    tmp_path: Path, selection: dict[str, object], message: str
+) -> None:
+    path = tmp_path / ".build/report.json"
+    path.parent.mkdir()
+    path.write_text(
+        json.dumps({"schemaVersion": 3, "status": "success", "selections": [selection]})
+    )
+    with pytest.raises(ValueError, match=message):
+        format_reports(tmp_path)

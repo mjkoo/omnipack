@@ -116,18 +116,8 @@ def format_reports(root: Path) -> str:
         ):
             raise ReportFormatError("malformed build family selections")
         for item in selections or []:
-            required = (
-                "family",
-                "variant",
-                "effective_id",
-                "url",
-                "source",
-                "origin",
-                "reason",
-                "considered",
-            )
-            if not all(key in item for key in required) or not isinstance(
-                item["considered"], list
+            if not isinstance(item.get("considered"), list) or not _strings(
+                item, ("family", "variant")
             ):
                 raise ReportFormatError("malformed build family selection")
             lines.append(
