@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import json
 import shutil
 from email.message import Message
@@ -16,12 +17,13 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.http import HttpClient, HttpError, HttpResponse
-from omnipack.merge import _import_data, compose
+from omnipack.merge import CompositionError, _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import render
 from omnipack.sources import (
     IngestionReport,
+    IngestionResult,
     SourceError,
     bboi,
     codm,
@@ -432,11 +434,11 @@ def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
         codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
 
 
-def test_ingestion_applies_policy_before_coverage_and_after_generation(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    # An RJNY entry that upstream leaves out of its dual-screen export.
-    higher = App(
+PROJECT = "https://github.com/owner/project"
+
+
+def rjny_candidate(eligibility: frozenset[Variant]) -> App:
+    return App(
         "app.standard",
         "https://www.github.com/owner/project.git/",
         "Standard",
@@ -444,110 +446,132 @@ def test_ingestion_applies_policy_before_coverage_and_after_generation(
         (),
         Variant.SINGLE,
         Provenance("rjny", "catalog"),
-        eligibility=frozenset({Variant.SINGLE}),
+        eligibility=eligibility,
         origin="rjny-catalog",
     )
-    generated = App(
-        "app.generated",
-        "https://github.com/owner/project",
-        "project",
-        SourceType.GITHUB,
-        (),
-        Variant.DUAL,
-        Provenance("codm2000", "readme"),
-        eligibility=frozenset({Variant.DUAL}),
-        dual_preferred=True,
-        origin="codm-generated",
+
+
+def ingest_over_codm_entry(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, higher: list[App]
+) -> IngestionResult:
+    """Ingest stubbed higher-precedence candidates over one codm2000 entry."""
+    entry = {
+        "id": "app.generated",
+        "url": PROJECT,
+        "name": "project",
+        "overrideSource": "GitHub",
+    }
+    (tmp_path / "codm.json").write_text(json.dumps({"apps": [entry]}))
+    monkeypatch.setattr(rjny, "fetch", lambda *_args: higher)
+    monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
+    monkeypatch.setattr(extras, "fetch", lambda *_args: [])
+    return ingest_all(
+        tmp_path,
+        FakeHttp({}),
+        {"rjny": {}, "bboi": {}, "codm": {"catalog": "codm.json"}},
+        [],
     )
+
+
+def test_ingestion_takes_no_policy_and_returns_candidates_unmodified(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    assert "policy" not in inspect.signature(ingest_all).parameters
+    higher = rjny_candidate(frozenset({Variant.SINGLE}))
+    result = ingest_over_codm_entry(tmp_path, monkeypatch, [higher])
+    assert result.apps[0] is higher
+    assert [(app.id, app.family) for app in result.apps] == [
+        ("app.standard", None),
+        ("app.generated", None),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("eligibility", "suppressed"),
+    [
+        (frozenset(Variant), True),
+        (frozenset({Variant.DUAL}), True),
+        (frozenset({Variant.SINGLE}), False),
+    ],
+    ids=["both-exports", "dual-export-only", "left-out-of-dual"],
+)
+def test_codm_suppression_follows_source_dual_eligibility(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    eligibility: frozenset[Variant],
+    suppressed: bool,
+) -> None:
+    result = ingest_over_codm_entry(
+        tmp_path, monkeypatch, [rjny_candidate(eligibility)]
+    )
+    assert ("app.generated" not in {app.id for app in result.apps}) is suppressed
+
+
+def test_codm_suppression_holds_when_a_rule_regroups_the_covering_candidate(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    result = ingest_over_codm_entry(
+        tmp_path, monkeypatch, [rjny_candidate(frozenset(Variant))]
+    )
+    assert [app.id for app in result.apps] == ["app.standard"]
     policy = parse_composition_policy(
         {
             "schemaVersion": 1,
             "candidates": [
                 {
                     "match": {
-                        "source": "codm2000",
-                        "origin": "codm-generated",
-                        "id": "app.generated",
-                        "url": "https://github.com/owner/project",
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "app.standard",
+                        "url": PROJECT,
                     },
+                    "packageId": "app.corrected",
                     "family": "app:project",
-                    "rationale": "Group the generated candidate after resolution.",
-                },
+                    "rationale": "Primary APK manifest records the corrected identity.",
+                }
             ],
             "pins": [],
         }
     )
-    monkeypatch.setattr(rjny, "fetch", lambda *_args: [higher])
-    monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
-    monkeypatch.setattr(extras, "fetch", lambda *_args: [])
-
-    def generate(_root, _config, candidates, _report):
-        assert candidates[0].eligibility == frozenset({Variant.SINGLE})
-        return [generated]
-
-    monkeypatch.setattr(codm, "fetch", generate)
-    result = ingest_all(
-        Path("."),
-        FakeHttp({}),
-        {"rjny": {}, "bboi": {}, "codm": {}},
-        [],
-        policy,
-    )
-    assert [(app.id, app.family) for app in result.apps] == [
-        ("app.standard", "package:app.standard"),
-        ("app.generated", "app:project"),
-    ]
-    assert result.policy is policy
+    composed = compose(result.apps, [], [], policy=policy)
+    for variant in Variant:
+        assert [(app.id, app.family) for app in composed.apps[variant]] == [
+            ("app.corrected", "app:project")
+        ]
 
 
-@pytest.mark.parametrize("selector_kind", ["rule", "pin"])
-def test_ingestion_requires_generated_policy_selectors_after_resolution(
+@pytest.mark.parametrize(
+    ("selector_kind", "message"),
+    [("rule", "matched no candidate"), ("pin", "missing or ambiguous")],
+)
+def test_policy_naming_a_suppressed_codm_entry_fails_in_composition(
+    tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     selector_kind: str,
+    message: str,
 ) -> None:
+    result = ingest_over_codm_entry(
+        tmp_path, monkeypatch, [rjny_candidate(frozenset(Variant))]
+    )
     required = {
         "match": {
             "source": "codm2000",
             "origin": "codm-generated",
-            "id": "missing.id",
-            "url": "https://github.com/owner/missing",
+            "id": "app.generated",
+            "url": PROJECT,
         },
         "rationale": "Required generated candidate.",
     }
+    pin = {**required, "family": "package:app.generated", "variant": "dual"}
     policy = parse_composition_policy(
         {
             "schemaVersion": 1,
             "candidates": [required] if selector_kind == "rule" else [],
-            "pins": [
-                {
-                    **required,
-                    "family": "package:missing.id",
-                    "variant": "dual",
-                }
-            ]
-            if selector_kind == "pin"
-            else [],
+            "pins": [pin] if selector_kind == "pin" else [],
         }
     )
-    monkeypatch.setattr(rjny, "fetch", lambda *_args: [])
-    monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
-    monkeypatch.setattr(extras, "fetch", lambda *_args: [])
-    resolved = []
-
-    def generate(*_args):
-        resolved.append(True)
-        return []
-
-    monkeypatch.setattr(codm, "fetch", generate)
-    with pytest.raises(CompositionPolicyError, match="matched no candidate"):
-        ingest_all(
-            Path("."),
-            FakeHttp({}),
-            {"rjny": {}, "bboi": {}, "codm": {}},
-            [],
-            policy,
-        )
-    assert resolved == [True]
+    with pytest.raises(CompositionError, match=message):
+        compose(result.apps, [], [], policy=policy)
 
 
 @pytest.mark.parametrize("missing", ["id", "url", "name"])

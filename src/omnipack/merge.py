@@ -10,6 +10,7 @@ from omnipack.composition_policy import (
     CandidateSelector,
     CompositionPolicy,
     CompositionPolicyError,
+    Pin,
     PinKey,
     apply_composition_policy,
     rendered_key,
@@ -113,13 +114,13 @@ def compose(
     report = report or CompositionReport()
     exclusions = parse_exclusions(denylist)
     try:
-        candidates = list(
-            apply_composition_policy(policy, candidates, validate_pins=False).candidates
-        )
+        candidates = list(apply_composition_policy(policy, candidates).candidates)
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
-    pins = {(pin.family, pin.variant): pin.match for pin in policy.pins}
-    selected = _select(candidates, exclusions, pins, report)
+    families = _families(candidates)
+    denied = _exclude(candidates, exclusions, report)
+    pinned = _resolve_pins(candidates, policy.pins, denied)
+    selected = _select(families, denied, pinned, report)
     try:
         patches = parse_overlay(overlay, "overlay")
         _validate_overlay_targets(selected, patches)
@@ -154,12 +155,7 @@ def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
     return tuple(result)
 
 
-def _select(
-    candidates: list[App],
-    exclusions: tuple[_Exclusion, ...],
-    pins: dict[PinKey, CandidateSelector],
-    report: CompositionReport,
-) -> dict[Variant, list[ComposedApp]]:
+def _families(candidates: list[App]) -> dict[str, list[App]]:
     families: dict[str, list[App]] = {}
     for candidate in candidates:
         source = candidate.provenance.source
@@ -168,6 +164,15 @@ def _select(
         if candidate.family is None:
             raise CompositionError(f"candidate {candidate.original_id!r} has no family")
         families.setdefault(candidate.family, []).append(candidate)
+    return families
+
+
+def _exclude(
+    candidates: list[App],
+    exclusions: tuple[_Exclusion, ...],
+    report: CompositionReport,
+) -> dict[tuple[int, Variant], str]:
+    """Record each candidate a denial removes, keyed by candidate and variant."""
     denied: dict[tuple[int, Variant], str] = {}
     for rule in exclusions:
         matched = False
@@ -183,8 +188,42 @@ def _select(
                     )
         if not matched:
             report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
+    return denied
+
+
+def _resolve_pins(
+    candidates: list[App],
+    pins: tuple[Pin, ...],
+    denied: dict[tuple[int, Variant], str],
+) -> dict[PinKey, App]:
+    """Validate every pin against the admitted candidates before any selection."""
+    resolved: dict[PinKey, App] = {}
+    for pin in sorted(pins, key=lambda item: (item.family, item.variant.value)):
+        label = f"pin for family {pin.family!r} target {pin.variant.value!r}"
+        matches = [item for item in candidates if _matches_pin(item, pin.match)]
+        if len(matches) != 1:
+            raise CompositionError(f"{label} is missing or ambiguous")
+        [winner] = matches
+        if winner.family != pin.family:
+            raise CompositionError(
+                f"{label} names a candidate of family {winner.family!r}"
+            )
+        if pin.variant not in winner.eligibility:
+            raise CompositionError(f"{label} is ineligible")
+        denied_reason = denied.get((id(winner), pin.variant))
+        if denied_reason is not None:
+            raise CompositionError(f"{label} is denied: {denied_reason}")
+        resolved[(pin.family, pin.variant)] = winner
+    return resolved
+
+
+def _select(
+    families: dict[str, list[App]],
+    denied: dict[tuple[int, Variant], str],
+    pinned: dict[PinKey, App],
+    report: CompositionReport,
+) -> dict[Variant, list[ComposedApp]]:
     result = {variant: [] for variant in Variant}
-    processed_pins: set[PinKey] = set()
     for family in sorted(families):
         family_candidates = families[family]
         for variant in Variant:
@@ -199,28 +238,9 @@ def _select(
                     excluded.append((candidate, denied_reason))
                 else:
                     available.append(candidate)
-            pin_key = (family, variant)
-            pin = pins.get(pin_key)
-            if pin is not None:
-                processed_pins.add(pin_key)
-                matches = [
-                    item for item in family_candidates if _matches_pin(item, pin)
-                ]
-                if len(matches) != 1:
-                    raise CompositionError(
-                        f"pin for family {family!r} target {variant.value!r} is missing or ambiguous"
-                    )
-                winner = matches[0]
-                if variant not in winner.eligibility:
-                    raise CompositionError(
-                        f"pin for family {family!r} target {variant.value!r} is ineligible"
-                    )
-                denied_reason = denied.get((id(winner), variant))
-                if denied_reason is not None:
-                    raise CompositionError(
-                        f"pin for family {family!r} target {variant.value!r} is denied: {denied_reason}"
-                    )
-                reason = "pin"
+            pinned_winner = pinned.get((family, variant))
+            if pinned_winner is not None:
+                winner, reason = pinned_winner, "pin"
             elif available:
                 tier, reason = available, "source"
                 if variant is Variant.DUAL and any(
@@ -295,12 +315,6 @@ def _select(
                     winner.origin,
                 )
             )
-    missing_pins = set(pins) - processed_pins
-    if missing_pins:
-        family, variant = min(missing_pins, key=lambda item: (item[0], item[1].value))
-        raise CompositionError(
-            f"pin for family {family!r} target {variant.value!r} is missing or ambiguous"
-        )
     for values in result.values():
         values.sort(key=lambda item: (item.family or "", item.id, item.url))
     return result

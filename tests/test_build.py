@@ -76,15 +76,21 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         {"apps": [{"id": "kept.id"}]},
     )
     write_config(tmp_path)
-    ingestion = IngestionReport(
-        skipped=[{"source": "codm2000", "url": "https://covered"}]
-    )
+    admitted = {
+        "source": "codm2000",
+        "url": "https://github.com/owner/app",
+        "kind": "apk",
+        "id": "owner.app",
+    }
+    ingestion = IngestionReport(admitted=[admitted])
     build_module.publish_build(tmp_path, composition("kept.id", "new.id"), ingestion)
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["changes"]["single"] == {"added": ["new.id"], "removed": ["old.id"]}
     assert report["changes"]["dual"] == {"added": ["new.id"], "removed": []}
-    assert not ({"generated", "unresolved", "retainedFailures"} & report.keys())
-    assert report["sourceAdmissions"] == []
+    assert not (
+        {"generated", "unresolved", "retainedFailures", "skipped"} & report.keys()
+    )
+    assert report["sourceAdmissions"] == [admitted]
     assert report["displacements"][0]["id"] == "old.id"
     assert report["denylistRemovals"][0]["id"] == "denied.id"
     assert report["staleExclusions"][0]["id"] == "stale.id"

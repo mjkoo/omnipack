@@ -7,10 +7,7 @@ from typing import Any
 
 import pytest
 
-from omnipack.composition_policy import (
-    apply_composition_policy,
-    parse_composition_policy,
-)
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
 from omnipack.package_id import _is_valid_package_id
@@ -69,13 +66,9 @@ def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
 
 def captured_pipeline() -> tuple[list[App], list[App]]:
     higher = captured_higher()
-    policy = parse_composition_policy(load_json(PRE_MIGRATION / "composition.json"))
-    eligible_higher = list(
-        apply_composition_policy(policy, higher, require_all=False).candidates
-    )
     covered = {
         normalize_project_url(app.url)
-        for app in eligible_higher
+        for app in higher
         if Variant.DUAL in app.eligibility
     }
     generated = [
@@ -169,12 +162,9 @@ def _compose_with_codm_catalog(
     catalog: dict[str, Any], tmp_path: Path, higher: list[App]
 ) -> CompositionResult:
     policy = parse_composition_policy(load_json(ROOT / "config/composition.json"))
-    eligible_higher = apply_composition_policy(
-        policy, higher, require_all=False
-    ).candidates
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "codm.json").write_text(json.dumps(catalog))
-    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, eligible_higher)
+    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, higher)
     return compose(
         [*higher, *generated],
         load_json(ROOT / "config/deny.json"),

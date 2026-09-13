@@ -8,16 +8,13 @@ import pytest
 
 from omnipack import cli
 from omnipack.cli import main
-from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import CompositionReport, CompositionResult
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport, IngestionResult, SourceError
 
-EMPTY_POLICY = parse_composition_policy(
-    {"schemaVersion": 1, "candidates": [], "pins": []}
-)
+EMPTY_POLICY = '{"schemaVersion":1,"candidates":[],"pins":[]}'
 
 
 def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
@@ -92,12 +89,7 @@ def test_build_writes_both_variants_and_report(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report=None: IngestionResult(
-            [],
-            report or IngestionReport(),
-            EMPTY_POLICY,
-            (root / "config/composition.json").read_bytes(),
-        ),
+        lambda root, report=None: IngestionResult([], report or IngestionReport()),
     )
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.chdir(tmp_path)
@@ -125,6 +117,8 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     before = b'{"apps":[{"id":"existing.app"}]}\n'
     for name in ("single-screen.json", "dual-screen.json"):
         (dist / name).write_bytes(before)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/composition.json").write_text(EMPTY_POLICY)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         cli,
@@ -174,12 +168,7 @@ def test_build_failure_does_not_mutate_committed_catalog(
     (config / "catalogs/codm.json").write_bytes(catalog)
 
     def resolved(_root: Path, report: IngestionReport | None = None) -> IngestionResult:
-        return IngestionResult(
-            [],
-            report or IngestionReport(),
-            EMPTY_POLICY,
-            (_root / "config/composition.json").read_bytes(),
-        )
+        return IngestionResult([], report or IngestionReport())
 
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
@@ -389,7 +378,6 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     config = tmp_path / "config"
     config.mkdir()
     policy_document = {"schemaVersion": 1, "candidates": [], "pins": []}
-    consumed_policy = parse_composition_policy(policy_document)
     candidate = App(
         "current.id",
         "https://example.test/current",
@@ -424,12 +412,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            [candidate],
-            report,
-            consumed_policy,
-            (root / "config/composition.json").read_bytes(),
-        ),
+        lambda root, report: IngestionResult([candidate], report),
     )
     if stage == "rendering":
         from omnipack import build as build_module
@@ -535,9 +518,7 @@ def test_composition_failure_preserves_collected_diagnostics(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            apps, report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
-        ),
+        lambda root, report: IngestionResult(apps, report),
     )
     monkeypatch.chdir(tmp_path)
 
@@ -597,9 +578,7 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            [], report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
-        ),
+        lambda root, report: IngestionResult([], report),
     )
     monkeypatch.setattr(cli, "compose", lambda *_args, **_kwargs: composed)
     calls = 0
@@ -645,7 +624,7 @@ def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
 
     def ingested(root: Path, report: IngestionReport) -> IngestionResult:
         (root / "config/composition.json").write_bytes(original + b"\n")
-        return IngestionResult([], report, EMPTY_POLICY, original)
+        return IngestionResult([], report)
 
     monkeypatch.setattr(cli, "_ingest_for_build", ingested)
     monkeypatch.setattr(
@@ -677,6 +656,7 @@ def test_winning_tie_reports_original_selectors(
     config.mkdir()
     for name in ("deny.json", "overlay.json"):
         (config / name).write_text("[]")
+    (config / "composition.json").write_text(EMPTY_POLICY)
     candidates = [
         App(
             "same.package",
@@ -699,10 +679,7 @@ def test_winning_tie_reports_original_selectors(
         cli,
         "_ingest_for_build",
         lambda root, report: IngestionResult(
-            list(reversed(candidates)) if reverse else candidates,
-            report,
-            EMPTY_POLICY,
-            b'{"schemaVersion":1,"candidates":[],"pins":[]}',
+            list(reversed(candidates)) if reverse else candidates, report
         ),
     )
     monkeypatch.chdir(tmp_path)

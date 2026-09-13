@@ -158,30 +158,24 @@ def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
 
 
 def apply_composition_policy(
-    policy: CompositionPolicy,
-    candidates: list[App] | tuple[App, ...],
-    *,
-    require_all: bool = True,
-    validate_pins: bool = True,
+    policy: CompositionPolicy, candidates: list[App] | tuple[App, ...]
 ) -> AppliedPolicy:
-    """Apply rules; composition defers pin validation until after exclusions.
+    """Apply identity and family rules once, requiring every rule selector.
 
-    Deferring pins preserves candidate-rule presence and identity checks.
-    Ingestion retains full pin validation, including required selectors.
+    Pins are left to composition, which validates them after processing
+    exclusions so that a failed pin still leaves the exclusion diagnostics.
     """
     collapsed = _collapse(candidates)
     by_selector = {_candidate_selector(app).key: app for app in collapsed}
     rules = {rule.match.key: rule for rule in policy.candidate_rules}
-    pin_selectors = tuple(pin.match.key for pin in policy.pins) if validate_pins else ()
-    for selector in (*rules, *pin_selectors):
-        if require_all and selector not in by_selector:
+    for selector in rules:
+        if selector not in by_selector:
             shown = CandidateSelector(*selector)
             raise CompositionPolicyError(
                 f"selector {_show(shown)} matched no candidate"
             )
 
     result: list[App] = []
-    applied_by_selector: dict[tuple[str, str, str, str], App] = {}
     for app in collapsed:
         selector = _candidate_selector(app)
         rule = rules.get(selector.key)
@@ -201,21 +195,6 @@ def apply_composition_policy(
                 f"{kind} {_show(selector)} conflicts with rendered projection"
             )
         result.append(updated)
-        applied_by_selector[selector.key] = updated
-
-    if validate_pins:
-        for pin in policy.pins:
-            candidate = applied_by_selector.get(pin.match.key)
-            if candidate is None:
-                continue
-            if (
-                candidate.family != pin.family
-                or pin.variant not in candidate.eligibility
-            ):
-                raise CompositionPolicyError(
-                    f"pin for family {pin.family!r} target {pin.variant.value!r} "
-                    "conflicts with candidate family or eligibility"
-                )
 
     return AppliedPolicy(tuple(result), dict(policy.projected_pins))
 

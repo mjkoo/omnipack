@@ -223,42 +223,15 @@ def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
     assert applied.projected_pins[("app:example", Variant.DUAL)] == key
 
 
-def test_staged_application_defers_only_missing_selector_presence() -> None:
+def test_policy_application_requires_every_rule_selector() -> None:
     parsed = parse_composition_policy(
-        policy(
-            candidates=[rule(packageId="org.example.new", family="app:example")],
-            pins=[
-                {
-                    "family": "app:example",
-                    "variant": "dual",
-                    "match": rule()["match"],
-                    "rationale": "Prefer the tested dual build.",
-                }
-            ],
-        )
+        policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
-    assert apply_composition_policy(parsed, [], require_all=False).candidates == ()
-    assert (
-        apply_composition_policy(parsed, [], require_all=False).projected_pins
-        == parsed.projected_pins
-    )
-    with pytest.raises(CompositionPolicyError, match="matched no candidate"):
+    with pytest.raises(CompositionPolicyError, match="org.example.old.*matched no"):
         apply_composition_policy(parsed, [])
 
-    conflicting = candidate(
-        id="org.example.new",
-        original_id="org.example.new",
-        provenance=Provenance("bboi", "asset"),
-        origin="bboi-standard-asset",
-    )
-    with pytest.raises(CompositionPolicyError, match="rendered projection"):
-        apply_composition_policy(parsed, [conflicting], require_all=False)
 
-
-@pytest.mark.parametrize("require_all", [False, True])
-def test_policy_application_validates_present_pin_eligibility_by_default(
-    require_all: bool,
-) -> None:
+def test_policy_application_leaves_pins_to_composition() -> None:
     parsed = parse_composition_policy(
         policy(
             pins=[
@@ -271,12 +244,11 @@ def test_policy_application_validates_present_pin_eligibility_by_default(
             ]
         )
     )
-    with pytest.raises(CompositionPolicyError, match="pin.*eligibility"):
-        apply_composition_policy(
-            parsed,
-            [candidate(eligibility=frozenset({Variant.SINGLE}))],
-            require_all=require_all,
-        )
+    single_only = candidate(eligibility=frozenset({Variant.SINGLE}))
+    assert apply_composition_policy(parsed, []).candidates == ()
+    assert apply_composition_policy(parsed, [single_only]).candidates == (
+        replace(single_only, family="package:org.example.old"),
+    )
 
 
 def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:

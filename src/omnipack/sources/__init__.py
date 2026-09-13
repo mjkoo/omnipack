@@ -9,10 +9,6 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
-from omnipack.composition_policy import (
-    CompositionPolicy,
-    apply_composition_policy,
-)
 from omnipack.model import App
 
 from .common import HttpGetter, SourceError
@@ -22,7 +18,6 @@ from .common import HttpGetter, SourceError
 class IngestionReport:
     """Structured source outcomes consumed by the eventual build report."""
 
-    skipped: list[dict[str, Any]] = field(default_factory=list)
     admitted: list[dict[str, Any]] = field(default_factory=list)
 
 
@@ -33,8 +28,6 @@ __all__ = ["IngestionReport", "SourceError"]
 class IngestionResult:
     apps: list[App]
     report: IngestionReport
-    policy: CompositionPolicy | None = None
-    policy_bytes: bytes | None = None
 
 
 def ingest_all(
@@ -42,10 +35,14 @@ def ingest_all(
     http: HttpGetter,
     source_config: Mapping[str, object],
     extras_config: object,
-    policy: CompositionPolicy,
     report: IngestionReport | None = None,
 ) -> IngestionResult:
-    """Fetch every source in precedence order and retain structured outcomes."""
+    """Fetch every source in precedence order and retain structured outcomes.
+
+    Candidates come back as their sources describe them; composition applies
+    the policy. A codm2000 entry is suppressed when a higher-precedence
+    candidate that its source makes eligible for dual covers the same project.
+    """
     from . import bboi, codm, extras, rjny
 
     def section(name: str) -> Mapping[str, object]:
@@ -61,13 +58,8 @@ def ingest_all(
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)
     higher = [*extra_apps, *rjny_apps, *bboi_apps]
-    applied_higher = apply_composition_policy(
-        policy, higher, require_all=False
-    ).candidates
-    generated = codm.fetch(root, section("codm"), applied_higher, report)
-    all_candidates = [*rjny_apps, *bboi_apps, *generated, *extra_apps]
-    applied = apply_composition_policy(policy, all_candidates)
-    return IngestionResult(list(applied.candidates), report, policy)
+    generated = codm.fetch(root, section("codm"), higher, report)
+    return IngestionResult([*rjny_apps, *bboi_apps, *generated, *extra_apps], report)
 
 
 def load_json(path: str | PathLike[str], source: str) -> object:

@@ -343,6 +343,18 @@ def test_denied_shared_package_leaves_the_family_s_other_package_selected() -> N
     assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"other.pkg"}
 
 
+def test_dual_pin_keeps_a_standard_build_over_its_shared_package_dual_build() -> None:
+    standard, dual = shared_package_builds()
+    policy = pin_policy(standard, "app:x", Variant.DUAL, dual)
+    result = compose([standard, dual], [], [], policy=policy)
+    assert [
+        (item.variant, item.origin, item.reason) for item in result.report.selections
+    ] == [
+        (Variant.SINGLE, "bboi-standard-asset", "source"),
+        (Variant.DUAL, "bboi-standard-asset", "pin"),
+    ]
+
+
 def test_winning_rank_tie_fails_but_losing_tier_tie_does_not() -> None:
     tied = [app("one", "rjny", family="app:x"), app("two", "rjny", family="app:x")]
     with pytest.raises(CompositionError, match="ambiguous"):

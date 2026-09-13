@@ -59,7 +59,6 @@ def write_report(
         "schemaVersion": BUILD_SCHEMA_VERSION,
         "status": "failed" if error else "success",
         "changes": changes,
-        "skipped": ingestion.skipped,
         "sourceAdmissions": ingestion.admitted,
         "displacements": [],
         "denylistRemovals": [],
