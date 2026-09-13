@@ -56,7 +56,47 @@ class Transport(Protocol):
     ) -> HttpResponse: ...
 
 
-class HttpClient:
+class RetryingClient:
+    """Retry configuration and dispatch shared by every plain-GET HTTP client.
+
+    A subclass owns its own `transport` attribute, since each accepts a
+    differently shaped transport callable, and calls `_retry` from its `get`.
+    """
+
+    timeout: float
+    user_agent: str
+    retries: int
+    backoff: float
+    sleep: Callable[[float], None]
+
+    def __init__(
+        self,
+        *,
+        timeout: float = 30.0,
+        user_agent: str = "omnipack/0.1",
+        retries: int = 2,
+        backoff: float = 0.5,
+        sleep: Callable[[float], None] = time.sleep,
+    ) -> None:
+        if retries < 0 or backoff < 0:
+            raise ValueError("retries and backoff must be nonnegative")
+        self.timeout = timeout
+        self.user_agent = user_agent
+        self.retries = retries
+        self.backoff = backoff
+        self.sleep = sleep
+
+    def _retry(self, url: str, attempt: Callable[[], HttpResponse]) -> HttpResponse:
+        return retrying(
+            url,
+            attempt,
+            retries=self.retries,
+            backoff=self.backoff,
+            sleep=self.sleep,
+        )
+
+
+class HttpClient(RetryingClient):
     """Fetch public URLs with bounded transient retries and no credentials."""
 
     def __init__(
@@ -69,25 +109,22 @@ class HttpClient:
         sleep: Callable[[float], None] = time.sleep,
         transport: Transport | None = None,
     ) -> None:
-        if retries < 0 or backoff < 0:
-            raise ValueError("retries and backoff must be nonnegative")
-        self.timeout = timeout
-        self.user_agent = user_agent
-        self.retries = retries
-        self.backoff = backoff
-        self.sleep = sleep
+        super().__init__(
+            timeout=timeout,
+            user_agent=user_agent,
+            retries=retries,
+            backoff=backoff,
+            sleep=sleep,
+        )
         self.transport = transport or self._urllib_transport
 
     def get(self, url: str) -> HttpResponse:
         """Fetch one URL, retrying transient failures up to the configured bound."""
-        return retrying(
+        return self._retry(
             url,
             lambda: self.transport(
                 build_request(url, user_agent=self.user_agent), self.timeout
             ),
-            retries=self.retries,
-            backoff=self.backoff,
-            sleep=self.sleep,
         )
 
     def _urllib_transport(

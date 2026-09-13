@@ -23,10 +23,10 @@ from urllib.parse import urlsplit
 from omnipack.http import (
     HttpError,
     HttpResponse,
+    RetryingClient,
     build_request,
     complete_response,
     redact_url,
-    retrying,
 )
 
 MAX_REDIRECTS = 10
@@ -114,7 +114,7 @@ class _CredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
         return self.client.redirect_request(redirected, newurl)
 
 
-class SourceHttpClient:
+class SourceHttpClient(RetryingClient):
     """Fetch with exact-host credentials, bounded reads and transient retries."""
 
     def __init__(
@@ -128,14 +128,14 @@ class SourceHttpClient:
         sleep: Callable[[float], None] = time.sleep,
         transport: Transport | None = None,
     ) -> None:
-        if retries < 0 or backoff < 0:
-            raise ValueError("retries and backoff must be nonnegative")
+        super().__init__(
+            timeout=timeout,
+            user_agent=user_agent,
+            retries=retries,
+            backoff=backoff,
+            sleep=sleep,
+        )
         self.config = config
-        self.timeout = timeout
-        self.user_agent = user_agent
-        self.retries = retries
-        self.backoff = backoff
-        self.sleep = sleep
         self.transport = transport or self._urllib_transport
 
     def get(
@@ -149,16 +149,13 @@ class SourceHttpClient:
         """Fetch one URL, retrying transient failures up to the configured bound."""
         if max_bytes is not None and max_bytes < 0:
             raise ValueError("max_bytes must be nonnegative")
-        return retrying(
+        return self._retry(
             url,
             lambda: self.transport(
                 self.build_request(url, headers=headers, method=method),
                 self.timeout,
                 max_bytes,
             ),
-            retries=self.retries,
-            backoff=self.backoff,
-            sleep=self.sleep,
         )
 
     def build_request(
