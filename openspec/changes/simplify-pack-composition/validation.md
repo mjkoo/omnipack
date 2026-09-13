@@ -13,12 +13,12 @@ the flake checks. Nix omitted incompatible systems, so the flake checks ran for
 aarch64-darwin only. `openspec validate simplify-pack-composition --strict`
 reported the change valid.
 
-The suite has 766 tests, against 732 at the start of this change.
+The suite has 761 tests, against 732 at the start of this change.
 
 | Measure | Start | Now | Removed | Added | Net |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Implementation (`src/` and `scripts/` Python) | 6,731 | 6,129 | 1,262 | 660 | -602 |
-| Tests (`tests/` Python) | 12,031 | 12,118 | 1,663 | 1,750 | +87 |
+| Implementation (`src/` and `scripts/` Python) | 6,731 | 6,151 | 1,332 | 752 | -580 |
+| Tests (`tests/` Python) | 12,031 | 12,118 | 1,705 | 1,792 | +87 |
 
 The proposal estimated about 850 implementation lines removed and 80 added, and
 about 1,000 test lines removed and 200 added. The implementation removed more
@@ -37,7 +37,7 @@ added. The tests did not shrink as estimated, for three reasons:
 ## Output comparison
 
 Clean `git archive` exports of the base commit `70f7514` and the branch at
-`7aa4850` were built back to back, at 18:30:56 and 18:30:58 UTC, each against
+`047e305` were built back to back, at 19:15:03 and 19:15:05 UTC, each against
 the live upstream catalogs. Both builds succeeded and produced byte-identical
 outputs:
 

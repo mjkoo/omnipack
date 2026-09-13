@@ -127,9 +127,9 @@
 
 ## 7. Final checks and review
 
-- [ ] 7.1 Run `just check-all` in the dev shell and `openspec validate simplify-pack-composition --strict`. Verify that both pass.
-- [ ] 7.2 Build the base commit and the branch head back to back from clean exports of each, for example with `git archive`, and compare both packs and `README.md` byte for byte. Then run `uv run pack verify` on the branch. Verify that the outputs are identical and verification passes.
-- [ ] 7.3 Write `openspec/changes/simplify-pack-composition/validation.md` with:
+- [x] 7.1 Run `just check-all` in the dev shell and `openspec validate simplify-pack-composition --strict`. Verify that both pass.
+- [x] 7.2 Build the base commit and the branch head back to back from clean exports of each, for example with `git archive`, and compare both packs and `README.md` byte for byte. Then run `uv run pack verify` on the branch. Verify that the outputs are identical and verification passes.
+- [x] 7.3 Write `openspec/changes/simplify-pack-composition/validation.md` with:
   - the test count against the 732 at the start of this change;
   - the implementation and test line deltas against 6,731 and 12,031;
   - the comparison from 7.2;
