@@ -136,8 +136,11 @@ each pack since the previous output. `selections` records every family's winner
 in each pack, the other available candidates it was chosen over, and one reason:
 `pin`, `dual-preferred`, `ordinary-fallback` (dual with no available dual-screen
 build), or `source` (single-screen precedence). `denylistRemovals` and
-`staleExclusions` list what each denial removed or failed to match. Selection
-records use snake_case field names:
+`staleExclusions` list what each denial removed or failed to match.
+`sourceAdmissions` lists each committed codm entry the build admitted, with its
+id, URL and whether it is an APK or track-only entry, and `offlineVerification`
+holds the offline gate's status and findings. Selection records use snake_case
+field names:
 
 ```json
 {

@@ -104,7 +104,7 @@
 
 ## 6. Documentation
 
-- [ ] 6.1 Update `docs/composition.md`, `docs/verification.md`, `docs/development.md` and any other guide that describes the retired pieces, so each describes current behavior. In `docs/composition.md`, state the dual-screen build model in plain words:
+- [x] 6.1 Update `docs/composition.md`, `docs/verification.md`, `docs/development.md` and any other guide that describes the retired pieces, so each describes current behavior. In `docs/composition.md`, state the dual-screen build model in plain words:
   - every build is a baseline build or a dual-screen build, and an app's baseline build, when it has one, is what the single-screen pack uses;
   - absent a pin, a dual-screen build, when one exists, replaces the baseline in the dual-screen pack;
   - an app may instead have only a dual-screen build, which appears only in the dual-screen pack, as an app only codm2000 supplies does;
