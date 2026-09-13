@@ -235,6 +235,13 @@ def test_complete_native_gitlab_entry_passes_offline_validation() -> None:
     assert validate_offline(inputs([value], [dict(value)])) == ()
 
 
+def test_gitlab_url_rules_are_outside_offline_verification() -> None:
+    value = app("deep", source="GitLab")
+    # Deeper than ingestion accepts for a GitLab project.
+    value["url"] = "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22))
+    assert validate_offline(inputs([value], [dict(value)])) == ()
+
+
 @pytest.mark.parametrize(
     ("field", "nested", "code"),
     [
