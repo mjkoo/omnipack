@@ -210,13 +210,6 @@ def test_pin_uses_original_provenance_when_rendered_identity_is_shared() -> None
     ] == ["bboi"]
 
 
-def test_package_denial_cannot_hide_missing_pin() -> None:
-    missing = app("missing", family="app:gone")
-    policy = pin_policy(missing, "app:gone", Variant.DUAL)
-    with pytest.raises(CompositionError, match=r"selector.*missing"):
-        compose([], [{"id": "missing", "reason": "gone"}], [], policy=policy)
-
-
 @pytest.mark.parametrize("present", [False, True], ids=["missing", "ineligible"])
 def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) -> None:
     pinned = app("pinned", eligibility=frozenset({Variant.SINGLE}))
@@ -330,6 +323,19 @@ def test_package_denial_leaves_a_different_package_alternative_selectable() -> N
     assert [(item.package_id, item.variant) for item in result.report.removals] == [
         ("dual.denied", Variant.DUAL)
     ]
+
+
+def test_package_denial_removes_the_package_from_every_source() -> None:
+    carriers = [
+        app("shared.pkg", source, family="app:x")
+        for source in ("extras", "rjny", "bboi")
+    ]
+    other = app("other.pkg", "bboi", family="app:x")
+    result = compose([*carriers, other], [{"id": "shared.pkg", "reason": "broken"}], [])
+    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"other.pkg"}
+    assert len(result.report.removals) == 2 * len(carriers)
+    assert {item.package_id for item in result.report.removals} == {"shared.pkg"}
+    assert result.report.stale_exclusions == []
 
 
 def shared_package_builds() -> tuple[App, App]:
@@ -507,6 +513,23 @@ def test_overlay_for_a_replaced_fork_s_old_url_fails_as_stale() -> None:
         compose([current], [], patches)
 
 
+def test_denial_removing_an_overlay_s_only_target_fails_as_stale() -> None:
+    target = app("denied", family="app:x")
+    other = app("other", "bboi", family="app:x")
+    report = CompositionReport()
+    with pytest.raises(CompositionError, match="no selected target"):
+        compose(
+            [target, other],
+            [{"id": "denied", "reason": "broken"}],
+            overlays((target.id, target.url, {"name": "patched"})),
+            report=report,
+        )
+    assert [(item.package_id, item.variant) for item in report.removals] == [
+        ("denied", Variant.SINGLE),
+        ("denied", Variant.DUAL),
+    ]
+
+
 def test_stale_losing_overlay_fails_after_selection_diagnostics_survive() -> None:
     winner = app("winner", "extras", family="app:x")
     loser = app("loser", "rjny", family="app:x")
@@ -604,6 +627,26 @@ def test_selection_reasons_name_pin_preference_fallback_and_source() -> None:
         item.variant: item.reason
         for item in compose([high, pinned], [], [], policy=policy).report.selections
     } == {Variant.SINGLE: "source", Variant.DUAL: "pin"}
+
+
+def test_dual_falls_back_to_source_precedence_among_several_baseline_builds() -> None:
+    builds = [
+        app(f"{source}.pkg", source, family="app:x")
+        for source in ("bboi", "rjny", "extras")
+    ]
+    selections = compose(builds, [], []).report.selections
+    assert [
+        (
+            item.variant,
+            item.effective_id,
+            item.reason,
+            [candidate.source for candidate in item.considered],
+        )
+        for item in selections
+    ] == [
+        (Variant.SINGLE, "extras.pkg", "source", ["bboi", "rjny"]),
+        (Variant.DUAL, "extras.pkg", "ordinary-fallback", ["bboi", "rjny"]),
+    ]
 
 
 def test_considered_lists_only_other_available_candidates() -> None:
