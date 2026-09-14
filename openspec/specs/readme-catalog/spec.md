@@ -29,8 +29,8 @@ Development, build, verification, and detailed publishing guidance SHALL be avai
 ### Requirement: Catalog groups final variant configurations by family
 
 The catalog SHALL contain one row per current selected family across both exports,
-using current policy projection and its package-family fallback, never historical
-mappings. Columns SHALL be Program, Single-screen and Dual-screen. Each available
+using current policy projection and its package-family fallback. Columns SHALL be
+Program, Single-screen and Dual-screen. Each available
 variant SHALL include its own source URL and Add to Obtainium link; an unavailable
 variant SHALL display a hyphen. The single-screen record SHALL supply the row name
 and first category when present, otherwise the dual-screen record SHALL supply

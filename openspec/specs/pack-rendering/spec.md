@@ -79,41 +79,31 @@ named category.
 - **THEN** it sorts as though its primary category were the empty string, so it
   precedes every entry whose primary category is a named one
 
-### Requirement: The settings block combines configuration with observed categories
+### Requirement: The settings block maps observed categories to derived colours
 
-The system SHALL render the settings block from the pack settings
-configuration, with the category list set to the union of the categories used
-by the entries in that variant, so that Obtainium can group and colour every
-app the pack contains. An entry carrying no category contributes nothing to
-that union. The category list SHALL be rendered as a JSON-encoded
-string mapping each category name to its colour as an ARGB integer. A category
-the configuration describes SHALL take the colour the configuration gives it.
-A category the configuration does not describe SHALL take a colour derived
-from its name alone, being the first three bytes of the SHA-256 digest of the
-category name as the red, green and blue channels with the alpha channel fully
-opaque, so that the same category name renders the same colour on every run
-and in both variants.
+The system SHALL render each variant's settings block with a `categories` field
+holding the union of the categories used by the entries in that variant, so
+that Obtainium can group and colour every app the pack contains. An entry
+carrying no category contributes nothing to that union. The field SHALL be a
+JSON-encoded string mapping each category name to its colour as an ARGB
+integer. Each colour SHALL be derived from the category name alone, being the
+first three bytes of the SHA-256 digest of the name as the red, green and blue
+channels with the alpha channel fully opaque, so that the same category name
+renders the same colour on every run and in both variants. The settings block
+SHALL carry no other pack settings.
 
-#### Scenario: Entry uses a category absent from configuration
+#### Scenario: Entry uses a category
 
-- **WHEN** a composed entry carries a category that the settings configuration
-  does not list
+- **WHEN** a composed entry carries a category
 - **THEN** the rendered settings block includes that category, mapped to the
   ARGB value derived from the category name, and a later run renders the same
   value
 
-#### Scenario: Configuration describes a category an entry uses
+#### Scenario: A category is unused in one variant
 
-- **WHEN** the settings configuration gives a colour for a category that
-  entries in that variant use
-- **THEN** the rendered settings block maps that category to the configured
-  colour rather than to the derived one
-
-#### Scenario: Configured category is unused
-
-- **WHEN** the settings configuration lists a category no entry in that
-  variant uses
-- **THEN** the rendered settings block omits that category
+- **WHEN** entries in the dual-screen variant use a category that no
+  single-screen entry uses
+- **THEN** the single-screen settings block omits that category
 
 ### Requirement: Package ids are unique within a rendered file
 
