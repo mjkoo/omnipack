@@ -69,6 +69,37 @@ def test_rjny_applies_export_flags_and_ignores_presentation_overrides() -> None:
     assert all(isinstance(app.additional_settings, dict) for app in apps)
 
 
+def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_only_build() -> (
+    None
+):
+    url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
+    apps = rjny.fetch(
+        FakeHttp({url: fixture("rjny-applications.json")}),
+        {
+            "repo": "RJNY/Obtainium-Emulation-Pack",
+            "branch": "main",
+            "path": "src/applications.json",
+        },
+    )
+    cemu = [app for app in apps if app.id == "info.cemu.cemu"]
+    result = compose(
+        cemu,
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
+    )
+    selections = {item.variant: item for item in result.report.selections}
+    assert {
+        variant: (item.url, item.reason) for variant, item in selections.items()
+    } == {
+        Variant.SINGLE: ("https://github.com/SSimco/Cemu", "source"),
+        Variant.DUAL: ("https://github.com/sapphirerhodonite/cemu", "dual-preferred"),
+    }
+    assert selections[Variant.DUAL].considered == ()
+
+
 def test_rjny_matches_both_upstream_exports() -> None:
     catalog_url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     apps = rjny.fetch(
