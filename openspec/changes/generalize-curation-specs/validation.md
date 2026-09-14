@@ -483,6 +483,9 @@ At `2c9085a`:
   changed, where a word diff shows exactly `mod` replaced by `resource` in the
   Kanto Gear entry's `about`. `dist/`, `README.md` and `scripts/` are
   unchanged. `docs/curation.md` gained the setup notes recorded under 3.2.
+- Re-run inside `nix develop` after the catalog-variant fix and the 4.4
+  deltas (`d093b3e`): `just check-all` exit 0, with the same results (798
+  tests passed, 93% coverage, 121 script tests, 0 link errors).
 
 ## 4.3 Record
 
