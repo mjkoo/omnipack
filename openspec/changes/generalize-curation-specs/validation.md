@@ -318,6 +318,35 @@ curated app decisions are recorded, protected and documented, plus the pack's
 own notification tracker and the exclusion of upstream pack trackers."
 `openspec validate --specs --strict`: 10 passed, 0 failed.
 
+## Line counts
+
+| File | Before (`9b5e84e`) | After |
+|---|---|---|
+| `tests/test_port_curation.py` | 308 | 427 |
+| `tests/test_source_generation_fixtures.py` | 315 | 456 |
+| All of `tests/*.py` | 12316 | 12576 |
+
+The proposal estimated a net test change near zero. The actual growth, 260
+lines, comes from the guard's derivation and its correction, pin and denial
+tests, from the fixture test comparing selections with an empty-catalog
+composition, and from the two fixes to catalog-reading tests found during the
+catalog audit. The suite count is unchanged at 793: the guard's seven
+dual-screen mutation cases became one derived-set test, four correction cases
+and two denial cases.
+
+Main specs change only when the deltas are applied at archive. Applying them
+with `openspec archive` in a scratch copy of `openspec/` succeeded (7 added,
+2 modified, 15 removed), and `openspec validate --specs --strict` passed on
+the result:
+
+| Spec | Before | After archive |
+|---|---|---|
+| `pack-curation` | 346 | 127 |
+| `readme-source-generation` | 490 | 483 |
+| `source-ingestion` | 459 | 455 |
+| `pack-cli` | 294 | 294 |
+| `pack-composition` | 432 | 431 |
+
 ## 4.1 Retired names in the delta specs
 
 A search of all five delta specs for the retired app and project names
