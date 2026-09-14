@@ -59,13 +59,15 @@ single is checked by the guard.
 |---|---|---|
 | Names and PC Ports category | `config/overlay.json` (`igawa6.dualsouls`, `com.jakobkhansen.silksong`) | `tests/test_port_curation.py::test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup` |
 | Package ids, repositories, dual-only, no single entries | Committed codm2000 catalog, targeted by the overlay records | `tests/test_port_curation.py::test_hollow_knight_source_composition_preserves_dual_only_catalog`; a catalog dropping them fails the build on a stale overlay |
-| Setup documentation, including the Android 13 restriction | `docs/curation.md` "Port setup"; entry `about` via overlay | Folded into "Curation evidence states its limits"; reviewed |
+| Setup documentation of user-supplied game files and Silksong's on-device build | `docs/curation.md` "Port setup"; entry `about` via overlay | Folded into "Curation evidence states its limits" (user action beyond installing); reviewed |
+| Second-screen features and Silksong's Android 13 restriction | Entry `about` via `config/overlay.json`; `docs/curation.md` "Port setup" | Documentation duty dropped: a feature description and a platform limit are not user action beyond installing. The overlay `about` text keeps both, and `test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup` and `test_hollow_knight_source_composition_preserves_dual_only_catalog` assert the Android 13 restriction; `docs/curation.md` still carries it |
 
 ### pack-curation: "Reviewed installed applications use verified identities and maintained sources"
 
 | Fact | Configuration | Outcome check |
 |---|---|---|
-| The sixteen identity corrections, exactly, and none for `com.winlator.ludashi` | `packageId` rules in `config/composition.json` | `tests/test_reconciliation_curation.py::test_reconciliation_evidence_is_real_and_configuration_is_complete` (exact set against recorded evidence) |
+| The identity corrections the recorded evidence lists | `packageId` rules in `config/composition.json` | `tests/test_reconciliation_curation.py::test_reconciliation_evidence_is_real_and_configuration_is_complete` checks that the evidence lists the corrections the recorded observations back, sixteen of them, and that every rule matching each one has exactly that `packageId`. It does not check that the configuration carries no others: the configuration also carries a seventeenth correction, legacy Ghostship `com.izzy2lost.ghostship` to `com.ghostship.android`, which predates this change and which the evidence fixture does not list. Three corrections have two selectors each, so the seventeen span twenty rules |
+| No correction for `com.winlator.ludashi` | No `packageId` rule names it in `config/composition.json` | Configured value; no test asserts the absence. `tests/test_curation.py::test_ludashi_allows_its_manifest_package_to_differ` checks its `allowIdChange` setting |
 | Corrected ids present after repeated refreshes, OpenMW-DS and Dusklight dual only | same | `test_full_reconciliation_survives_repeated_catalog_refresh` |
 | Official Ghostship wins both packs, legacy Ghostship denied | `config/extras.json`, `app:ghostship` rules and dual pin in `config/composition.json`, `com.ghostship.android` in `config/deny.json` | Single: Guard (`app:ghostship`); both: `test_full_reconciliation_survives_repeated_catalog_refresh`; dual: the pin |
 | Gen1Recomp from its canonical repository | `config/extras.json`, `app:gen1recomp` rules and dual pin | Single: Guard (`app:gen1recomp`); both: `test_full_reconciliation_survives_repeated_catalog_refresh` |
@@ -82,6 +84,7 @@ single is checked by the guard.
 | Super Metroid family and dual pin | `config/composition.json` | Same test: dual selects it from extras, single has no Super Metroid entry |
 | Retired catalog ids denied, no URL denial | `config/deny.json` | Same test |
 | Evidence, shared-directory and ADB configuration documentation | `docs/metroidarch.md` | Folded into "Curation evidence states its limits" (user action beyond installing); reviewed |
+| ARM64 core limitation, debuggable build, inherited HTTP updater defaults and known widescreen limitations | `docs/metroidarch.md`; the entry `about` in `config/extras.json` names the ARM64 target | Documentation duty dropped: platform limits are not user action beyond installing. `docs/metroidarch.md` still carries all four |
 
 ### pack-curation: "The upstream pack tracker is excluded" (replaced)
 
@@ -152,7 +155,10 @@ reason.
 
 ## 1.2 Derived single-screen set
 
-`designated_single_winners` over the committed `config/extras.json` and
+`designated_single_winners` takes each extra's family and effective id from
+composition's own code: it applies the policy's extras candidate rules to the
+extras alone with `apply_composition_policy`, then drops any family a single pin
+selects for. Over the committed `config/extras.json` and
 `config/composition.json` (no single pins committed):
 
 | Family | Expected winner (effective id, normalized URL) | Pinned |
@@ -168,14 +174,43 @@ reason.
 | `package:su.xash.engine.test` | `su.xash.engine.test`, `github.com/fwgs/xash3d-fwgs` | dual |
 
 MetroidArch is a dual-screen build and is not in the set. Every entry wins its
-family's single-screen selection as committed: the guard passes. Cinderbox and
-the omnipack tracker are the designated extras that no pin names; the denial
-test composes successfully under each one's denial and reports exactly that
-family. With an in-memory candidate rule giving either extra `packageId`
-`com.example.corrected`, the derived family is `package:com.example.corrected`,
-or the rule's `family` when it sets one, and the guard still passes. Red check:
-replacing the derivation with one that ignores candidate rules makes all four
-correction cases fail.
+family's single-screen selection as committed: the guard passes.
+
+The tests around the guard:
+
+- `test_designated_single_set_is_derived_from_extras_and_single_pins` runs over
+  two synthetic extras and a synthetic policy, naming no committed extra. The
+  extra with no rule is designated as `package:<id>` with winner (id,
+  normalized URL), and a candidate rule with an `app:` family puts the other in
+  that family. Dual pins for both keep both designated, single pins for both
+  remove both, and `dualScreen: true` removes that extra.
+- `test_curated_single_guard_fails_when_a_designated_extra_is_denied` is
+  parametrized over every designated family of the committed configuration,
+  with the family as the test id: nine cases. Each drops, in its own copy of
+  the policy, every pin whose projected package id is the extra's effective id,
+  then adds a package denial of that id. Only single pins affect designation, so
+  the family stays designated. Composition succeeds in all nine, and the guard
+  reports exactly that family. The set is empty only when no curated extra is
+  eligible for single.
+- `test_designated_family_follows_a_package_id_correction` appends one
+  synthetic extra, eligible for both packs, to the committed extras, so it never
+  depends on a committed rule correcting an id. A candidate rule gives it
+  `packageId` `com.example.corrected`, alone or with `family` `app:corrected`.
+  The derived family is `package:com.example.corrected` or `app:corrected`,
+  the uncorrected family is absent, the winner carries the corrected id, and
+  the guard reports no mismatch with the synthetic extra present.
+
+Red checks, each replacing `designated_single_winners` in a throwaway script:
+
+- excluding a family when any pin names it, whatever the variant, fails the
+  derived-set test;
+- a derivation that ignores candidate rules and names each extra
+  `package:<id>` fails both correction cases;
+- unmutated, each of the nine denials makes the guard report exactly its own
+  family: `app:gen1recomp`, `app:ghostship`, `package:809443320`,
+  `package:com.aurora.store`, `package:com.game.cinderbox`,
+  `package:com.github.bvschaik.julius`, `package:com.karin.idTech4Amm`,
+  `package:is.xyz.vcmi` and `package:su.xash.engine.test`.
 
 ## 1.3 Composed outcomes without a check
 
@@ -197,16 +232,23 @@ in `tests/test_source_generation_fixtures.py`. It composes a three-entry fixture
 catalog with the frozen captured higher sources, under the frozen pre-migration
 composition policy and denials with their codm2000 selectors removed and no
 overlay, since those target entries the fixture does not carry. It compares
-every family selection with a composition over an empty codm2000 catalog.
+every family selection with a composition over an empty codm2000 catalog; that
+one equality covers the covering project's and the tracked host's selections
+in both packs, so no separate host check remains. The host is the first family,
+by name, with a single-screen selection in the empty-catalog composition, which
+a captured higher source provides. That pick and the covering candidate's are
+`min()` choices made only for determinism; which ones are chosen is
+immaterial. Fixture entries carry the constant author `example`.
 
 | Scenario | Fixture entry | Assertion |
 |---|---|---|
 | Dual coverage suppresses a local catalog candidate | `com.example.covered`, at the URL of a dual-eligible captured higher-source candidate | Ingestion drops it; every family selection, including what each considered, equals the empty-catalog composition's |
 | Newly resolved prerelease apps are admitted | `com.example.prerelease` with prerelease and APK filter settings | Dual selects it from codm2000 with its original id and settings; single has no entry |
-| A tracking resource keeps its identity | Track-only `1234567890` extending a captured app eligible for both packs | Dual keeps its id, track-only flag and description; single has no entry; the host family's selection in both packs is unchanged |
+| A tracking resource keeps its identity | Track-only `1234567890` extending a captured app eligible for both packs | Dual keeps its id, track-only flag and description; single has no entry; the all-selections equality keeps the host family's selections in both packs unchanged |
 
 The test names no entry of `config/catalogs/codm.json`, and it passes. Red
-checks: it fails when ingestion stops suppressing dual-covered entries, when
+checks, rerun after the host check was folded into the all-selections
+equality: it fails when ingestion stops suppressing dual-covered entries, when
 codm2000 entries become eligible for both packs, and when ingestion drops a
 prerelease setting.
 
@@ -219,6 +261,11 @@ canonical rendering of the entries. Ingestion checks the first two. Source
 generation checks unique ids and normalized URLs in the committed catalog it
 reads, unique ids in its candidate, and renders the candidate canonically.
 Composition does not load the catalog.
+
+Composition in this rule means composition over the suite's captured upstream
+records, as the spec now says at the user's direction. A catalog whose
+composition depends on upstream records newer than the captures, such as an
+overlay target only a live upstream supplies, is outside the guarantee.
 
 | Test | Can fail only where |
 |---|---|
@@ -246,11 +293,15 @@ Both were fixed at the user's direction:
   overlay targets, or which supplies a family's only dual-screen build, would
   fail both tests that compose the variant. It now removes the last entry that no
   codm2000 rule, pin or overlay record targets and whose package id no captured
-  higher-source candidate or identity correction carries, removing nothing
-  when none qualifies. Its template falls back to minimal APK settings, and
-  the added project takes an id and URL the catalog does not use. The
-  composes test derives the added ids by comparison with the committed
-  catalog. Red/green: a valid 23-entry catalog ending at `igawa6.dualsouls`
+  higher-source candidate or identity correction carries. When none
+  qualifies it skips the variant with a stated reason, rather than silently
+  testing only an addition. It reads the captured higher sources directly and
+  builds its used id and URL sets once. Its template falls back to minimal APK
+  settings, and the added project takes an id and URL the catalog does not
+  use. The composes test derives the added ids by comparison with the
+  committed catalog. Skip check, in a throwaway script: unpatched, the helper
+  removes one entry; with every committed entry's package id carried by a
+  higher candidate, it skips. Red/green: a valid 23-entry catalog ending at `igawa6.dualsouls`
   composes with the committed configuration. The old helper removed
   `igawa6.dualsouls` and the composes test failed with a stale-overlay
   `CompositionError`. The new helper removed `com.kalenjohnson.chronoduo`
@@ -310,7 +361,10 @@ committed rule through `effective_settings` and re-rendering the catalog with
   In the Kanto Gear entry only the `about` setting differs, and a word diff of
   the file shows exactly `mod` replaced by `resource`.
 
-`dist/` was not edited.
+`dist/` and `README.md` were not edited, so both still carry the old wording
+until the nightly rebuild: `dist/dual-screen.json` in the Kanto Gear entry's
+`about`, and `README.md` in the Kanto Gear import link, where the text is
+URL-encoded. The rebuild regenerates the README catalog from the built packs.
 
 ## 3.1 pack-curation Purpose
 
@@ -319,21 +373,47 @@ curated app decisions are recorded, protected and documented, plus the pack's
 own notification tracker and the exclusion of upstream pack trackers."
 `openspec validate --specs --strict`: 10 passed, 0 failed.
 
+## 3.2 Setup notes for curated extras
+
+Each `config/extras.json` entry's upstream README was read on 2026-09-14 from
+the repository its `url` names; for VCMI, also the Android installation guide
+its README links. The notes restate upstream documentation, and none claims
+device validation. The Hollow Knight entries are upstream entries that overlays
+touch, not curated extras; their existing notes stay.
+
+| Entry | Upstream documents beyond installing | `docs/curation.md` "Port setup" |
+|---|---|---|
+| MetroidArch (Super Metroid) | A Japan/USA Super Metroid ROM with a given CRC32, loaded uncompressed; the Online Updater's Update Assets and Update Core Info Files; separately downloaded BPS and BSO files for widescreen | Added a note pointing to `docs/metroidarch.md`, which already describes these steps and the directory configuration |
+| Cinderbox | A legitimate copy of Stardew Valley; no game assets are included | Added |
+| Ghostship | The user's own US or JP Super Mario 64 `.z64` ROM, chosen in the app | Added |
+| Pokémon Red/Blue Recomp | A legally obtained canonical US Pokémon Game Boy ROM (`.gb` or `.gbc`, listed with checksums), chosen on first boot | Added |
+| Aurora Store | A login on first open, with a Google Play account or anonymously; anonymous login limits some features | Added to its existing note |
+| idTech4A++ | PC game data for a supported id Tech game in the game's data folder; for Prey, an optional config-file edit to bind keys | Already described |
+| VCMI | Heroes of Might and Magic III: Shadow of Death or Complete data (`Data`, `Maps`, `Mp3`), imported through the VCMI Launcher | Already described |
+| Julius | The original Caesar III files | Already described |
+| Xash3D FWGS | Half-Life's `valve` directory, copied to a `xash` folder in internal storage | Already described |
+| omnipack updates | Its upstream is this repository: acknowledge a notification, then download and re-import the pack | Already described in "Tracking omnipack itself" |
+
+The section's intro now says that the entries listed need user action beyond
+installing them and that each note restates upstream documentation rather than
+recording device validation. `nix develop -c lychee --offline docs/ README.md`:
+0 errors.
+
 ## Line counts
 
 | File | Before (`9b5e84e`) | After |
 |---|---|---|
-| `tests/test_port_curation.py` | 308 | 427 |
+| `tests/test_port_curation.py` | 308 | 450 |
 | `tests/test_source_generation_fixtures.py` | 315 | 456 |
-| All of `tests/*.py` | 12316 | 12576 |
+| All of `tests/*.py` | 12316 | 12599 |
 
-The proposal estimated a net test change near zero. The actual growth, 260
-lines, comes from the guard's derivation and its correction, pin and denial
-tests, from the fixture test comparing selections with an empty-catalog
-composition, and from the two fixes to catalog-reading tests found during the
-catalog audit. The suite count is unchanged at 793: the guard's seven
-dual-screen mutation cases became one derived-set test, four correction cases
-and two denial cases.
+The proposal estimated a net test change near zero. The actual growth, 283
+lines, comes from the guard's derivation and its synthetic derived-set,
+correction and denial tests, from the fixture test comparing selections with an
+empty-catalog composition, and from the two fixes to catalog-reading tests
+found during the catalog audit. The suite count rises from 793 to 798: the
+guard's seven dual-screen mutation cases became one derived-set test, two
+correction cases and nine denial cases.
 
 Main specs change only when the deltas are applied at archive. Applying them
 with `openspec archive` in a scratch copy of `openspec/` succeeded (7 added,
@@ -347,6 +427,23 @@ the result:
 | `source-ingestion` | 459 | 455 |
 | `pack-cli` | 294 | 294 |
 | `pack-composition` | 432 | 431 |
+
+## Follow-ups
+
+Outside this change's scope, recorded for later work:
+
+- Per-app names remain in main-spec requirements this change's deltas do not
+  touch. In source-ingestion, "Every entry carries a supported source type"
+  has an Aurora Store GitLab scenario, "Public GitLab entries retain native
+  source identity" has "Aurora extra reaches both exports", and "RJNY export
+  flags select entries per variant" illustrates "Entry kept out of dual by
+  upstream" with the captured Cemu entries. In pack-curation, "Both packs
+  include one shared omnipack notification tracker" says "the RJNY tracker
+  exclusion SHALL remain in force".
+- No code stops a candidate rule from placing a track-only codm2000 entry in
+  its host app's family, where it would compete with the host for the
+  dual-screen selection. Making `apply_composition_policy` reject such a rule
+  is a production change outside this change.
 
 ## 4.1 Retired names in the delta specs
 
