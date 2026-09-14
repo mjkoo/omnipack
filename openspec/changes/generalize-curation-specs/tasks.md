@@ -32,6 +32,6 @@
 
 ## 4. Checks and records
 
-- [ ] 4.1 Verify that a search of the delta specs for the retired app and project names finds them only inside REMOVED blocks.
-- [ ] 4.2 Run `openspec validate generalize-curation-specs --strict` and `just check-all`. Verify that both pass. Compared with the commit the branch started from, verify that under `src/` only `src/omnipack/source_generation.py` changed, and only in the track-only sentence from 2.3; that under `config/` only `config/catalogs/codm.json` changed, and only in the Kanto Gear entry's `about` text; and that `dist/`, `README.md` and `scripts/` are unchanged.
-- [ ] 4.3 Complete `validation.md` in this change directory. It records the coverage audit, the derived single-screen set from 1.2, the candidate-catalog run from 2.2, the track-only wording check from 2.3, the setup-notes check from 3.2, the check results, and test and spec line counts before and after.
+- [x] 4.1 Verify that a search of the delta specs for the retired app and project names finds them only inside REMOVED blocks.
+- [x] 4.2 Run `openspec validate generalize-curation-specs --strict` and `just check-all`. Verify that both pass. Compared with the commit the branch started from, verify that under `src/` only `src/omnipack/source_generation.py` changed, and only in the track-only sentence from 2.3; that under `config/` only `config/catalogs/codm.json` changed, and only in the Kanto Gear entry's `about` text; and that `dist/`, `README.md` and `scripts/` are unchanged.
+- [x] 4.3 Complete `validation.md` in this change directory. It records the coverage audit, the derived single-screen set from 1.2, the candidate-catalog run from 2.2, the track-only wording check from 2.3, the setup-notes check from 3.2, the check results, and test and spec line counts before and after.
