@@ -372,6 +372,18 @@ def test_dual_pin_keeps_a_standard_build_over_its_shared_package_dual_build() ->
     ]
 
 
+def test_shared_package_builds_split_by_kind_without_a_pin() -> None:
+    standard, dual = shared_package_builds()
+    selections = compose([standard, dual], [], []).report.selections
+    assert [(item.variant, item.origin, item.reason) for item in selections] == [
+        (Variant.SINGLE, "bboi-standard-asset", "source"),
+        (Variant.DUAL, "bboi-dual-asset", "dual-preferred"),
+    ]
+    assert selections[1].considered == (
+        ConsideredCandidate("bboi", "bboi-standard-asset", "shared.pkg", standard.url),
+    )
+
+
 def test_winning_rank_tie_fails_but_losing_tier_tie_does_not() -> None:
     tied = [app("one", "rjny", family="app:x"), app("two", "rjny", family="app:x")]
     with pytest.raises(CompositionError, match="ambiguous"):
@@ -583,6 +595,57 @@ def test_selection_report_preserves_corrected_identity_and_origin() -> None:
     assert selection.considered == (
         ConsideredCandidate("rjny", "rjny-catalog", "other", loser.url),
     )
+
+
+def test_similar_forks_without_a_family_rule_stay_separate_families() -> None:
+    upstream = app("org.a.dolphin", url="https://github.com/a/dolphin", name="Dolphin")
+    fork = app("org.b.dolphin", url="https://github.com/b/dolphin", name="Dolphin MMJR")
+    result = compose(
+        [replace(upstream, family=None), replace(fork, family=None)], [], []
+    )
+    for variant in Variant:
+        assert {(item.family, item.id) for item in result.apps[variant]} == {
+            ("package:org.a.dolphin", "org.a.dolphin"),
+            ("package:org.b.dolphin", "org.b.dolphin"),
+        }
+
+
+def test_denials_and_package_collisions_see_the_corrected_package_id() -> None:
+    corrected = app("original", "extras")
+    policy = CompositionPolicy(
+        (
+            CandidateRule(
+                candidate_selector(corrected),
+                "test",
+                family="app:x",
+                package_id="taken.pkg",
+            ),
+        ),
+        (),
+        {rendered_key("taken.pkg", corrected.url): "app:x"},
+        {},
+    )
+    denied = compose(
+        [corrected],
+        [
+            {"id": "taken.pkg", "reason": "broken"},
+            {"id": "original", "reason": "names the original id"},
+        ],
+        [],
+        policy=policy,
+    )
+    assert denied.apps == {Variant.SINGLE: [], Variant.DUAL: []}
+    assert {(item.package_id, item.family) for item in denied.report.removals} == {
+        ("taken.pkg", "app:x")
+    }
+    assert denied.report.stale_exclusions == [
+        StaleExclusion("original", "names the original id")
+    ]
+    other = app("taken.pkg", "rjny")
+    with pytest.raises(
+        CompositionError, match="selects package id 'taken.pkg' for distinct families"
+    ):
+        compose([corrected, other], [], [], policy=policy)
 
 
 def test_selection_reasons_name_pin_preference_fallback_and_source() -> None:
