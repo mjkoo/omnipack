@@ -1,4 +1,5 @@
 import json
+from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
 from urllib.request import Request
@@ -6,17 +7,15 @@ from urllib.request import Request
 import pytest
 
 from omnipack import cli
+from omnipack.build import BuildInputs
 from omnipack.cli import main
-from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import CompositionReport, CompositionResult
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
-from omnipack.sources import IngestionReport, IngestionResult, SourceError
+from omnipack.sources import IngestionReport, SourceError
 
-EMPTY_POLICY = parse_composition_policy(
-    {"schemaVersion": 1, "candidates": [], "pins": []}
-)
+EMPTY_POLICY = '{"schemaVersion":1,"candidates":[],"pins":[]}'
 
 
 def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
@@ -64,17 +63,16 @@ def test_build_writes_both_variants_and_report(
         b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
     )
     (tmp_path / "config").mkdir()
-    (tmp_path / "config/settings.json").write_text("{}", encoding="utf-8")
     for name, value in (
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
+        ("sources.json", {}),
+        ("extras.json", []),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
     ):
         (tmp_path / "config" / name).write_text(json.dumps(value), encoding="utf-8")
     app = ComposedApp(
-        Variant.SINGLE,
-        Provenance("extras", "https://example.test/app"),
+        "package:app.test",
         {
             "id": "app.test",
             "url": "https://example.test/app",
@@ -86,20 +84,11 @@ def test_build_writes_both_variants_and_report(
     composed = CompositionResult(
         {
             Variant.SINGLE: [app],
-            Variant.DUAL: [ComposedApp(Variant.DUAL, app.provenance, dict(app.data))],
+            Variant.DUAL: [ComposedApp(app.family, dict(app.data))],
         },
         CompositionReport(),
     )
-    monkeypatch.setattr(
-        cli,
-        "_ingest_for_build",
-        lambda root, report=None: IngestionResult(
-            [],
-            report or IngestionReport(),
-            EMPTY_POLICY,
-            (root / "config/composition.json").read_bytes(),
-        ),
-    )
+    monkeypatch.setattr(cli, "_ingest_for_build", lambda root, inputs, report: [])
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
     monkeypatch.chdir(tmp_path)
 
@@ -126,11 +115,20 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     before = b'{"apps":[{"id":"existing.app"}]}\n'
     for name in ("single-screen.json", "dual-screen.json"):
         (dist / name).write_bytes(before)
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config/composition.json").write_text(EMPTY_POLICY)
+    for name, value in (
+        ("sources.json", "{}"),
+        ("extras.json", "[]"),
+        ("deny.json", "[]"),
+        ("overlay.json", "[]"),
+    ):
+        (tmp_path / "config" / name).write_text(value)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report=None: (_ for _ in ()).throw(
+        lambda root, inputs, report: (_ for _ in ()).throw(
             SourceError("rjny", "HTTP 503")
         ),
     )
@@ -156,10 +154,10 @@ def test_build_failure_does_not_mutate_committed_catalog(
     config.mkdir()
     for name, value in (
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
+        ("sources.json", {}),
+        ("extras.json", []),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     dist = tmp_path / "dist"
@@ -176,13 +174,10 @@ def test_build_failure_does_not_mutate_committed_catalog(
     catalog = b'{"apps":[{"id":"app.old","url":"https://github.com/old/project"}]}\n'
     (config / "catalogs/codm.json").write_bytes(catalog)
 
-    def resolved(_root: Path, report: IngestionReport | None = None) -> IngestionResult:
-        return IngestionResult(
-            [],
-            report or IngestionReport(),
-            EMPTY_POLICY,
-            (_root / "config/composition.json").read_bytes(),
-        )
+    def resolved(
+        _root: Path, _inputs: BuildInputs, report: IngestionReport
+    ) -> list[App]:
+        return []
 
     monkeypatch.setattr(cli, "_ingest_for_build", resolved)
     monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
@@ -197,15 +192,12 @@ def test_build_failure_does_not_mutate_committed_catalog(
         assert json.loads((dist / name).read_text()) == before
 
 
-@pytest.mark.parametrize("existing", [False, True])
-@pytest.mark.parametrize("invalid_gate", [False, True])
-def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, invalid_gate: bool
-) -> None:
-    (tmp_path / "README.md").write_bytes(
+def write_fixture_pipeline(root: Path) -> dict[str, str]:
+    """Write a fixture configuration and return the upstream responses it needs."""
+    (root / "README.md").write_bytes(
         b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
     )
-    config = tmp_path / "config"
+    config = root / "config"
     config.mkdir()
     source_config = {
         "rjny": {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
@@ -218,13 +210,10 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     }
     files: dict[str, object] = {
         "sources.json": source_config,
-        "http.json": {"credentials": {}},
         "extras.json": [],
         "composition.json": {"schemaVersion": 1, "candidates": [], "pins": []},
         "deny.json": [],
         "overlay.json": [],
-        "overlay.dual.json": [],
-        "settings.json": {},
     }
     for name, value in files.items():
         (config / name).write_text(json.dumps(value), encoding="utf-8")
@@ -255,12 +244,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "name": "Fixture",
         "overrideSource": "HTML",
     }
-    if existing:
-        (tmp_path / "dist").mkdir()
-        (tmp_path / "dist/dual-screen.json").write_text(
-            json.dumps({"apps": [{"id": "app.generated"}]})
-        )
-    responses = {
+    return {
         "https://raw.githubusercontent.com/fixture/rjny/main/apps.json": json.dumps(
             {"apps": [record]}
         ),
@@ -281,10 +265,56 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "https://fixture.test/single": '{"apps":[]}',
         "https://fixture.test/dual": '{"apps":[]}',
     }
+
+
+def fixture_transport(
+    responses: dict[str, str],
+) -> Callable[[HttpClient, Request, float], HttpResponse]:
+    def transport(
+        _client: HttpClient, request: Request, _timeout: float
+    ) -> HttpResponse:
+        body = responses[request.full_url].encode()
+        return HttpResponse(request.full_url, 200, Message(), body)
+
+    return transport
+
+
+def test_build_verify_and_report_sequence_records_no_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 0
+    build_report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert build_report["offlineVerification"] == {"status": "success", "findings": []}
+    assert main(["verify"]) == 0
+    verification = json.loads((tmp_path / ".build/verify.json").read_text())
+    assert (verification["status"], verification["errors"]) == ("success", [])
+    capsys.readouterr()
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    for variant in Variant:
+        assert f"Selection: {variant.value} package:app.fixture -> " in output
+    assert "Evidence: current" in output
+
+
+@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize("invalid_gate", [False, True])
+def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool, invalid_gate: bool
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    if existing:
+        (tmp_path / "dist").mkdir()
+        (tmp_path / "dist/dual-screen.json").write_text(
+            json.dumps({"apps": [{"id": "app.generated"}]})
+        )
     requested: list[str] = []
 
     def transport(
-        _client: HttpClient, request: Request, _timeout: float, _max_bytes: int | None
+        _client: HttpClient, request: Request, _timeout: float
     ) -> HttpResponse:
         requested.append(request.full_url)
         body = responses[request.full_url].encode()
@@ -295,9 +325,9 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
 
         real_render = build_module.render
 
-        def invalid_render(apps: list[ComposedApp], settings: dict) -> str:
-            rendered = json.loads(real_render(apps, settings))
-            rendered["settings"]["categories"] = "not JSON"
+        def invalid_render(apps: list[ComposedApp]) -> str:
+            rendered = json.loads(real_render(apps))
+            rendered["apps"][0]["preferredApkIndex"] = "first"
             return json.dumps(rendered)
 
         monkeypatch.setattr(build_module, "render", invalid_render)
@@ -355,36 +385,22 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     )
     config = tmp_path / "config"
     config.mkdir()
-    policy_document = {
-        "schemaVersion": 1,
-        "candidates": [],
-        "pins": [],
-        "history": [
-            {
-                "id": "before.id",
-                "url": "https://example.test/old",
-                "family": "package:current.id",
-                "rationale": "Previous published identity",
-            }
-        ],
-    }
-    consumed_policy = parse_composition_policy(policy_document)
+    policy_document = {"schemaVersion": 1, "candidates": [], "pins": []}
     candidate = App(
         "current.id",
         "https://example.test/current",
         "Current",
         SourceType.HTML,
         (),
-        Variant.SINGLE,
         Provenance("extras", "fixture"),
         eligibility=frozenset(Variant),
     )
     for name, value in (
         ("composition.json", policy_document),
+        ("sources.json", {}),
+        ("extras.json", []),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
     before = json.dumps(
@@ -405,12 +421,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            [candidate],
-            report,
-            consumed_policy,
-            (root / "config/composition.json").read_bytes(),
-        ),
+        lambda root, inputs, report: [candidate],
     )
     if stage == "rendering":
         from omnipack import build as build_module
@@ -452,38 +463,6 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         else:
             assert not path.exists()
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    for variant in Variant:
-        changes = report["familyChanges"][variant.value]
-        assert changes["retained"] == (
-            [
-                {
-                    "family": "package:current.id",
-                    "previous": [
-                        {"id": "before.id", "url": "https://example.test/old"}
-                    ],
-                    "current": {
-                        "id": "current.id",
-                        "url": "https://example.test/current",
-                    },
-                }
-            ]
-            if existing
-            else []
-        )
-        assert changes["unmappedPrevious"] == (
-            [
-                {
-                    "id": "unknown.id",
-                    "url": "https://example.test/unknown",
-                }
-            ]
-            if existing
-            else []
-        )
-        assert changes["unknownReason"] == (
-            "previous entries lack historical family mappings" if existing else None
-        )
-        assert changes["added"] == ([] if existing else ["package:current.id"])
     assert report["stage"] == stage
     assert report["error"] == f"injected {stage} failure"
     assert report["offlineVerification"] == {
@@ -509,6 +488,8 @@ def test_composition_failure_preserves_collected_diagnostics(
     config.mkdir()
     for name, value in (
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
+        ("sources.json", {}),
+        ("extras.json", []),
         (
             "deny.json",
             [
@@ -526,7 +507,6 @@ def test_composition_failure_preserves_collected_diagnostics(
                 }
             ],
         ),
-        ("overlay.dual.json", []),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     apps = [
@@ -536,7 +516,6 @@ def test_composition_failure_preserves_collected_diagnostics(
             source,
             SourceType.HTML,
             (),
-            Variant.SINGLE,
             Provenance(source, "https://example.test/catalog"),
             eligibility=frozenset(Variant),
         )
@@ -549,9 +528,7 @@ def test_composition_failure_preserves_collected_diagnostics(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            apps, report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
-        ),
+        lambda root, inputs, report: apps,
     )
     monkeypatch.chdir(tmp_path)
 
@@ -559,13 +536,24 @@ def test_composition_failure_preserves_collected_diagnostics(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == "composition"
     assert "missing.app" in report["error"]
-    assert report["displacements"] == [
+    assert report["selections"] == [
         {
-            "id": "collision.app",
+            "family": "package:collision.app",
             "variant": variant.value,
-            "winner_source": "extras",
-            "loser_source": "rjny",
-            "differing_fields": ["name"],
+            "original_id": "collision.app",
+            "effective_id": "collision.app",
+            "url": "https://example.test/app",
+            "source": "extras",
+            "origin": "extras",
+            "reason": "source" if variant is Variant.SINGLE else "ordinary-fallback",
+            "considered": [
+                {
+                    "source": "rjny",
+                    "origin": "rjny",
+                    "original_id": "collision.app",
+                    "url": "https://example.test/app",
+                }
+            ],
         }
         for variant in Variant
     ]
@@ -578,9 +566,7 @@ def test_composition_failure_preserves_collected_diagnostics(
         }
         for variant in Variant
     ]
-    assert report["staleExclusions"] == [
-        {"id": "stale.app", "variant": None, "reason": "obsolete", "family": None}
-    ]
+    assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
 
@@ -595,10 +581,10 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     config.mkdir()
     for name, value in (
         ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
+        ("sources.json", {}),
+        ("extras.json", []),
         ("deny.json", []),
         ("overlay.json", []),
-        ("overlay.dual.json", []),
-        ("settings.json", {}),
     ):
         (config / name).write_text(json.dumps(value))
     dist = tmp_path / "dist"
@@ -615,9 +601,7 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            [], report, EMPTY_POLICY, (root / "config/composition.json").read_bytes()
-        ),
+        lambda root, inputs, report: [],
     )
     monkeypatch.setattr(cli, "compose", lambda *_args, **_kwargs: composed)
     calls = 0
@@ -638,50 +622,11 @@ def test_offline_gate_preserves_pair_and_standalone_evidence(
     )
     assert verify_path.read_bytes() == b'{"keep":true}\n'
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["familyChanges"] is not None
     assert report["stage"] == "offline verification"
     assert report["offlineVerification"]["status"] == "failed"
     assert report["changes"] == {
         variant.value: {"added": [], "removed": []} for variant in Variant
     }
-
-
-def test_build_rejects_semantically_equal_policy_bytes_replaced_after_ingestion(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (tmp_path / "README.md").write_bytes(
-        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
-    )
-    config = tmp_path / "config"
-    config.mkdir()
-    original = b'{"schemaVersion":1,"candidates":[],"pins":[]}'
-    (config / "composition.json").write_bytes(original)
-    for name, value in (
-        ("deny.json", []),
-        ("overlay.json", []),
-        ("overlay.dual.json", []),
-        ("settings.json", {}),
-    ):
-        (config / name).write_text(json.dumps(value))
-
-    def ingested(root: Path, report: IngestionReport) -> IngestionResult:
-        (root / "config/composition.json").write_bytes(original + b"\n")
-        return IngestionResult([], report, EMPTY_POLICY, original)
-
-    monkeypatch.setattr(cli, "_ingest_for_build", ingested)
-    monkeypatch.setattr(
-        cli,
-        "compose",
-        lambda *_args, **_kwargs: CompositionResult(
-            {variant: [] for variant in Variant}, CompositionReport()
-        ),
-    )
-    monkeypatch.chdir(tmp_path)
-    assert main(["build"]) == 1
-    report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["stage"] == "offline verification"
-    assert report["offlineVerification"]["findings"][0]["code"] == "input_changed"
-    assert not (tmp_path / "dist").exists()
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -696,8 +641,11 @@ def test_winning_tie_reports_original_selectors(
     )
     config = tmp_path / "config"
     config.mkdir()
-    for name in ("deny.json", "overlay.json", "overlay.dual.json"):
+    for name in ("deny.json", "overlay.json"):
         (config / name).write_text("[]")
+    (config / "composition.json").write_text(EMPTY_POLICY)
+    (config / "sources.json").write_text("{}")
+    (config / "extras.json").write_text("[]")
     candidates = [
         App(
             "same.package",
@@ -705,7 +653,6 @@ def test_winning_tie_reports_original_selectors(
             "Candidate",
             SourceType.HTML,
             (),
-            Variant.SINGLE,
             Provenance("bboi", "fixture"),
             eligibility=frozenset(Variant),
             origin=origin,
@@ -719,11 +666,8 @@ def test_winning_tie_reports_original_selectors(
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, report: IngestionResult(
-            list(reversed(candidates)) if reverse else candidates,
-            report,
-            EMPTY_POLICY,
-            b'{"schemaVersion":1,"candidates":[],"pins":[]}',
+        lambda root, inputs, report: (
+            list(reversed(candidates)) if reverse else candidates
         ),
     )
     monkeypatch.chdir(tmp_path)
@@ -738,8 +682,140 @@ def test_winning_tie_reports_original_selectors(
     )
     assert report["stage"] == "composition"
     assert report["changes"] is None
-    assert report["familyChanges"] is None
     assert report["error"] == expected
     assert expected in capsys.readouterr().err
     assert main(["report"]) == 0
     assert expected in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "edited",
+    [
+        "README.md",
+        "config/overlay.json",
+        "config/deny.json",
+        "config/composition.json",
+        "config/sources.json",
+        "config/extras.json",
+    ],
+)
+def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, edited: str
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    readme_before = (tmp_path / "README.md").read_bytes()
+    edits = {
+        "README.md": b"Edited guide\n" + readme_before,
+        "config/overlay.json": json.dumps(
+            [
+                {
+                    "id": "app.fixture",
+                    "url": "https://example.test/app",
+                    "patch": {"name": "Edited"},
+                }
+            ]
+        ).encode(),
+        "config/deny.json": json.dumps(
+            [{"id": "app.fixture", "reason": "edited"}]
+        ).encode(),
+        "config/composition.json": b"not json",
+        "config/sources.json": b"not json",
+        "config/extras.json": json.dumps(
+            [
+                {
+                    "id": "edited.extra",
+                    "url": "https://example.test/edited",
+                    "name": "Edited Extra",
+                }
+            ]
+        ).encode(),
+    }
+    real_ingest = cli._ingest_for_build
+
+    def ingest_then_edit(
+        root: Path, inputs: BuildInputs, report: IngestionReport
+    ) -> list[App]:
+        (root / edited).write_bytes(edits[edited])
+        return real_ingest(root, inputs, report)
+
+    monkeypatch.setattr(cli, "_ingest_for_build", ingest_then_edit)
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    for name in ("single-screen.json", "dual-screen.json"):
+        apps = json.loads((tmp_path / "dist" / name).read_text())["apps"]
+        assert [app["name"] for app in apps if app["id"] == "app.fixture"] == [
+            "Fixture"
+        ]
+        assert "edited.extra" not in {app["id"] for app in apps}
+    readme = (tmp_path / "README.md").read_bytes()
+    assert b"Edited guide" not in readme and b"Fixture" in readme
+    if edited != "README.md":
+        assert (tmp_path / edited).read_bytes() == edits[edited]
+
+
+@pytest.mark.parametrize(
+    "http_config",
+    [
+        None,
+        b"not json",
+        json.dumps(
+            {
+                "credentials": {
+                    "raw.githubusercontent.com": "GITHUB_TOKEN",
+                    "codeberg.org": "GITHUB_TOKEN",
+                }
+            }
+        ).encode(),
+    ],
+    ids=["absent", "unreadable", "registered"],
+)
+def test_build_fetches_catalogs_without_credentials_or_http_config(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, http_config: bytes | None
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    if http_config is not None:
+        (tmp_path / "config/http.json").write_bytes(http_config)
+    monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
+    requests: list[Request] = []
+
+    def transport(
+        _client: HttpClient, request: Request, _timeout: float
+    ) -> HttpResponse:
+        requests.append(request)
+        body = responses[request.full_url].encode()
+        return HttpResponse(request.full_url, 200, Message(), body)
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    assert {request.full_url for request in requests} == set(responses)
+    assert all(request.get_header("Authorization") is None for request in requests)
+
+
+@pytest.mark.parametrize(
+    ("missing", "source"),
+    [
+        ("config/sources.json", "sources"),
+        ("config/extras.json", "extras"),
+        ("config/deny.json", "denylist"),
+        ("config/overlay.json", "overlay"),
+        ("config/composition.json", "composition policy"),
+    ],
+)
+def test_missing_local_input_fails_at_ingestion_before_any_fetch(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str, source: str
+) -> None:
+    write_fixture_pipeline(tmp_path)
+    (tmp_path / missing).unlink()
+
+    def fetch(*_args: object) -> HttpResponse:
+        pytest.fail("the build fetched a catalog after a missing input")
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fetch)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "ingestion"
+    assert report["error"].startswith(f"{source}: ")
+    assert not (tmp_path / "dist").exists()

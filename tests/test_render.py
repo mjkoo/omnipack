@@ -7,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import (
     RenderError,
@@ -39,15 +38,15 @@ def composed(
     }
     if author is not None:
         data["author"] = author
-    return ComposedApp(
-        Variant.SINGLE,
-        Provenance("test", "fixture"),
-        data,
-    )
+    return ComposedApp(f"package:{package_id}", data)
 
 
-def document(apps: list[ComposedApp], settings: dict[str, object] | None = None):
-    return json.loads(render(apps, settings or {}))
+def document(apps: list[ComposedApp]):
+    return json.loads(render(apps))
+
+
+def derived_color(category: str) -> int:
+    return int.from_bytes(b"\xff" + hashlib.sha256(category.encode()).digest()[:3])
 
 
 def test_defaults_match_every_source_key_set_in_upstream_exports() -> None:
@@ -120,7 +119,7 @@ def test_render_rejects_missing_or_wrong_required_strings(
         app.data[field] = value
 
     with pytest.raises(RenderError, match=rf"org\.example\.app.*{field}"):
-        render([app], {})
+        render([app])
 
 
 def test_render_is_byte_stable_and_pins_object_key_order() -> None:
@@ -128,10 +127,8 @@ def test_render_is_byte_stable_and_pins_object_key_order() -> None:
     app.data["zFuture"] = True
     app.data["aFuture"] = False
 
-    first = render([app], {"zSetting": 1, "aSetting": 2})
-    second = render([app], {"aSetting": 2, "zSetting": 1})
+    first = render([app])
 
-    assert first == second
     assert first.endswith("\n")
     rendered_app = json.loads(first, object_pairs_hook=dict)["apps"][0]
     assert list(rendered_app) == [
@@ -147,13 +144,13 @@ def test_render_is_byte_stable_and_pins_object_key_order() -> None:
     ]
 
     reversed_data = dict(reversed(list(app.data.items())))
-    reordered = ComposedApp(app.variant, app.provenance, reversed_data)
-    assert render([reordered], {"aSetting": 2, "zSetting": 1}) == second
+    reordered = ComposedApp(app.family, reversed_data)
+    assert render([reordered]) == first
 
 
 def test_render_rejects_non_finite_numbers() -> None:
     with pytest.raises(RenderError, match="invalid in JSON"):
-        render([composed(settings={"future": float("nan")})], {})
+        render([composed(settings={"future": float("nan")})])
 
 
 def test_render_orders_by_first_category_then_name_then_id_for_all_permutations() -> (
@@ -172,36 +169,40 @@ def test_render_orders_by_first_category_then_name_then_id_for_all_permutations(
         assert [app["id"] for app in document(list(ordering))["apps"]] == expected
 
 
-def test_settings_categories_use_configured_and_derived_colors_for_observed_union() -> (
-    None
-):
-    derived = int.from_bytes(b"\xff" + hashlib.sha256(b"Beta").digest()[:3])
+def test_settings_block_holds_only_colours_derived_from_category_names() -> None:
     apps = [
         composed("one", categories=("Alpha", "Beta")),
         composed("two", categories=()),
     ]
-    rendered = document(
-        apps,
-        {
-            "categories": {"Alpha": 0xFF010203, "Unused": 0xFF040506},
-            "groupByCategory": True,
-        },
-    )["settings"]
+    settings = document(apps)["settings"]
 
-    assert rendered["categories"] == json.dumps(
-        {"Alpha": 0xFF010203, "Beta": derived}, separators=(",", ":")
+    assert set(settings) == {"categories"}
+    assert settings["categories"] == json.dumps(
+        {"Alpha": derived_color("Alpha"), "Beta": derived_color("Beta")},
+        separators=(",", ":"),
     )
-    assert rendered["groupByCategory"] is True
-    assert "Unused" not in rendered["categories"]
-    assert (
-        document(apps, {"categories": rendered["categories"]})["settings"]["categories"]
-        == rendered["categories"]
+    assert document(list(reversed(apps)))["settings"] == settings
+
+
+def test_category_used_in_one_variant_is_absent_from_the_other() -> None:
+    shared = composed("shared", categories=("Emulator",))
+    single = json.loads(document([shared])["settings"]["categories"])
+    dual = json.loads(
+        document([shared, composed("dual.only", categories=("Dual Screen",))])[
+            "settings"
+        ]["categories"]
     )
+
+    assert dual == {
+        "Dual Screen": derived_color("Dual Screen"),
+        "Emulator": derived_color("Emulator"),
+    }
+    assert single == {"Emulator": derived_color("Emulator")}
 
 
 def test_render_rejects_duplicate_package_ids() -> None:
     with pytest.raises(RenderError, match="duplicate package id.*same"):
-        render([composed("same"), composed("same", name="Other")], {})
+        render([composed("same"), composed("same", name="Other")])
 
 
 def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None:
@@ -211,11 +212,10 @@ def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None
     second_app = composed(settings={"intermediateLink": [right]})
     first_app.data["future"] = left
     second_app.data["future"] = right
-    first = render([first_app], {"future": left})
-    second = render([second_app], {"future": right})
+    first = render([first_app])
+    second = render([second_app])
     assert first == second
     decoded = json.loads(first)
-    assert decoded["settings"]["future"] == left
     assert decoded["apps"][0]["future"] == left
     assert json.loads(decoded["apps"][0]["additionalSettings"])["intermediateLink"] == [
         left

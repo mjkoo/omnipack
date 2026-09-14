@@ -24,7 +24,6 @@ def candidate(**changes: object) -> App:
         "Example",
         SourceType.GITHUB,
         (),
-        Variant.SINGLE,
         Provenance("rjny", "catalog"),
         eligibility=frozenset(Variant),
         origin="rjny-catalog",
@@ -76,39 +75,22 @@ def test_policy_applies_one_original_selector_without_recursive_matching() -> No
 
 def test_policy_correction_retains_original_identity_and_internal_fields() -> None:
     parsed = parse_composition_policy(
-        policy(
-            candidates=[
-                rule(
-                    packageId="org.example.new",
-                    family="app:example",
-                    eligible=["dual"],
-                    dualPreferred=True,
-                )
-            ]
-        )
+        policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
-    applied = apply_composition_policy(parsed, [candidate()])
-    result = applied.candidates[0]
+    [result] = apply_composition_policy(parsed, [candidate()])
 
     assert result.id == "org.example.new"
     assert result.original_id == "org.example.old"
     assert result.family == "app:example"
-    assert result.eligibility == frozenset({Variant.DUAL})
-    assert result.dual_preferred is True
+    assert result.eligibility == frozenset(Variant)
+    assert result.dual_preferred is False
     assert set(result.raw).isdisjoint(
         {"family", "eligible", "eligibility", "dualPreferred", "origin", "originalId"}
     )
 
     rendered = json.loads(
         render(
-            [
-                ComposedApp(
-                    Variant.DUAL,
-                    result.provenance,
-                    _import_data(result),
-                )
-            ],
-            {},
+            [ComposedApp("app:example", _import_data(result))],
         )
     )["apps"][0]
     assert rendered["id"] == "org.example.new"
@@ -128,10 +110,7 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
 
 def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
     parsed = parse_composition_policy(policy())
-    assert (
-        len(apply_composition_policy(parsed, [candidate(), candidate()]).candidates)
-        == 1
-    )
+    assert len(apply_composition_policy(parsed, [candidate(), candidate()])) == 1
 
     with pytest.raises(
         CompositionPolicyError, match="ambiguous original candidate identity"
@@ -146,14 +125,17 @@ def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
     [
         ({"schemaVersion": True, "candidates": [], "pins": []}, "schemaVersion"),
         (policy(extra=[]), "unknown field"),
+        (policy(history=[]), "unknown field 'history'"),
         (policy(candidates=[rule(extra=True)]), "unknown field"),
         (policy(candidates=[rule(family="package:forbidden")]), "family"),
         (policy(candidates=[rule(family="app:bad family")]), "family"),
-        (policy(candidates=[rule(eligible=[])]), "eligible"),
-        (policy(candidates=[rule(eligible=["tablet"])]), "unknown target"),
         (
-            policy(candidates=[rule(eligible=["single"], dualPreferred=True)]),
-            "dualPreferred",
+            policy(candidates=[rule(), rule(eligible=["dual"])]),
+            r"candidates\[1\] has unknown field 'eligible'",
+        ),
+        (
+            policy(candidates=[rule(), rule(dualPreferred=True)]),
+            r"candidates\[1\] has unknown field 'dualPreferred'",
         ),
         (policy(candidates=[rule(rationale="  ")]), "rationale"),
         (
@@ -221,51 +203,23 @@ def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
             ],
         )
     )
-    applied = apply_composition_policy(parsed, [candidate()])
+    [applied] = apply_composition_policy(parsed, [candidate()])
     key = ("org.example.new", "github.com/example/app")
 
-    assert parsed.projections[key].family == "app:example"
-    assert parsed.projections[key].eligibility is None
+    assert parsed.projections[key] == "app:example"
     assert parsed.projected_pins[("app:example", Variant.DUAL)] == key
-    assert applied.projected_pins[("app:example", Variant.DUAL)] == key
+    assert applied.id == "org.example.new"
 
 
-def test_staged_application_defers_only_missing_selector_presence() -> None:
+def test_policy_application_requires_every_rule_selector() -> None:
     parsed = parse_composition_policy(
-        policy(
-            candidates=[rule(packageId="org.example.new", family="app:example")],
-            pins=[
-                {
-                    "family": "app:example",
-                    "variant": "dual",
-                    "match": rule()["match"],
-                    "rationale": "Prefer the tested dual build.",
-                }
-            ],
-        )
+        policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
-    assert apply_composition_policy(parsed, [], require_all=False).candidates == ()
-    assert (
-        apply_composition_policy(parsed, [], require_all=False).projected_pins
-        == parsed.projected_pins
-    )
-    with pytest.raises(CompositionPolicyError, match="matched no candidate"):
+    with pytest.raises(CompositionPolicyError, match="org.example.old.*matched no"):
         apply_composition_policy(parsed, [])
 
-    conflicting = candidate(
-        id="org.example.new",
-        original_id="org.example.new",
-        provenance=Provenance("bboi", "asset"),
-        origin="bboi-standard-asset",
-    )
-    with pytest.raises(CompositionPolicyError, match="rendered projection"):
-        apply_composition_policy(parsed, [conflicting], require_all=False)
 
-
-@pytest.mark.parametrize("require_all", [False, True])
-def test_policy_application_validates_present_pin_eligibility_by_default(
-    require_all: bool,
-) -> None:
+def test_policy_application_leaves_pins_to_composition() -> None:
     parsed = parse_composition_policy(
         policy(
             pins=[
@@ -278,12 +232,11 @@ def test_policy_application_validates_present_pin_eligibility_by_default(
             ]
         )
     )
-    with pytest.raises(CompositionPolicyError, match="pin.*eligibility"):
-        apply_composition_policy(
-            parsed,
-            [candidate(eligibility=frozenset({Variant.SINGLE}))],
-            require_all=require_all,
-        )
+    single_only = candidate(eligibility=frozenset({Variant.SINGLE}))
+    assert apply_composition_policy(parsed, []) == ()
+    assert apply_composition_policy(parsed, [single_only]) == (
+        replace(single_only, family="package:org.example.old"),
+    )
 
 
 def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:
@@ -321,7 +274,7 @@ def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:
         apply_composition_policy(parsed, [candidate(), unruled])
 
 
-def test_projection_adopts_the_only_explicit_eligibility() -> None:
+def test_agreeing_rules_share_one_projected_family() -> None:
     other = rule(
         match={
             "source": "bboi",
@@ -330,7 +283,6 @@ def test_projection_adopts_the_only_explicit_eligibility() -> None:
             "url": "https://github.com/example/app",
         },
         family="app:example",
-        eligible=["dual"],
     )
     parsed = parse_composition_policy(
         policy(
@@ -340,9 +292,9 @@ def test_projection_adopts_the_only_explicit_eligibility() -> None:
             ]
         )
     )
-    assert parsed.projections[
-        ("org.example.new", "github.com/example/app")
-    ].eligibility == frozenset({Variant.DUAL})
+    assert parsed.projections == {
+        ("org.example.new", "github.com/example/app"): "app:example"
+    }
 
 
 def test_pin_family_must_match_its_projected_candidate_family() -> None:
@@ -359,142 +311,3 @@ def test_pin_family_must_match_its_projected_candidate_family() -> None:
                 ]
             )
         )
-
-
-def test_history_is_normalized_independent_and_conflict_checked() -> None:
-    parsed = parse_composition_policy(
-        policy(
-            history=[
-                {
-                    "id": "org.retired",
-                    "url": "HTTPS://WWW.GITHUB.COM/Example/Retired.git/",
-                    "family": "app:retired",
-                    "rationale": "Previously published identity.",
-                }
-            ]
-        )
-    )
-    assert (
-        parsed.history[("org.retired", "github.com/example/retired")] == "app:retired"
-    )
-    assert apply_composition_policy(parsed, []).candidates == ()
-
-    with pytest.raises(CompositionPolicyError, match="duplicate history key"):
-        parse_composition_policy(
-            policy(
-                history=[
-                    {
-                        "id": "x",
-                        "url": "https://github.com/a/b",
-                        "family": "package:x",
-                        "rationale": "Old output.",
-                    },
-                    {
-                        "id": "x",
-                        "url": "https://www.github.com/A/B.git/",
-                        "family": "package:x",
-                        "rationale": "Old output.",
-                    },
-                ]
-            )
-        )
-
-    with pytest.raises(CompositionPolicyError, match="history.*conflicts"):
-        parse_composition_policy(
-            policy(
-                candidates=[rule(packageId="org.example.new", family="app:example")],
-                history=[
-                    {
-                        "id": "org.example.new",
-                        "url": "https://github.com/example/app",
-                        "family": "app:other",
-                        "rationale": "Old output.",
-                    }
-                ],
-            )
-        )
-
-
-@pytest.mark.parametrize(
-    "record, message",
-    [
-        (
-            {
-                "id": "x",
-                "url": "https://github.com/a/b",
-                "family": "package:x",
-                "rationale": "Old output.",
-                "extra": True,
-            },
-            "unknown field",
-        ),
-        (
-            {
-                "id": "x",
-                "url": "not a project",
-                "family": "package:x",
-                "rationale": "Old output.",
-            },
-            "project URL",
-        ),
-        (
-            {
-                "id": "x",
-                "url": "https://github.com/a/b",
-                "family": "unknown:x",
-                "rationale": "Old output.",
-            },
-            "family",
-        ),
-        (
-            {
-                "id": "x",
-                "url": "https://github.com/a/b",
-                "family": "package:x",
-                "rationale": "",
-            },
-            "rationale",
-        ),
-    ],
-)
-def test_history_rejects_malformed_records(
-    record: dict[str, object], message: str
-) -> None:
-    with pytest.raises(CompositionPolicyError, match=message):
-        parse_composition_policy(policy(history=[record]))
-
-
-def test_history_cannot_change_current_projection_or_candidate_family() -> None:
-    active = [rule(packageId="org.example.new", family="app:example")]
-    without_history = parse_composition_policy(policy(candidates=active))
-    with_history = parse_composition_policy(
-        policy(
-            candidates=active,
-            history=[
-                {
-                    "id": "org.retired",
-                    "url": "https://github.com/example/retired",
-                    "family": "app:retired",
-                    "rationale": "Previously published identity.",
-                }
-            ],
-        )
-    )
-
-    assert with_history.projections == without_history.projections
-    assert (
-        with_history.rendered_family(
-            "org.retired", "https://github.com/example/retired"
-        )
-        == "package:org.retired"
-    )
-    assert (
-        with_history.historical_family(
-            "org.retired", "https://github.com/example/retired"
-        )
-        == "app:retired"
-    )
-    assert (
-        apply_composition_policy(with_history, [candidate()]).candidates
-        == apply_composition_policy(without_history, [candidate()]).candidates
-    )

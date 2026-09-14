@@ -9,7 +9,7 @@ import pytest
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import compose
-from omnipack.model import Provenance, Variant
+from omnipack.model import Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.sources import rjny
@@ -50,8 +50,8 @@ def test_upstream_pack_tracker_stays_excluded_after_refresh():
         upstream[0]["name"] += f" refresh {refresh}"
         apps = rjny.fetch(FakeHttp({url: json.dumps({"apps": upstream})}), source)
         assert {a.id for a in apps} == {"904332840", "aenu.aps3e"}
-        result = compose(apps, exclusions, [], [], policy=policy)
-        packs = {v: render(result.apps[v], {}).encode() for v in Variant}
+        result = compose(apps, exclusions, [], policy=policy)
+        packs = {v: render(result.apps[v]).encode() for v in Variant}
         for pack in packs.values():
             assert [a["id"] for a in json.loads(pack)["apps"]] == ["aenu.aps3e"]
         catalog = generate_catalog(packs[Variant.SINGLE], packs[Variant.DUAL], policy)
@@ -77,13 +77,7 @@ def curated():
             data = deepcopy(record)
             data["additionalSettings"] = json.loads(data["additionalSettings"])
             data["id"] = effective_id(data)
-            selected[variant].append(
-                ComposedApp(
-                    variant,
-                    Provenance("fixture", data["url"]),
-                    data,
-                )
-            )
+            selected[variant].append(ComposedApp(f"package:{data['id']}", data))
     historical_extras = [
         entry
         for entry in read(ROOT / "config/extras.json")
@@ -100,12 +94,10 @@ def curated():
             additionalSettings=deepcopy(app.additional_settings),
         )
         for variant in app.eligibility:
-            selected[variant].append(
-                ComposedApp(variant, app.provenance, deepcopy(data))
-            )
-    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "common overlay")
+            selected[variant].append(ComposedApp(f"package:{app.id}", deepcopy(data)))
+    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     return {
-        variant.value: json.loads(render(apply_overlay(apps, overlay), {}))["apps"]
+        variant.value: json.loads(render(apply_overlay(apps, overlay)))["apps"]
         for variant, apps in selected.items()
     }
 

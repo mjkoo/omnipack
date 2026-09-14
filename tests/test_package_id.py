@@ -14,8 +14,9 @@ from urllib.response import addinfourl
 
 import pytest
 
-from omnipack.http import HttpClient, HttpConfig, HttpError, HttpResponse
+from omnipack.http import HttpError, HttpResponse
 from omnipack.package_id import MAX_APK_FULL_DOWNLOAD, resolve_release_assets
+from omnipack.source_http import HttpConfig, SourceHttpClient
 
 API = "https://api.github.com/repos/OWNER/REPO/releases/latest"
 ASSET = "https://objects.example/app.apk"
@@ -106,8 +107,10 @@ def release(names: list[tuple[str, str]]) -> dict[str, object]:
     }
 
 
-def client(transport: AssetTransport, config: HttpConfig | None = None) -> HttpClient:
-    return HttpClient(config or HttpConfig({}), retries=0, transport=transport)
+def client(
+    transport: AssetTransport, config: HttpConfig | None = None
+) -> SourceHttpClient:
+    return SourceHttpClient(config or HttpConfig({}), retries=0, transport=transport)
 
 
 def test_fixture_apk_tail_resolves_package_id() -> None:
@@ -250,7 +253,7 @@ def test_integration_covers_redirect_ranges_and_full_fallback(
         return fixture_response(request, archive, 200, headers)
 
     monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
-    http = HttpClient(HttpConfig.from_path("config/http.json"), retries=0)
+    http = SourceHttpClient(HttpConfig.from_path("config/http.json"), retries=0)
     listed = http.get(API, headers={"Accept": "application/vnd.github+json"}).json()
     package_id = resolve_release_assets(http, listed)
     for url in (
@@ -364,7 +367,9 @@ def test_http_body_failure_is_retried_then_reported(
         return stream
 
     monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
-    http_client = HttpClient(HttpConfig({}), retries=1, sleep=observed_sleeps.append)
+    http_client = SourceHttpClient(
+        HttpConfig({}), retries=1, sleep=observed_sleeps.append
+    )
     with pytest.raises(ValueError, match="failed after 2 attempts"):
         resolve_release_assets(http_client, release([("app.apk", ASSET)]))
     assert [request.method for request in requests] == methods
@@ -393,7 +398,7 @@ def test_real_http_full_download_is_bounded(monkeypatch: pytest.MonkeyPatch) -> 
         return FixtureResponse(stream, Message(), request.full_url, 200)
 
     monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
-    http_client = HttpClient(HttpConfig({}), retries=0)
+    http_client = SourceHttpClient(HttpConfig({}), retries=0)
     data = release([("one.apk", ASSET), ("two.apk", ASSET + "2")])
     with pytest.raises(ValueError, match="exceeds 1024 bytes"):
         resolve_release_assets(http_client, data)

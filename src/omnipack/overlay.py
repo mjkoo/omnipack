@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from omnipack.model import Provenance, Variant
+from omnipack.model import COMPOSITION_ONLY_FIELDS
 from omnipack.urls import normalize_project_url
 
 
@@ -16,12 +16,10 @@ class OverlayError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class ComposedApp:
-    variant: Variant
-    provenance: Provenance
+    """A selected entry: its app family and the import data rendered for it."""
+
+    family: str
     data: dict[str, Any]
-    family: str | None = None
-    original_id: str | None = None
-    origin: str | None = None
 
     @property
     def id(self) -> str:
@@ -71,28 +69,21 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
             ) from error
         if not isinstance(patch, dict):
             raise OverlayError(f"{item_label}.patch must be an object")
-        protected = {
-            "id",
-            "url",
-            "overrideSource",
-            "family",
-            "originalId",
-            "original_id",
-            "origin",
-            "eligibility",
-            "eligible",
-            "variant",
-            "variants",
-            "dualPreferred",
-            "dual_preferred",
-            "provenance",
-            "selectionReason",
-            "selection_reason",
-        }.intersection(patch)
+        protected = (
+            {
+                "id",
+                "url",
+                "overrideSource",
+                "variant",
+                "selectionReason",
+                "selection_reason",
+            }
+            | COMPOSITION_ONLY_FIELDS
+        ).intersection(patch)
         if protected:
             raise OverlayError(
-                f"{item_label}.patch contains protected field "
-                + ", ".join(sorted(protected))
+                f"{item_label}.patch for selector {(package_id, url)!r} "
+                "contains protected field " + ", ".join(sorted(protected))
             )
         record = OverlayPatch(package_id, url, deepcopy(patch))
         if record.key in keys:
@@ -126,14 +117,5 @@ def apply_overlay(
             patched = merge_patch(data, patch)
             assert isinstance(patched, dict)
             data = patched
-        result.append(
-            ComposedApp(
-                app.variant,
-                app.provenance,
-                data,
-                app.family,
-                app.original_id,
-                app.origin,
-            )
-        )
+        result.append(ComposedApp(app.family, data))
     return result

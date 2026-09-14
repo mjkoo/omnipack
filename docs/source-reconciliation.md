@@ -173,14 +173,14 @@ Most mismatches originated in the BBoi/codm2000 source catalogs or generated
 catalog identities. The pack previously validated metadata and version syntax
 without checking those selected APK manifests. Some known mismatches, including
 Symphony and Shipwright, were explicitly deferred during version-policy work.
-The dual preference correctly selected igawa6 CTR according to the composition
-rule, but that rule did not establish signing continuity with an existing Simon
-installation. These are limits in our curation and acceptance process as well as
-upstream metadata quality, not evidence that the conflict resolver randomly
-chose the wrong repository.
+The dual preference correctly selected igawa6 CTR, a dual-screen build from the
+codm catalog, but that choice did not establish signing continuity with an
+existing Simon installation. These are limits in our curation and acceptance
+process as well as upstream metadata quality, not evidence that the conflict
+resolver randomly chose the wrong repository.
 
 Maintained provenance-aware corrections, explicit official-source pins, and
-family exclusions now preserve the decisions through refreshes. The bounded
+package denials now preserve the decisions through refreshes. The bounded
 review does not correct unrelated known catalog issues such as Winlator-Ludashi.
 See [curation](curation.md) for that remaining identity/asset selection caveat and
 [verification](verification.md) for the runtime check's limits.

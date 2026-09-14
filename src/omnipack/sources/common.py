@@ -4,24 +4,16 @@ from __future__ import annotations
 
 import json
 import re
-from collections.abc import Mapping
 from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpResponse
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import COMPOSITION_ONLY_FIELDS, App, Provenance, SourceType, Variant
 from omnipack.urls import gitlab_project_path
 
 
 class HttpGetter(Protocol):
-    def get(
-        self,
-        url: str,
-        *,
-        headers: Mapping[str, str] | None = None,
-        max_bytes: int | None = None,
-        method: str = "GET",
-    ) -> HttpResponse: ...
+    def get(self, url: str) -> HttpResponse: ...
 
 
 class SourceError(RuntimeError):
@@ -113,15 +105,14 @@ def normalize_record(
     record: object,
     *,
     source: str,
-    variant: Variant,
+    eligibility: frozenset[Variant],
     derive_type: bool = False,
-    eligibility: frozenset[Variant] | None = None,
-    dual_preferred: bool = False,
-    origin: str | None = None,
+    origin: str = "",
+    default_label: str = "unnamed entry",
 ) -> App:
     if not isinstance(record, dict):
         raise SourceError(source, "catalog entry must be an object")
-    label = record.get("name") or record.get("id") or "unnamed entry"
+    label = record.get("name") or record.get("id") or default_label
     for field in ("id", "url", "name"):
         if not isinstance(record.get(field), str) or not record[field].strip():
             raise SourceError(source, f"entry {label!r} is missing {field}")
@@ -149,31 +140,19 @@ def normalize_record(
         "categories",
         "additionalSettings",
         "meta",
-        "variants",
-        "dualPreferred",
-        "dual_preferred",
-        "eligible",
-        "eligibility",
-        "family",
-        "origin",
-        "originalId",
-        "original_id",
-        "provenance",
-    }
+    } | COMPOSITION_ONLY_FIELDS
     return App(
         id=record["id"],
         url=url,
         name=record["name"],
         source_type=kind,
         categories=tuple(categories),
-        variant=variant,
         provenance=Provenance(source, url),
+        eligibility=eligibility,
         additional_settings=settings(
             record.get("additionalSettings"), source=source, entry=str(label)
         ),
         raw={key: value for key, value in record.items() if key not in modeled},
-        eligibility=(frozenset({variant}) if eligibility is None else eligibility),
-        dual_preferred=dual_preferred,
         origin=origin,
     )
 

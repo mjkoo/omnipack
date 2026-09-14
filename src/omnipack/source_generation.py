@@ -12,8 +12,7 @@ from pathlib import Path
 from typing import Any, Protocol, cast
 from urllib.parse import urlsplit
 
-from omnipack.http import HttpClient, HttpConfig, HttpError
-from omnipack.model import Provenance, Variant
+from omnipack.http import HttpError
 from omnipack.overlay import ComposedApp
 from omnipack.package_id import resolve_release_assets
 from omnipack.project_policy import (
@@ -23,6 +22,7 @@ from omnipack.project_policy import (
     repository_url,
 )
 from omnipack.render import render
+from omnipack.source_http import HttpConfig, SourceHttpClient
 from omnipack.sources import load_json
 from omnipack.urls import normalize_project_url
 
@@ -280,7 +280,9 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
             raise ValueError("codm source paths must be strings")
         policy_bytes = (root / policy_path).read_bytes()
         policy = parse_project_policy(policy_bytes)
-        client = http or HttpClient(HttpConfig.from_path(root / "config/http.json"))
+        client = http or SourceHttpClient(
+            HttpConfig.from_path(root / "config/http.json")
+        )
         readme = client.get(source_url).body
         parsed = parse_project_table(readme)
         report["inputs"] = {"sourceUrl": source_url, "readmeSha256": _sha(readme)}
@@ -309,7 +311,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                     )
                     continue
                 package_id = resolve_release_assets(
-                    cast(HttpClient, client),
+                    cast(SourceHttpClient, client),
                     release,
                     rule.additional_settings.get("apkFilterRegEx", ""),
                     report,
@@ -436,16 +438,8 @@ def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
         if not isinstance(settings, dict):
             raise TypeError(f"entry {data.get('id')!r} has invalid additionalSettings")
         data["additionalSettings"] = settings
-        apps.append(
-            ComposedApp(
-                Variant.DUAL,
-                Provenance("codm2000", data["url"]),
-                data,
-                origin="codm-generated",
-                original_id=data["id"],
-            )
-        )
-    return render(apps, {}).encode()
+        apps.append(ComposedApp(f"package:{data['id']}", data))
+    return render(apps).encode()
 
 
 def _validate_ids(entries: list[dict[str, Any]]) -> None:

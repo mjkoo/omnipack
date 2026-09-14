@@ -8,19 +8,13 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Any
 
-from omnipack.build import previous_ids, publish_build
-from omnipack.composition_policy import CompositionPolicy, load_composition_policy
-from omnipack.http import HttpClient, HttpConfig
+from omnipack.build import BuildInputs, previous_ids, publish_build
+from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
+from omnipack.model import App
 from omnipack.report import format_reports, write_report
 from omnipack.source_generation import generate_codm
-from omnipack.sources import (
-    IngestionReport,
-    IngestionResult,
-    SourceError,
-    ingest_all,
-    load_json,
-)
+from omnipack.sources import IngestionReport, SourceError, ingest_all, parse_json
 from omnipack.verify import VerificationReportError, run_verification
 
 
@@ -29,7 +23,6 @@ def build(_args: argparse.Namespace) -> int:
     ingestion_report = IngestionReport()
     composition_report = CompositionReport()
     composition: CompositionResult | None = None
-    consumed_policy: CompositionPolicy | None = None
     stage = "ingestion"
     offline_verification: dict[str, Any] = {"status": "not-run", "findings": []}
 
@@ -42,29 +35,22 @@ def build(_args: argparse.Namespace) -> int:
         offline_verification = value
 
     try:
-        ingested = _ingest_for_build(root, ingestion_report)
+        inputs = BuildInputs.read(root)
+        ingested = _ingest_for_build(root, inputs, ingestion_report)
         stage = "composition"
-        if ingested.policy is None:
-            raise ValueError("ingestion result is missing composition policy")
-        consumed_policy = ingested.policy
-        composition_bytes = ingested.policy_bytes
-        if composition_bytes is None:
-            raise ValueError("ingestion result is missing composition policy snapshot")
         composition = compose(
-            ingested.apps,
-            _object_list(root / "config/deny.json", "denylist"),
-            load_json(root / "config/overlay.json", "overlay"),
-            load_json(root / "config/overlay.dual.json", "dual overlay"),
-            policy=ingested.policy,
+            ingested,
+            _object_list(inputs.deny, "denylist"),
+            parse_json(inputs.overlay, "overlay"),
+            policy=inputs.policy,
             report=composition_report,
         )
         stage = "rendering"
         publish_build(
             root,
             composition,
-            _object(root / "config/settings.json", "settings"),
             ingestion_report,
-            composition_bytes,
+            inputs,
             on_stage=record_stage,
             on_verification=record_verification,
         )
@@ -76,7 +62,6 @@ def build(_args: argparse.Namespace) -> int:
                 composition,
                 ingestion_report,
                 composition_report=composition_report,
-                policy=consumed_policy,
                 stage=stage,
                 error=error,
                 offline_verification=offline_verification,
@@ -93,30 +78,17 @@ def build(_args: argparse.Namespace) -> int:
 
 
 def _ingest_for_build(
-    root: Path, report: IngestionReport | None = None
-) -> IngestionResult:
-    source_config = load_json(root / "config/sources.json", "sources")
+    root: Path, inputs: BuildInputs, report: IngestionReport
+) -> list[App]:
+    source_config = parse_json(inputs.sources, "sources")
     if not isinstance(source_config, dict):
-        from omnipack.sources import SourceError
-
         raise SourceError("sources", "configuration must be an object")
-    extras_config = load_json(root / "config/extras.json", "extras")
-    http = HttpClient(HttpConfig.from_path(root / "config/http.json"))
-    policy_bytes = (root / "config/composition.json").read_bytes()
-    policy = load_composition_policy(policy_bytes)
-    result = ingest_all(root, http, source_config, extras_config, policy, report)
-    return IngestionResult(result.apps, result.report, result.policy, policy_bytes)
+    extras_config = parse_json(inputs.extras, "extras")
+    return ingest_all(root, HttpClient(), source_config, extras_config, report)
 
 
-def _object(path: Path, source: str) -> dict[str, Any]:
-    value = load_json(path, source)
-    if not isinstance(value, dict):
-        raise SourceError(source, "configuration must be an object")
-    return value
-
-
-def _object_list(path: Path, source: str) -> list[dict[str, str]]:
-    value = load_json(path, source)
+def _object_list(data: bytes, source: str) -> list[dict[str, str]]:
+    value = parse_json(data, source)
     if not isinstance(value, list) or not all(isinstance(item, dict) for item in value):
         raise SourceError(source, "configuration must be a list of objects")
     return value

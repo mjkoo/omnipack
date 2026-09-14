@@ -48,13 +48,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
                 normalize_record(
                     record,
                     source="rjny",
-                    variant=(
-                        Variant.SINGLE
-                        if Variant.SINGLE in eligibility
-                        else Variant.DUAL
-                    ),
                     eligibility=eligibility,
-                    dual_preferred=eligibility == frozenset({Variant.DUAL}),
                     origin="rjny-catalog",
                 )
             )

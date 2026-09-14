@@ -8,9 +8,8 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any
+from typing import Any, TypeGuard
 
-from omnipack.composition_policy import CompositionPolicy
 from omnipack.merge import (
     CompositionReport,
     CompositionResult,
@@ -18,7 +17,7 @@ from omnipack.merge import (
 from omnipack.model import Variant
 from omnipack.sources import IngestionReport
 
-BUILD_SCHEMA_VERSION = 2
+BUILD_SCHEMA_VERSION = 3
 
 
 class ReportFormatError(ValueError):
@@ -27,7 +26,7 @@ class ReportFormatError(ValueError):
 
 def write_report(
     root: Path,
-    previous: Mapping[Variant, set[str] | list[dict[str, str]]],
+    previous: Mapping[Variant, set[str]],
     composition: CompositionResult | None,
     ingestion: IngestionReport,
     *,
@@ -35,60 +34,30 @@ def write_report(
     stage: str | None = None,
     error: Exception | None = None,
     offline_verification: dict[str, Any] | None = None,
-    policy: CompositionPolicy | None = None,
 ) -> None:
     changes = None
     if composition is not None:
         changes = {}
         for variant in Variant:
             current = {app.id for app in composition.apps[variant]}
-            raw_before = previous.get(variant, set())
-            before = (
-                set(raw_before)
-                if isinstance(raw_before, set)
-                else {
-                    item["id"]
-                    for item in raw_before
-                    if isinstance(item, dict) and isinstance(item.get("id"), str)
-                }
-            )
+            before = previous.get(variant, set())
             changes[variant.value] = {
                 "added": sorted(current - before),
                 "removed": sorted(before - current),
             }
         composition_report = composition.report
-    family_changes = (
-        _family_changes(previous, composition, policy)
-        if composition is not None and policy is not None
-        else None
-    )
+    records = composition_report or CompositionReport()
     document: dict[str, Any] = {
         "schemaVersion": BUILD_SCHEMA_VERSION,
         "status": "failed" if error else "success",
         "changes": changes,
-        "skipped": ingestion.skipped,
         "sourceAdmissions": ingestion.admitted,
-        "displacements": [],
-        "denylistRemovals": [],
-        "staleExclusions": [],
+        "denylistRemovals": [_record(item) for item in records.removals],
+        "staleExclusions": [_record(item) for item in records.stale_exclusions],
+        "selections": [_record(item) for item in records.selections],
         "offlineVerification": offline_verification
         or {"status": "not-run", "findings": []},
     }
-    document["familyChanges"] = family_changes
-    document["selections"] = []
-    if composition_report is not None:
-        document["displacements"] = [
-            _record(item) for item in composition_report.displacements
-        ]
-        document["denylistRemovals"] = [
-            _record(item) for item in composition_report.removals
-        ]
-        document["staleExclusions"] = [
-            _record(item) for item in composition_report.stale_exclusions
-        ]
-        document["selections"] = [
-            _record(item) for item in composition_report.selections
-        ]
     if error is not None:
         document["stage"] = stage
         document["error"] = str(error)
@@ -108,88 +77,28 @@ def format_reports(root: Path) -> str:
     sections: list[str] = []
     if build_path.exists():
         build = _read_document(build_path, "build")
-        schema = build.get("schemaVersion")
-        if "schemaVersion" in build and (
-            type(schema) is not int or schema not in (1, BUILD_SCHEMA_VERSION)
-        ):
-            raise ReportFormatError(f"unsupported build report schema {schema!r}")
-        if build.get("status") not in ("success", "failed"):
-            raise ReportFormatError("malformed build report: status is required")
-        if any(
-            key in build and build[key] is not None and not isinstance(build[key], str)
-            for key in ("stage", "error")
-        ):
-            raise ReportFormatError("malformed build report diagnostics")
-        if "offlineVerification" in build:
-            offline = build["offlineVerification"]
-            if (
-                not isinstance(offline, dict)
-                or offline.get("status") not in ("not-run", "success", "failed")
-                or not isinstance(offline.get("findings"), list)
-                or not all(_valid_finding(item) for item in offline["findings"])
-            ):
-                raise ReportFormatError("malformed build offline verification")
+        _validate_build_report(build)
         lines = ["Build report", f"Status: {build['status']}"]
-        selections = build.get("selections", [])
-        family_changes = build.get("familyChanges")
-        if selections is not None and (
-            not isinstance(selections, list)
-            or not all(isinstance(item, dict) for item in selections)
-        ):
-            raise ReportFormatError("malformed build family selections")
-        if family_changes is not None and not isinstance(family_changes, dict):
-            raise ReportFormatError("malformed build family changes")
-        for item in selections or []:
-            required = (
-                "family",
-                "variant",
-                "effective_id",
-                "url",
-                "source",
-                "origin",
-                "reason",
-                "alternatives",
-            )
-            if not all(key in item for key in required) or not isinstance(
-                item["alternatives"], list
+        for item in build["selections"]:
+            if not isinstance(item.get("considered"), list) or not _strings(
+                item, ("family", "variant")
             ):
                 raise ReportFormatError("malformed build family selection")
             lines.append(
                 f"Selection: {item['variant']} {item['family']} -> "
-                f"{_format_candidate(item)}; reason: {item['reason']}"
+                f"{_format_winner(item)}; reason: {item['reason']}"
             )
-            for alternative in item["alternatives"]:
-                if (
-                    not isinstance(alternative, dict)
-                    or not isinstance(alternative.get("loss_reason"), str)
-                    or not _string_list(alternative.get("differing_fields"))
-                    or (
-                        alternative.get("excluded_reason") is not None
-                        and not isinstance(alternative["excluded_reason"], str)
-                    )
-                ):
-                    raise ReportFormatError("malformed build selection alternative")
-                lines.append(
-                    f"  Alternative: {_format_candidate(alternative)}; "
-                    f"lost: {alternative['loss_reason']}; "
-                    f"exclusion: {alternative.get('excluded_reason') or 'none'}; "
-                    f"differing fields: {', '.join(alternative['differing_fields']) or 'none'}"
-                )
-        if isinstance(family_changes, dict):
-            for variant, value in family_changes.items():
-                if not isinstance(value, dict):
-                    raise ReportFormatError("malformed build family changes")
-                lines.append(
-                    f"Family changes ({variant}): {json.dumps(value, sort_keys=True)}"
-                )
+            lines.extend(
+                f"  Considered: {_format_considered(considered)}"
+                for considered in item["considered"]
+            )
         if build.get("stage"):
             lines.append(f"Stage: {build['stage']}")
         if build.get("error"):
             lines.append(f"Error: {build['error']}")
-        offline = build.get("offlineVerification")
-        if isinstance(offline, dict):
-            lines.append(f"Offline verification: {offline.get('status', 'unknown')}")
-            lines.extend(_format_findings(offline.get("findings", [])))
+        offline = build["offlineVerification"]
+        lines.append(f"Offline verification: {offline['status']}")
+        lines.extend(_format_findings(offline["findings"]))
         sections.append("\n".join(lines))
     else:
         sections.append("Build report\nNo build report recorded")
@@ -221,25 +130,29 @@ def format_reports(root: Path) -> str:
     return "\n\n".join(sections) + "\n"
 
 
-def _string_list(value: object) -> bool:
-    return isinstance(value, list) and all(isinstance(item, str) for item in value)
+def _strings(item: object, keys: tuple[str, ...]) -> TypeGuard[dict[str, Any]]:
+    return isinstance(item, dict) and all(
+        isinstance(item.get(key), str) for key in keys
+    )
 
 
-def _format_candidate(item: dict[str, Any]) -> str:
-    if (
-        not all(
-            isinstance(item.get(key), str)
-            for key in ("original_id", "effective_id", "url", "source", "origin")
-        )
-        or not _string_list(item.get("eligibility"))
-        or type(item.get("dual_preferred")) is not bool
+def _format_winner(item: dict[str, Any]) -> str:
+    if not _strings(
+        item, ("original_id", "effective_id", "url", "source", "origin", "reason")
     ):
-        raise ReportFormatError("malformed build selection candidate")
-    preference = "dual-preferred" if item["dual_preferred"] else "ordinary"
+        raise ReportFormatError("malformed build selection winner")
     return (
         f"original id: {item['original_id']}; effective id: {item['effective_id']}; "
-        f"URL: {item['url']}; source: {item['source']}/{item['origin']}; "
-        f"eligible: {', '.join(item['eligibility'])}; preference: {preference}"
+        f"URL: {item['url']}; source: {item['source']}/{item['origin']}"
+    )
+
+
+def _format_considered(item: object) -> str:
+    if not _strings(item, ("original_id", "url", "source", "origin")):
+        raise ReportFormatError("malformed build selection considered candidate")
+    return (
+        f"original id: {item['original_id']}; URL: {item['url']}; "
+        f"source: {item['source']}/{item['origin']}"
     )
 
 
@@ -279,16 +192,87 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
                 location.append(f"index {value['index']}")
             if value.get("field") is not None:
                 location.append(str(value["field"]))
-            if value.get("effective_version") is not None:
-                location.append(f"version {value['effective_version']!r}")
         context = f" [{' / '.join(location)}]" if location else ""
         lines.append(f"{label}:{context} {message}")
     return lines
 
 
-def _validate_verification_report(value: dict[str, Any]) -> None:
+_BUILD_FIELDS = frozenset(
+    {
+        "schemaVersion",
+        "status",
+        "changes",
+        "sourceAdmissions",
+        "denylistRemovals",
+        "staleExclusions",
+        "selections",
+        "offlineVerification",
+    }
+)
+_BUILD_FAILURE_FIELDS = frozenset({"stage", "error"})
+_BUILD_RECORD_FIELDS = (
+    "sourceAdmissions",
+    "denylistRemovals",
+    "staleExclusions",
+    "selections",
+)
+
+
+def _validate_build_report(value: dict[str, Any]) -> None:
     schema = value.get("schemaVersion")
-    if type(schema) is not int or schema != 2:
+    if type(schema) is not int or schema != BUILD_SCHEMA_VERSION:
+        raise ReportFormatError(
+            f"unsupported build report schema {schema!r}; regenerate with `pack build`"
+        )
+    status = value.get("status")
+    if status not in ("success", "failed"):
+        raise ReportFormatError("malformed build report: status is required")
+    expected = (
+        _BUILD_FIELDS | _BUILD_FAILURE_FIELDS if status == "failed" else _BUILD_FIELDS
+    )
+    if set(value) != expected:
+        raise ReportFormatError("malformed build report fields")
+    if any(
+        value.get(key) is not None and not isinstance(value[key], str)
+        for key in _BUILD_FAILURE_FIELDS
+    ):
+        raise ReportFormatError("malformed build report diagnostics")
+    changes = value["changes"]
+    if changes is not None and not (
+        isinstance(changes, dict)
+        and set(changes) == {variant.value for variant in Variant}
+        and all(
+            isinstance(item, dict)
+            and set(item) == {"added", "removed"}
+            and all(
+                isinstance(ids, list) and all(isinstance(id_, str) for id_ in ids)
+                for ids in item.values()
+            )
+            for item in changes.values()
+        )
+    ):
+        raise ReportFormatError("malformed build package changes")
+    for key in _BUILD_RECORD_FIELDS:
+        records = value[key]
+        if not isinstance(records, list) or not all(
+            isinstance(item, dict) for item in records
+        ):
+            raise ReportFormatError(f"malformed build report {key}")
+    offline = value["offlineVerification"]
+    if (
+        not isinstance(offline, dict)
+        or offline.get("status") not in ("not-run", "success", "failed")
+        or not isinstance(offline.get("findings"), list)
+        or not all(_valid_finding(item) for item in offline["findings"])
+    ):
+        raise ReportFormatError("malformed build offline verification")
+
+
+def _validate_verification_report(value: dict[str, Any]) -> None:
+    from omnipack.verify import INPUT_PATHS, SCHEMA_VERSION
+
+    schema = value.get("schemaVersion")
+    if type(schema) is not int or schema != SCHEMA_VERSION:
         raise ReportFormatError(
             f"unsupported verification report schema {schema!r}; regenerate with `pack verify`"
         )
@@ -304,17 +288,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
         or set(verifier) != {"version", "scope"}
         or verifier.get("scope") != "structural"
         or not isinstance(inputs, dict)
-        or set(inputs)
-        != {
-            "single",
-            "dual",
-            "deny",
-            "common_overlay",
-            "dual_overlay",
-            "settings",
-            "composition",
-            "readme",
-        }
+        or set(inputs) != set(INPUT_PATHS)
         or set(value)
         != {
             "schemaVersion",
@@ -399,57 +373,3 @@ def _json_value(value: Any) -> Any:
     if isinstance(value, (list, tuple)):
         return [_json_value(item) for item in value]
     return value
-
-
-def _family_changes(
-    previous: Mapping[Variant, set[str] | list[dict[str, str]]],
-    composition: CompositionResult,
-    policy: CompositionPolicy,
-) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for variant in Variant:
-        raw = previous.get(variant, [])
-        records = raw if isinstance(raw, list) else []
-        previous_by_family: dict[str, list[tuple[str, str]]] = {}
-        unknown: list[dict[str, str]] = []
-        for item in records:
-            if not isinstance(item, dict):
-                continue
-            package_id, url = item.get("id"), item.get("url")
-            if not isinstance(package_id, str) or not isinstance(url, str):
-                continue
-            try:
-                family = policy.historical_family(package_id, url)
-            except ValueError:
-                family = None
-            if family is None:
-                unknown.append({"id": package_id, "url": url})
-            else:
-                previous_by_family.setdefault(family, []).append((package_id, url))
-        current = {app.family: app for app in composition.apps[variant] if app.family}
-        retained = []
-        for family in sorted(previous_by_family.keys() & current.keys()):
-            winner = current[family]
-            retained.append(
-                {
-                    "family": family,
-                    "previous": [
-                        {"id": package_id, "url": url}
-                        for package_id, url in previous_by_family[family]
-                    ],
-                    "current": {"id": winner.id, "url": winner.url},
-                }
-            )
-        removed = sorted(previous_by_family.keys() - current.keys())
-        unmatched = sorted(current.keys() - previous_by_family.keys())
-        result[variant.value] = {
-            "retained": retained,
-            "removed": removed,
-            "added": unmatched if not records else ([] if unknown else unmatched),
-            "unknownAdditions": unmatched if records and unknown else [],
-            "unmappedPrevious": unknown,
-            "unknownReason": "previous entries lack historical family mappings"
-            if unknown
-            else None,
-        }
-    return result

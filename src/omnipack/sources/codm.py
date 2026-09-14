@@ -37,10 +37,8 @@ def fetch(
         app = normalize_record(
             record,
             source="codm2000",
-            variant=Variant.DUAL,
             derive_type=True,
             eligibility=frozenset({Variant.DUAL}),
-            dual_preferred=True,
             origin="codm-generated",
         )
         previous = identities.get(app.id)

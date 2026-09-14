@@ -22,16 +22,15 @@ There is no generic whole-pack replacement. The separate `pack generate-source
 codm` operation resolves only the explicitly configured codm source candidate;
 it does not extend structural verification or change committed files.
 
-Standalone verification writes schema 2 evidence to `.build/verify.json`, separately
+Standalone verification writes schema 3 evidence to `.build/verify.json`, separately
 from the build report. It reads every input once, checks and fingerprints exactly
 those captured bytes, and writes the report a single time, when the run completes;
 an interrupted run leaves no new report, so any report already on disk still
 describes only the inputs an earlier completed run checked. Reports contain offline
 mode, verifier identity, observation times, completion, status, contextual errors and
-SHA-256 fingerprints of both distribution files, the denylist, both overlays,
-composition policy, pack settings and README. Missing and unreadable inputs are
-explicit. HTTP configuration and environment credentials are not consulted or
-fingerprinted.
+SHA-256 fingerprints of both distribution files, the denylist, the overlay,
+composition policy and README. Missing and unreadable inputs are explicit. HTTP
+configuration and environment credentials are not consulted or fingerprinted.
 
 Independent errors are collected across both variants. Verification exits zero
 only for a complete run without errors; report persistence failure also causes a
@@ -42,25 +41,37 @@ Verification never rebuilds or changes the packs, README, configuration or
 package IDs; codm discovery belongs to source generation.
 
 `pack report` labels supported evidence stale when any input fingerprint or the
-verifier identity differs. Older verification schemas require regeneration with
-`pack verify`. Existing build reports remain readable. One available report is
+verifier identity differs. Older verification schemas, including schema 2 reports
+that fingerprinted the removed dual-screen overlay and pack settings files,
+require regeneration with `pack verify`. Build reports must use schema 3; an older
+build report requires regeneration with `pack build`. One available report is
 enough; missing both, corrupt reports and unsupported schemas fail display.
 Displaying a recorded failed operation exits successfully.
 
 ## Structural checks and limits
 
-The validator checks JSON types, required app fields, source URL shapes,
-source-specific default settings and known setting types, package uniqueness,
-family composition constraints, configured pack settings and category colours.
-Unknown settings are acceptable when structurally valid. Regex strings are not
-compiled or evaluated, so even a malformed pattern can pass structural checks.
+The validator checks JSON types, required app fields, absolute URLs, supported
+source types and package uniqueness. Within decoded settings, it checks that a
+setting named by the source type's defaults has its default's type, that HTML
+`intermediateLink` steps and `requestHeader` records are well formed, and that
+`preferredApkIndex`, when present, is an integer. These values come from upstream
+records and overlay patches, and rendering copies them unchecked. Unknown settings
+are acceptable when structurally valid. Regex strings are not compiled or
+evaluated, so even a malformed pattern can pass structural checks.
 
-Composition checks cover rendered families, projected pins, eligibility,
-exclusions, package uniqueness, family coverage and overlay targets. Rendered
-output omits losing candidates, so verification cannot reconstruct provenance,
-candidate presence, preference or source ranking, or prove that a patch produced
-the rendered values. Fixture-driven composition and rendering tests protect
-maintained IDs, URLs, variant membership and override values across refreshes.
+Verification no longer checks that every default key is present, the rendered
+pack settings or category colours, or GitLab project URL rules. Rendering fills
+every default key and derives each category colour from its name, and ingestion
+enforces the GitLab URL rules.
+
+Composition checks cover rendered families, projected pins, denied packages,
+package uniqueness, family coverage and overlay targets. They do not check
+eligibility, which no candidate rule declares and rendered entries cannot reveal.
+Rendered output omits losing candidates, so verification cannot reconstruct
+provenance, candidate presence, preference or source ranking, or prove that a
+patch produced the rendered values. Fixture-driven composition and rendering
+tests protect maintained IDs, URLs, variant membership and override values
+across refreshes.
 
 Catalog verification compares the generated marker interior against the captured
 packs and policy. Missing, unreadable, malformed or stale catalogs fail. Handwritten

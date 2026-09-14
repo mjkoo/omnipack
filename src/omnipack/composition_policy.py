@@ -53,8 +53,6 @@ class CandidateRule:
     rationale: str
     family: str | None = None
     package_id: str | None = None
-    eligibility: frozenset[Variant] | None = None
-    dual_preferred: bool | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -66,34 +64,18 @@ class Pin:
 
 
 @dataclass(frozen=True, slots=True)
-class Projection:
-    family: str
-    eligibility: frozenset[Variant] | None
-
-
-@dataclass(frozen=True, slots=True)
 class CompositionPolicy:
     candidate_rules: tuple[CandidateRule, ...]
     pins: tuple[Pin, ...]
-    history: dict[RenderedKey, str]
-    projections: dict[RenderedKey, Projection]
+    # The family each rule assigns, by the rendered key its builds end up with.
+    projections: dict[RenderedKey, str]
     projected_pins: dict[PinKey, RenderedKey]
 
     def rendered_family(self, package_id: str, url: str) -> str:
         """Interpret a current rendered entry without build-report state."""
-        key = rendered_key(package_id, url)
-        projection = self.projections.get(key)
-        return projection.family if projection else f"package:{package_id}"
-
-    def historical_family(self, package_id: str, url: str) -> str | None:
-        """Classify a previous output only from explicit retained history."""
-        return self.history.get(rendered_key(package_id, url))
-
-
-@dataclass(frozen=True, slots=True)
-class AppliedPolicy:
-    candidates: tuple[App, ...]
-    projected_pins: dict[PinKey, RenderedKey]
+        return self.projections.get(
+            rendered_key(package_id, url), f"package:{package_id}"
+        )
 
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
@@ -102,18 +84,17 @@ def rendered_key(package_id: str, url: str) -> RenderedKey:
 
 def parse_composition_policy(document: object) -> CompositionPolicy:
     root = _object(document, "composition policy")
-    _fields(root, {"schemaVersion", "candidates", "pins", "history"}, "policy")
+    _fields(root, {"schemaVersion", "candidates", "pins"}, "policy")
     if type(root.get("schemaVersion")) is not int or root["schemaVersion"] != 1:
         raise CompositionPolicyError("schemaVersion must be integer 1")
     candidates_raw = _array(root.get("candidates"), "candidates")
     pins_raw = _array(root.get("pins"), "pins")
-    history_raw = _array(root.get("history", []), "history")
 
     rules = tuple(
         _parse_rule(value, index) for index, value in enumerate(candidates_raw)
     )
     selectors: set[tuple[str, str, str, str]] = set()
-    projections: dict[RenderedKey, Projection] = {}
+    projections: dict[RenderedKey, str] = {}
     for rule in rules:
         if rule.match.key in selectors:
             raise CompositionPolicyError(
@@ -123,21 +104,10 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
         effective_id = rule.package_id or rule.match.id
         family = rule.family or f"package:{effective_id}"
         key = rendered_key(effective_id, rule.match.url)
-        projected = Projection(family, rule.eligibility)
-        previous = projections.get(key)
-        if previous is not None:
-            if previous.family != projected.family or (
-                previous.eligibility is not None
-                and projected.eligibility is not None
-                and previous.eligibility != projected.eligibility
-            ):
-                raise CompositionPolicyError(
-                    f"rendered key {key!r} has conflicting projections"
-                )
-            projected = Projection(
-                projected.family, previous.eligibility or projected.eligibility
+        if projections.setdefault(key, family) != family:
+            raise CompositionPolicyError(
+                f"rendered key {key!r} has conflicting projections"
             )
-        projections[key] = projected
 
     pins = tuple(_parse_pin(value, index) for index, value in enumerate(pins_raw))
     pin_keys: set[PinKey] = set()
@@ -151,9 +121,8 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
         pin_keys.add(key)
         rule = next((item for item in rules if item.match == pin.match), None)
         effective_id = rule.package_id if rule and rule.package_id else pin.match.id
-        projection = projections.get(rendered_key(effective_id, pin.match.url))
-        effective_family = (
-            projection.family if projection is not None else f"package:{effective_id}"
+        effective_family = projections.get(
+            rendered_key(effective_id, pin.match.url), f"package:{effective_id}"
         )
         if pin.family != effective_family:
             raise CompositionPolicyError(
@@ -161,25 +130,7 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
                 f"{effective_family!r}"
             )
         projected_pins[key] = rendered_key(effective_id, pin.match.url)
-
-    history: dict[RenderedKey, str] = {}
-    for index, value in enumerate(history_raw):
-        record = _object(value, f"history[{index}]")
-        _fields(record, {"id", "url", "family", "rationale"}, f"history[{index}]")
-        package_id = _text(record.get("id"), f"history[{index}].id")
-        url = _url(record.get("url"), f"history[{index}].url")
-        family = _family(record.get("family"), explicit_only=False)
-        _text(record.get("rationale"), f"history[{index}].rationale")
-        key = rendered_key(package_id, url)
-        if key in history:
-            raise CompositionPolicyError(f"duplicate history key {key!r}")
-        projection = projections.get(key)
-        if projection is not None and projection.family != family:
-            raise CompositionPolicyError(
-                f"history key {key!r} conflicts with active projection"
-            )
-        history[key] = family
-    return CompositionPolicy(rules, pins, history, projections, projected_pins)
+    return CompositionPolicy(rules, pins, projections, projected_pins)
 
 
 def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
@@ -194,32 +145,26 @@ def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
 
 
 def apply_composition_policy(
-    policy: CompositionPolicy,
-    candidates: list[App] | tuple[App, ...],
-    *,
-    require_all: bool = True,
-    validate_pins: bool = True,
-) -> AppliedPolicy:
-    """Apply rules; composition defers pin validation until after exclusions.
+    policy: CompositionPolicy, candidates: list[App] | tuple[App, ...]
+) -> tuple[App, ...]:
+    """Apply identity and family rules once, requiring every rule selector.
 
-    Deferring pins preserves candidate-rule presence and identity checks.
-    Ingestion retains full pin validation, including required selectors.
+    Pins are left to composition, which validates them after processing
+    exclusions so that a failed pin still leaves the exclusion diagnostics.
     """
     collapsed = _collapse(candidates)
-    by_selector = {_candidate_selector(app).key: app for app in collapsed}
+    by_selector = {candidate_selector(app).key: app for app in collapsed}
     rules = {rule.match.key: rule for rule in policy.candidate_rules}
-    pin_selectors = tuple(pin.match.key for pin in policy.pins) if validate_pins else ()
-    for selector in (*rules, *pin_selectors):
-        if require_all and selector not in by_selector:
+    for selector in rules:
+        if selector not in by_selector:
             shown = CandidateSelector(*selector)
             raise CompositionPolicyError(
                 f"selector {_show(shown)} matched no candidate"
             )
 
     result: list[App] = []
-    applied_by_selector: dict[tuple[str, str, str, str], App] = {}
     for app in collapsed:
-        selector = _candidate_selector(app)
+        selector = candidate_selector(app)
         rule = rules.get(selector.key)
         if rule is None:
             updated = replace(app, family=f"package:{app.id}")
@@ -229,53 +174,22 @@ def apply_composition_policy(
                 app,
                 id=effective_id,
                 family=rule.family or f"package:{effective_id}",
-                eligibility=rule.eligibility or app.eligibility,
-                dual_preferred=(
-                    rule.dual_preferred
-                    if rule.dual_preferred is not None
-                    else app.dual_preferred
-                ),
             )
-            if updated.dual_preferred and Variant.DUAL not in updated.eligibility:
-                raise CompositionPolicyError(
-                    f"candidate {_show(selector)} is dualPreferred without dual eligibility"
-                )
-        projection = policy.projections.get(rendered_key(updated.id, updated.url))
-        if projection is not None and (
-            updated.family != projection.family
-            or (
-                projection.eligibility is not None
-                and updated.eligibility != projection.eligibility
-            )
-        ):
+        projected = policy.projections.get(rendered_key(updated.id, updated.url))
+        if projected is not None and updated.family != projected:
             kind = "unruled candidate" if rule is None else "candidate"
             raise CompositionPolicyError(
                 f"{kind} {_show(selector)} conflicts with rendered projection"
             )
         result.append(updated)
-        applied_by_selector[selector.key] = updated
 
-    if validate_pins:
-        for pin in policy.pins:
-            candidate = applied_by_selector.get(pin.match.key)
-            if candidate is None:
-                continue
-            if (
-                candidate.family != pin.family
-                or pin.variant not in candidate.eligibility
-            ):
-                raise CompositionPolicyError(
-                    f"pin for family {pin.family!r} target {pin.variant.value!r} "
-                    "conflicts with candidate family or eligibility"
-                )
-
-    return AppliedPolicy(tuple(result), dict(policy.projected_pins))
+    return tuple(result)
 
 
 def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:
     unique: dict[tuple[str, str, str, str], App] = {}
     for app in candidates:
-        selector = _candidate_selector(app)
+        selector = candidate_selector(app)
         previous = unique.get(selector.key)
         if previous is not None and previous != app:
             raise CompositionPolicyError(
@@ -285,11 +199,12 @@ def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:
     return tuple(unique.values())
 
 
-def _candidate_selector(app: App) -> CandidateSelector:
+def candidate_selector(app: App) -> CandidateSelector:
+    """The original identity a rule or pin names this candidate by."""
     return CandidateSelector(
         app.provenance.source,
-        app.origin or app.provenance.source,
-        app.original_id or app.id,
+        app.origin,
+        app.original_id,
         normalize_project_url(app.url),
     )
 
@@ -297,9 +212,7 @@ def _candidate_selector(app: App) -> CandidateSelector:
 def _parse_rule(value: object, index: int) -> CandidateRule:
     record = _object(value, f"candidates[{index}]")
     _fields(
-        record,
-        {"match", "family", "packageId", "eligible", "dualPreferred", "rationale"},
-        f"candidates[{index}]",
+        record, {"match", "family", "packageId", "rationale"}, f"candidates[{index}]"
     )
     selector = _selector(record.get("match"), f"candidates[{index}].match")
     rationale = _text(record.get("rationale"), f"candidates[{index}].rationale")
@@ -311,28 +224,7 @@ def _parse_rule(value: object, index: int) -> CandidateRule:
         if "packageId" in record
         else None
     )
-    eligibility = (
-        _eligibility(record["eligible"], f"candidates[{index}].eligible")
-        if "eligible" in record
-        else None
-    )
-    preferred = record.get("dualPreferred")
-    if "dualPreferred" in record and type(preferred) is not bool:
-        raise CompositionPolicyError(
-            f"candidates[{index}].dualPreferred must be boolean"
-        )
-    if preferred is True and (
-        eligibility is not None and Variant.DUAL not in eligibility
-    ):
-        raise CompositionPolicyError("dualPreferred requires dual eligibility")
-    return CandidateRule(
-        selector,
-        rationale,
-        family,
-        package_id,
-        eligibility,
-        preferred if isinstance(preferred, bool) else None,
-    )
+    return CandidateRule(selector, rationale, family, package_id)
 
 
 def _parse_pin(value: object, index: int) -> Pin:
@@ -370,19 +262,6 @@ def _selector(value: object, label: str) -> CandidateSelector:
         _text(record.get("id"), f"{label}.id"),
         _url(record.get("url"), f"{label}.url"),
     )
-
-
-def _eligibility(value: object, label: str) -> frozenset[Variant]:
-    values = _array(value, label)
-    if not values:
-        raise CompositionPolicyError(f"{label} must not be empty")
-    try:
-        variants = frozenset(Variant(item) for item in values)
-    except (TypeError, ValueError) as error:
-        raise CompositionPolicyError(f"{label} contains an unknown target") from error
-    if len(variants) != len(values):
-        raise CompositionPolicyError(f"{label} contains duplicate targets")
-    return variants
 
 
 def _family(value: object, *, explicit_only: bool) -> str:

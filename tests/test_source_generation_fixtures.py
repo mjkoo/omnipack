@@ -7,10 +7,7 @@ from typing import Any
 
 import pytest
 
-from omnipack.composition_policy import (
-    apply_composition_policy,
-    parse_composition_policy,
-)
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
 from omnipack.package_id import _is_valid_package_id
@@ -32,7 +29,8 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
-def captured_pipeline() -> tuple[list[App], list[App]]:
+def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
+    """Ingest the captured upstream catalogs with the frozen or the given extras."""
     sources = load_json(PRE_MIGRATION / "sources.json")
     release = load_json(CAPTURED / "bboi-release.json")
     standard_url, dual_url = (
@@ -57,28 +55,28 @@ def captured_pipeline() -> tuple[list[App], list[App]]:
             ).read_text(),
         }
     )
-    policy = parse_composition_policy(load_json(PRE_MIGRATION / "composition.json"))
-    higher = [
+    return [
         *rjny.fetch(http, sources["rjny"]),
         *bboi.fetch(http, sources["bboi"]),
-        *fetch_extras(load_json(PRE_MIGRATION / "extras.json")),
+        *fetch_extras(
+            load_json(PRE_MIGRATION / "extras.json") if extras is None else extras
+        ),
     ]
-    eligible_higher = list(
-        apply_composition_policy(policy, higher, require_all=False).candidates
-    )
+
+
+def captured_pipeline() -> tuple[list[App], list[App]]:
+    higher = captured_higher()
     covered = {
         normalize_project_url(app.url)
-        for app in eligible_higher
+        for app in higher
         if Variant.DUAL in app.eligibility
     }
     generated = [
         normalize_record(
             record,
             source="codm2000",
-            variant=Variant.DUAL,
             derive_type=True,
             eligibility=frozenset({Variant.DUAL}),
-            dual_preferred=True,
             origin="codm-generated",
         )
         for record in load_json(PRE_MIGRATION / "admitted-catalog.json")["apps"]
@@ -93,7 +91,6 @@ def compose_captured_baseline() -> CompositionResult:
         [*higher, *generated],
         load_json(PRE_MIGRATION / "deny.json"),
         load_json(PRE_MIGRATION / "overlay.json"),
-        load_json(PRE_MIGRATION / "overlay.dual.json"),
         policy=parse_composition_policy(load_json(PRE_MIGRATION / "composition.json")),
     )
 
@@ -103,10 +100,9 @@ def test_current_captured_baseline_reproduces_exact_exports_and_family_winners()
 ):
     index = load_json(FIXTURES / "baseline/index.json")
     result = compose_captured_baseline()
-    settings = load_json(PRE_MIGRATION / "settings.json")
 
     for variant in Variant:
-        output = render(result.apps[variant], settings).encode()
+        output = render(result.apps[variant]).encode()
         expected = next(
             item for item in index["outputs"] if item["variant"] == variant.value
         )
@@ -164,17 +160,13 @@ def _compose_with_codm_catalog(
     catalog: dict[str, Any], tmp_path: Path, higher: list[App]
 ) -> CompositionResult:
     policy = parse_composition_policy(load_json(ROOT / "config/composition.json"))
-    eligible_higher = apply_composition_policy(
-        policy, higher, require_all=False
-    ).candidates
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "codm.json").write_text(json.dumps(catalog))
-    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, eligible_higher)
+    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, higher)
     return compose(
         [*higher, *generated],
         load_json(ROOT / "config/deny.json"),
         load_json(ROOT / "config/overlay.json"),
-        load_json(ROOT / "config/overlay.dual.json"),
         policy=policy,
     )
 
@@ -243,6 +235,50 @@ def test_committed_catalog_leaves_the_single_screen_pack_unchanged(
         higher,
     )
     assert committed.apps[Variant.SINGLE] == modified.apps[Variant.SINGLE]
+
+
+def test_committed_codm_entries_keep_their_source_semantics_in_composition(
+    tmp_path: Path,
+) -> None:
+    higher, _ = captured_pipeline()
+    result = _compose_with_codm_catalog(_committed_codm_catalog(), tmp_path, higher)
+    selections = {
+        (item.effective_id, item.variant): item for item in result.report.selections
+    }
+    settings = {
+        (app.id, variant): app.data["additionalSettings"]
+        for variant in Variant
+        for app in result.apps[variant]
+    }
+
+    # A higher source already covers EmuLnk in dual, so its codm entry is
+    # suppressed and the higher source's build and settings win.
+    emulnk = selections[("com.emulnk", Variant.DUAL)]
+    assert emulnk.source == "rjny"
+    assert all(item.source != "codm2000" for item in emulnk.considered)
+    assert settings[("com.emulnk", Variant.DUAL)]["includePrereleases"] is True
+
+    for package_id in ("dev.adrian.showdown", "com.mastercook777.heimdall"):
+        selection = selections[(package_id, Variant.DUAL)]
+        assert (selection.source, selection.origin, selection.original_id) == (
+            "codm2000",
+            "codm-generated",
+            package_id,
+        )
+        assert settings[(package_id, Variant.DUAL)]["includePrereleases"] is True
+        assert (package_id, Variant.SINGLE) not in settings
+
+    kanto = selections[("1845280017", Variant.DUAL)]
+    assert (kanto.source, kanto.original_id) == ("codm2000", "1845280017")
+    assert settings[("1845280017", Variant.DUAL)]["trackOnly"] is True
+    assert "Gen1Recomp" in settings[("1845280017", Variant.DUAL)]["about"]
+    assert ("1845280017", Variant.SINGLE) not in settings
+    for variant in Variant:
+        host = selections[("com.theboisclub.pokemonred", variant)]
+        assert (host.source, normalize_project_url(host.url)) == (
+            "extras",
+            normalize_project_url("https://github.com/bryanthaboi/gen1recomp"),
+        )
 
 
 def test_reviewed_policy_sets_fallback_for_named_projects() -> None:

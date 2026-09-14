@@ -3,22 +3,40 @@ from __future__ import annotations
 import json
 import shutil
 from pathlib import Path
+from typing import Any
 
 import pytest
 
-from omnipack.report import format_reports
+from omnipack.report import format_reports, write_report
+from omnipack.sources import IngestionReport
 from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
-from tests.test_verify import historical_composition
+from tests.test_verify import composition_without_extras
+
+
+def build_report(
+    root: Path, *, drop: tuple[str, ...] = (), **fields: object
+) -> dict[str, Any]:
+    """Write a writer-shaped build report with fields replaced or dropped."""
+    write_report(root, {}, None, IngestionReport())
+    path = root / ".build/report.json"
+    document = {
+        key: value
+        for key, value in json.loads(path.read_text()).items()
+        if key not in drop
+    }
+    document.update(fields)
+    path.write_text(json.dumps(document))
+    return document
 
 
 def copy_inputs(root: Path) -> None:
     for relative in INPUT_PATHS.values():
         target = root / relative
         target.parent.mkdir(parents=True, exist_ok=True)
-        if relative.name in {"overlay.json", "overlay.dual.json"}:
+        if relative.name == "overlay.json":
             target.write_text("[]")
         elif relative.name == "composition.json" and relative.exists():
-            target.write_text(historical_composition())
+            target.write_text(composition_without_extras())
         elif relative.exists():
             shutil.copyfile(relative, target)
         elif relative.name == "composition.json":
@@ -27,7 +45,7 @@ def copy_inputs(root: Path) -> None:
 
 def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
-    run_verification(tmp_path)
+    assert run_verification(tmp_path)["schemaVersion"] == 3
     output = format_reports(tmp_path)
     assert "No build report recorded" in output
     assert "Evidence: current" in output
@@ -38,15 +56,41 @@ def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     assert "Evidence: stale" in format_reports(tmp_path)
 
 
-def test_build_only_legacy_failure_is_displayable(tmp_path: Path) -> None:
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps({"status": "failed", "stage": "rendering", "error": "bad"})
-    )
+def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
+    build_report(tmp_path, status="failed", stage="rendering", error="bad")
     output = format_reports(tmp_path)
     assert "Build report\nStatus: failed" in output
+    assert "Stage: rendering" in output and "Error: bad" in output
     assert "No standalone verification recorded" in output
+
+
+@pytest.mark.parametrize(
+    "document",
+    [
+        {"status": "success"},
+        {"schemaVersion": 1, "status": "success"},
+        {"schemaVersion": 2, "status": "success", "displacements": []},
+    ],
+    ids=["schemaless", "schema-1", "schema-2"],
+)
+def test_older_build_reports_require_regeneration(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    document: dict[str, object],
+) -> None:
+    from omnipack.cli import main
+
+    path = tmp_path / ".build/report.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(document))
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 1
+    error = capsys.readouterr().err
+    assert (
+        f"unsupported build report schema {document.get('schemaVersion')!r}; "
+        "regenerate with `pack build`"
+    ) in error
 
 
 @pytest.mark.parametrize(
@@ -71,7 +115,7 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
     path.write_text(
         json.dumps(
             {
-                "schemaVersion": 2,
+                "schemaVersion": 3,
                 "verifier": verifier_identity(),
                 "mode": "offline",
                 "startedAt": "2026-09-01T00:00:00+00:00",
@@ -137,10 +181,26 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    assert report["schemaVersion"] == 2
+    assert report["schemaVersion"] == 3
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
+
+
+def test_schema_2_verification_report_requires_regeneration(tmp_path: Path) -> None:
+    copy_inputs(tmp_path)
+    report = run_verification(tmp_path)
+    inputs = dict(report["inputs"])
+    inputs["common_overlay"] = inputs.pop("overlay")
+    inputs["dual_overlay"] = inputs["settings"] = {"state": "missing"}
+    report.update(schemaVersion=2, inputs=inputs)
+    report["verifier"]["version"] = "1.0.0"
+    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    with pytest.raises(
+        ValueError,
+        match=r"unsupported verification report schema 2; regenerate with `pack verify`",
+    ):
+        format_reports(tmp_path)
 
 
 @pytest.mark.parametrize("value", ["not json", "[]", '{"schemaVersion":99}'])
@@ -155,17 +215,7 @@ def test_corrupt_or_unsupported_verification_report_fails(
 
 
 def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps(
-            {
-                "schemaVersion": 1,
-                "status": "success",
-                "offlineVerification": {"status": "success", "findings": []},
-            }
-        )
-    )
+    build_report(tmp_path, offlineVerification={"status": "success", "findings": []})
     assert "Offline verification: success" in format_reports(tmp_path)
 
 
@@ -183,8 +233,17 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
         {"offlineVerification": {"status": [], "findings": []}},
         {"offlineVerification": {"status": "success", "findings": {}}},
         {"offlineVerification": {"status": "failed", "findings": [{}]}},
-        {"error": []},
-        {"stage": {}},
+        {"status": "failed", "stage": "rendering", "error": []},
+        {"status": "failed", "stage": {}, "error": "bad"},
+        {"status": "failed", "stage": "rendering"},
+        {"stage": "rendering", "error": "bad"},
+        {"displacements": []},
+        {"changes": {"single": {"added": []}}},
+        {"changes": {"single": {"added": [], "removed": [1]}, "dual": {}}},
+        {"sourceAdmissions": None},
+        {"denylistRemovals": ["removed"]},
+        {"staleExclusions": {}},
+        {"selections": None},
     ],
 )
 def test_malformed_build_report_is_concise_cli_failure(
@@ -192,18 +251,31 @@ def test_malformed_build_report_is_concise_cli_failure(
 ) -> None:
     from omnipack.cli import main
 
-    path = tmp_path / ".build/report.json"
-    path.parent.mkdir()
-    path.write_text(json.dumps({"status": "success", **mutation}))
+    document = build_report(tmp_path, **mutation)
     monkeypatch.chdir(tmp_path)
     assert main(["report"]) == 1
     assert "Traceback" not in capsys.readouterr().err
-    assert json.loads(path.read_text()) == {"status": "success", **mutation}
+    assert json.loads((tmp_path / ".build/report.json").read_text()) == document
 
 
-def test_findings_display_location_field_and_effective_version(
-    tmp_path, monkeypatch, capsys
-) -> None:
+@pytest.mark.parametrize(
+    "field",
+    [
+        "changes",
+        "sourceAdmissions",
+        "denylistRemovals",
+        "staleExclusions",
+        "selections",
+        "offlineVerification",
+    ],
+)
+def test_build_report_missing_a_field_is_rejected(tmp_path: Path, field: str) -> None:
+    build_report(tmp_path, drop=(field,))
+    with pytest.raises(ValueError, match="malformed build report fields"):
+        format_reports(tmp_path)
+
+
+def test_findings_display_location_and_field(tmp_path, monkeypatch, capsys) -> None:
     from omnipack.cli import main
 
     copy_inputs(tmp_path)
@@ -234,10 +306,10 @@ def test_findings_display_location_field_and_effective_version(
     assert path.read_bytes() == before
 
 
-def test_human_report_explains_corrected_winner_and_rejected_alternative(
+def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
     tmp_path: Path,
 ) -> None:
-    from omnipack.merge import CompositionReport, FamilySelection, SelectionAlternative
+    from omnipack.merge import CompositionReport, ConsideredCandidate, FamilySelection
     from omnipack.model import Variant
     from omnipack.report import write_report
     from omnipack.sources import IngestionReport
@@ -250,21 +322,13 @@ def test_human_report_explains_corrected_winner_and_rejected_alternative(
         "https://example.test/winner",
         "extras",
         "extras",
-        (Variant.SINGLE, Variant.DUAL),
-        False,
         "ordinary-fallback",
         (
-            SelectionAlternative(
-                "old.manifest",
-                "preferred.pkg",
-                "https://example.test/preferred",
+            ConsideredCandidate(
                 "bboi",
-                "bboi-dual-asset",
-                (Variant.DUAL,),
-                True,
-                ("url", "additionalSettings"),
-                "excluded",
-                "incompatible release",
+                "bboi-standard-asset",
+                "old.manifest",
+                "https://example.test/other",
             ),
         ),
     )
@@ -279,15 +343,55 @@ def test_human_report_explains_corrected_winner_and_rejected_alternative(
     )
     output = format_reports(tmp_path)
     assert "Status: failed" in output
-    assert "original id: manifest.wrong; effective id: correct.pkg" in output
-    assert "https://example.test/winner" in output
-    assert "eligible: single, dual; preference: ordinary" in output
-    assert "ordinary-fallback" in output
     assert (
-        "Alternative: original id: old.manifest; effective id: preferred.pkg" in output
-    )
-    assert "https://example.test/preferred" in output
-    assert "bboi/bboi-dual-asset" in output
-    assert "eligible: dual; preference: dual-preferred" in output
-    assert "lost: excluded; exclusion: incompatible release" in output
-    assert "differing fields: url, additionalSettings" in output
+        "Selection: dual app:shared -> original id: manifest.wrong; "
+        "effective id: correct.pkg; URL: https://example.test/winner; "
+        "source: extras/extras; reason: ordinary-fallback"
+    ) in output
+    assert (
+        "  Considered: original id: old.manifest; URL: https://example.test/other; "
+        "source: bboi/bboi-standard-asset"
+    ) in output
+    assert "lost:" not in output and "eligible:" not in output
+
+
+WINNER = {
+    "family": "app:x",
+    "variant": "dual",
+    "original_id": "winner",
+    "effective_id": "winner",
+    "url": "https://example.test/winner",
+    "source": "extras",
+    "origin": "extras",
+    "reason": "source",
+    "considered": [],
+}
+
+
+@pytest.mark.parametrize(
+    ("selection", "message"),
+    [
+        ({**WINNER, "family": None}, "malformed build family selection"),
+        ({**WINNER, "considered": {}}, "malformed build family selection"),
+        (
+            {key: value for key, value in WINNER.items() if key != "original_id"},
+            "malformed build selection winner",
+        ),
+        (
+            {
+                **WINNER,
+                "considered": [
+                    {"source": "rjny", "origin": "rjny-catalog", "original_id": "b"}
+                ],
+            },
+            "malformed build selection considered candidate",
+        ),
+    ],
+    ids=["no-family", "considered-not-list", "no-original-id", "considered-no-url"],
+)
+def test_malformed_selection_records_are_rejected(
+    tmp_path: Path, selection: dict[str, object], message: str
+) -> None:
+    build_report(tmp_path, selections=[selection])
+    with pytest.raises(ValueError, match=message):
+        format_reports(tmp_path)

@@ -36,18 +36,20 @@ fetch the source README, inspect APKs or resolve package IDs.
 
 ### Requirement: HTTP credentials are optional and scoped to exact hosts
 
-All ingestion and source-discovery HTTP requests SHALL use the shared
-standard-library HTTP helper, including catalog fetches and the vendored
-package-id resolver's release metadata requests, ranged APK reads and full asset
-downloads. GitHub default stable-release metadata SHALL be requested from
+Source-discovery HTTP requests SHALL use the shared standard-library HTTP
+helper, including the vendored package-id resolver's release metadata requests,
+ranged APK reads and full asset downloads. GitHub default stable-release
+metadata SHALL be requested from
 `https://api.github.com/repos/OWNER/REPO/releases/latest`. Explicit prerelease
 or release-title policy SHALL use
 `https://api.github.com/repos/OWNER/REPO/releases` with bounded listing under
 the source-generation contract. Track-only release checks SHALL use the same
-host-scoped helper without APK requests. Publication operations are outside
-this helper: release and PR operations SHALL use the `gh` CLI and branch pushes
-SHALL use `git`, under the publication credential rules of the workflows that
-make them.
+host-scoped helper without APK requests. Routine build ingestion SHALL fetch
+upstream catalogs with standard-library requests that carry no credentials,
+and SHALL NOT read the HTTP credential configuration. Publication operations
+are outside this helper: release and PR operations SHALL use the `gh` CLI and
+branch pushes SHALL use `git`, under the publication credential rules of the
+workflows that make them.
 
 The system SHALL read host-to-environment-variable registrations from the
 `credentials` object in dedicated `config/http.json`, whose committed default
@@ -93,6 +95,12 @@ that destination's exact registration.
 - **WHEN** a request bearing the token for `api.github.com` redirects to an
   unregistered host
 - **THEN** the redirected request carries no Authorization header
+
+#### Scenario: Build ingestion carries no credentials
+
+- **WHEN** `pack build` fetches upstream catalogs while `GITHUB_TOKEN` is nonempty
+- **THEN** no catalog request carries an Authorization header, and the build
+  succeeds without `config/http.json`
 
 ### Requirement: URLs are compared in a normalized form
 
@@ -169,10 +177,13 @@ drop any entry marked as excluded from export, SHALL omit an entry from the
 single-screen variant when it is marked as not included in the standard pack,
 and SHALL omit an entry from the dual-screen variant when it is marked as not
 included in the dual-screen pack. An entry carrying no such flag SHALL be a
-candidate for both variants. Entries eligible for single SHALL be ordinary
-candidates; entries eligible only for dual SHALL be dual-preferred. Explicit
-composition policy SHALL be able to override eligibility and preference after
-source normalization, but SHALL NOT revive an entry excluded from export.
+candidate for both variants. An entry in both exports SHALL be a baseline
+build. An entry only in the dual-screen export SHALL be a dual-screen build,
+preferred in dual. An entry only in the standard export SHALL be a baseline
+build that upstream keeps out of dual. An entry marked out of both packs SHALL
+contribute to neither. These flags SHALL alone decide an entry's kind and
+eligibility: composition policy SHALL NOT change them, restore an entry to a
+pack its flags leave it out of, or revive an entry excluded from export.
 
 #### Scenario: Entry excluded from export
 
@@ -188,6 +199,13 @@ source normalization, but SHALL NOT revive an entry excluded from export.
 
 - **WHEN** an RJNY entry carries no export metadata
 - **THEN** it is a candidate for both variants
+
+#### Scenario: Entry kept out of dual by upstream
+
+- **WHEN** an RJNY entry is marked as not included in the dual-screen pack, as
+  the captured catalog's Cemu 0.5 entry is
+- **THEN** it is a baseline build for single only, and its family's dual
+  selection comes from another build, such as the dual-only Cemu 0.5.2 entry
 
 ### Requirement: RJNY presentation metadata does not reach the pack
 
@@ -225,38 +243,46 @@ and SHALL NOT require that a package id map to the same entry across variants.
 
 ### Requirement: BBoi34 entries map to variants by source file
 
-The system SHALL retain each standard-asset record as an ordinary candidate
-eligible for both targets, and each dual-asset record as a dual-preferred
-candidate eligible only for dual. It SHALL preserve asset origin and retain both
-records when a package id appears in both assets. Selection SHALL occur during
-composition, where device preference precedes source ranking. Explicit policy
-SHALL be able to override normalized eligibility and preference.
+The system SHALL retain each standard-asset record as a baseline build eligible
+for both targets, and each dual-asset record as a dual-screen build eligible
+only for dual and therefore preferred there. It SHALL preserve asset origin and
+retain both records when a package id appears in both assets. Selection SHALL
+occur during composition, where, absent a pin, a dual-screen build replaces the
+baseline build in dual ahead of source ranking. The asset a record comes from
+SHALL alone decide its kind; composition policy SHALL NOT change its
+eligibility or dual preference. A package denial SHALL remove a dual-asset
+build together with any standard-asset build carrying the same package id. A
+dual pin naming the standard-asset build keeps it in dual in place of the
+dual-asset build without removing either.
 
 #### Scenario: Id present in both BBoi34 assets
 
-- **WHEN** both assets contain different builds of an id and no override changes their suitability
-- **THEN** ingestion retains both and composition selects the standard build for single and the dual build for dual, absent a higher-ranked eligible choice
+- **WHEN** both assets contain different builds of an id, and no pin applies
+- **THEN** ingestion retains both and composition selects the standard build for single and the dual build for dual, absent a higher-precedence build of the same kind
 
 #### Scenario: Standard alternative remains available
 
-- **WHEN** explicit policy makes the dual candidate ineligible for dual
-- **THEN** the retained standard candidate remains available for dual selection
+- **WHEN** a family's standard-asset build is eligible for both targets and the
+  family has no available dual-screen build, because the dual asset lacks one
+  or a denial removed one whose package the standard build does not carry
+- **THEN** the retained standard build remains available for dual selection
 
-### Requirement: Hand-written extras are ingested as complete entries
+### Requirement: Hand-written extras are ingested as baseline or dual-screen builds
 
 The system SHALL ingest each entry in the extras configuration as a candidate
 entry, and SHALL fail the build with an error naming the entry when an extras
 entry is missing a package id, a URL or a name. An extras entry has no upstream
 record to take a display name from, and a name is not optional downstream:
 rendering orders entries by name and the import format displays it. An extras
-entry SHALL be a candidate for both variants, unless it
-carries a variants field naming the variants it applies to, in which case it
-SHALL be a candidate for exactly the named variants. The system SHALL fail the
-build when that field names anything other than the known variants, or names
-an empty list. An optional boolean `dualPreferred` SHALL default to false and
-SHALL be valid only with dual eligibility. Explicit composition policy SHALL be
-able to override normalized eligibility and preference. Composition-only fields
-SHALL NOT reach Obtainium app records.
+entry SHALL be a baseline build, a candidate for both variants, unless it
+carries an optional boolean `dualScreen` set to true, which makes it a
+dual-screen build: a candidate for the dual-screen variant only, preferred
+there. `dualScreen` SHALL default to false, and a non-boolean value SHALL fail
+the build with an error naming the entry. An extras entry carrying a `variants`
+or `dualPreferred` field SHALL fail the build with an error naming the entry
+and the field. Composition policy SHALL NOT change an extra's eligibility or
+dual preference. `dualScreen` and the other composition-only fields SHALL NOT
+reach Obtainium app records.
 
 #### Scenario: Extras entry lacks a package id
 
@@ -268,24 +294,37 @@ SHALL NOT reach Obtainium app records.
 - **WHEN** an extras entry carries a package id and a URL but no name
 - **THEN** the build fails with an error naming that entry
 
-#### Scenario: Extras entry names no variants
+#### Scenario: Extras entry is a baseline build
 
-- **WHEN** an extras entry carries a package id and a URL and no variants
-  field
+- **WHEN** an extras entry carries a package id, a URL and a name and no
+  `dualScreen` field
 - **THEN** it is a candidate for both the single-screen and the dual-screen
-  variant
+  variant and is not preferred in dual
 
-#### Scenario: Extras entry names an unknown variant
+#### Scenario: Extras entry is a dual-screen build
 
-- **WHEN** an extras entry's variants field names a variant the pack does not
-  have
-- **THEN** the build fails with an error naming that entry and the rejected
-  value
+- **WHEN** an extras entry sets `dualScreen` to true, a dual-screen
+  lower-source candidate shares its family and no pin applies
+- **THEN** the extra is a candidate for the dual-screen variant only and wins
+  dual selection over that candidate by source precedence
+
+#### Scenario: Extras dual-screen flag is not a boolean
+
+- **WHEN** an extras entry's `dualScreen` field holds a value other than true
+  or false
+- **THEN** the build fails with an error naming that entry
+
+#### Scenario: Extras entry carries a retired field
+
+- **WHEN** an extras entry carries a `variants` or `dualPreferred` field
+- **THEN** the build fails with an error naming that entry and the field
 
 #### Scenario: Ordinary extra competes with a dual fork
 
-- **WHEN** an extra omits dualPreferred and a dual-preferred lower-source candidate shares its family
-- **THEN** the extra is ordinary and does not win dual selection solely through source precedence
+- **WHEN** a baseline extra and a dual-screen lower-source candidate share a
+  family and no pin applies
+- **THEN** the dual-screen candidate wins dual selection, and the extra does
+  not win it solely through source precedence
 
 ### Requirement: Every entry carries a supported source type
 
@@ -369,18 +408,20 @@ explicit track-only resources. It SHALL retain discovery settings such as
 prerelease enablement and filename filters, and SHALL NOT reinterpret a
 track-only resource ID as an Android package ID.
 
-During routine ingestion, codm2000 entries SHALL be dual-only and dual-preferred
-unless explicit policy overrides those properties. A normalized project URL
-already supplied by a higher-precedence candidate eligible for dual after
-explicit eligibility policy SHALL suppress the corresponding codm2000 candidate
-before exclusions and selection. Single-only coverage SHALL NOT suppress it.
-Merely appearing in codm2000 SHALL NOT promote an ordinary higher-source build.
+During routine ingestion, codm2000 entries SHALL be dual-screen builds,
+eligible for dual only and preferred there; composition policy SHALL NOT change
+that. A normalized project URL already supplied by a higher-precedence
+candidate that its source makes eligible for dual SHALL suppress the
+corresponding codm2000 candidate before exclusions and selection. Single-only
+coverage SHALL NOT suppress it. Suppression SHALL use source eligibility alone,
+and ingestion SHALL NOT read or apply the composition policy. Merely appearing
+in codm2000 SHALL NOT promote an ordinary higher-source build.
 
 Retained entries SHALL preserve codm2000 provenance, generated origin, original
 package identity and source settings so existing family rules and fork-specific
 overlays continue matching. Active candidate selectors SHALL be validated
-against the complete admitted candidate set; historical mappings SHALL remain
-exempt. Missing rules or pinned candidates SHALL fail explicitly.
+against the complete admitted candidate set. Missing rules or pinned candidates
+SHALL fail explicitly.
 
 #### Scenario: Dual coverage suppresses a local catalog candidate
 
@@ -389,8 +430,8 @@ exempt. Missing rules or pinned candidates SHALL fail explicitly.
 
 #### Scenario: Single-only coverage leaves a dual candidate
 
-- **WHEN** the higher source covers only single, including after explicit eligibility policy
-- **THEN** the committed entry remains a dual-preferred codm2000 candidate
+- **WHEN** the higher-precedence candidate for that URL is eligible for single only, as an RJNY entry left out of the dual-screen export is
+- **THEN** the committed entry remains a dual-screen codm2000 candidate, preferred in dual
 
 #### Scenario: Existing generated family selector remains valid
 

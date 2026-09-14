@@ -39,15 +39,82 @@ remain separate and unchanged.
 - **WHEN** all source acquisition succeeds, no preferred candidate exists, and no pin requires one
 - **THEN** dual selection uses an eligible ordinary candidate if available
 
+### Requirement: Each build is a baseline build or a dual-screen build
+
+Every candidate build SHALL be either a baseline build or a dual-screen build.
+A build SHALL be a dual-screen build exactly when it is eligible for dual only,
+and dual preference SHALL be derived from that alone, with no separate
+preference setting. A build's kind and eligibility SHALL come only from its
+source, as source ingestion defines for each source. No candidate rule or other
+composition setting SHALL change a build's eligibility or dual preference.
+
+The single-screen pack SHALL select among a family's baseline builds. A valid
+pin comes first: it selects the one candidate it names for its family and pack
+ahead of dual-screen replacement and source precedence, as explicit selections
+define, and it may name a dual-eligible baseline build for dual even when the
+family has an available dual-screen build. Absent a pin, a family's available
+dual-screen build SHALL replace its baseline build in the dual-screen pack, a
+family with no available dual-screen build SHALL use its dual-eligible baseline
+build, and source precedence SHALL decide among builds of one kind. A family
+whose only builds are dual-screen builds SHALL appear only in the dual-screen
+pack. Nothing other than a pin naming a specific candidate SHALL make the
+dual-screen pack select a baseline build over an available dual-screen build.
+
+A package denial removes builds, not families, as "Denied packages are excluded
+from both variants" defines. Where a family's baseline and dual-screen builds
+share a package id, a denial of that id SHALL remove both builds from both
+packs, and the family's builds carrying other package ids SHALL stay
+selectable. The Zelda 3, Minish Cap and Harvest Moon 64 standard and dual
+builds share a package id and those families have no other build, so a denial
+of that id removes each of those apps from both packs. A dual pin naming a
+family's baseline build SHALL keep it in the dual-screen pack in place of the
+family's dual-screen build, whether or not the two builds share a package id.
+
+#### Scenario: A dual-screen build replaces the baseline in dual
+
+- **WHEN** a family has a baseline build eligible for both packs and a
+  dual-screen build, and no pin applies
+- **THEN** single selects the baseline build and dual selects the dual-screen
+  build, even when the baseline build comes from a higher-precedence source
+
+#### Scenario: A family has no dual-screen build
+
+- **WHEN** a family's builds are all baseline builds eligible for both packs,
+  and no pin applies
+- **THEN** both packs select among those baseline builds by source precedence
+
+#### Scenario: A family has only a dual-screen build
+
+- **WHEN** a family's only build is a dual-screen build
+- **THEN** it is selected in the dual-screen pack and the single-screen pack
+  has no entry for that family
+
+#### Scenario: A denied package shared by both builds leaves other packages selectable
+
+- **WHEN** a denial names a package id carried by both a family's baseline
+  build and its dual-screen build, and the family has another baseline build
+  with a different package id that is eligible for both packs
+- **THEN** neither denied build is selected in either pack, and the
+  different-package baseline build is selected in both
+
+#### Scenario: A dual pin keeps a baseline build that shares its package
+
+- **WHEN** a family's baseline build eligible for both packs and its
+  dual-screen build share a package id, and a valid dual pin names the
+  baseline build
+- **THEN** both packs select the baseline build, the dual-screen build is
+  selected in neither, and the dual selection's reason is the pin
+
 ### Requirement: Explicit selections identify an eligible candidate
 
 Policy SHALL permit one candidate pin per family and variant. A pin SHALL name
 an original candidate selector and a rationale, and SHALL select that candidate
-ahead of device preference or source ranking. A missing, ambiguous, excluded,
+ahead of device preference or source ranking. A dual pin MAY therefore name a
+dual-eligible baseline build even when the family has an available dual-screen
+build. A missing, ambiguous, excluded,
 wrong-family or target-ineligible pinned candidate SHALL fail the build. A pin
-SHALL NOT implicitly override an exclusion or eligibility restriction, and a
-family exclusion SHALL NOT silently disable a pin. Multiple pins for one family
-and target SHALL fail.
+SHALL NOT implicitly override an exclusion or eligibility restriction. Multiple
+pins for one family and target SHALL fail.
 
 #### Scenario: Maintainer selects a standard build for dual
 
@@ -62,33 +129,8 @@ and target SHALL fail.
 
 #### Scenario: Pin conflicts with a denial
 
-- **WHEN** a pin names a candidate excluded for its target by package or family
+- **WHEN** a pin names a candidate whose effective package is denied
 - **THEN** the build fails with the conflicting pin and denial identified
-
-### Requirement: Historical family mappings survive candidate retirement
-
-The composition policy SHALL accept an optional `history` array, defaulting to
-empty, of records containing nonempty effective `id`, project `url`, `family`
-and `rationale`. Family values SHALL use the `package:` or `app:` namespace.
-Keys SHALL use effective id and normalized project URL. Unknown fields, duplicate
-normalized keys and family disagreement with an active rule projection for the
-same key SHALL fail configuration validation with the conflicting key identified.
-Historical mappings SHALL be maintainer-authored committed input and SHALL remain
-usable after their candidates and obsolete active rules disappear. They SHALL NOT
-require current candidate presence or satisfy active candidate selectors. They
-SHALL be used only for previous-output family classification, never for current
-selection, corrections, eligibility, pins or current rendered-family coverage.
-Nightly SHALL NOT update history or expand its publication allowlist.
-
-#### Scenario: Retired candidate retains its family authority
-
-- **WHEN** an old selected candidate disappears from successful ingestion and its obsolete active rule is removed while its historical mapping remains
-- **THEN** history does not fail candidate-presence validation and remains available to classify the previous output
-
-#### Scenario: Historical mappings conflict
-
-- **WHEN** history duplicates a normalized rendered key or disagrees with an active rule projection for that key
-- **THEN** configuration fails with the key identified rather than silently choosing a family
 
 ### Requirement: Explicit policy separates app families from package identities
 
@@ -103,18 +145,21 @@ fail with the affected selector identified.
 
 A candidate SHALL default to family `package:<effective-package-id>`. Explicit
 family assignments SHALL use the separate `app:` namespace and SHALL NOT be
-inferred from names, categories or repository ancestry. Rules SHALL permit an
-effective package-id correction, family assignment, device eligibility and dual
-preference, require a rationale, and preserve original provenance. Identity
-corrections SHALL have recorded primary APK manifest evidence. Rules projecting
-to the same effective id and normalized URL SHALL agree on family and explicitly
-declared eligibility, so rendered-family interpretation is unambiguous. Build
-SHALL reject any candidate sharing that rendered key whose family or eligibility
-contradicts the projection, including candidates without their own rule. Absent
-explicit eligibility SHALL impose no additional offline restriction, because
-source-derived eligibility cannot be reconstructed from rendered entries.
-Composition metadata SHALL NOT
-be serialized into Obtainium app records.
+inferred from names, categories or repository ancestry. A candidate rule SHALL
+contain a `match` selector and a `rationale`, SHALL permit an effective
+package-id correction (`packageId`) and a family assignment (`family`), and
+SHALL preserve original provenance. A rule SHALL NOT set eligibility or dual
+preference, which come only from the build's source: an `eligible` or
+`dualPreferred` field SHALL fail as an unknown candidate-rule field with the
+rule and field identified. Identity corrections SHALL have recorded primary APK
+manifest evidence. Rules projecting to the same effective id and normalized URL
+SHALL agree on family, so rendered-family interpretation is unambiguous, and a
+projection SHALL carry the family only. Build SHALL reject any candidate
+sharing that rendered key whose family contradicts the projection, including
+candidates without their own rule. Projections SHALL impose no offline
+eligibility restriction, because source-derived eligibility cannot be
+reconstructed from rendered entries. Composition metadata SHALL NOT be
+serialized into Obtainium app records.
 
 #### Scenario: Different package ids represent replacement builds
 
@@ -137,8 +182,13 @@ be serialized into Obtainium app records.
 #### Scenario: Rules disagree on a rendered identity
 
 - **WHEN** two source-specific rules project to one effective id and URL but assign
-  different families or eligibility
+  different families
 - **THEN** configuration fails instead of making offline interpretation ambiguous
+
+#### Scenario: A rule declares eligibility or dual preference
+
+- **WHEN** a candidate rule carries an `eligible` or `dualPreferred` field
+- **THEN** configuration fails with the rule and the unknown field identified
 
 ### Requirement: Each variant is composed independently
 
@@ -153,13 +203,13 @@ separately, so that a package id may carry different content in each.
 
 ### Requirement: Composition runs in a fixed stage order
 
-The system SHALL normalize candidates, apply identity/family/device rules, remove
+The system SHALL normalize candidates, apply identity and family rules, remove
 excluded candidates, validate explicit selections, select by family and target,
 validate overlay targets, apply overlays, and check unique packages and family
-coverage. Exclusions SHALL observe corrected package and family identities before
-selection and SHALL NOT be re-applied after overlays. Overlays SHALL NOT change
-identity, URL, source type or composition metadata, including by null deletion.
-Failures SHALL preserve the previous output pair and diagnostics already collected.
+coverage. Exclusions SHALL observe corrected package identities before selection
+and SHALL NOT be re-applied after overlays. Overlays SHALL NOT change identity,
+URL, source type or composition metadata, including by null deletion. Failures
+SHALL preserve the previous output pair and diagnostics already collected.
 
 #### Scenario: An overlay cannot move an entry onto a denylisted package id
 
@@ -224,41 +274,41 @@ in each output, including when family rules separate candidates sharing an id.
 - **WHEN** an extras entry shares a family with an upstream candidate at the same device-preference tier and no pin applies
 - **THEN** extras wins and its complete entry is selected
 
-### Requirement: Displaced candidates are reported
+### Requirement: Family selections are reported
 
-The system SHALL report every selected family/variant with the winning candidate,
-effective package id, source and origin, and selection reason: pin, dual preference,
-ordinary fallback or source precedence. It SHALL list displaced alternatives,
-their identities and eligibility, why they lost, and fields differing from the
-winner. Exclusions and identity corrections SHALL also be reported. Reports SHALL
-distinguish project/package replacements from app-family additions and removals
-using historical mappings for previous outputs, and mark missing-history
-classifications unknown rather than infer family changes.
+The system SHALL report every selected family and variant with the winning
+candidate's original and effective package ids, project URL, source and origin,
+the other candidates of that family it was chosen over, and one selection
+reason: pin, dual preference, ordinary fallback or source precedence. Exclusions
+and stale exclusions SHALL also be reported.
 
 #### Scenario: Lower-source dual build wins
 
 - **WHEN** a dual-preferred BBoi entry defeats an ordinary RJNY entry
-- **THEN** the report names both candidates and identifies device preference as the reason
+- **THEN** the report names the winner, lists the RJNY candidate as considered
+  and identifies device preference as the reason
 
-#### Scenario: Losing candidate differs from the winner
+#### Scenario: Identity correction is visible in the selection
 
-- **WHEN** a displaced candidate differs in its version or APK settings
-- **THEN** the report identifies the differing fields for maintainer review
+- **WHEN** an evidenced rule changes the winning candidate's effective package id
+- **THEN** the selection records both its original and effective package ids
 
-### Requirement: Denylisted apps are excluded
+### Requirement: Denied packages are excluded from both variants
 
-A denylist entry SHALL contain exactly one nonempty package `id` or `family`, a
-reason, and optionally a known variant. Missing variant SHALL mean both targets.
-The system SHALL exclude all matching candidates before selection and report the
-exclusion. Package denials SHALL match effective package identities across sources;
-family denials SHALL match every build in the logical family. A package denial
-SHALL NOT remove different-package alternatives merely because they share a family.
-Stale exclusions SHALL be nonfatal and reported against their applicable targets.
-Invalid shapes, both selector kinds, or unknown variants SHALL fail explicitly.
+A denylist entry SHALL contain exactly a nonempty effective package `id` and a
+nonempty `reason`. The system SHALL exclude every candidate carrying that
+effective package id from both variants before selection and report the
+exclusion. Package denials SHALL match effective package identities across
+sources. A package denial SHALL NOT remove different-package alternatives merely
+because they share a family, so a family SHALL be absent from a variant after
+denials only when none of its remaining candidates is eligible there. An entry
+matching no candidate SHALL be reported as
+a stale exclusion and SHALL NOT fail the build. Any other field, including a
+family or variant selector, SHALL fail explicitly with the entry identified.
 
 #### Scenario: Denied by package id
 
-- **WHEN** several sources contribute a denied package and the denial names no variant
+- **WHEN** several sources contribute a denied package
 - **THEN** no candidate carrying that package is selected in either output
 
 #### Scenario: Package exclusion permits an alternative
@@ -266,34 +316,24 @@ Invalid shapes, both selector kinds, or unknown variants SHALL fail explicitly.
 - **WHEN** a preferred dual package is denied and its family has another eligible package
 - **THEN** dual can select that alternative unless a conflicting pin fails validation
 
-#### Scenario: Family exclusion removes all builds
+#### Scenario: Denylist entry matches no candidate
 
-- **WHEN** a family denial applies only to dual
-- **THEN** no build of that family is selected in dual and single is unaffected
-
-#### Scenario: Denylist entry matches no composed entry
-
-- **WHEN** a dual-only denial matches only a single-only candidate
+- **WHEN** a denial names a package that no candidate carries
 - **THEN** the exclusion is reported stale, changes nothing and does not fail the build
 
-#### Scenario: Denylist entry names an unknown variant
+#### Scenario: Denylist entry carries a retired selector
 
-- **WHEN** a denial names an unrecognized target
-- **THEN** the build fails with the selector and rejected target
+- **WHEN** a denylist entry carries a `family` or `variant` field
+- **THEN** the build fails with the entry and the unknown field identified
 
-#### Scenario: Denied in one variant only
+### Requirement: One overlay patches composed entries
 
-- **WHEN** a package denial names dual and that package is eligible for both variants
-- **THEN** all dual candidates carrying that package are excluded and single remains unaffected
-
-### Requirement: Overlays patch composed entries
-
-Each overlay file SHALL contain an array of records with effective package `id`,
-project `url` and object `patch`. The common overlay SHALL apply to matching
-selected entries in both variants, followed by the dual overlay in dual only.
-Matching SHALL use both effective id and normalized project URL. Duplicate
-selectors within one file SHALL fail. A non-object patch, including null, SHALL
-fail. An obsolete id-keyed overlay object SHALL fail with migration guidance.
+The overlay file SHALL contain an array of records with effective package `id`,
+project `url` and object `patch`. Each record SHALL apply to the matching
+selected entry in every variant that selects it. Matching SHALL use both
+effective id and normalized project URL. Duplicate selectors SHALL fail. A
+non-object patch, including null, SHALL fail. An obsolete id-keyed overlay
+object SHALL fail with migration guidance.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
 Patches SHALL NOT contain `id`, `url`, `overrideSource` or composition metadata
@@ -305,17 +345,12 @@ to another fork. Whole-app removal SHALL remain the denylist's responsibility.
 #### Scenario: Overlay changes a setting
 
 - **WHEN** both variants select the same effective id and normalized URL
-- **THEN** a common matching patch applies to both
+- **THEN** a matching patch applies to both
 
 #### Scenario: Shared package id uses different repositories
 
 - **WHEN** single and dual select one package id from different project URLs
 - **THEN** a patch naming the single repository does not affect the dual repository
-
-#### Scenario: Dual overlay refines the common overlay
-
-- **WHEN** both files patch the same id and URL
-- **THEN** dual receives the common patch followed by the dual patch and single receives only common
 
 #### Scenario: Overlay deletes a key
 
@@ -347,44 +382,39 @@ to another fork. Whole-app removal SHALL remain the denylist's responsibility.
 - **WHEN** a patch maps overrideSource or id to null
 - **THEN** the build fails because protected fields cannot be deleted
 
-### Requirement: An overlay that patches nothing fails the build
+### Requirement: An overlay record that patches nothing fails the build
 
-The system SHALL fail when an overlay's id-and-URL selector matches no selected
-entry in its applicable variants. A common selector matching either variant SHALL
-be valid and apply only where matched. A dual selector SHALL match dual. The
-presence of the package id under a different project URL SHALL NOT satisfy a
-selector. Losing or excluded candidates SHALL NOT satisfy overlay targets.
+The system SHALL fail when an overlay record's id-and-URL selector matches no
+selected entry in either variant. A selector matching one variant SHALL be
+valid and apply only where matched. The presence of the package id under a
+different project URL SHALL NOT satisfy a selector. Losing or excluded
+candidates SHALL NOT satisfy overlay targets.
 
 #### Scenario: Old fork was replaced
 
 - **WHEN** the package id remains selected but under a different normalized URL
 - **THEN** the old fork's overlay fails as stale
 
-#### Scenario: Common overlay names an id present in one variant only
+#### Scenario: Overlay names an id present in one variant only
 
-- **WHEN** a common selector matches only the dual output
+- **WHEN** a selector matches only the dual output
 - **THEN** it is valid and applies only there
-
-#### Scenario: Dual overlay names an id the dual-screen variant lacks
-
-- **WHEN** a dual selector matches only the single output
-- **THEN** the build fails with the stale dual selector
 
 #### Scenario: Overlay names an id that no longer exists
 
-- **WHEN** a common overlay selector's id is absent from both selected outputs
+- **WHEN** a selector's id is absent from both selected outputs
 - **THEN** the build fails with the stale id-and-URL selector
 
-### Requirement: The dual-screen variant covers every single-screen app
+### Requirement: Every single-screen family has a dual-screen selection
 
-Every family selected in single SHALL have a selected build in dual, except an
-explicit applicable family denial or a dual-applicable package denial naming
-the single winner's effective package id. An exemption SHALL apply even if its
-denial removed no dual candidate. A denial of some other package in that family
-SHALL NOT waive coverage. Upstream eligibility restrictions, unresolved generated
-links and verification failures SHALL NOT themselves waive family coverage.
-Different-package replacements in one declared family SHALL satisfy coverage.
-Dual-only additions SHALL NOT require a single counterpart.
+Every family selected in single SHALL have a selected build in dual. Upstream
+eligibility restrictions, unresolved generated links, denials of other packages
+in the family and verification failures SHALL NOT waive family coverage. An app
+therefore cannot be published in single only. An app is kept out of both packs
+by denying every package id its family's builds carry, since a package denial
+leaves the family's builds with other package ids selectable. Different-package replacements in one declared
+family SHALL satisfy coverage. Dual-only additions SHALL NOT require a single
+counterpart.
 
 #### Scenario: Different-package dual replacement
 
@@ -393,20 +423,10 @@ Dual-only additions SHALL NOT require a single counterpart.
 
 #### Scenario: An app is missing from the dual-screen variant
 
-- **WHEN** single selects a family with no dual-eligible candidate or explicit exemption
+- **WHEN** single selects a family with no dual-eligible candidate
 - **THEN** the build fails with the family coverage gap rather than copying an ineligible build
 
-#### Scenario: A variant-scoped denial leaves a gap
+#### Scenario: The only dual build is denied
 
-- **WHEN** the single winner's family or effective package id is explicitly denied for dual
-- **THEN** missing dual coverage is permitted even if the denial removed nothing
-
-#### Scenario: Another package was denied
-
-- **WHEN** a different package in a single-selected family is denied for dual and no dual winner exists
-- **THEN** coverage fails because that denial does not exempt the single winner
-
-#### Scenario: A variant-scoped denial removed nothing but still exempts
-
-- **WHEN** a dual denial names the single winner's effective package, no dual candidate carried it, and its family has no dual selection
-- **THEN** coverage is exempt and the unmatched denial is reported stale
+- **WHEN** the only dual-eligible candidate of a single-selected family carries a denied package
+- **THEN** the build fails with the family coverage gap

@@ -13,7 +13,7 @@ from omnipack.catalog import (
     replace_catalog,
     split_catalog,
 )
-from omnipack.composition_policy import CompositionPolicy, Projection, rendered_key
+from omnipack.composition_policy import CompositionPolicy, rendered_key
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -51,9 +51,8 @@ def policy(*projections: tuple[str, str, str]) -> CompositionPolicy:
     return CompositionPolicy(
         (),
         (),
-        {},
         {
-            rendered_key(package_id, url): Projection(family, None)
+            rendered_key(package_id, url): family
             for package_id, url, family in projections
         },
         {},

@@ -1,22 +1,24 @@
-"""Small authenticated HTTP client for every pipeline network request."""
+"""Plain retrying HTTP GET, and the request pieces every client shares.
+
+The build fetches whole public catalogs, so `HttpClient` sends no credentials
+and follows redirects with urllib's defaults. Source generation, which
+authenticates and bounds its reads, uses `omnipack.source_http`, built on the
+shared request, response and retry helpers here.
+"""
 
 from __future__ import annotations
 
 import json
-import os
 import time
 import urllib.error
 import urllib.request
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
-from http.client import HTTPException, HTTPMessage, IncompleteRead
-from io import BytesIO
-from pathlib import Path
-from typing import IO, Any, Protocol
+from http.client import HTTPException, IncompleteRead
+from typing import Any, Protocol, TypedDict, Unpack
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
-MAX_REDIRECTS = 10
 _FORBIDDEN_CALLER_HEADERS = frozenset({"authorization", "cookie"})
 
 
@@ -35,42 +37,6 @@ class TransientHttpError(HttpError):
 
 
 @dataclass(frozen=True, slots=True)
-class HttpConfig:
-    """Exact-host mappings to environment variables containing credentials."""
-
-    credentials: Mapping[str, str]
-
-    def __post_init__(self) -> None:
-        object.__setattr__(
-            self,
-            "credentials",
-            {host.lower(): variable for host, variable in self.credentials.items()},
-        )
-
-    @classmethod
-    def from_path(cls, path: str | Path) -> HttpConfig:
-        """Load and validate an HTTP configuration document."""
-        with Path(path).open(encoding="utf-8") as stream:
-            document = json.load(stream)
-        return cls.from_document(document)
-
-    @classmethod
-    def from_document(cls, document: object) -> HttpConfig:
-        """Validate an already captured HTTP configuration document."""
-        credentials = (
-            document.get("credentials") if isinstance(document, dict) else None
-        )
-        if not isinstance(credentials, dict) or not all(
-            isinstance(host, str) and isinstance(variable, str)
-            for host, variable in credentials.items()
-        ):
-            raise ValueError(
-                "HTTP config credentials must map host strings to variable names"
-            )
-        return cls(credentials)
-
-
-@dataclass(frozen=True, slots=True)
 class HttpResponse:
     """The response data needed by catalog and APK consumers."""
 
@@ -86,195 +52,134 @@ class HttpResponse:
 
 class Transport(Protocol):
     def __call__(
-        self, request: urllib.request.Request, timeout: float, max_bytes: int | None
+        self, request: urllib.request.Request, timeout: float
     ) -> HttpResponse: ...
 
 
-class _CredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
-    max_redirections = MAX_REDIRECTS
+class ClientSettings(TypedDict, total=False):
+    """Request and retry settings every retrying client accepts."""
 
-    def __init__(self, client: HttpClient) -> None:
-        self.client = client
-
-    def http_error_302(
-        self,
-        req: urllib.request.Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: HTTPMessage,
-    ) -> Any:
-        # urllib drains redirect bodies without a bound. Give its redirect policy
-        # an empty body after closing the real stream, preserving loop checks.
-        fp.close()
-        with BytesIO() as empty:
-            return super().http_error_302(req, empty, code, msg, headers)
-
-    http_error_301 = http_error_302
-    http_error_303 = http_error_302
-    http_error_307 = http_error_302
-    http_error_308 = http_error_302
-
-    def redirect_request(
-        self,
-        req: urllib.request.Request,
-        fp: IO[bytes],
-        code: int,
-        msg: str,
-        headers: HTTPMessage,
-        newurl: str,
-    ) -> urllib.request.Request | None:
-        redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
-        if redirected is None:
-            return None
-        return self.client.redirect_request(redirected, newurl)
+    timeout: float
+    user_agent: str
+    retries: int
+    backoff: float
+    sleep: Callable[[float], None]
 
 
-class HttpClient:
-    """Fetch bytes with exact-host credentials and bounded transient retries."""
+class RetryingClient:
+    """Retry configuration and dispatch shared by every retrying HTTP client.
+
+    Subclasses pass their `ClientSettings` keywords through unchanged, so the
+    defaults live here only. A subclass owns its own `transport` attribute,
+    since each accepts a differently shaped transport callable, and calls
+    `_retry` from its `get`.
+    """
+
+    timeout: float
+    user_agent: str
+    retries: int
+    backoff: float
+    sleep: Callable[[float], None]
 
     def __init__(
         self,
-        config: HttpConfig,
         *,
         timeout: float = 30.0,
         user_agent: str = "omnipack/0.1",
         retries: int = 2,
         backoff: float = 0.5,
         sleep: Callable[[float], None] = time.sleep,
-        transport: Transport | None = None,
     ) -> None:
         if retries < 0 or backoff < 0:
             raise ValueError("retries and backoff must be nonnegative")
-        self.config = config
         self.timeout = timeout
         self.user_agent = user_agent
         self.retries = retries
         self.backoff = backoff
         self.sleep = sleep
-        self.transport = transport or self._urllib_transport
 
-    def get(
-        self,
-        url: str,
-        *,
-        headers: Mapping[str, str] | None = None,
-        max_bytes: int | None = None,
-        method: str = "GET",
-    ) -> HttpResponse:
-        """Fetch one URL, retrying transient failures up to the configured bound."""
-        if max_bytes is not None and max_bytes < 0:
-            raise ValueError("max_bytes must be nonnegative")
-        return self._request(url, headers=headers, max_bytes=max_bytes, method=method)
-
-    def _request(
-        self,
-        url: str,
-        *,
-        headers: Mapping[str, str] | None = None,
-        max_bytes: int | None = None,
-        method: str = "GET",
-    ) -> HttpResponse:
+    def _retry(self, url: str, attempt: Callable[[], HttpResponse]) -> HttpResponse:
+        """Run one request attempt, retrying transient failures with backoff."""
         attempts = self.retries + 1
-        for attempt in range(attempts):
-            request = self.build_request(url, headers=headers, method=method)
+        for number in range(attempts):
             try:
-                return self.transport(request, self.timeout, max_bytes)
+                return attempt()
             except (OSError, HTTPException) as error:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
-                if not _is_transient(error) or attempt + 1 == attempts:
+                if not _is_transient(error) or number + 1 == attempts:
                     if _is_transient(error):
-                        raise TransientHttpError(url, attempt + 1) from error
+                        raise TransientHttpError(url, number + 1) from error
                     raise HttpError(
-                        f"request to {redact_url(url)} failed after "
-                        f"{attempt + 1} attempts"
+                        f"request to {redact_url(url)} failed after {number + 1} attempts"
                     ) from error
-                self.sleep(self.backoff * (2**attempt))
+                self.sleep(self.backoff * (2**number))
         raise AssertionError("request loop did not return or raise")
 
-    def build_request(
+
+class HttpClient(RetryingClient):
+    """Fetch public URLs with bounded transient retries and no credentials."""
+
+    def __init__(
         self,
-        url: str,
         *,
-        headers: Mapping[str, str] | None = None,
-        method: str = "GET",
-    ) -> urllib.request.Request:
-        """Build a request and attach credentials registered for its exact host."""
-        parsed = urlsplit(url)
-        if parsed.username is not None or parsed.password is not None:
-            raise ValueError("embedded URL credentials are not allowed")
-        forbidden = [
-            name
-            for name in (headers or {})
-            if name.lower() in _FORBIDDEN_CALLER_HEADERS
-        ]
-        if forbidden:
-            raise ValueError(f"caller credential header is not allowed: {forbidden[0]}")
-        request = urllib.request.Request(
-            url, headers=dict(headers or {}), method=method
-        )
-        if not request.has_header("User-agent"):
-            request.add_header("User-Agent", self.user_agent)
-        self._set_authorization(request)
-        return request
+        transport: Transport | None = None,
+        **settings: Unpack[ClientSettings],
+    ) -> None:
+        super().__init__(**settings)
+        self.transport = transport or self._urllib_transport
 
-    def redirect_request(
-        self, request: urllib.request.Request, new_url: str
-    ) -> urllib.request.Request:
-        """Rebuild authorization for a redirect destination."""
-        headers = {
-            name: value
-            for name, value in (
-                *request.header_items(),
-                *request.unredirected_hdrs.items(),
-            )
-            if name.lower() != "authorization"
-        }
-        redirected = urllib.request.Request(
-            new_url, headers=headers, method=request.method
+    def get(self, url: str) -> HttpResponse:
+        """Fetch one URL, retrying transient failures up to the configured bound."""
+        return self._retry(
+            url,
+            lambda: self.transport(
+                build_request(url, user_agent=self.user_agent), self.timeout
+            ),
         )
-        self._set_authorization(redirected)
-        return redirected
-
-    def _set_authorization(self, request: urllib.request.Request) -> None:
-        host = (urlsplit(request.full_url).hostname or "").lower()
-        variable = self.config.credentials.get(host)
-        token = os.environ.get(variable, "") if variable else ""
-        if token:
-            request.add_unredirected_header("Authorization", f"Bearer {token}")
 
     def _urllib_transport(
-        self,
-        request: urllib.request.Request,
-        timeout: float,
-        max_bytes: int | None,
+        self, request: urllib.request.Request, timeout: float
     ) -> HttpResponse:
-        opener = urllib.request.build_opener(_CredentialRedirectHandler(self))
-        stream: Any
-        stream = opener.open(request, timeout=timeout)
-        with stream:
-            body = stream.read() if max_bytes is None else stream.read(max_bytes + 1)
-            if max_bytes is not None and len(body) > max_bytes:
-                raise HttpError(
-                    f"response from {redact_url(stream.url)} exceeds {max_bytes} bytes"
-                )
-            # A sized read returns a short body instead of raising when the
-            # connection closes before Content-Length is satisfied.
-            remaining = getattr(stream, "length", None)
-            if remaining:
-                raise IncompleteRead(body, remaining)
-            status = stream.status
-            if not isinstance(status, int):
-                raise HttpError(
-                    f"response from {redact_url(stream.url)} has no HTTP status"
-                )
-            return HttpResponse(
-                url=stream.url,
-                status=status,
-                headers=stream.headers,
-                body=body,
-            )
+        with urllib.request.urlopen(request, timeout=timeout) as stream:
+            return complete_response(stream, stream.read())
+
+
+def build_request(
+    url: str,
+    *,
+    user_agent: str,
+    headers: Mapping[str, str] | None = None,
+    method: str = "GET",
+) -> urllib.request.Request:
+    """Build a request that carries neither URL nor caller-supplied credentials."""
+    parsed = urlsplit(url)
+    if parsed.username is not None or parsed.password is not None:
+        raise ValueError("embedded URL credentials are not allowed")
+    forbidden = [
+        name for name in (headers or {}) if name.lower() in _FORBIDDEN_CALLER_HEADERS
+    ]
+    if forbidden:
+        raise ValueError(f"caller credential header is not allowed: {forbidden[0]}")
+    request = urllib.request.Request(url, headers=dict(headers or {}), method=method)
+    if not request.has_header("User-agent"):
+        request.add_header("User-Agent", user_agent)
+    return request
+
+
+def complete_response(stream: Any, body: bytes) -> HttpResponse:
+    """Wrap a body read from a urllib response, rejecting a truncated read."""
+    # A sized read returns a short body instead of raising when the
+    # connection closes before Content-Length is satisfied.
+    remaining = getattr(stream, "length", None)
+    if remaining:
+        raise IncompleteRead(body, remaining)
+    status = stream.status
+    if not isinstance(status, int):
+        raise HttpError(f"response from {redact_url(stream.url)} has no HTTP status")
+    return HttpResponse(
+        url=stream.url, status=status, headers=stream.headers, body=body
+    )
 
 
 def _is_transient(error: OSError | HTTPException) -> bool:

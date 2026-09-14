@@ -8,28 +8,33 @@ to exact input bytes. Verification makes no upstream or device-behavior guarante
 
 ## Requirements
 
-### Requirement: Offline verification checks the serialized pair
+### Requirement: Offline verification checks the serialized entry shape
 
 The system SHALL validate both rendered import documents without fetching,
-hydrating, repairing or rewriting them. It SHALL reject missing/unreadable files,
-invalid JSON including non-finite numbers, non-object roots, non-list `apps`,
-non-object `settings`, malformed app records, duplicate ids within a variant,
-and unsupported source types. Each app SHALL have nonempty string `id`, `name`
-and absolute HTTP(S) `url`, string `author`, string-list `categories`, and
-`overrideSource` equal to GitHub, HTML or GitLab. GitLab entries SHALL use
-public HTTPS gitlab.com project URLs with a namespace and project, optionally
-including subgroups (at most 21 path components in total), with the full case-sensitive project path preserved. Track-only ids SHALL NOT be required
-to follow Android package-name syntax.
+hydrating, repairing or rewriting them. It SHALL reject missing or unreadable
+files, invalid JSON including non-finite numbers, non-object roots, non-list
+`apps`, non-object `settings`, malformed app records, duplicate ids within a
+variant, and unsupported source types. Each app SHALL have nonempty string `id`,
+`name` and absolute HTTP(S) `url`, string `author`, string-list `categories`,
+`overrideSource` equal to GitHub, HTML or GitLab, and `additionalSettings` as a
+string decoding to an object. Track-only ids SHALL NOT be required to follow
+Android package-name syntax. Unknown fields SHALL NOT be removed or rejected
+solely for being unknown offline.
 
-`additionalSettings` SHALL be a string decoding to an object with every key
-defined by the committed defaults for its source type, with correctly typed
-known settings. Nested HTML steps and header records SHALL be checked. Optional
-`preferredApkIndex`, when present, SHALL be an integer, not a boolean. Unknown
-fields SHALL NOT be removed or rejected solely for being unknown offline.
-`settings.categories` SHALL decode from a string to a mapping of the exact
-observed category names to unsigned 32-bit integer ARGB colours, consistent with
-the configured colours and existing deterministic fallback rule. Other configured
-pack settings SHALL agree with the rendered settings block.
+Within decoded settings, a setting named by the committed defaults for the
+entry's source type SHALL have the same JSON type as its default. For HTML
+entries, each `intermediateLink` step SHALL be an object carrying every step
+field with its expected type, and each `requestHeader` record SHALL be an
+object with a string `requestHeader`. Optional `preferredApkIndex`, when
+present, SHALL be an integer, not a boolean. These values reach the packs from
+upstream catalog records and overlay patches, and rendering copies them without
+checking their types, so offline verification is their only check before
+publication.
+
+Default-key completeness, the rendered pack settings and category colours, and
+GitLab project URL rules SHALL be outside offline verification. Rendering fills
+every default key and derives every category colour from the entries it
+renders, and ingestion enforces the GitLab URL rules.
 
 #### Scenario: A rendered settings object is not string encoded
 
@@ -49,53 +54,64 @@ pack settings SHALL agree with the rendered settings block.
 - **THEN** offline verification preserves the input and does not claim that the
   setting behaves correctly in Obtainium
 
-#### Scenario: Ordinary offline verification accepts the rendered Aurora pair
-
-- **WHEN** both normally rendered packs contain Aurora with `overrideSource: GitLab`, its canonical public HTTPS gitlab.com project URL and correctly typed complete GitLab settings, and all other offline checks pass
-- **THEN** ordinary offline verification succeeds for both variants without network access, hydration, repair or rewriting
-
 #### Scenario: Unsupported source remains an offline error
 
 - **WHEN** either rendered pack contains an `overrideSource` other than GitHub, HTML or GitLab
 - **THEN** offline verification fails with the variant, id and offending source identified and no network requests occur
 
-#### Scenario: GitLab defaults are incomplete or mistyped
+#### Scenario: A known setting has the wrong type
 
-- **WHEN** a rendered GitLab entry lacks a committed default key or supplies a known setting with the wrong type
-- **THEN** offline verification fails without hydrating or repairing the entry
+- **WHEN** a rendered entry's decoded settings hold a known setting whose type
+  differs from its default, or the entry's `preferredApkIndex` is a boolean or a
+  string
+- **THEN** offline verification fails with the variant, id and field identified,
+  without hydrating or repairing the entry
 
-### Requirement: Offline verification checks local composition constraints
+#### Scenario: A nested HTML step or request header is malformed
 
-The system SHALL validate the composition policy, denylist and build-bound
-overlays without fetching source catalogs. It SHALL interpret rendered families
-using effective id and normalized project URL projections from the policy,
-falling back to package families where no active rule applies. Historical mappings
-SHALL be validated as configuration but SHALL NOT participate in current output
-family projection, eligibility, pins or coverage. Ambiguous projections,
-invalid configuration and forbidden overlay fields SHALL fail.
+- **WHEN** an HTML entry's `intermediateLink` step lacks a step field or holds
+  one of the wrong type, or a `requestHeader` record lacks a string
+  `requestHeader`
+- **THEN** offline verification fails with the variant, id and setting
+  identified
+
+#### Scenario: A default key is absent
+
+- **WHEN** a rendered entry's decoded settings lack a default key, and every
+  other check passes
+- **THEN** offline verification succeeds without claiming that the settings
+  behave correctly in Obtainium
+
+### Requirement: Offline verification checks rendered composition consistency
+
+The system SHALL validate the composition policy, denylist and overlay without
+fetching source catalogs. It SHALL interpret rendered families using effective
+id and normalized project URL projections from the policy, falling back to
+package families where no active rule applies. Projections SHALL carry the
+family only; offline verification SHALL NOT check eligibility, which no
+candidate rule declares and which rendered entries cannot reveal. Ambiguous
+projections, invalid configuration and forbidden overlay fields SHALL fail.
 
 It SHALL reject duplicate selected families within a variant, a denied package
-or family remaining in scope, violations of projected eligibility or candidate
-pins, stale id-and-URL overlay targets, and single families absent from dual
-without the explicit composition exemptions. A common patch matching either
-variant SHALL be valid; stale exclusions SHALL remain nonfatal. A different
-package in the same declared family SHALL satisfy coverage. Unique output package
-ids SHALL still be required independently.
+present in either variant, violations of candidate pins, overlay records whose
+id-and-URL pair is in neither variant, and single families absent from dual. Stale exclusions SHALL remain nonfatal. A different
+package in the same declared family SHALL satisfy coverage. Unique output
+package ids SHALL still be required independently.
 
 These checks SHALL NOT claim to verify source provenance, optimal winner ranking,
 rule presence in unfetched catalogs or actual patch values. Those candidate-level
-checks remain build responsibilities. Offline verification SHALL not rewrite
+checks remain build responsibilities. Offline verification SHALL NOT rewrite
 outputs or require previous build reports to interpret family coverage.
 
-#### Scenario: Dual-only overlay has no target
+#### Scenario: Overlay has no target
 
-- **WHEN** the named id-and-URL pair exists only in single
-- **THEN** verification reports a stale dual overlay
+- **WHEN** an overlay record's id-and-URL pair exists in neither variant
+- **THEN** verification reports a stale overlay
 
-#### Scenario: An explicit exclusion permits different coverage
+#### Scenario: Single family is missing from dual
 
-- **WHEN** a single family's dual output is absent and its family or single winner's package is denied for dual
-- **THEN** coverage passes even if the denial removed no candidate
+- **WHEN** a family present in single has no dual output
+- **THEN** verification reports the coverage gap for that family
 
 #### Scenario: Different-package family replacement is present
 
@@ -136,13 +152,13 @@ Catalog errors SHALL prevent successful verification.
 
 Verification SHALL make no network requests or simulate Obtainium release
 selection, HTML traversal, Dart regular-expression semantics, effective-version
-extraction, or device behavior. It SHALL retain local serialized-output,
-composition, settings and generated-catalog checks. Unknown settings SHALL remain
-acceptable when structurally valid, without a support claim. Regular-expression
-settings SHALL be validated as the required data type, not compiled in Python
-as a claim of Dart compatibility. Success SHALL establish only the documented
-local checks, not upstream health, download availability, package identity,
-installation, or absence of spurious update notifications.
+extraction, or device behavior. It SHALL retain local serialized-shape,
+setting-value, composition and generated-catalog checks. Unknown settings SHALL
+remain acceptable when structurally valid, without a support claim.
+Regular-expression settings SHALL be checked only as the required data type,
+not compiled in Python as a claim of Dart compatibility. Success SHALL establish
+only the documented local checks, not upstream health, download availability,
+package identity, installation, or absence of spurious update notifications.
 
 #### Scenario: Upstream release becomes unavailable
 
@@ -151,7 +167,7 @@ installation, or absence of spurious update notifications.
 
 #### Scenario: Pattern semantics are outside the guarantee
 
-- **WHEN** a regex setting has the correct structural type but may be invalid in Obtainium
+- **WHEN** a regex setting may be invalid in Obtainium
 - **THEN** structural verification does not evaluate it or claim syntax compatibility
 
 ### Requirement: Structural verification evidence belongs to an exact input snapshot
@@ -160,12 +176,11 @@ Standalone verification SHALL write `.build/verify.json` separately from the
 build report, as a diagnostic. It SHALL identify structural/offline scope, schema
 and verifier versions, observation times, status, fingerprints of the exact
 input bytes it checked, and errors with variant, entry and field context where
-applicable. Fingerprints SHALL cover both output files, denylist, both overlays,
-composition policy, pack settings and README. Missing and unreadable inputs
-SHALL be explicit. HTTP configuration and credentials SHALL NOT be required,
-read, or fingerprinted by structural verification. Reports SHALL NOT contain
-resolved versions, asset probes, compatibility classifications, or an Obtainium
-compatibility guarantee.
+applicable. Fingerprints SHALL cover both output files, denylist, overlay,
+composition policy and README. Missing and unreadable inputs SHALL be explicit.
+HTTP configuration and credentials SHALL NOT be required, read, or fingerprinted
+by structural verification. Reports SHALL NOT contain resolved versions, asset
+probes, compatibility classifications, or an Obtainium compatibility guarantee.
 
 Verification SHALL check and fingerprint one captured set of input bytes,
 collect independently discoverable errors across both variants, and succeed
@@ -196,5 +211,6 @@ publication. Previous reports SHALL NOT bypass these checks. Obsolete verificati
 
 #### Scenario: Obsolete evidence
 
-- **WHEN** an old report uses the retired live-capable schema
+- **WHEN** a report uses an older schema, including the retired live-capable
+  schema or one that fingerprints the removed dual overlay and pack settings
 - **THEN** the user is instructed to regenerate it with `pack verify`

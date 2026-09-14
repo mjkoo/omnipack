@@ -27,11 +27,11 @@
     },
     {
       "file": "config/extras.json",
-      "sha256": "b7432b7255db4d7642a98ea03bdcfc68fb2dc53d6e05eec9eac24f439c2467f3"
+      "sha256": "3066b2293f2861969ad30e021f5e8c2fdad7edc01a7c82d6288edb857aa81f08"
     },
     {
       "file": "config/composition.json",
-      "sha256": "0d9a5cd95f446e93e6d95d238c1c83503df274562ef7c4d3184742e5006227e6"
+      "sha256": "b9aca1bcef981b7d968d3136c35aee8049d885ab85c1373fae1f5f2d0c6be7f1"
     },
     {
       "file": "config/deny.json",
@@ -40,14 +40,6 @@
     {
       "file": "config/overlay.json",
       "sha256": "93f01e45d2c395f35829a8db83b1321cfbb9e4594c9078e5faf2b3cffedf13fc"
-    },
-    {
-      "file": "config/overlay.dual.json",
-      "sha256": "37517e5f3dc66819f61f5a7bb8ace1921282415f10551d2defa5c3eb0985b570"
-    },
-    {
-      "file": "config/settings.json",
-      "sha256": "ca3d163bab055381827226140568f3bef7eaac187cebd76878e0b63e9e442356"
     }
   ],
   "outputs": [

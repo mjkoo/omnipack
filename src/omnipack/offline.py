@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import json
 import math
 from dataclasses import dataclass
@@ -10,7 +9,6 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
-from omnipack.urls import gitlab_project_path
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,9 +18,7 @@ class OfflineInputs:
     single: bytes | None
     dual: bytes | None
     deny: bytes | None
-    common_overlay: bytes | None
-    dual_overlay: bytes | None
-    settings: bytes | None
+    overlay: bytes | None
     composition: bytes | None
 
 
@@ -39,31 +35,6 @@ class Finding:
     field: str | None = None
 
 
-@dataclass(frozen=True, slots=True)
-class ValidatedEntry:
-    """An unchanged serialized entry with its checked settings decoded."""
-
-    variant: str
-    index: int
-    entry_id: str
-    source: str
-    raw: dict[str, Any]
-    settings: dict[str, Any]
-
-
-@dataclass(frozen=True, slots=True)
-class OfflineResult:
-    """Collected findings and entries usable by later verification stages."""
-
-    inputs: OfflineInputs
-    findings: tuple[Finding, ...]
-    entries: dict[str, tuple[ValidatedEntry, ...]]
-
-    @property
-    def ok(self) -> bool:
-        return not self.findings
-
-
 _HTML_STEP_TYPES: dict[str, type] = {
     "customLinkFilterRegex": str,
     "filterByLinkText": bool,
@@ -74,28 +45,27 @@ _HTML_STEP_TYPES: dict[str, type] = {
 _INVALID = object()
 
 
-def validate_offline(inputs: OfflineInputs) -> OfflineResult:
-    """Validate a pair and its composition configuration without I/O."""
+def validate_offline(inputs: OfflineInputs) -> tuple[Finding, ...]:
+    """Validate a pair and its composition configuration without I/O.
+
+    Rendering fills every default setting key and derives the category
+    colours from the entries it renders, and ingestion enforces GitLab project
+    URLs, so none of those is checked again here. Setting values are checked:
+    upstream records and overlay patches supply them, and rendering copies them
+    without checking their types.
+    """
     findings: list[Finding] = []
     documents = {
         variant: _decode_snapshot(getattr(inputs, variant), variant, findings)
         for variant in ("single", "dual")
     }
     deny = _decode_snapshot(inputs.deny, "deny", findings)
-    common = _decode_snapshot(inputs.common_overlay, "common_overlay", findings)
-    dual_overlay = _decode_snapshot(inputs.dual_overlay, "dual_overlay", findings)
-    configured = _decode_snapshot(inputs.settings, "settings", findings)
+    overlay = _decode_snapshot(inputs.overlay, "overlay", findings)
     composition = _decode_snapshot(inputs.composition, "composition", findings)
-
-    entries: dict[str, tuple[ValidatedEntry, ...]] = {}
-    id_sets: dict[str, set[str]] = {}
     for variant, document in documents.items():
-        validated, ids = _validate_document(variant, document, configured, findings)
-        entries[variant] = tuple(validated)
-        id_sets[variant] = ids
-
-    _validate_composition(deny, common, dual_overlay, composition, documents, findings)
-    return OfflineResult(inputs, tuple(findings), entries)
+        _validate_document(variant, document, findings)
+    _validate_composition(deny, overlay, composition, documents, findings)
+    return tuple(findings)
 
 
 def _decode_snapshot(value: bytes | None, name: str, findings: list[Finding]) -> object:
@@ -138,29 +108,23 @@ def _all_finite(value: object) -> bool:
     return True
 
 
-def _validate_document(
-    variant: str,
-    document: object,
-    configured: object,
-    findings: list[Finding],
-) -> tuple[list[ValidatedEntry], set[str]]:
+def _validate_document(variant: str, document: object, findings: list[Finding]) -> None:
     if document is _INVALID:
-        return [], set()
+        return
     if not isinstance(document, dict):
         findings.append(
             Finding(
                 "document", "invalid_root", "document root must be an object", variant
             )
         )
-        return [], set()
+        return
     apps = document.get("apps")
-    rendered_settings = document.get("settings")
     if not isinstance(apps, list):
         findings.append(
             Finding("document", "invalid_apps", "apps must be a list", variant)
         )
         apps = []
-    if not isinstance(rendered_settings, dict):
+    if not isinstance(document.get("settings"), dict):
         findings.append(
             Finding(
                 "document",
@@ -169,11 +133,8 @@ def _validate_document(
                 variant,
             )
         )
-        rendered_settings = None
 
-    result: list[ValidatedEntry] = []
     seen: set[str] = set()
-    categories: set[str] = set()
     for index, raw in enumerate(apps):
         if isinstance(raw, dict):
             entry_id = raw.get("id")
@@ -190,24 +151,12 @@ def _validate_document(
                         "id",
                     )
                 seen.add(entry_id)
-            raw_categories = raw.get("categories")
-            if isinstance(raw_categories, list):
-                categories.update(
-                    item for item in raw_categories if isinstance(item, str)
-                )
-        entry = _validate_entry(variant, index, raw, findings)
-        if entry is not None:
-            result.append(entry)
-    if rendered_settings is not None:
-        _validate_pack_settings(
-            variant, rendered_settings, configured, categories, findings
-        )
-    return result, seen
+        _validate_entry(variant, index, raw, findings)
 
 
 def _validate_entry(
     variant: str, index: int, raw: object, findings: list[Finding]
-) -> ValidatedEntry | None:
+) -> None:
     if not isinstance(raw, dict):
         _add(
             findings,
@@ -217,7 +166,7 @@ def _validate_entry(
             variant,
             index=index,
         )
-        return None
+        return
     entry_id = raw.get("id") if isinstance(raw.get("id"), str) else None
     for field in ("id", "name", "url", "author"):
         if field not in raw:
@@ -289,17 +238,6 @@ def _validate_entry(
             "overrideSource",
         )
         source = None
-    if source == "GitLab" and isinstance(url, str) and not _valid_gitlab_url(url):
-        _add(
-            findings,
-            "entry",
-            "invalid_gitlab_url",
-            "GitLab URL must identify a public HTTPS gitlab.com project",
-            variant,
-            entry_id,
-            index,
-            "url",
-        )
     preferred = raw.get("preferredApkIndex")
     if "preferredApkIndex" in raw and (
         not isinstance(preferred, int) or isinstance(preferred, bool)
@@ -319,17 +257,6 @@ def _validate_entry(
     )
     if settings is not None and source is not None:
         _validate_additional(source, settings, variant, entry_id, index, findings)
-    if entry_id is None or source is None or settings is None:
-        return None
-    return ValidatedEntry(variant, index, entry_id, source, raw, settings)
-
-
-def _valid_gitlab_url(url: str) -> bool:
-    try:
-        gitlab_project_path(url)
-    except ValueError:
-        return False
-    return True
 
 
 def _decode_additional(
@@ -402,20 +329,8 @@ def _validate_additional(
     index: int,
     findings: list[Finding],
 ) -> None:
-    defaults = SETTINGS_DEFAULTS[source]
-    for key, default in defaults.items():
-        if key not in settings:
-            _add(
-                findings,
-                "settings",
-                "missing_setting_default",
-                f"missing setting {key}",
-                variant,
-                entry_id,
-                index,
-                key,
-            )
-        elif type(settings[key]) is not type(default):
+    for key, default in SETTINGS_DEFAULTS[source].items():
+        if key in settings and type(settings[key]) is not type(default):
             _add(
                 findings,
                 "settings",
@@ -473,143 +388,9 @@ def _validate_additional(
                 )
 
 
-def _validate_pack_settings(
-    variant: str,
-    rendered: dict[str, Any],
-    configured: object,
-    observed: set[str],
-    findings: list[Finding],
-) -> None:
-    if not isinstance(configured, dict):
-        if configured is not _INVALID:
-            findings.append(
-                Finding(
-                    "config",
-                    "invalid_settings_config",
-                    "settings config must be an object",
-                )
-            )
-        return
-    raw_categories = rendered.get("categories")
-    if not isinstance(raw_categories, str):
-        findings.append(
-            Finding(
-                "document",
-                "invalid_category_mapping",
-                "settings.categories must be an encoded object",
-                variant,
-            )
-        )
-        actual: object = None
-    else:
-        try:
-            actual = json.loads(
-                raw_categories,
-                parse_constant=lambda token: (_ for _ in ()).throw(ValueError(token)),
-            )
-        except ValueError:
-            actual = None
-    if not isinstance(actual, dict):
-        findings.append(
-            Finding(
-                "document",
-                "invalid_category_mapping",
-                "settings.categories must decode to an object",
-                variant,
-            )
-        )
-    else:
-        if set(actual) != observed:
-            findings.append(
-                Finding(
-                    "document",
-                    "category_mapping_mismatch",
-                    "category mapping must exactly match observed categories",
-                    variant,
-                )
-            )
-        for name, color in actual.items():
-            if (
-                not isinstance(name, str)
-                or not isinstance(color, int)
-                or isinstance(color, bool)
-                or not 0 <= color <= 0xFFFFFFFF
-            ):
-                findings.append(
-                    Finding(
-                        "document",
-                        "invalid_category_color",
-                        f"category {name!r} has invalid ARGB color",
-                        variant,
-                        field="settings.categories",
-                    )
-                )
-        configured_categories = configured.get("categories", {})
-        if isinstance(configured_categories, str):
-            try:
-                configured_categories = json.loads(configured_categories)
-            except ValueError:
-                configured_categories = None
-        if not isinstance(configured_categories, dict):
-            findings.append(
-                Finding(
-                    "config",
-                    "invalid_settings_config",
-                    "configured categories must be an object",
-                )
-            )
-        else:
-            for name, color in configured_categories.items():
-                if (
-                    not isinstance(name, str)
-                    or not isinstance(color, int)
-                    or isinstance(color, bool)
-                    or not 0 <= color <= 0xFFFFFFFF
-                ):
-                    findings.append(
-                        Finding(
-                            "config",
-                            "invalid_category_color",
-                            f"configured category {name!r} has invalid ARGB color",
-                            field="categories",
-                        )
-                    )
-            for name in observed:
-                expected = configured_categories.get(name)
-                if expected is None:
-                    expected = int.from_bytes(
-                        b"\xff" + hashlib.sha256(name.encode()).digest()[:3]
-                    )
-                if actual.get(name) != expected:
-                    findings.append(
-                        Finding(
-                            "document",
-                            "configured_category_mismatch",
-                            f"category {name!r} color disagrees with configuration",
-                            variant,
-                        )
-                    )
-    for key in sorted((configured.keys() | rendered.keys()) - {"categories"}):
-        if (
-            key not in configured
-            or key not in rendered
-            or rendered[key] != configured[key]
-        ):
-            findings.append(
-                Finding(
-                    "document",
-                    "configured_setting_mismatch",
-                    f"setting {key!r} disagrees with configuration",
-                    variant,
-                    field=key,
-                )
-            )
-
-
 def _validate_composition(
     deny: object,
-    common: object,
-    dual_overlay: object,
+    overlay: object,
     composition: object,
     documents: dict[str, object],
     findings: list[Finding],
@@ -630,8 +411,7 @@ def _validate_composition(
         if not isinstance(deny, list):
             raise CompositionError("denylist must be a list")
         exclusions = parse_exclusions(deny)
-        common_patches = parse_overlay(common, "common overlay")
-        dual_patches = parse_overlay(dual_overlay, "dual-screen overlay")
+        patches = parse_overlay(overlay, "overlay")
     except (CompositionPolicyError, CompositionError, OverlayError, TypeError) as error:
         findings.append(Finding("config", "invalid_composition_config", str(error)))
         return
@@ -669,22 +449,6 @@ def _validate_composition(
             families[variant].add(family)
             keys[variant].add(key)
             family_ids[variant][family] = package_id
-            projection = policy.projections.get(key)
-            target = Variant(variant)
-            if (
-                projection
-                and projection.eligibility is not None
-                and target not in projection.eligibility
-            ):
-                findings.append(
-                    Finding(
-                        "composition",
-                        "ineligible_output",
-                        f"family {family!r} is ineligible for {variant}",
-                        variant,
-                        package_id,
-                    )
-                )
     for (family, target), pinned in policy.projected_pins.items():
         if pinned not in keys[target.value]:
             findings.append(
@@ -698,12 +462,9 @@ def _validate_composition(
             )
 
     for exclusion in exclusions:
-        applicable = (
-            tuple(Variant) if exclusion.variant is None else (exclusion.variant,)
-        )
-        for target in applicable:
+        for target in Variant:
             for family, package_id in family_ids[target.value].items():
-                if package_id == exclusion.package_id or family == exclusion.family:
+                if package_id == exclusion.package_id:
                     findings.append(
                         Finding(
                             "composition",
@@ -715,45 +476,27 @@ def _validate_composition(
                     )
 
     all_keys = keys["single"] | keys["dual"]
-    for patch in common_patches:
+    for patch in patches:
         if patch.key not in all_keys:
             findings.append(
                 Finding(
                     "composition",
-                    "stale_common_overlay",
-                    f"common overlay has no target for {patch.key!r}",
+                    "stale_overlay",
+                    f"overlay has no target for {patch.key!r}",
                     entry_id=patch.package_id,
-                )
-            )
-    for patch in dual_patches:
-        if patch.key not in keys["dual"]:
-            findings.append(
-                Finding(
-                    "composition",
-                    "stale_dual_overlay",
-                    f"dual overlay has no target for {patch.key!r}",
-                    "dual",
-                    patch.package_id,
                 )
             )
 
     for family in families["single"] - families["dual"]:
-        package_id = family_ids["single"][family]
-        exempt = any(
-            (rule.variant is None or rule.variant is Variant.DUAL)
-            and (rule.family == family or rule.package_id == package_id)
-            for rule in exclusions
-        )
-        if not exempt:
-            findings.append(
-                Finding(
-                    "composition",
-                    "dual_coverage_gap",
-                    f"dual variant is missing family {family!r}",
-                    "dual",
-                    package_id,
-                )
+        findings.append(
+            Finding(
+                "composition",
+                "dual_coverage_gap",
+                f"dual variant is missing family {family!r}",
+                "dual",
+                family_ids["single"][family],
             )
+        )
 
 
 def _add(

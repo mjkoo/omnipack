@@ -52,10 +52,6 @@ def test_reconciliation_evidence_is_real_and_configuration_is_complete():
         ]
         assert matches
         assert {rule.get("packageId") for rule in matches} == {effective}
-        assert any(
-            record["id"] == original and record["url"] == url
-            for record in document["history"]
-        )
 
     ghost = evidence["ghostship"]
     assert len(ghost["asset_sha256"]) == len(ghost["member_sha256"]) == 64
@@ -115,10 +111,8 @@ def candidates(refresh: int):
         normalize_record(
             record,
             source="codm2000",
-            variant=Variant.DUAL,
             derive_type=True,
             eligibility=frozenset({Variant.DUAL}),
-            dual_preferred=True,
             origin="codm-generated",
         )
         for record in admitted
@@ -137,7 +131,6 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             candidates(refresh),
             deny,
             read(ROOT / "config/overlay.json"),
-            read(ROOT / "config/overlay.dual.json"),
             policy=policy,
         )
         for variant in Variant:
@@ -169,7 +162,7 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
                     )
                     == "extras"
                 )
-                [rendered_metroid] = json.loads(render([metroid[0]], {}))["apps"]
+                [rendered_metroid] = json.loads(render([metroid[0]]))["apps"]
                 settings = json.loads(rendered_metroid["additionalSettings"])
                 assert settings["versionDetection"] is False
                 assert settings["trackOnly"] is False
@@ -216,9 +209,10 @@ def test_full_reconciliation_survives_repeated_catalog_refresh():
             )
             observation = expected_ctr[variant.value]
             assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
-            assert ctr_app.original_id == observation["original_id"]
+            [ctr_selection] = [item for item in ctr if item.variant is variant]
+            assert ctr_selection.original_id == observation["original_id"]
             assert ctr_app.url == observation["source"]
-            [rendered_ctr] = json.loads(render([ctr_app], {}))["apps"]
+            [rendered_ctr] = json.loads(render([ctr_app]))["apps"]
             settings = json.loads(rendered_ctr["additionalSettings"])
             assert settings["versionDetection"] is False
             assert settings["versionExtractionRegEx"] == ""

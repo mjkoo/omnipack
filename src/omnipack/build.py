@@ -4,16 +4,17 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from pathlib import Path
 from stat import S_IMODE
 from typing import Any
 from uuid import uuid4
 
+from omnipack.composition_policy import CompositionPolicy, load_composition_policy
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
 from omnipack.render import render
-from omnipack.sources import IngestionReport
+from omnipack.sources import IngestionReport, SourceError
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -29,95 +30,121 @@ class OfflineVerificationError(ValueError):
         self.findings = findings
 
 
-def previous_ids(root: Path) -> dict[Variant, list[dict[str, str]]]:
-    """Read rendered identities from the output pair before publication begins."""
-    result: dict[Variant, list[dict[str, str]]] = {}
+@dataclass(frozen=True, slots=True)
+class BuildInputs:
+    """The five configuration files and the optional README, captured once
+    when a build starts, with the composition policy parsed from its bytes.
+
+    Composition, the offline gate and catalog generation all use these bytes,
+    so a file edited while the build runs is overwritten by, or missing from,
+    that build's outputs instead of being read part way through. Other
+    on-disk inputs, such as the committed codm catalog, are read separately
+    during ingestion.
+    """
+
+    sources: bytes
+    extras: bytes
+    deny: bytes
+    overlay: bytes
+    composition: bytes
+    policy: CompositionPolicy
+    readme: bytes | None
+
+    @classmethod
+    def read(cls, root: Path) -> BuildInputs:
+        def required(relative: str, source: str) -> bytes:
+            try:
+                return (root / relative).read_bytes()
+            except OSError as error:
+                raise SourceError(source, str(error)) from error
+
+        try:
+            readme = (root / "README.md").read_bytes()
+        except OSError:
+            readme = None
+        sources = required("config/sources.json", "sources")
+        extras = required("config/extras.json", "extras")
+        deny = required("config/deny.json", "denylist")
+        overlay = required("config/overlay.json", "overlay")
+        composition = required("config/composition.json", "composition policy")
+        return cls(
+            sources=sources,
+            extras=extras,
+            deny=deny,
+            overlay=overlay,
+            composition=composition,
+            policy=load_composition_policy(composition),
+            readme=readme,
+        )
+
+
+def previous_ids(root: Path) -> dict[Variant, set[str]]:
+    """Read rendered package ids from the output pair before publication begins."""
+    result: dict[Variant, set[str]] = {}
     for variant, name in OUTPUTS.items():
         path = root / "dist" / name
         if not path.exists():
-            result[variant] = []
+            result[variant] = set()
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
         except OSError, json.JSONDecodeError:
-            result[variant] = []
+            result[variant] = set()
             continue
         apps = document.get("apps", []) if isinstance(document, dict) else []
-        result[variant] = [
-            {"id": item["id"], "url": item.get("url", "")}
+        result[variant] = {
+            item["id"]
             for item in apps
             if isinstance(item, dict) and isinstance(item.get("id"), str)
-        ]
+        }
     return result
 
 
 def publish_build(
     root: Path,
     composition: CompositionResult,
-    settings: dict[str, Any],
     ingestion: IngestionReport,
-    composition_bytes: bytes | None = None,
+    inputs: BuildInputs,
     *,
     on_stage: Callable[[str], None] | None = None,
     on_verification: Callable[[dict[str, Any]], None] | None = None,
 ) -> None:
     """Render both variants and their catalog, gate them, and publish together."""
-    readme_path = root / "README.md"
-    try:
-        readme_before = readme_path.read_bytes()
-    except OSError:
-        readme_before = None
     if on_stage is not None:
         on_stage("rendering")
     before = previous_ids(root)
     rendered = {
-        variant: render(composition.apps[variant], settings).encode()
-        for variant in Variant
+        variant: render(composition.apps[variant]).encode() for variant in Variant
     }
     from omnipack.offline import OfflineInputs, validate_offline
     from omnipack.report import write_report
 
     if on_stage is not None:
         on_stage("offline verification")
-    config_paths = (
-        "config/deny.json",
-        "config/overlay.json",
-        "config/overlay.dual.json",
-        "config/composition.json",
-    )
-    snapshots = [(root / path).read_bytes() for path in config_paths]
-    consumed_policy = (
-        composition_bytes if composition_bytes is not None else snapshots[3]
-    )
-    result = validate_offline(
+    offline_findings = validate_offline(
         OfflineInputs(
             rendered[Variant.SINGLE],
             rendered[Variant.DUAL],
-            snapshots[0],
-            snapshots[1],
-            snapshots[2],
-            (root / "config/settings.json").read_bytes(),
-            consumed_policy,
+            inputs.deny,
+            inputs.overlay,
+            inputs.composition,
         )
     )
     findings = [
         {key: value for key, value in asdict(item).items() if value is not None}
-        for item in result.findings
+        for item in offline_findings
     ]
     from omnipack.catalog import generate_catalog, replace_catalog
-    from omnipack.composition_policy import load_composition_policy
 
     readme_rendered = None
     if not findings:
         try:
-            if readme_before is None:
+            if inputs.readme is None:
                 raise ValueError("README input is missing or unreadable")
             catalog = generate_catalog(
-                rendered[Variant.SINGLE],
-                rendered[Variant.DUAL],
-                load_composition_policy(consumed_policy),
+                rendered[Variant.SINGLE], rendered[Variant.DUAL], inputs.policy
             )
-            readme_rendered = replace_catalog(readme_before, catalog)
+            readme_rendered = replace_catalog(inputs.readme, catalog)
         except ValueError as error:
             findings.append(
                 {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
@@ -128,31 +155,6 @@ def publish_build(
     if findings:
         raise OfflineVerificationError(findings)
 
-    def require_current_inputs() -> None:
-        changed = []
-        for path, snapshot, label in (
-            (root / "config/composition.json", consumed_policy, "composition policy"),
-            (readme_path, readme_before, "README"),
-        ):
-            try:
-                current = path.read_bytes()
-            except OSError:
-                current = None
-            if current != snapshot:
-                changed.append(
-                    {
-                        "stage": "input",
-                        "code": "input_changed",
-                        "message": f"{label} changed during the build",
-                    }
-                )
-        if changed:
-            if on_verification is not None:
-                on_verification({"status": "failed", "findings": changed})
-            raise OfflineVerificationError(changed)
-
-    require_current_inputs()
-
     if on_stage is not None:
         on_stage("report writing")
     write_report(
@@ -161,11 +163,9 @@ def publish_build(
         composition,
         ingestion,
         offline_verification=verdict,
-        policy=load_composition_policy(consumed_policy),
     )
     if on_stage is not None:
         on_stage("publication")
-    require_current_inputs()
     assert readme_rendered is not None
     _replace_outputs(
         {
@@ -173,15 +173,12 @@ def publish_build(
                 root / "dist" / OUTPUTS[variant]: value
                 for variant, value in rendered.items()
             },
-            readme_path: readme_rendered,
-        },
-        before_replace=require_current_inputs,
+            root / "README.md": readme_rendered,
+        }
     )
 
 
-def _replace_outputs(
-    rendered: dict[Path, bytes], *, before_replace: Callable[[], None] | None = None
-) -> None:
+def _replace_outputs(rendered: dict[Path, bytes]) -> None:
     """Preserve modes and recover prior bytes or absence on handled failures."""
     snapshots = {
         path: path.read_bytes() if path.exists() else None for path in rendered
@@ -210,8 +207,6 @@ def _replace_outputs(
     try:
         for path, content in rendered.items():
             staged[path] = stage(path, content)
-        if before_replace is not None:
-            before_replace()
         for path, temp in staged.items():
             temp.replace(path)
             replaced.append(path)
