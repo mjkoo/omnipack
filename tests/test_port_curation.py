@@ -409,7 +409,10 @@ def test_hollow_knight_source_composition_preserves_dual_only_catalog():
         ),
     }
     for app in result.apps[Variant.DUAL]:
-        assert (app.data["url"], app.data["name"]) == expected[app.data["id"]]
+        url, name = expected[app.data["id"]]
+        # Overlay records find their targets by normalized project URL.
+        assert normalize_project_url(app.data["url"]) == normalize_project_url(url)
+        assert app.data["name"] == name
         assert app.data["categories"] == ["PC Ports"]
         if app.data["id"] == "com.jakobkhansen.silksong":
             assert "Android 13 only" in app.data["additionalSettings"]["about"]
