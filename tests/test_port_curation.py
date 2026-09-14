@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
 import pytest
 
 from omnipack.catalog import generate_catalog
-from omnipack.composition_policy import candidate_selector, parse_composition_policy
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    parse_composition_policy,
+)
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
@@ -145,47 +149,26 @@ def designated_single_winners(
     An extra is designated when it is eligible for the single-screen pack and
     no single pin selects for its family. It then has the highest source
     precedence in its family, and no build or offline check fails if single
-    stops serving it. Its family and effective package id follow the candidate
-    rule composition applies to it, so an extra that composition no longer
-    selects still names its family. The winner is (effective id, normalized
-    project URL).
+    stops serving it. Its family and effective package id are composition's
+    own: the policy's extras candidate rules are applied to the extras alone,
+    so an extra that composition no longer selects still names its family. The
+    winner is (effective id, normalized project URL).
     """
     policy = parse_composition_policy(policy_document)
-    rules = {rule.match.key: rule for rule in policy.candidate_rules}
+    extras_policy = replace(
+        policy,
+        candidate_rules=tuple(
+            rule for rule in policy.candidate_rules if rule.match.source == "extras"
+        ),
+    )
     single_pinned = {pin.family for pin in policy.pins if pin.variant is Variant.SINGLE}
     designated: dict[str, tuple[str, str]] = {}
-    for app in fetch(extras_config):
-        if Variant.SINGLE not in app.eligibility:
-            continue
-        rule = rules.get(candidate_selector(app).key)
-        effective_id = (rule.package_id if rule else None) or app.id
-        family = (rule.family if rule else None) or f"package:{effective_id}"
-        if family not in single_pinned:
-            designated[family] = (effective_id, normalize_project_url(app.url))
+    for app in apply_composition_policy(extras_policy, fetch(extras_config)):
+        family = app.family
+        assert family is not None, "composition assigns every candidate a family"
+        if Variant.SINGLE in app.eligibility and family not in single_pinned:
+            designated[family] = (app.id, normalize_project_url(app.url))
     return designated
-
-
-def unpinned_designated_families(
-    extras_config: list[dict[str, Any]], policy_document: dict[str, Any]
-) -> dict[str, str]:
-    """Map each designated family whose extra no pin selects to its package id.
-
-    Composition accepts a denial of such an extra's package id, since it
-    rejects only a denial that removes a pinned candidate.
-    """
-    pinned_ids = {
-        package_id
-        for package_id, _ in parse_composition_policy(
-            policy_document
-        ).projected_pins.values()
-    }
-    return {
-        family: package_id
-        for family, (package_id, _) in designated_single_winners(
-            extras_config, policy_document
-        ).items()
-        if package_id not in pinned_ids
-    }
 
 
 def curated_single_mismatches(
@@ -236,43 +219,79 @@ def test_committed_configuration_selects_each_curated_extra_in_single(
     assert curated_single_mismatches(extras_config, tmp_path) == set()
 
 
-def test_designated_single_set_is_derived_from_extras_and_single_pins() -> None:
-    extras_config = read(ROOT / "config/extras.json")
-    policy_document = read(ROOT / "config/composition.json")
-    designated = designated_single_winners(extras_config, policy_document)
-    assert {"package:com.game.cinderbox", "package:809443320"} <= set(designated)
-
-    [cinderbox] = [e for e in extras_config if e["id"] == "com.game.cinderbox"]
-    pinned = deepcopy(policy_document)
-    pinned["pins"].append(
-        {
-            "family": "package:com.game.cinderbox",
-            "variant": "single",
-            "match": {
-                "source": "extras",
-                "origin": "extras",
-                "id": cinderbox["id"],
-                "url": cinderbox["url"],
-            },
-            "rationale": "Test pin.",
-        }
-    )
-    assert set(designated_single_winners(extras_config, pinned)) == set(designated) - {
-        "package:com.game.cinderbox"
+def _extra(package_id: str) -> dict[str, Any]:
+    """A curated extras entry eligible for both packs."""
+    return {
+        "id": package_id,
+        "url": f"https://github.com/example/{package_id}",
+        "name": package_id,
+        "author": "example",
+        "categories": ["Utilities"],
+        "additionalSettings": {"trackOnly": False},
     }
 
-    cinderbox["dualScreen"] = True
-    assert "package:com.game.cinderbox" not in designated_single_winners(
-        extras_config, policy_document
-    )
+
+def _extras_match(entry: dict[str, Any]) -> dict[str, str]:
+    return {
+        "source": "extras",
+        "origin": "extras",
+        "id": entry["id"],
+        "url": entry["url"],
+    }
 
 
-UNPINNED_DESIGNATED = unpinned_designated_families(
+def _winner(entry: dict[str, Any]) -> tuple[str, str]:
+    return entry["id"], normalize_project_url(entry["url"])
+
+
+def test_designated_single_set_is_derived_from_extras_and_single_pins() -> None:
+    plain, grouped = _extra("com.example.plain"), _extra("com.example.grouped")
+    policy_document: dict[str, Any] = {
+        "schemaVersion": 1,
+        "candidates": [
+            {
+                "match": _extras_match(grouped),
+                "family": "app:grouped",
+                "rationale": "Test family.",
+            }
+        ],
+        "pins": [],
+    }
+    both = {
+        "package:com.example.plain": _winner(plain),
+        "app:grouped": _winner(grouped),
+    }
+    assert designated_single_winners([plain, grouped], policy_document) == both
+
+    def pinned(variant: str) -> dict[str, Any]:
+        document = deepcopy(policy_document)
+        document["pins"] = [
+            {
+                "family": family,
+                "variant": variant,
+                "match": _extras_match(entry),
+                "rationale": "Test pin.",
+            }
+            for family, entry in (
+                ("package:com.example.plain", plain),
+                ("app:grouped", grouped),
+            )
+        ]
+        return document
+
+    # A dual pin is a reviewed dual selection; single still falls to the extra.
+    assert designated_single_winners([plain, grouped], pinned("dual")) == both
+    assert designated_single_winners([plain, grouped], pinned("single")) == {}
+    assert designated_single_winners(
+        [{**plain, "dualScreen": True}, grouped], policy_document
+    ) == {"app:grouped": _winner(grouped)}
+
+
+DESIGNATED = designated_single_winners(
     read(ROOT / "config/extras.json"), read(ROOT / "config/composition.json")
 )
 
 
-@pytest.mark.parametrize("family", sorted(UNPINNED_DESIGNATED))
 @pytest.mark.parametrize(
     "correction",
     [
@@ -282,34 +301,25 @@ UNPINNED_DESIGNATED = unpinned_designated_families(
     ids=["package-id", "family-and-package-id"],
 )
 def test_designated_family_follows_a_package_id_correction(
-    family: str, correction: dict[str, str], tmp_path: Path
+    correction: dict[str, str], tmp_path: Path
 ) -> None:
-    extras_config = read(ROOT / "config/extras.json")
+    curated = _extra("com.example.curated")
+    extras_config = [*read(ROOT / "config/extras.json"), curated]
     policy_document = read(ROOT / "config/composition.json")
-    package_id = UNPINNED_DESIGNATED[family]
-    [entry] = [e for e in extras_config if e["id"] == package_id]
-    match = {
-        "source": "extras",
-        "origin": "extras",
-        "id": entry["id"],
-        "url": entry["url"],
-    }
-    policy_document["candidates"] = [
-        rule
-        for rule in policy_document["candidates"]
-        if (rule["match"]["source"], rule["match"]["origin"], rule["match"]["id"])
-        != ("extras", "extras", entry["id"])
-    ]
     policy_document["candidates"].append(
-        {"match": match, **correction, "rationale": "Test correction."}
+        {
+            "match": _extras_match(curated),
+            **correction,
+            "rationale": "Test correction.",
+        }
     )
     expected = correction.get("family", "package:com.example.corrected")
 
     designated = designated_single_winners(extras_config, policy_document)
-    assert family not in designated
+    assert "package:com.example.curated" not in designated
     assert designated[expected] == (
         "com.example.corrected",
-        normalize_project_url(entry["url"]),
+        normalize_project_url(curated["url"]),
     )
     assert (
         curated_single_mismatches(
@@ -319,15 +329,25 @@ def test_designated_family_follows_a_package_id_correction(
     )
 
 
-@pytest.mark.parametrize("family", sorted(UNPINNED_DESIGNATED))
+@pytest.mark.parametrize("family", sorted(DESIGNATED))
 def test_curated_single_guard_fails_when_a_designated_extra_is_denied(
     family: str, tmp_path: Path
 ) -> None:
     extras_config = read(ROOT / "config/extras.json")
-    denial = {"id": UNPINNED_DESIGNATED[family], "reason": "Test displacement."}
-    assert curated_single_mismatches(extras_config, tmp_path, denials=[denial]) == {
-        family
-    }
+    policy_document = read(ROOT / "config/composition.json")
+    package_id, _ = DESIGNATED[family]
+    # Composition rejects a denial of a pinned candidate, so the pins naming
+    # the extra go. Only a single pin would change whether it is designated.
+    projected = parse_composition_policy(policy_document).projected_pins
+    policy_document["pins"] = [
+        pin
+        for pin in policy_document["pins"]
+        if projected[(pin["family"], Variant(pin["variant"]))][0] != package_id
+    ]
+    denial = {"id": package_id, "reason": "Test displacement."}
+    assert curated_single_mismatches(
+        extras_config, tmp_path, policy_document=policy_document, denials=[denial]
+    ) == {family}
 
 
 @pytest.mark.parametrize(
