@@ -64,7 +64,7 @@ what the upstream project documents; it is not a device validation record.
 - **Ghostship** requires a user-supplied US or JP Super Mario 64 ROM (`.z64`),
   chosen in the app.
 - **Pokémon Red/Blue Recomp** requires a user-supplied canonical US Pokémon Game
-  Boy ROM (`.gb` or `.gbc`), chosen on first boot. The upstream README lists the
+  Boy ROM (`.gb` or `.gbc`), chosen in the app. The upstream README lists the
   accepted ROMs and their checksums.
 - **MetroidArch (Super Metroid)** requires a user-supplied, uncompressed Super
   Metroid ROM, the app's own asset and core-info updates, and separate writable

@@ -190,8 +190,9 @@ The tests around the guard:
   the policy, every pin whose projected package id is the extra's effective id,
   then adds a package denial of that id. Only single pins affect designation, so
   the family stays designated. Composition succeeds in all nine, and the guard
-  reports exactly that family. The set is empty only when no curated extra is
-  eligible for single.
+  reports exactly that family. The set is empty only when no curated extra
+  needs the check: none is eligible for single, or every eligible extra's
+  family has a single pin.
 - `test_designated_family_follows_a_package_id_correction` appends one
   synthetic extra, eligible for both packs, to the committed extras, so it never
   depends on a committed rule correcting an id. A candidate rule gives it
@@ -386,7 +387,7 @@ touch, not curated extras; their existing notes stay.
 | MetroidArch (Super Metroid) | A Japan/USA Super Metroid ROM with a given CRC32, loaded uncompressed; the Online Updater's Update Assets and Update Core Info Files; separately downloaded BPS and BSO files for widescreen | Added a note pointing to `docs/metroidarch.md`, which already describes these steps and the directory configuration |
 | Cinderbox | A legitimate copy of Stardew Valley; no game assets are included | Added |
 | Ghostship | The user's own US or JP Super Mario 64 `.z64` ROM, chosen in the app | Added |
-| Pokémon Red/Blue Recomp | A legally obtained canonical US Pokémon Game Boy ROM (`.gb` or `.gbc`, listed with checksums), chosen on first boot | Added |
+| Pokémon Red/Blue Recomp | A legally obtained canonical US Pokémon Game Boy ROM (`.gb` or `.gbc`, listed with checksums), chosen in the app | Added |
 | Aurora Store | A login on first open, with a Google Play account or anonymously; anonymous login limits some features | Added to its existing note |
 | idTech4A++ | PC game data for a supported id Tech game in the game's data folder; for Prey, an optional config-file edit to bind keys | Already described |
 | VCMI | Heroes of Might and Magic III: Shadow of Death or Complete data (`Data`, `Maps`, `Mp3`), imported through the VCMI Launcher | Already described |
