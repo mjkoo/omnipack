@@ -405,10 +405,10 @@ recording device validation. `nix develop -c lychee --offline docs/ README.md`:
 | File | Before (`9b5e84e`) | After |
 |---|---|---|
 | `tests/test_port_curation.py` | 308 | 450 |
-| `tests/test_source_generation_fixtures.py` | 315 | 456 |
-| All of `tests/*.py` | 12316 | 12599 |
+| `tests/test_source_generation_fixtures.py` | 315 | 459 |
+| All of `tests/*.py` | 12316 | 12602 |
 
-The proposal estimated a net test change near zero. The actual growth, 283
+The proposal estimated a net test change near zero. The actual growth, 286
 lines, comes from the guard's derivation and its synthetic derived-set,
 correction and denial tests, from the fixture test comparing selections with an
 empty-catalog composition, and from the two fixes to catalog-reading tests
@@ -455,3 +455,33 @@ MetroidArch, Super Metroid, RetroArch, Ghostship, Gen1Recomp, EmuLnk, Showdown,
 Heimdall, Kanto, Zelda, Minish, Harvest Moon, CTR, OpenMW, Dusklight and the
 other corrected apps), for `904332840` and `1845280017`, and for `com.` and
 `github.com/`, finds matches only inside `## REMOVED Requirements` sections.
+Re-run at `2c9085a`, after the pack-curation delta was amended: still no match
+outside a REMOVED section. The 1.4 search, re-run at the same commit with
+`git grep`, still finds each of the fifteen removed requirement names in exactly
+one file, its own spec.
+
+## 4.2 Checks
+
+At `2c9085a`:
+
+- `openspec validate generalize-curation-specs --strict`: valid.
+- `just check-all`, run inside `nix develop`: exit 0. `ruff format --check`
+  (252 files) and `ruff check` clean, `ty check` clean, 798 tests passed with
+  93% coverage, `pack verify` passed, the Python 3.12 script tests passed
+  (121), actionlint and zizmor reported no findings, lychee checked 538 links
+  with 0 errors, and the nix formatting check and `nix flake check` passed. An
+  earlier run outside the devShell stopped at `check-links` because `lychee`
+  was not on `PATH`; every recipe before it had passed.
+- Compared with `9b5e84e`: under `src/` only `src/omnipack/source_generation.py`
+  changed, in one line, where the track-only sentence says "the resource"
+  instead of "the mod". Under `config/` only `config/catalogs/codm.json`
+  changed, where a word diff shows exactly `mod` replaced by `resource` in the
+  Kanto Gear entry's `about`. `dist/`, `README.md` and `scripts/` are
+  unchanged. `docs/curation.md` gained the setup notes recorded under 3.2.
+
+## 4.3 Record
+
+This file records the coverage audit (1.1), the derived single-screen set and
+its tests (1.2), the catalog audit and candidate-catalog run (2.2), the
+track-only wording check (2.3), the setup-notes check (3.2), the check results
+(4.2), and test and spec line counts before and after.

@@ -28,7 +28,7 @@
 ## 3. Main spec Purpose and curation documentation
 
 - [x] 3.1 Rewrite the `## Purpose` of `openspec/specs/pack-curation/spec.md` directly, using the text in design.md: curated app decisions are recorded, protected and documented, plus the pack's own notification tracker and the exclusion of upstream pack trackers. Verify that `openspec validate --specs --strict` passes.
-- [ ] 3.2 Check the upstream README of each `config/extras.json` entry for user action beyond installing it: supplying game files or a ROM, installing a separate component, or configuring the app by hand. For each entry that needs such action and that `docs/curation.md` does not already describe, add a setup note under "Port setup", including Ghostship and Pokémon Red/Blue Recomp, which need a user-supplied ROM. Claim no device validation. Record in `validation.md` which entries were checked and what each needs.
+- [x] 3.2 Check the upstream README of each `config/extras.json` entry for user action beyond installing it: supplying game files or a ROM, installing a separate component, or configuring the app by hand. For each entry that needs such action and that `docs/curation.md` does not already describe, add a setup note under "Port setup", including Ghostship and Pokémon Red/Blue Recomp, which need a user-supplied ROM. Claim no device validation. Record in `validation.md` which entries were checked and what each needs.
 
 ## 4. Checks and records
 
