@@ -230,7 +230,7 @@ def effective_settings(rule: ProjectRule) -> dict[str, Any]:
             autoApkFilterByArch=False,
         )
         settings["about"] = (
-            f"{rule.rationale} {rule.installation} Obtainium only tracks release notifications; acknowledgement does not install the mod or detect its installed version."
+            f"{rule.rationale} {rule.installation} Obtainium only tracks release notifications; acknowledgement does not install the resource or detect its installed version."
         )
     return settings
 
