@@ -157,15 +157,28 @@ def codm_catalog(request: pytest.FixtureRequest) -> dict[str, Any]:
 
 
 def _compose_with_codm_catalog(
-    catalog: dict[str, Any], tmp_path: Path, higher: list[App]
+    catalog: dict[str, Any],
+    tmp_path: Path,
+    higher: list[App],
+    *,
+    policy_document: dict[str, Any] | None = None,
+    denials: list[dict[str, str]] | None = None,
 ) -> CompositionResult:
-    policy = parse_composition_policy(load_json(ROOT / "config/composition.json"))
+    """Compose the committed configuration, or the given policy, over a catalog.
+
+    `denials` are added to the committed denials.
+    """
+    policy = parse_composition_policy(
+        load_json(ROOT / "config/composition.json")
+        if policy_document is None
+        else policy_document
+    )
     tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "codm.json").write_text(json.dumps(catalog))
     generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, higher)
     return compose(
         [*higher, *generated],
-        load_json(ROOT / "config/deny.json"),
+        [*load_json(ROOT / "config/deny.json"), *(denials or [])],
         load_json(ROOT / "config/overlay.json"),
         policy=policy,
     )

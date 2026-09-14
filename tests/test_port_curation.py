@@ -3,11 +3,12 @@ from __future__ import annotations
 import json
 from copy import deepcopy
 from pathlib import Path
+from typing import Any
 
 import pytest
 
 from omnipack.catalog import generate_catalog
-from omnipack.composition_policy import parse_composition_policy
+from omnipack.composition_policy import candidate_selector, parse_composition_policy
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
@@ -28,36 +29,6 @@ PORT_IDS = {
     "is.xyz.vcmi",
     "com.github.bvschaik.julius",
     "su.xash.engine.test",
-}
-# Each curated extra is the only extra in its family and wins the single-screen
-# pack by source precedence. No build or offline check fails if single stops
-# serving one, so these expectations are that guard.
-CURATED_SINGLE_WINNERS = {
-    "package:com.aurora.store": (
-        "com.aurora.store",
-        "https://gitlab.com/AuroraOSS/AuroraStore",
-    ),
-    "package:com.karin.idTech4Amm": (
-        "com.karin.idTech4Amm",
-        "https://github.com/glKarin/com.n0n3m4.diii4a",
-    ),
-    "package:is.xyz.vcmi": ("is.xyz.vcmi", "https://github.com/vcmi/vcmi"),
-    "package:com.github.bvschaik.julius": (
-        "com.github.bvschaik.julius",
-        "https://github.com/bvschaik/julius",
-    ),
-    "package:su.xash.engine.test": (
-        "su.xash.engine.test",
-        "https://github.com/FWGS/xash3d-fwgs",
-    ),
-    "app:ghostship": (
-        "dev.net64.ghostship",
-        "https://github.com/HarbourMasters/Ghostship",
-    ),
-    "app:gen1recomp": (
-        "com.theboisclub.pokemonred",
-        "https://github.com/bryanthaboi/gen1recomp",
-    ),
 }
 
 
@@ -166,15 +137,79 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             assert app.data["additionalSettings"] == expected[app.data["id"]]
 
 
-def curated_single_mismatches(
-    extras_config: list[dict[str, object]], tmp_path: Path
-) -> set[str]:
-    """Name each curated family whose single-screen winner is not its extra.
+def designated_single_winners(
+    extras_config: list[dict[str, Any]], policy_document: dict[str, Any]
+) -> dict[str, tuple[str, str]]:
+    """Map each designated curated extra's family to its expected single winner.
 
-    Composes the committed configuration over the captured upstream catalogs.
+    An extra is designated when it is eligible for the single-screen pack and
+    no single pin selects for its family. It then has the highest source
+    precedence in its family, and no build or offline check fails if single
+    stops serving it. Its family and effective package id follow the candidate
+    rule composition applies to it, so an extra that composition no longer
+    selects still names its family. The winner is (effective id, normalized
+    project URL).
     """
+    policy = parse_composition_policy(policy_document)
+    rules = {rule.match.key: rule for rule in policy.candidate_rules}
+    single_pinned = {pin.family for pin in policy.pins if pin.variant is Variant.SINGLE}
+    designated: dict[str, tuple[str, str]] = {}
+    for app in fetch(extras_config):
+        if Variant.SINGLE not in app.eligibility:
+            continue
+        rule = rules.get(candidate_selector(app).key)
+        effective_id = (rule.package_id if rule else None) or app.id
+        family = (rule.family if rule else None) or f"package:{effective_id}"
+        if family not in single_pinned:
+            designated[family] = (effective_id, normalize_project_url(app.url))
+    return designated
+
+
+def unpinned_designated_families(
+    extras_config: list[dict[str, Any]], policy_document: dict[str, Any]
+) -> dict[str, str]:
+    """Map each designated family whose extra no pin selects to its package id.
+
+    Composition accepts a denial of such an extra's package id, since it
+    rejects only a denial that removes a pinned candidate.
+    """
+    pinned_ids = {
+        package_id
+        for package_id, _ in parse_composition_policy(
+            policy_document
+        ).projected_pins.values()
+    }
+    return {
+        family: package_id
+        for family, (package_id, _) in designated_single_winners(
+            extras_config, policy_document
+        ).items()
+        if package_id not in pinned_ids
+    }
+
+
+def curated_single_mismatches(
+    extras_config: list[dict[str, Any]],
+    tmp_path: Path,
+    *,
+    policy_document: dict[str, Any] | None = None,
+    denials: list[dict[str, str]] | None = None,
+) -> set[str]:
+    """Name each designated family whose single-screen winner is not its extra.
+
+    Composes the committed configuration, with any given policy and added
+    denials, over the captured upstream catalogs.
+    """
+    if policy_document is None:
+        policy_document = read(ROOT / "config/composition.json")
     higher = captured_higher(extras_config)
-    result = _compose_with_codm_catalog(_committed_codm_catalog(), tmp_path, higher)
+    result = _compose_with_codm_catalog(
+        _committed_codm_catalog(),
+        tmp_path,
+        higher,
+        policy_document=policy_document,
+        denials=denials,
+    )
     selections = {
         selection.family: (
             selection.effective_id,
@@ -187,9 +222,10 @@ def curated_single_mismatches(
     }
     return {
         family
-        for family, (package_id, url) in CURATED_SINGLE_WINNERS.items()
-        if selections.get(family)
-        != (package_id, normalize_project_url(url), "source", "extras")
+        for family, (package_id, url) in designated_single_winners(
+            extras_config, policy_document
+        ).items()
+        if selections.get(family) != (package_id, url, "source", "extras")
     }
 
 
@@ -200,15 +236,98 @@ def test_committed_configuration_selects_each_curated_extra_in_single(
     assert curated_single_mismatches(extras_config, tmp_path) == set()
 
 
-@pytest.mark.parametrize("family", sorted(CURATED_SINGLE_WINNERS))
-def test_curated_single_guard_fails_when_one_extra_becomes_dual_screen(
+def test_designated_single_set_is_derived_from_extras_and_single_pins() -> None:
+    extras_config = read(ROOT / "config/extras.json")
+    policy_document = read(ROOT / "config/composition.json")
+    designated = designated_single_winners(extras_config, policy_document)
+    assert {"package:com.game.cinderbox", "package:809443320"} <= set(designated)
+
+    [cinderbox] = [e for e in extras_config if e["id"] == "com.game.cinderbox"]
+    pinned = deepcopy(policy_document)
+    pinned["pins"].append(
+        {
+            "family": "package:com.game.cinderbox",
+            "variant": "single",
+            "match": {
+                "source": "extras",
+                "origin": "extras",
+                "id": cinderbox["id"],
+                "url": cinderbox["url"],
+            },
+            "rationale": "Test pin.",
+        }
+    )
+    assert set(designated_single_winners(extras_config, pinned)) == set(designated) - {
+        "package:com.game.cinderbox"
+    }
+
+    cinderbox["dualScreen"] = True
+    assert "package:com.game.cinderbox" not in designated_single_winners(
+        extras_config, policy_document
+    )
+
+
+UNPINNED_DESIGNATED = unpinned_designated_families(
+    read(ROOT / "config/extras.json"), read(ROOT / "config/composition.json")
+)
+
+
+@pytest.mark.parametrize("family", sorted(UNPINNED_DESIGNATED))
+@pytest.mark.parametrize(
+    "correction",
+    [
+        {"packageId": "com.example.corrected"},
+        {"family": "app:corrected", "packageId": "com.example.corrected"},
+    ],
+    ids=["package-id", "family-and-package-id"],
+)
+def test_designated_family_follows_a_package_id_correction(
+    family: str, correction: dict[str, str], tmp_path: Path
+) -> None:
+    extras_config = read(ROOT / "config/extras.json")
+    policy_document = read(ROOT / "config/composition.json")
+    package_id = UNPINNED_DESIGNATED[family]
+    [entry] = [e for e in extras_config if e["id"] == package_id]
+    match = {
+        "source": "extras",
+        "origin": "extras",
+        "id": entry["id"],
+        "url": entry["url"],
+    }
+    policy_document["candidates"] = [
+        rule
+        for rule in policy_document["candidates"]
+        if (rule["match"]["source"], rule["match"]["origin"], rule["match"]["id"])
+        != ("extras", "extras", entry["id"])
+    ]
+    policy_document["candidates"].append(
+        {"match": match, **correction, "rationale": "Test correction."}
+    )
+    expected = correction.get("family", "package:com.example.corrected")
+
+    designated = designated_single_winners(extras_config, policy_document)
+    assert family not in designated
+    assert designated[expected] == (
+        "com.example.corrected",
+        normalize_project_url(entry["url"]),
+    )
+    assert (
+        curated_single_mismatches(
+            extras_config, tmp_path, policy_document=policy_document
+        )
+        == set()
+    )
+
+
+@pytest.mark.parametrize("family", sorted(UNPINNED_DESIGNATED))
+def test_curated_single_guard_fails_when_a_designated_extra_is_denied(
     family: str, tmp_path: Path
 ) -> None:
-    package_id, _ = CURATED_SINGLE_WINNERS[family]
     extras_config = read(ROOT / "config/extras.json")
-    [entry] = [entry for entry in extras_config if entry["id"] == package_id]
-    entry["dualScreen"] = True
-    assert curated_single_mismatches(extras_config, tmp_path) == {family}
+    denial = {"id": UNPINNED_DESIGNATED[family], "reason": "Test displacement."}
+    assert curated_single_mismatches(extras_config, tmp_path, denials=[denial]) == {
+        family
+    }
 
 
 @pytest.mark.parametrize(
