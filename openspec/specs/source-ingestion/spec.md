@@ -202,10 +202,9 @@ pack its flags leave it out of, or revive an entry excluded from export.
 
 #### Scenario: Entry kept out of dual by upstream
 
-- **WHEN** an RJNY entry is marked as not included in the dual-screen pack, as
-  the captured catalog's Cemu 0.5 entry is
+- **WHEN** an RJNY entry is marked as not included in the dual-screen pack
 - **THEN** it is a baseline build for single only, and its family's dual
-  selection comes from another build, such as the dual-only Cemu 0.5.2 entry
+  selection, if any, comes from another build in that family
 
 ### Requirement: RJNY presentation metadata does not reach the pack
 
@@ -341,7 +340,7 @@ source type, including a malformed explicit declaration rather than silently
 falling back to URL inference.
 
 Native GitLab entries SHALL follow the URL, identity and discovery boundary in
-"Public GitLab entries retain native source identity". Explicit per-app settings
+"Public GitLab entries keep native source identity". Explicit per-app settings
 SHALL override hydrated defaults. Native GitLab selection SHALL NOT route through
 HTML defaults.
 
@@ -364,7 +363,7 @@ HTML defaults.
 
 #### Scenario: Explicit GitLab declaration takes precedence over URL inference
 
-- **WHEN** an Aurora extra declares `overrideSource: GitLab` and `https://gitlab.com/AuroraOSS/AuroraStore`
+- **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
 - **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
 
 #### Scenario: Native GitLab URL is outside the supported boundary
@@ -389,16 +388,16 @@ compares and patches them uniformly.
 - **WHEN** an upstream entry's per-app settings string cannot be decoded
 - **THEN** the build fails with an error naming that entry
 
-### Requirement: Public GitLab entries retain native source identity
+### Requirement: Public GitLab entries keep native source identity
 
 The system SHALL accept explicit extras with source type `GitLab` and public HTTPS gitlab.com project URLs, preserve the full case-sensitive project path including subgroups (at most 21 path components in total), hydrate supported GitLab defaults, and render `overrideSource: GitLab`. Existing non-GitHub URL comparison semantics SHALL remain unchanged. Package ids for these explicit extras SHALL be supplied and backed by manifest evidence; adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
 
-#### Scenario: Aurora extra reaches both exports
+#### Scenario: A GitLab extra reaches both exports
 
-- **WHEN** an explicit Aurora Store extra uses its canonical GitLab URL and both variants
+- **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is selected in both variants
 - **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
 
-### Requirement: Committed codm2000 entries retain device-aware source semantics
+### Requirement: Committed codm2000 entries keep device-aware source semantics
 
 The system SHALL ingest accepted codm2000 entries from committed Obtainium JSON.
 README parsing and package-ID resolution SHALL occur only in the separate
@@ -443,17 +442,13 @@ SHALL fail explicitly.
 - **WHEN** an accepted source update removes a candidate required by an active rule or pin
 - **THEN** pack composition fails explicitly rather than silently ignoring the stale selector
 
-#### Scenario: EmuLnk already has correct higher-source settings
-
-- **WHEN** RJNY supplies EmuLnk as dual-eligible with prereleases enabled
-- **THEN** its entry remains the winner with unchanged settings and suppresses the independently generated codm entry
-
 #### Scenario: Newly resolved prerelease apps are admitted
 
-- **WHEN** the committed catalog includes manifest-verified Showdown-DS and Heimdall with explicit prerelease settings and no higher-source coverage
+- **WHEN** the committed catalog includes manifest-verified APK entries with explicit prerelease settings and no higher-source coverage
 - **THEN** they enter dual as installable APK entries, retaining those settings and their original identities without entering single
 
-#### Scenario: Kanto is a tracking resource
+#### Scenario: A tracking resource keeps its identity
 
-- **WHEN** the committed catalog includes the explicit Kanto Gear tracker
-- **THEN** dual retains its stable resource identity, track-only flag and manual-installation description, and neither pack's Gen1Recomp host is replaced
+- **WHEN** the committed catalog includes an explicit track-only resource
+- **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
+- **AND** neither pack's entry for the app the resource extends is replaced

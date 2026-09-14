@@ -250,7 +250,7 @@ change.
 - **WHEN** selection fails on tied candidates or a package collision
 - **THEN** the report identifies the family, target and conflicting selectors and preserves prior diagnostics
 
-### Requirement: A separate command generates the README source catalog
+### Requirement: A separate command generates the reviewed README source catalog
 
 The system SHALL provide `pack generate-source codm`. Each invocation SHALL
 fetch the configured README, validate the reviewed project policy, resolve every
@@ -288,7 +288,7 @@ its result.
 - **WHEN** project policy changes while README bytes remain identical
 - **THEN** the next invocation generates under the new policy
 
-#### Scenario: Kanto needs no APK resolution
+#### Scenario: A track-only rule needs no APK resolution
 
-- **WHEN** Kanto's explicit track-only rule and permitted release validate
+- **WHEN** a project's explicit track-only rule and its permitted release validate
 - **THEN** the report records a tracking resource with its synthetic ID, not a resolved Android package
