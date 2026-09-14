@@ -129,11 +129,12 @@ ADDED_ID = "com.example.testinvariant.added"
 def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
     """Vary the committed catalog the way a source proposal might.
 
-    The removed entry is the last one composition does not depend on: no
-    candidate rule, pin or overlay record targets it, and no higher-source
-    candidate or identity correction carries its package ID, so it cannot be a
-    family's only dual-screen build. When every entry is depended on, the
-    variant is skipped rather than silently testing only an addition.
+    The removed entry is the last one that composition admits and does not
+    depend on: no dual-eligible higher-source candidate covers its project, so
+    ingestion keeps it; no candidate rule, pin or overlay record targets it; and
+    no higher-source candidate or identity correction carries its package ID,
+    so it cannot be a family's only dual-screen build. When no entry qualifies,
+    the variant is skipped rather than silently testing only an addition.
     """
     apps = list(_committed_codm_catalog()["apps"])
     policy = load_json(ROOT / "config/composition.json")
@@ -145,13 +146,20 @@ def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
         (record["id"], normalize_project_url(record["url"]))
         for record in load_json(ROOT / "config/overlay.json")
     }
-    carried = {app.id for app in captured_higher()} | {
+    higher = captured_higher()
+    covered = {
+        normalize_project_url(app.url)
+        for app in higher
+        if Variant.DUAL in app.eligibility
+    }
+    carried = {app.id for app in higher} | {
         rule["packageId"] for rule in policy["candidates"] if "packageId" in rule
     }
     removable = [
         app
         for app in apps
-        if (app["id"], normalize_project_url(app["url"])) not in targeted
+        if normalize_project_url(app["url"]) not in covered
+        and (app["id"], normalize_project_url(app["url"])) not in targeted
         and app["id"] not in carried
     ]
     if not removable:
