@@ -344,7 +344,8 @@ A later review found that the helper could remove an entry codm2000 ingestion
 already drops: as committed its pick was `com.raekwon.supermetroid`, whose
 project a dual-eligible captured higher-source candidate covers, one of 9 of the
 30 entries ingestion suppresses. Removing it left composition unchanged, so the
-variant never tested a removal. The helper now also skips covered projects;
+variant never tested a removal. The helper now also skips covered projects
+and entries a package denial names;
 18 entries qualify and it removes `com.pokeemerald.dualscreen`, which is in the
 dual pack before the removal and absent after it, with composition succeeding
 and the single pack unchanged.

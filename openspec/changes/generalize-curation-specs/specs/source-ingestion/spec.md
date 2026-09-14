@@ -35,7 +35,7 @@ pack its flags leave it out of, or revive an entry excluded from export.
 
 - **WHEN** an RJNY entry is marked as not included in the dual-screen pack
 - **THEN** it is a baseline build for single only, and its family's dual
-  selection comes from another build in that family
+  selection, if any, comes from another build in that family
 
 ### Requirement: Every entry carries a supported source type
 
@@ -147,7 +147,7 @@ The system SHALL accept explicit extras with source type `GitLab` and public HTT
 
 #### Scenario: A GitLab extra reaches both exports
 
-- **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is eligible for both variants
+- **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is selected in both variants
 - **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
 
 ## REMOVED Requirements
