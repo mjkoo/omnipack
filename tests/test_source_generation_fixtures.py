@@ -132,8 +132,8 @@ def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
     The removed entry is the last one composition does not depend on: no
     candidate rule, pin or overlay record targets it, and no higher-source
     candidate or identity correction carries its package ID, so it cannot be a
-    family's only dual-screen build. When every entry is depended on, nothing
-    is removed.
+    family's only dual-screen build. When every entry is depended on, the
+    variant is skipped rather than silently testing only an addition.
     """
     apps = list(_committed_codm_catalog()["apps"])
     policy = load_json(ROOT / "config/composition.json")
@@ -145,8 +145,7 @@ def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
         (record["id"], normalize_project_url(record["url"]))
         for record in load_json(ROOT / "config/overlay.json")
     }
-    higher, _ = captured_pipeline()
-    carried = {app.id for app in higher} | {
+    carried = {app.id for app in captured_higher()} | {
         rule["packageId"] for rule in policy["candidates"] if "packageId" in rule
     }
     removable = [
@@ -155,8 +154,9 @@ def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
         if (app["id"], normalize_project_url(app["url"])) not in targeted
         and app["id"] not in carried
     ]
-    if removable:
-        apps.remove(removable[-1])
+    if not removable:
+        pytest.skip("composition depends on every codm2000 entry, so none can go")
+    apps.remove(removable[-1])
     # The added project copies an APK entry, chosen for its kind rather than
     # its position, under an ID and URL the catalog does not already use.
     template = next(
@@ -167,10 +167,10 @@ def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
         ),
         {"additionalSettings": json.dumps({"trackOnly": False}), "categories": []},
     )
+    used_ids = {app["id"] for app in apps}
+    used_urls = {normalize_project_url(app["url"]) for app in apps}
     added_id, added_url = ADDED_ID, "https://github.com/example/testinvariant-added"
-    while added_id in {app["id"] for app in apps} or normalize_project_url(
-        added_url
-    ) in {normalize_project_url(app["url"]) for app in apps}:
+    while added_id in used_ids or normalize_project_url(added_url) in used_urls:
         added_id, added_url = f"{added_id}x", f"{added_url}x"
     added = {
         **template,
@@ -293,7 +293,7 @@ def _codm_entry(
     return {
         "id": package_id,
         "url": url,
-        "author": url.split("/")[3],
+        "author": "example",
         "name": name,
         "additionalSettings": json.dumps(settings),
         "categories": [],
@@ -327,9 +327,9 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
 
     _, baseline = compose_catalog([], tmp_path / "baseline")
     before = {(item.family, item.variant): item for item in baseline.report.selections}
-    host_family = min(
-        family for family, variant in before if (family, Variant.SINGLE) in before
-    )
+    # The min() picks only make the fixture deterministic; which host and which
+    # covering candidate are chosen is immaterial.
+    host_family = min(family for family, variant in before if variant is Variant.SINGLE)
     host = before[(host_family, Variant.SINGLE)]
     covering = min(
         (
@@ -386,6 +386,8 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     # project, so its codm2000 entry is suppressed before selection: it neither
     # competes in nor changes any family's selection.
     assert "com.example.covered" not in {app.id for app in generated}
+    # Every earlier selection is unchanged, which covers the covering project's
+    # and the tracked host's selections in both packs.
     assert {key: after[key] for key in before} == before
     assert set(after) - set(before) == {
         ("package:com.example.prerelease", Variant.DUAL),
@@ -418,8 +420,6 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
     assert ("1234567890", Variant.SINGLE) not in settings
-    for variant in Variant:
-        assert after[(host_family, variant)] == before[(host_family, variant)]
 
 
 def test_reviewed_policy_sets_fallback_for_named_projects() -> None:
