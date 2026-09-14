@@ -192,10 +192,13 @@ def test_malformed_source_produces_findings_without_stopping_other_entries(
     malformed["overrideSource"] = source
     other = app("other")
     other.pop("name")
+    findings = validate_offline(inputs([malformed], [other]))
     assert {
         ("single", "malformed", "overrideSource", "unsupported_source"),
         ("dual", "other", "name", "missing_field"),
-    } <= located(validate_offline(inputs([malformed], [other])))
+    } <= located(findings)
+    [unsupported] = [item for item in findings if item.code == "unsupported_source"]
+    assert repr(source) in unsupported.message
 
 
 @pytest.mark.parametrize("field", ["overrideSource", "additionalSettings"])
@@ -373,7 +376,9 @@ def test_family_projection_and_pin_are_distinct() -> None:
     dual["url"] = "https://example.com/dual/"
     assert validate_offline(inputs([single], [dual], composition=policy)) == ()
     missing = validate_offline(inputs([], [], composition=policy))
-    assert "pin_mismatch" in codes(missing)
+    [mismatch] = [item for item in missing if item.code == "pin_mismatch"]
+    assert mismatch.variant == "dual"
+    assert "'app:shared'" in mismatch.message
     denied = validate_offline(
         inputs(
             [],
