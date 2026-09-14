@@ -268,7 +268,8 @@ Candidate catalog run, from the committed catalog as of commit `2ed9be9`:
   reviewed project rule or captured higher-source candidate references.
 - Re-resolved `com.enrpau.dualscreendex` as `com.enrpau.dualscreendex.rebuilt`.
 - Added an APK entry `com.example.candidate.added` and a track-only entry
-  `9876543210`.
+  `9876543210`. The task asks only for removals and a re-resolution; the
+  additions cover the requirement's scenario for proposals that add projects.
 - Rendered with `_render_catalog`: an object with an apps list, canonical, with
   unique ids, unique normalized URLs and kind-appropriate ids and flags.
 

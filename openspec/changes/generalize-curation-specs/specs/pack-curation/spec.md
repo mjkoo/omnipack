@@ -7,9 +7,10 @@ rationale, the observed release/APK versions and package identities behind it, t
 observation date and primary upstream references. It SHALL distinguish current
 structural validation from dated metadata/APK observations and from device
 validation, and SHALL NOT claim device validation that was not performed. Where
-a curated entry needs user action beyond installing it, such as supplying game
-files, installing a separate component or configuring the app by hand,
-consumer documentation SHALL describe that action. It SHALL explain that
+a curated entry, meaning an entry maintained in `config/extras.json`, needs
+user action beyond installing it, such as supplying game files, installing a
+separate component or configuring the app by hand, consumer documentation
+SHALL describe that action. It SHALL explain that
 explicit source-version tracking keeps update checks enabled but cannot
 guarantee eliminating a one-time spurious update after re-import or detecting
 an in-place asset replacement that leaves the source version unchanged.
@@ -75,7 +76,11 @@ covered without editing the check.
 
 A test that reads the automation-maintained codm2000 catalog SHALL fail only
 where composition, build or verification with the committed configuration, or
-catalog validation, would also reject that catalog. Catalog validation
+catalog validation, would also reject that catalog. The test suite composes
+over frozen captured upstream records while the source workflow builds from
+live ones. Composition here means composition over the suite's captured
+records; a catalog whose composition depends on upstream records newer than
+those captures is outside this guarantee. Catalog validation
 consists of these checks on the catalog's content: the catalog is an object
 with an apps list; entry ids are unique; no two entries share a normalized
 project URL; each entry's id and flags suit its kind, meaning an APK entry carries a syntactically valid Android manifest
@@ -85,8 +90,8 @@ extraction and APK architecture filtering disabled; and the file's bytes are
 the canonical rendering of its entries. These checks never depend on which
 projects the catalog contains or how they resolved, so a test asserting
 particular committed ids or projects is not part of catalog validation, and a
-source proposal whose catalog passes catalog validation and composes, builds
-and verifies cannot fail the test suite. Tests SHALL NOT require maintaining
+source proposal whose catalog passes catalog validation, composes over the
+captured records, builds and verifies cannot fail the test suite. Tests SHALL NOT require maintaining
 another implementation of Obtainium source resolution or regex semantics.
 
 #### Scenario: Upstream refresh changes a curated setting
@@ -101,7 +106,7 @@ another implementation of Obtainium source resolution or regex semantics.
 
 #### Scenario: A source proposal adds, removes or re-resolves projects
 
-- **WHEN** a candidate codm2000 catalog passes catalog validation, meaning it is an object with an apps list, its entry ids are unique, no two entries share a normalized project URL, each entry's id and flags suit its kind and its bytes are the canonical rendering of its entries, and it composes, builds and verifies with the committed configuration
+- **WHEN** a candidate codm2000 catalog passes catalog validation, meaning it is an object with an apps list, its entry ids are unique, no two entries share a normalized project URL, each entry's id and flags suit its kind and its bytes are the canonical rendering of its entries, and it composes with the committed configuration over the suite's captured upstream records, builds and verifies
 - **THEN** no test fails because of which projects the catalog contains or how they resolved
 
 ## REMOVED Requirements

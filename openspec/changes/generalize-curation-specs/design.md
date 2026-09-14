@@ -12,8 +12,8 @@ See proposal.md for motivation. These constraints shape the approach:
   parametrized over the committed catalog and a catalog with one project added
   and one removed. One test still asserts named projects in the committed
   catalog: Showdown-DS, Heimdall, Kanto Gear, and EmuLnk through suppression.
-  Three other tests read it to check unique ids and normalized project URLs,
-  canonical rendering, and kind-appropriate IDs and flags.
+  Other tests read it too, three of them to check unique ids and normalized
+  project URLs, canonical rendering, and kind-appropriate IDs and flags.
 - The curated single-screen guard in `tests/test_port_curation.py` checks a
   hand-kept list of seven families. `config/extras.json` also carries curated
   extras outside that list that are eligible for single and whose families
@@ -39,7 +39,8 @@ See proposal.md for motivation. These constraints shape the approach:
   or protected by an outcome check.
 - No test can fail on a codm2000 catalog that composition, build, verification
   and catalog validation accept, with catalog validation defined by the checks
-  it makes rather than by where they run.
+  it makes rather than by where they run. Composition here runs over the
+  suite's frozen captured upstream records.
 - Every curated extra that is eligible for single and whose family has no
   committed single pin is checked to win single, with no hand-kept list.
 - Generated track-only descriptions are accurate for any track-only resource,
@@ -49,11 +50,16 @@ See proposal.md for motivation. These constraints shape the approach:
 
 - Changing production code or configuration beyond the generated track-only
   sentence and the one committed catalog entry that carries it; changing
-  documentation, scripts or workflows; editing rendered packs by hand.
+  scripts or workflows, or documentation beyond setup notes for curated
+  extras; editing rendered packs by hand.
 - Removing or rewriting existing per-app tests other than the one that pins
   the automation-maintained catalog and the curated single-screen guard, which
   is rewritten to derive its set from configuration. Whether some of the others
   only restate configuration is a separate test-volume question.
+  Implementation found two further tests that could fail a catalog the build
+  accepts, the one-added-one-removed catalog helper and the Hollow Knight
+  composition test's exact URL comparison, and fixed both at the user's
+  direction.
 - Renaming or splitting the pack-curation capability.
 
 ## Decisions
@@ -128,7 +134,12 @@ files, ports' game data, Xash3D's rolling channel, Kanto Gear's manual install)
 become one duty: describe any user action a curated entry needs beyond
 installing it. This duty is reviewed, not tested, as the per-app clauses were.
 Dropping documentation duties entirely was rejected because a newly curated
-app that needs setup would carry no obligation. The duty to state each
+app that needs setup would carry no obligation. A curated entry is an entry
+maintained in `config/extras.json`; upstream entries that overlays or identity
+corrections touch carry no setup duty. Ghostship and Pokémon Red/Blue Recomp
+are curated extras that need a user-supplied ROM and were undocumented, so
+this change adds setup notes to `docs/curation.md` for them and for any other
+extra whose upstream needs user-supplied files. The duty to state each
 maintained policy and its rationale stays. The sentence explaining that
 automated source resolution, format lint and upstream-health publication gating
 are retired is dropped, because it describes a finished transition, as the
@@ -164,7 +175,18 @@ sources. The fixture holds:
 It asserts the same semantics without depending on committed contents. The
 Hollow Knight composition test also reads the committed catalog, but only
 entries that reviewed overlay records target. A catalog dropping or moving them
-already fails the build on a stale overlay, so it stays.
+already fails the build on a stale overlay, so it stays, with its URL
+assertion comparing normalized URLs as overlays do.
+
+Composition in this rule means composition over the suite's frozen captured
+upstream records. The source workflow builds from live records, and the suite
+cannot promise results against records it does not hold, so a catalog whose
+composition depends on upstream records newer than the captures, such as an
+overlay target that only a live upstream supplies, is outside the guarantee.
+Implementation found two tests that could fail a catalog the build accepts:
+the one-added-one-removed catalog helper removed whichever entry sorted last,
+which could be one composition depends on, and the Hollow Knight test compared
+exact URL strings. Both were fixed at the user's direction.
 
 Other code performs some of these checks. Ingestion, which `pack build`
 reaches through the codm2000 source's `fetch`, rejects a document that is not

@@ -34,8 +34,9 @@ resource need not be a mod.
   - curated decisions live in reviewed configuration, and regression checks
     assert the outcomes that depend on how the pipeline combines that
     configuration with upstream records. A test that reads the
-    automation-maintained codm2000 catalog fails only where composition,
-    build, verification or catalog validation would also reject it. Catalog
+    automation-maintained codm2000 catalog fails only where composition over
+    the suite's frozen captured upstream records, build, verification or
+    catalog validation would also reject it. Catalog
     validation is defined by what it checks: the catalog is an object with an
     apps list, entry ids are unique, no two entries share a normalized
     project URL, each entry's id and flags suit its kind, and the file's
@@ -43,8 +44,8 @@ resource need not be a mod.
     these depends on which projects the catalog contains, so a test asserting
     particular committed ids or projects is not part of it;
   - curation documentation states each maintained policy and its rationale,
-    and describes the user action a curated entry needs, within stated
-    evidence limits;
+    and describes the user action a curated entry, one maintained in
+    `config/extras.json`, needs, within stated evidence limits;
   - an upstream catalog's own pack tracker is excluded.
 
   Eight per-app requirements are removed: Cinderbox, numeric app versions,
@@ -87,6 +88,16 @@ resource need not be a mod.
   following any candidate rule's `packageId` correction. Its failure test
   displaces an extra in a way composition accepts, so the guard's own
   comparison is what reports the family.
+- **Two more tests are fixed, at the user's direction during
+  implementation.** The one-added-one-removed catalog helper removed whichever
+  entry sorted last, which could be one composition depends on; it now removes
+  only an entry nothing depends on. The Hollow Knight composition test compared
+  exact URL strings where overlays match normalized ones; it now compares
+  normalized URLs. Each could otherwise fail a catalog the build accepts.
+- **Setup notes for curated extras.** `docs/curation.md` gains a setup note
+  for every `config/extras.json` entry whose upstream needs user-supplied
+  files. Ghostship and Pokémon Red/Blue Recomp need a user-supplied ROM and
+  were undocumented.
 - **The generated track-only description says "the resource".** The sentence
   that `src/omnipack/source_generation.py` appends to every track-only entry
   becomes "Obtainium only tracks release notifications; acknowledgement does
@@ -99,8 +110,9 @@ resource need not be a mod.
   the wording on its next nightly rebuild.
 
 That sentence and that one catalog entry are the only production code or
-configuration changes. No documentation, script or workflow changes, and no
-rendered pack is edited by hand. Nothing is **BREAKING**: every retired
+configuration changes. No script or workflow changes; the only documentation
+change is the setup notes in `docs/curation.md`, and no rendered pack is
+edited by hand. Nothing is **BREAKING**: every retired
 statement describes values that the committed configuration still carries, and
 the only output change is one word in a track-only entry's description, which
 changes no identity, selection or other setting.
@@ -162,13 +174,17 @@ None.
   against fixture entries, and `tests/test_port_curation.py` rewrites the
   curated single-screen guard (`CURATED_SINGLE_WINNERS`,
   `curated_single_mismatches` and the tests that use them) to derive its set
-  from configuration. Other per-app tests stay.
+  from configuration. The one-added-one-removed catalog helper and the Hollow
+  Knight composition test's URL comparison are also fixed. Other per-app tests
+  stay.
 - Code: `src/omnipack/source_generation.py` changes "the mod" to "the
   resource" in the generated track-only description. No other `src/` change.
 - Configuration: `config/catalogs/codm.json` rewrites the Kanto Gear entry's
   description to what the changed generator renders. No other configuration
   changes.
-- Rendered packs: not edited by this change. `dist/dual-screen.json` picks up
-  the new wording on its next nightly rebuild; `dist/single-screen.json` has no
+- Rendered packs: not edited by this change. `dist/dual-screen.json` and the
+  Kanto Gear import link in the README catalog pick up the new wording on the
+  next nightly rebuild; `dist/single-screen.json` has no
   track-only codm2000 entry and does not change.
-- No change to `scripts/`, `docs/`, `README.md` or workflows.
+- Docs: `docs/curation.md` gains setup notes for curated extras that need
+  user-supplied files. No change to `scripts/`, `README.md` or workflows.
