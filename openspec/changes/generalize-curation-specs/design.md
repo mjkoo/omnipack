@@ -100,9 +100,12 @@ dual-pinned extra tests the pin check instead of the guard. No composition rule
 changes a build's eligibility, and an extra has the highest source precedence,
 so a family or package-id rule cannot take single from it without composition
 failing on ambiguous winners or the extra simply winning its reassigned
-family. The displacement composition accepts is a denial of the package id of
-a designated extra that no pin names, which in the committed configuration
-means Cinderbox or the omnipack tracker. Alternatives rejected:
+family. The displacement composition accepts is therefore a package denial of
+an extra that no pin names. The test covers every designated extra: in its own
+copy of the policy it drops each pin that selects the extra, which can only be
+a dual pin because a designated family has no single pin, so the extra stays
+designated; then it denies the extra's package id. As committed, only Cinderbox
+and the omnipack tracker need no pin dropped. Alternatives rejected:
 - keeping pack-curation as the designated home for per-app contract, which
   contradicts the project's spec rules and keeps a spec delta in every curation
   edit;

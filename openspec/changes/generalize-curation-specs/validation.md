@@ -513,3 +513,28 @@ At `d093b3e`:
   any main spec is the omnipack notification tracker's own (`809443320`,
   `omnipack updates` and its repository), and the source-type requirement
   cites "Public GitLab entries keep native source identity".
+
+## Re-run at `3effece`
+
+After the last recorded run, `3effece` reworded two source-ingestion delta
+scenarios and made the catalog-variant helper skip entries a package denial
+names. At `3effece`:
+
+- `openspec validate generalize-curation-specs --strict`: valid.
+  `openspec validate --specs --strict`: 10 passed.
+- `just check-all`, inside `nix develop`: exit 0, with 798 tests passed, 121
+  script tests passed, 0 link errors, and `nix flake check` passed.
+- Kanto Gear is still the only track-only rule. Rendering it through
+  `effective_settings` yields settings the committed entry carries with
+  identical values, and `_retained` returns true for it.
+- Applying the deltas with `openspec archive` in a scratch copy of `openspec/`
+  succeeded (8 added, 5 modified, 16 removed), and `openspec validate --specs
+  --strict` passed there. The only app identity in any main spec is the
+  omnipack notification tracker's; the other `github.com` matches are the
+  `OWNER/REPO` and `owner/repo` placeholders source-ingestion already carries.
+- The 1.4 search finds each of the sixteen removed names only in its own spec
+  file.
+
+design.md and task 1.2 now describe the guard's denial test as implemented: it
+covers every designated extra, dropping from its own copy of the policy each
+pin that selects the extra before denying the extra's package id.
