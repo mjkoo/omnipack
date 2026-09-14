@@ -64,11 +64,10 @@ A package denial removes builds, not families, as "Denied packages are excluded
 from both variants" defines. Where a family's baseline and dual-screen builds
 share a package id, a denial of that id SHALL remove both builds from both
 packs, and the family's builds carrying other package ids SHALL stay
-selectable. The Zelda 3, Minish Cap and Harvest Moon 64 standard and dual
-builds share a package id and those families have no other build, so a denial
-of that id removes each of those apps from both packs. A dual pin naming a
-family's baseline build SHALL keep it in the dual-screen pack in place of the
-family's dual-screen build, whether or not the two builds share a package id.
+selectable. A family whose only builds share the denied package id is therefore
+absent from both packs. A dual pin naming a family's baseline build SHALL keep
+it in the dual-screen pack in place of the family's dual-screen build, whether
+or not the two builds share a package id.
 
 #### Scenario: A dual-screen build replaces the baseline in dual
 

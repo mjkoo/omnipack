@@ -1,12 +1,4 @@
-# pack-curation Specification
-
-## Purpose
-
-Defines how curated app decisions are recorded, protected and documented, plus
-the pack's own notification tracker and the exclusion of upstream pack
-trackers.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Curation evidence states its limits
 
@@ -40,19 +32,6 @@ behavior for those entries.
 - **THEN** consumer documentation describes that step
 - **AND** it does not claim the step was validated on a device unless it was
 
-### Requirement: Upstream pack trackers are excluded from both packs
-
-Both published variants SHALL exclude an upstream catalog's own pack-update
-tracker entry through a maintained package denial, including after upstream
-refreshes. The exclusion SHALL keep that upstream as an app catalog source,
-with its attribution and provenance.
-
-#### Scenario: Upstream refresh contains its pack tracker
-
-- **WHEN** an upstream source's refreshed records include its own track-only pack tracker, and a maintained denial names that tracker's id
-- **THEN** neither generated pack nor the generated README catalog includes that tracker
-- **AND** the upstream's other eligible apps remain available to composition
-
 ### Requirement: Both packs include one shared omnipack notification tracker
 
 Each export SHALL contain exactly one identical GitHub track-only entry with stable synthetic id `809443320`, name `omnipack updates`, repository `https://github.com/mjkoo/omnipack`, and Utilities categorization. It SHALL select titles matching `^omnipack revision [0-9]+$`, extract the trailing integer from the release title, allow prereleases and scanning past unrelated releases, disable latest-endpoint prioritization and asset-date versioning, and retain background notifications. The rendered tracker SHALL NOT embed the observed revision, installed version or asset URLs. Source revision changes SHALL NOT require an APK.
@@ -68,6 +47,21 @@ Consumer documentation SHALL explain that either variant changing can notify eve
 
 - **WHEN** the curated configuration and other build inputs are unchanged
 - **THEN** observing the tracker revision alone does not change either generated pack
+
+## ADDED Requirements
+
+### Requirement: Upstream pack trackers are excluded from both packs
+
+Both published variants SHALL exclude an upstream catalog's own pack-update
+tracker entry through a maintained package denial, including after upstream
+refreshes. The exclusion SHALL keep that upstream as an app catalog source,
+with its attribution and provenance.
+
+#### Scenario: Upstream refresh contains its pack tracker
+
+- **WHEN** an upstream source's refreshed records include its own track-only pack tracker, and a maintained denial names that tracker's id
+- **THEN** neither generated pack nor the generated README catalog includes that tracker
+- **AND** the upstream's other eligible apps remain available to composition
 
 ### Requirement: Curated decisions are protected by outcome checks over reviewed configuration
 
@@ -130,3 +124,116 @@ another implementation of Obtainium source resolution or regex semantics.
 
 - **WHEN** a candidate codm2000 catalog passes catalog validation, meaning it is an object with an apps list, its entry ids are unique, no two entries share a normalized project URL, each entry's id and flags suit its kind and its bytes are the canonical rendering of its entries, and it composes with the committed configuration over the suite's captured upstream records, builds and verifies
 - **THEN** no test fails because of which projects the catalog contains or how they resolved
+
+## REMOVED Requirements
+
+### Requirement: Cinderbox is included in both packs
+
+**Reason**: Per-app data. Cinderbox's URL, package id, name, category and
+release settings are recorded in `config/extras.json`, and existing regression
+checks assert them.
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: Numeric app versions are selected without release labels
+
+**Reason**: Per-app data. The BanjoRecomp, SymphonyRecomp and Cemu version
+settings are recorded in `config/overlay.json`. That structural verification
+never evaluates version extraction is stated in pack-verification.
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: Source-version tracking preserves build identity
+
+**Reason**: Per-app data. The package ids that disable version detection are
+recorded in `config/overlay.json`. The limits of source-version tracking stay
+in "Curation evidence states its limits".
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: Curated store and established ports are present in both variants
+
+**Reason**: Per-app data. The Aurora Store, idTech4A++, VCMI, Julius and Xash3D
+entries are recorded in `config/extras.json`, and their dual pins in
+`config/composition.json`. The single-screen guard these entries relied on is
+generalized in "Curated decisions are protected by outcome checks over reviewed
+configuration" to every curated extra that is eligible for single and whose
+family has no committed single pin. That set includes all five entries, whose
+pins are dual pins, and is derived from `config/extras.json` rather than
+listed. The game-data documentation duty moves
+to "Curation evidence states its limits".
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: Xash3D tracks the continuous Android asset
+
+**Reason**: Per-app data. Xash3D's release channel, asset and version settings
+are recorded in `config/extras.json`; its rolling-channel note is part of the
+entry's description and the curation documentation.
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: Hollow Knight entries have recognizable presentation
+
+**Reason**: Per-app data. The two entries' names and categories are recorded
+in `config/overlay.json`; their setup documentation falls under "Curation
+evidence states its limits".
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: Reviewed installed applications use verified identities and maintained sources
+
+**Reason**: Per-app data. The identity corrections, family rules and pins are
+recorded in `config/composition.json`, the retired catalog IDs in
+`config/deny.json` and the maintained sources in `config/extras.json`. The
+generic rules this requirement relied on are stated in pack-composition:
+identity corrections need recorded manifest evidence, and denials match exact
+package ids. The requirement also carried a finished change's acceptance
+criterion and an installed-app comparison scenario that no code implements.
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: MetroidArch preserves a separate dual-screen Super Metroid selection
+
+**Reason**: Per-app data. MetroidArch's dual-screen entry and release settings
+are recorded in `config/extras.json`, its family and pin in
+`config/composition.json`, and the retired Super Metroid IDs in
+`config/deny.json`. Its setup documentation falls under "Curation evidence
+states its limits".
+
+**Migration**: None. Retiring this requirement changes no configuration or
+rendered pack.
+
+### Requirement: The upstream pack tracker is excluded
+
+**Reason**: Replaced by "Upstream pack trackers are excluded from both packs",
+which states the rule without the tracker's id. The duty to keep migration
+guidance for users who imported the tracker before it was excluded is dropped
+as a finished transition.
+
+**Migration**: None. The denial stays in `config/deny.json`, and existing
+guidance may remain.
+
+### Requirement: Curation regression checks protect exported configuration
+
+**Reason**: Replaced by "Curated decisions are protected by outcome checks over
+reviewed configuration", which keeps the refresh-survival check, generalizes
+the curated single-screen guard and states what tests may assume about the
+automation-maintained catalog. The scenario about retiring the live verifier
+described a finished transition.
+
+**Migration**: None. Rewrite any test that fails on a codm2000 catalog that
+composition, build, verification and catalog validation accept, where catalog
+validation checks only that the catalog is an object with an apps list, its
+entry ids are unique, no two entries share a normalized project URL, each
+entry's id and flags suit its kind and its bytes are the canonical rendering of
+its entries. Derive the curated single-screen
+guard's set from `config/extras.json` and the committed single pins, leaving
+out any family that a single pin selects for.

@@ -52,10 +52,24 @@ device acceptance.
 
 ## Port setup
 
-Aurora Store is directly installable and selects the ordinary GitLab APK rather
-than hardware-specific or preload variants. The remaining new ports need game
-data that the project does not distribute:
+The entries below need user action beyond installing them. Each note restates
+what the upstream project documents; it is not a device validation record.
 
+- **Aurora Store** selects the ordinary GitLab APK rather than hardware-specific
+  or preload variants. On first open it asks the user to log in, with a Google
+  Play account or anonymously; an anonymous login leaves some features
+  unavailable.
+- **Cinderbox** requires a user-supplied legitimate copy of Stardew Valley; the
+  project distributes no game assets.
+- **Ghostship** requires a user-supplied US or JP Super Mario 64 ROM (`.z64`),
+  chosen in the app.
+- **Pokémon Red/Blue Recomp** requires a user-supplied canonical US Pokémon Game
+  Boy ROM (`.gb` or `.gbc`), chosen in the app. The upstream README lists the
+  accepted ROMs and their checksums.
+- **MetroidArch (Super Metroid)** requires a user-supplied, uncompressed Super
+  Metroid ROM, the app's own asset and core-info updates, and separate writable
+  directories. The [MetroidArch setup guide](metroidarch.md) describes each
+  step.
 - **idTech4A++** requires user-supplied data for a supported id Tech game.
 - **VCMI** requires user-supplied Heroes of Might and Magic III data and lets
   Obtainium select the APK matching the device architecture.

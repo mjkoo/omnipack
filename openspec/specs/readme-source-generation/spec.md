@@ -7,7 +7,7 @@ routine pack publication can consume accepted source data without APK discovery.
 
 ## Requirements
 
-### Requirement: Reviewed rules declare discovery and tracking treatment
+### Requirement: Reviewed project rules declare discovery and tracking treatment
 
 The system SHALL read committed per-project policy keyed by normalized GitHub
 repository URL. A project without a rule SHALL default to APK discovery using
@@ -36,16 +36,11 @@ an otherwise eligible project. Effective discovery settings SHALL be retained
 in generated Obtainium entries so a resolved prerelease remains discoverable
 after import. Final-pack overlays SHALL NOT substitute for discovery policy.
 
-The initial policy SHALL enable prerelease APK discovery for EmuLnk/emulnk,
-castdrian/showdown-ds and mastercook777/Heimdall-AYN-Thor-Assistant, and classify
-AverageConsumer/kanto-gear as track-only. Showdown and Heimdall SHALL select
-their versioned APK filenames and retain prerelease suffixes in version
-extraction. Heimdall SHALL exclude the mutable debug-latest release channel.
-The initial APK rules SHALL set the supported consumer setting
-`fallbackToOlderReleases` to true for Heimdall and false for Showdown and
-EmuLnk. Unconfigured projects SHALL preserve their existing default for that
-setting. Consumer fallback SHALL NOT change which release the generator
-resolves.
+An APK rule SHALL be able to set the supported consumer setting
+`fallbackToOlderReleases` explicitly, and the generated entry SHALL carry the
+configured value. Unconfigured projects SHALL preserve their existing default
+for that setting. Consumer fallback SHALL NOT change which release the
+generator resolves.
 
 #### Scenario: Version extraction references an absent capture group
 
@@ -62,11 +57,11 @@ resolves.
 - **WHEN** a project explicitly enables prereleases and publishes a matching prerelease APK
 - **THEN** generation can resolve it through the releases list despite a 404 from the stable latest endpoint, and its exported settings permit Obtainium to find that release
 
-#### Scenario: Heimdall client skips debug and falls back for asset availability
+#### Scenario: Exported title filter and consumer fallback reach the client
 
-- **WHEN** a newer Heimdall release title is `debug-latest`, the newest matching versioned release has no eligible APK, and an older matching versioned release has an eligible APK
-- **THEN** the generated entry's title filter excludes the debug release and its enabled `fallbackToOlderReleases` setting permits Obtainium to use the older matching release
-- **AND** Showdown and EmuLnk retain explicit disabled fallback settings
+- **WHEN** a rule's release-title filter excludes a mutable release channel and enables consumer fallback, and the newest matching versioned release has no eligible APK while an older matching versioned release has one
+- **THEN** the generated entry's title filter excludes the mutable channel and its enabled `fallbackToOlderReleases` setting permits Obtainium to use the older matching release
+- **AND** a rule that disables consumer fallback exports it disabled
 
 #### Scenario: An unconfigured project has no stable APK
 
@@ -127,7 +122,7 @@ as proposed deletions only after otherwise complete successful generation.
 - **WHEN** a README contains a valid Project table and another Project header with a missing or invalid delimiter
 - **THEN** generation fails without proposing removals from the malformed table or emitting a candidate catalog
 
-### Requirement: Package IDs are resolved automatically from release APKs
+### Requirement: Release APKs determine package IDs automatically
 
 Generation SHALL use the shared host-scoped HTTP helper to resolve APK package
 IDs automatically. Default APK policy SHALL use the GitHub latest stable release
@@ -167,10 +162,10 @@ follow its separate metadata-only contract.
 - **WHEN** an APK project's selected release contains only non-APK assets
 - **THEN** resolution fails with an explicit unsupported-asset diagnostic
 
-#### Scenario: Generator remains strict when Heimdall consumer fallback is enabled
+#### Scenario: Generator remains strict when consumer fallback is enabled
 
-- **WHEN** Heimdall's newest matching release has no eligible APK and an older matching release is usable
-- **THEN** resolution fails without inspecting the older release, and Heimdall's committed entry is kept as a retained failure only if its effective policy is unchanged
+- **WHEN** a project's rule enables consumer fallback, its newest matching release has no eligible APK, and an older matching release is usable
+- **THEN** resolution fails without inspecting the older release, and the project's committed entry is kept as a retained failure only if its effective policy is unchanged
 - **AND** the generated consumer setting does not broaden generator release selection
 
 #### Scenario: Explicit asset filter selects the supported APK family
@@ -188,7 +183,7 @@ follow its separate metadata-only contract.
 - **WHEN** no permitted release occurs within the bounded list
 - **THEN** the diagnostic identifies that limitation and no unbounded scan or broader release policy is attempted
 
-### Requirement: Explicit track-only resources remain honest non-APK entries
+### Requirement: Explicit track-only resources remain honest tracking entries
 
 Track-only generation SHALL require an explicit stable numeric-string resource
 ID and a documented manual installation path in reviewed policy. It SHALL
@@ -199,15 +194,13 @@ filtering. The record SHALL contain no observed installed or latest version,
 fixed download URL or claim of an Android package identity. Tracking outcomes
 SHALL be separate from APK resolution in diagnostics.
 
-Kanto Gear SHALL use resource ID `1845280017`, name `Kanto Gear (mod updates)`,
-its existing AverageConsumer/kanto-gear URL and stable release tags. It SHALL
-appear as a dual-only tracking entry while the official Gen1Recomp host remains
-in both packs. Its description and consumer guidance SHALL explain installation
-and updates through Gen1Recomp's Mod Index or ZIP import, and that Obtainium
-notifications and acknowledgement do not install the mod or detect its actual
-installed version. Enabling ZIP extraction SHALL NOT be presented as a way to
-install this Lua archive. The existing omnipack notification tracker SHALL
-retain its distinct identity and behavior.
+A track-only resource SHALL appear under its own synthetic identity and SHALL
+NOT replace the entry of the app it extends in either pack. Its description and
+consumer guidance SHALL explain its manual installation path, and that Obtainium
+notifications and acknowledgement neither install it nor detect its installed
+version. Enabling ZIP extraction SHALL NOT be presented as a way to install a
+non-APK archive. The existing omnipack notification tracker SHALL retain its
+distinct identity and behavior.
 
 A new tracker whose selected release cannot be verified SHALL block the
 complete proposal. A tracker with a committed entry SHALL keep that entry on a
@@ -218,15 +211,15 @@ tracker ID blocks retention. A change of kind SHALL require fresh validation for
 the destination kind, with no cross-kind fallback, and an APK package ID SHALL
 NOT be reused as a tracker ID.
 
-#### Scenario: Kanto release contains only a mod ZIP
+#### Scenario: A tracked release contains only non-APK assets
 
-- **WHEN** Kanto's published release is available and the reviewed rule is track-only
-- **THEN** generation emits the tracking entry without seeking an APK or downloading the ZIP
+- **WHEN** a track-only resource's published release is available and contains only non-APK archives
+- **THEN** generation emits the tracking entry without seeking an APK or downloading an archive
 
-#### Scenario: User acknowledges a Kanto notification
+#### Scenario: User acknowledges a tracking notification
 
-- **WHEN** the user marks a tracked Kanto release as acknowledged in Obtainium
-- **THEN** the documented update action remains installation through Gen1Recomp and no mod-installation claim is made
+- **WHEN** the user marks a tracked release as acknowledged in Obtainium
+- **THEN** the documented update action remains the resource's manual installation path and no installation claim is made
 
 #### Scenario: A new tracking resource is unavailable
 
