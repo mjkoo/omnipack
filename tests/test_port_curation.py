@@ -157,8 +157,10 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
         chosen = [app for app in result.apps[variant] if app.data["id"] in PORT_IDS]
         assert len(chosen) == len(PORT_IDS)
         assert {
-            item.source for item in result.report.selections if item.variant is variant
-        } == {"extras"}
+            (item.source, item.reason)
+            for item in result.report.selections
+            if item.variant is variant
+        } == {("extras", "source" if variant is Variant.SINGLE else "pin")}
         expected = {app.id: app.additional_settings for app in maintained}
         for app in chosen:
             assert app.data["additionalSettings"] == expected[app.data["id"]]
@@ -198,17 +200,15 @@ def test_committed_configuration_selects_each_curated_extra_in_single(
     assert curated_single_mismatches(extras_config, tmp_path) == set()
 
 
-def test_curated_single_guard_fails_when_the_extras_become_dual_screen(
-    tmp_path: Path,
+@pytest.mark.parametrize("family", sorted(CURATED_SINGLE_WINNERS))
+def test_curated_single_guard_fails_when_one_extra_becomes_dual_screen(
+    family: str, tmp_path: Path
 ) -> None:
-    curated = {package_id for package_id, _ in CURATED_SINGLE_WINNERS.values()}
+    package_id, _ = CURATED_SINGLE_WINNERS[family]
     extras_config = read(ROOT / "config/extras.json")
-    for entry in extras_config:
-        if entry["id"] in curated:
-            entry["dualScreen"] = True
-    assert curated_single_mismatches(extras_config, tmp_path) == set(
-        CURATED_SINGLE_WINNERS
-    )
+    [entry] = [entry for entry in extras_config if entry["id"] == package_id]
+    entry["dualScreen"] = True
+    assert curated_single_mismatches(extras_config, tmp_path) == {family}
 
 
 @pytest.mark.parametrize(
