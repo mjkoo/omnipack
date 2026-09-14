@@ -340,6 +340,15 @@ the run. `config/catalogs/codm.json` is byte-identical to its copy, and
 after this run; it only relaxes an assertion on entries the candidate did not
 touch.
 
+A later review found that the helper could remove an entry codm2000 ingestion
+already drops: as committed its pick was `com.raekwon.supermetroid`, whose
+project a dual-eligible captured higher-source candidate covers, one of 9 of the
+30 entries ingestion suppresses. Removing it left composition unchanged, so the
+variant never tested a removal. The helper now also skips covered projects;
+18 entries qualify and it removes `com.pokeemerald.dualscreen`, which is in the
+dual pack before the removal and absent after it, with composition succeeding
+and the single pack unchanged.
+
 ## 2.3 Track-only wording
 
 `effective_settings` now ends every track-only description with "Obtainium
@@ -405,10 +414,10 @@ recording device validation. `nix develop -c lychee --offline docs/ README.md`:
 | File | Before (`9b5e84e`) | After |
 |---|---|---|
 | `tests/test_port_curation.py` | 308 | 450 |
-| `tests/test_source_generation_fixtures.py` | 315 | 459 |
-| All of `tests/*.py` | 12316 | 12602 |
+| `tests/test_source_generation_fixtures.py` | 315 | 467 |
+| All of `tests/*.py` | 12316 | 12610 |
 
-The proposal estimated a net test change near zero. The actual growth, 286
+The proposal estimated a net test change near zero. The actual growth, 294
 lines, comes from the guard's derivation and its synthetic derived-set,
 correction and denial tests, from the fixture test comparing selections with an
 empty-catalog composition, and from the two fixes to catalog-reading tests
@@ -417,15 +426,15 @@ guard's seven dual-screen mutation cases became one derived-set test, two
 correction cases and nine denial cases.
 
 Main specs change only when the deltas are applied at archive. Applying them
-with `openspec archive` in a scratch copy of `openspec/` succeeded (7 added,
-2 modified, 15 removed), and `openspec validate --specs --strict` passed on
+with `openspec archive` in a scratch copy of `openspec/` succeeded (8 added,
+5 modified, 16 removed, after the 4.4 deltas), and `openspec validate --specs --strict` passed on
 the result:
 
 | Spec | Before | After archive |
 |---|---|---|
-| `pack-curation` | 346 | 127 |
+| `pack-curation` | 346 | 132 |
 | `readme-source-generation` | 490 | 483 |
-| `source-ingestion` | 459 | 455 |
+| `source-ingestion` | 459 | 454 |
 | `pack-cli` | 294 | 294 |
 | `pack-composition` | 432 | 431 |
 
@@ -433,18 +442,14 @@ the result:
 
 Outside this change's scope, recorded for later work:
 
-- Per-app names remain in main-spec requirements this change's deltas do not
-  touch. In source-ingestion, "Every entry carries a supported source type"
-  has an Aurora Store GitLab scenario, "Public GitLab entries retain native
-  source identity" has "Aurora extra reaches both exports", and "RJNY export
-  flags select entries per variant" illustrates "Entry kept out of dual by
-  upstream" with the captured Cemu entries. In pack-curation, "Both packs
-  include one shared omnipack notification tracker" says "the RJNY tracker
-  exclusion SHALL remain in force".
 - No code stops a candidate rule from placing a track-only codm2000 entry in
   its host app's family, where it would compete with the host for the
   dual-screen selection. Making `apply_composition_policy` reject such a rule
-  is a production change outside this change.
+  is new behavior and belongs in its own change.
+
+The per-app examples that remained in other main-spec requirements (the Cemu
+illustration, the Aurora Store GitLab scenarios and the omnipack tracker's
+reference to the RJNY tracker) were brought into this change; see 4.4.
 
 ## 4.1 Retired names in the delta specs
 
@@ -485,3 +490,22 @@ This file records the coverage audit (1.1), the derived single-screen set and
 its tests (1.2), the catalog audit and candidate-catalog run (2.2), the
 track-only wording check (2.3), the setup-notes check (3.2), the check results
 (4.2), and test and spec line counts before and after.
+
+## 4.4 Remaining per-app examples
+
+At `d093b3e`:
+
+- The 4.1 search over the amended delta specs finds one match outside a
+  REMOVED section: `github.com/` in the omnipack notification tracker's
+  repository URL, which is the pack's own tracker identity, not a retired
+  project.
+- The 1.4 search, now with sixteen names including "Public GitLab entries
+  retain native source identity", finds each only in its own spec file. That
+  name is also cited by "Every entry carries a supported source type" in the
+  same file, which the delta modifies to cite the replacement.
+- Applying the deltas with `openspec archive` in a scratch copy of `openspec/`
+  succeeded (8 added, 5 modified, 16 removed), and `openspec validate --specs
+  --strict` passed there (10 passed). After archive, the only app identity in
+  any main spec is the omnipack notification tracker's own (`809443320`,
+  `omnipack updates` and its repository), and the source-type requirement
+  cites "Public GitLab entries keep native source identity".
