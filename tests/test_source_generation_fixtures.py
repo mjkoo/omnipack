@@ -237,6 +237,50 @@ def test_committed_catalog_leaves_the_single_screen_pack_unchanged(
     assert committed.apps[Variant.SINGLE] == modified.apps[Variant.SINGLE]
 
 
+def test_committed_codm_entries_keep_their_source_semantics_in_composition(
+    tmp_path: Path,
+) -> None:
+    higher, _ = captured_pipeline()
+    result = _compose_with_codm_catalog(_committed_codm_catalog(), tmp_path, higher)
+    selections = {
+        (item.effective_id, item.variant): item for item in result.report.selections
+    }
+    settings = {
+        (app.id, variant): app.data["additionalSettings"]
+        for variant in Variant
+        for app in result.apps[variant]
+    }
+
+    # A higher source already covers EmuLnk in dual, so its codm entry is
+    # suppressed and the higher source's build and settings win.
+    emulnk = selections[("com.emulnk", Variant.DUAL)]
+    assert emulnk.source == "rjny"
+    assert all(item.source != "codm2000" for item in emulnk.considered)
+    assert settings[("com.emulnk", Variant.DUAL)]["includePrereleases"] is True
+
+    for package_id in ("dev.adrian.showdown", "com.mastercook777.heimdall"):
+        selection = selections[(package_id, Variant.DUAL)]
+        assert (selection.source, selection.origin, selection.original_id) == (
+            "codm2000",
+            "codm-generated",
+            package_id,
+        )
+        assert settings[(package_id, Variant.DUAL)]["includePrereleases"] is True
+        assert (package_id, Variant.SINGLE) not in settings
+
+    kanto = selections[("1845280017", Variant.DUAL)]
+    assert (kanto.source, kanto.original_id) == ("codm2000", "1845280017")
+    assert settings[("1845280017", Variant.DUAL)]["trackOnly"] is True
+    assert "Gen1Recomp" in settings[("1845280017", Variant.DUAL)]["about"]
+    assert ("1845280017", Variant.SINGLE) not in settings
+    for variant in Variant:
+        host = selections[("com.theboisclub.pokemonred", variant)]
+        assert (host.source, normalize_project_url(host.url)) == (
+            "extras",
+            normalize_project_url("https://github.com/bryanthaboi/gen1recomp"),
+        )
+
+
 def test_reviewed_policy_sets_fallback_for_named_projects() -> None:
     policy = load_json(ROOT / "config/codm-projects.json")["projects"]
     assert (
