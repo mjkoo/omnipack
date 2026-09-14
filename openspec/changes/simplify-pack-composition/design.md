@@ -340,8 +340,10 @@ single command, and tolerant readers are part of what this change removes.
   bodies and follows redirects with urllib's defaults;
 - `redact_url`.
 
-It sends no credentials. A new `omnipack/source_http.py` holds the
-generation-only client:
+It also holds the request, response and retry base (`RetryingClient`,
+`build_request` and `complete_response`) that the generation-side client
+builds on. None of it sends credentials. A new `omnipack/source_http.py` holds
+the generation-only client:
 
 - exact-host `HttpConfig`;
 - the credential-stripping redirect handler;

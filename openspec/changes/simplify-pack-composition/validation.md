@@ -15,18 +15,18 @@ reported the change valid. After the review fixes described below, both passed
 again at the branch head, with the flake checks again limited to
 aarch64-darwin.
 
-The suite has 782 tests, against 732 at the start of this change.
+The suite has 793 tests, against 732 at the start of this change.
 
 | Measure | Start | Now | Removed | Added | Net |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | Implementation (`src/` and `scripts/` Python) | 6,731 | 6,145 | 1,426 | 840 | -586 |
-| Tests (`tests/` Python) | 12,031 | 12,173 | 1,770 | 1,912 | +142 |
+| Tests (`tests/` Python) | 12,031 | 12,316 | 1,771 | 2,056 | +285 |
 
 The proposal estimated about 850 implementation lines removed and 80 added, and
 about 1,000 test lines removed and 200 added. The implementation removed more
 than estimated, and added more, because the credential-scoped HTTP client moved
 into its own module and git counts the moved lines once as removed and once as
-added. The tests did not shrink as estimated, for three reasons:
+added. The tests did not shrink as estimated, for four reasons:
 
 - the credential, redirect and bounded-read tests moved with that client, and
   are likewise counted on both sides;
@@ -34,7 +34,9 @@ added. The tests did not shrink as estimated, for three reasons:
   entry and field identified;
 - new tests cover the dual-screen build model, the guard that keeps each curated
   extra selected in the single-screen pack, and the build's one read of its
-  local inputs.
+  local inputs;
+- a verification pass after the review added direct tests for scenarios that
+  only the captured-baseline regression had covered.
 
 ## Output comparison
 
@@ -55,6 +57,12 @@ branch export and in the repository checkout: schema 3, verifier 2.0.0,
 structural scope, offline mode, complete, no errors, with fingerprints of the
 six inputs (both packs, denylist, overlay, composition policy and README).
 
+The comparison was repeated after the review fixes. Clean exports of `70f7514`
+and the branch at `e5326d0` were built back to back, at 22:30:21 and 22:30:23
+UTC, and again produced byte-identical outputs with the hashes above. `pack
+verify` passed in the branch export. Later commits change only tests and this
+change's records, not rendered output.
+
 The freshly built `dist/dual-screen.json` and `README.md` differ from the
 committed copies, while `dist/single-screen.json` matches. The base and the
 branch build the same bytes, so the difference is upstream change since the
@@ -70,7 +78,29 @@ selector. The offline stale overlay finding is renamed `stale_overlay`. New test
 cover the remaining composition scenarios, and the curated single-screen guard's
 mutation test now exercises the guard's own check. None of these fixes changes
 rendered output: the captured-baseline regression still reproduces the exact
-exports. The live comparison above ran before these fixes and was not repeated.
+exports. The first live comparison ran before these fixes; the repeated one
+above ran after them.
+
+## Verification follow-ups
+
+On 2026-09-14 a verification pass over the finished branch found every
+requirement implemented, but some scenarios had no direct test. Tests now cover:
+
+- two builds sharing a package id with no pin, where the standard build wins
+  single and the dual build wins dual by preference;
+- an RJNY build kept out of dual, whose family's dual-only build wins dual;
+- rule-less forks with similar names staying in separate families, and denials
+  and package collisions seeing a corrected package id;
+- the committed codm2000 outcomes for EmuLnk, Showdown-DS, Heimdall and Kanto;
+- the curated single-screen guard failing for each extra made a dual-screen
+  build on its own, and curated extras reporting a pin in dual;
+- the family and target a pin mismatch names, and the value an unsupported
+  source finding names.
+
+Disabling dual preference makes the first two fail. None of these changes
+rendered output. The design now also names the shared HTTP request, response
+and retry base. `just check-all` and `openspec validate
+simplify-pack-composition --strict` passed again afterward.
 
 ## Not established
 
