@@ -34,7 +34,8 @@ See proposal.md for motivation. These constraints shape the approach:
 **Goals:**
 
 - Specs state generic rules; per-app values live only in reviewed
-  configuration and tests.
+  configuration and tests. Once the change is archived, no main-spec
+  requirement names an app, apart from the pack's own notification tracker.
 - Every retired per-app fact stays either recorded in reviewed configuration
   or protected by an outcome check.
 - No test can fail on a codm2000 catalog that composition, build, verification
@@ -117,6 +118,14 @@ names close to the old ones and carry their generic body text unchanged. The
 composition change followed the same pattern. RENAMED plus MODIFIED was not
 used because the renamed scenarios would still be dropped from the MODIFIED
 block.
+
+Implementation review found per-app examples in four requirements outside the
+named projects' own: the Cemu illustration in the RJNY export-flag rule, the
+Aurora Store scenarios of the source-type and GitLab identity requirements,
+and the omnipack tracker's reference to the RJNY tracker. Three are modified
+in place. "Public GitLab entries retain native source identity" is replaced
+under a new name because its scenario is renamed, and the source-type
+requirement that cites it now cites the replacement.
 
 **No new requirement for "policies change only what they name".** Its generic
 parts are already stated elsewhere:
@@ -247,8 +256,8 @@ on catalogs that catalog validation accepts.
 - [Documentation drifts with no test] → Accepted. No curation document was
   tested before this change either.
 - [A removed requirement name is still cited] → No spec, document, test or
-  configuration file cites any of the fifteen removed names, the eight retired
-  and the seven replaced, outside its own spec file. The implementation
+  configuration file cites any of the sixteen removed names, the eight retired
+  and the eight replaced, outside its own spec file. The implementation
   re-checks every one of them before the specs are synchronized.
 - [The committed tracker entry drifts from the generator] → Implementation
   renders the committed track-only rule through `effective_settings` and

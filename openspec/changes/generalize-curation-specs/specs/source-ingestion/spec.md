@@ -1,3 +1,88 @@
+## MODIFIED Requirements
+
+### Requirement: RJNY export flags select entries per variant
+
+The RJNY catalog carries per-entry export metadata that determines whether an
+entry is exported at all and which variants it belongs to. The system SHALL
+drop any entry marked as excluded from export, SHALL omit an entry from the
+single-screen variant when it is marked as not included in the standard pack,
+and SHALL omit an entry from the dual-screen variant when it is marked as not
+included in the dual-screen pack. An entry carrying no such flag SHALL be a
+candidate for both variants. An entry in both exports SHALL be a baseline
+build. An entry only in the dual-screen export SHALL be a dual-screen build,
+preferred in dual. An entry only in the standard export SHALL be a baseline
+build that upstream keeps out of dual. An entry marked out of both packs SHALL
+contribute to neither. These flags SHALL alone decide an entry's kind and
+eligibility: composition policy SHALL NOT change them, restore an entry to a
+pack its flags leave it out of, or revive an entry excluded from export.
+
+#### Scenario: Entry excluded from export
+
+- **WHEN** an RJNY entry is marked as excluded from export
+- **THEN** it contributes to neither variant, regardless of its other flags
+
+#### Scenario: Entry opted out of one variant
+
+- **WHEN** an RJNY entry is marked as not included in the standard pack
+- **THEN** it is a candidate for the dual-screen variant only
+
+#### Scenario: Entry carries no export metadata
+
+- **WHEN** an RJNY entry carries no export metadata
+- **THEN** it is a candidate for both variants
+
+#### Scenario: Entry kept out of dual by upstream
+
+- **WHEN** an RJNY entry is marked as not included in the dual-screen pack
+- **THEN** it is a baseline build for single only, and its family's dual
+  selection comes from another build in that family
+
+### Requirement: Every entry carries a supported source type
+
+Obtainium reads a per-app source type that decides which settings keys an app
+has, so every entry must carry one before it can be rendered. An entry ingested
+from an upstream catalog SHALL take the source type that upstream's record
+declares for it. An extras entry with an explicit `overrideSource` SHALL use
+that declared source type before URL-based inference. Only when an extras entry
+omits `overrideSource`, or for a generated entry, SHALL the system derive the
+source type from the URL: a github.com repository takes GitHub and any other
+URL takes HTML. The pack SHALL support GitHub, HTML and GitLab, and SHALL fail
+the build with an error naming the entry and offending value for any other
+source type, including a malformed explicit declaration rather than silently
+falling back to URL inference.
+
+Native GitLab entries SHALL follow the URL, identity and discovery boundary in
+"Public GitLab entries keep native source identity". Explicit per-app settings
+SHALL override hydrated defaults. Native GitLab selection SHALL NOT route through
+HTML defaults.
+
+#### Scenario: Upstream record declares a source type
+
+- **WHEN** an upstream entry's record declares the HTML source type
+- **THEN** the ingested entry carries the HTML source type
+
+#### Scenario: An entry with no upstream record derives its source type
+
+- **WHEN** a generated entry or an extras entry without `overrideSource` addresses a github.com
+  repository
+- **THEN** it carries the GitHub source type, while an entry addressing any
+  other URL carries the HTML source type
+
+#### Scenario: Unsupported source type
+
+- **WHEN** an upstream or extras entry declares a source type other than GitHub, HTML or GitLab
+- **THEN** the build fails with an error naming that entry and that source type
+
+#### Scenario: Explicit GitLab declaration takes precedence over URL inference
+
+- **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
+- **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
+
+#### Scenario: Native GitLab URL is outside the supported boundary
+
+- **WHEN** an entry declares GitLab with a non-HTTPS URL, a host other than gitlab.com or no namespace/project path
+- **THEN** the build fails with the entry and invalid URL identified
+
 ## ADDED Requirements
 
 ### Requirement: Committed codm2000 entries keep device-aware source semantics
@@ -56,6 +141,15 @@ SHALL fail explicitly.
 - **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
 - **AND** neither pack's entry for the app the resource extends is replaced
 
+### Requirement: Public GitLab entries keep native source identity
+
+The system SHALL accept explicit extras with source type `GitLab` and public HTTPS gitlab.com project URLs, preserve the full case-sensitive project path including subgroups (at most 21 path components in total), hydrate supported GitLab defaults, and render `overrideSource: GitLab`. Existing non-GitHub URL comparison semantics SHALL remain unchanged. Package ids for these explicit extras SHALL be supplied and backed by manifest evidence; adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
+
+#### Scenario: A GitLab extra reaches both exports
+
+- **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is eligible for both variants
+- **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
+
 ## REMOVED Requirements
 
 ### Requirement: Committed codm2000 entries retain device-aware source semantics
@@ -68,3 +162,10 @@ naming projects; those projects' values remain in the reviewed project policy
 and the committed catalog.
 
 **Migration**: None. Ingestion behavior is unchanged.
+
+### Requirement: Public GitLab entries retain native source identity
+
+**Reason**: Replaced by "Public GitLab entries keep native source identity",
+which is identical except that its scenario no longer names a specific app.
+
+**Migration**: None. GitLab ingestion and rendering are unchanged.

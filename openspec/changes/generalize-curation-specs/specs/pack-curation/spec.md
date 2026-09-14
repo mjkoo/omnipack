@@ -32,6 +32,22 @@ behavior for those entries.
 - **THEN** consumer documentation describes that step
 - **AND** it does not claim the step was validated on a device unless it was
 
+### Requirement: Both packs include one shared omnipack notification tracker
+
+Each export SHALL contain exactly one identical GitHub track-only entry with stable synthetic id `809443320`, name `omnipack updates`, repository `https://github.com/mjkoo/omnipack`, and Utilities categorization. It SHALL select titles matching `^omnipack revision [0-9]+$`, extract the trailing integer from the release title, allow prereleases and scanning past unrelated releases, disable latest-endpoint prioritization and asset-date versioning, and retain background notifications. The rendered tracker SHALL NOT embed the observed revision, installed version or asset URLs. Source revision changes SHALL NOT require an APK.
+
+Consumer documentation SHALL explain that either variant changing can notify everyone, that acknowledgement is not synchronization, and that updating the pack requires downloading the appropriate JSON and re-importing. Existing raw-main links and the exclusion of upstream pack trackers SHALL remain in force.
+
+#### Scenario: Only one variant changes
+
+- **WHEN** a complete release publication increments the shared revision
+- **THEN** either variant's tracker can report that revision as an update
+
+#### Scenario: Rebuild observes a newer release revision
+
+- **WHEN** the curated configuration and other build inputs are unchanged
+- **THEN** observing the tracker revision alone does not change either generated pack
+
 ## ADDED Requirements
 
 ### Requirement: Upstream pack trackers are excluded from both packs

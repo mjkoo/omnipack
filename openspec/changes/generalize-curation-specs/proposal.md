@@ -66,6 +66,8 @@ resource need not be a mod.
   maintained policy and its rationale. It drops the sentence explaining that
   automated source resolution, format lint and upstream-health publication
   gating are retired, because that sentence describes a finished transition.
+  The omnipack notification tracker requirement now refers to the generic
+  upstream tracker exclusion instead of the RJNY tracker.
 - **readme-source-generation drops its named projects.** The initial-policy
   paragraph naming EmuLnk, Showdown-DS, Heimdall and Kanto Gear goes. Its
   generic rules stay: unconfigured projects keep their fallback default, and
@@ -76,7 +78,10 @@ resource need not be a mod.
   restated generically.
 - **source-ingestion** drops the EmuLnk scenario, which restates the existing
   dual-coverage suppression scenario, and restates the Showdown-DS, Heimdall
-  and Kanto scenarios generically.
+  and Kanto scenarios generically. It also drops the Cemu illustration from
+  the RJNY export-flag rule, restates its Aurora Store GitLab scenarios for any
+  GitLab extra, and replaces "Public GitLab entries retain native source
+  identity" under a new name because one of its scenarios is renamed.
 - **pack-cli** restates its Kanto scenario for any track-only rule.
 - **pack-composition** drops one sentence naming Zelda 3, Minish Cap and
   Harvest Moon 64, which only illustrated the rule before it.
@@ -120,16 +125,18 @@ changes no identity, selection or other setting.
 ### Retired and added
 
 - Retires 8 requirements outright, all in pack-curation.
-- Replaces 7 requirements with generic ones under new names, because OpenSpec
+- Replaces 8 requirements with generic ones under new names, because OpenSpec
   rejects a MODIFIED block that drops or renames a scenario: 2 in
-  pack-curation, 3 in readme-source-generation, 1 in source-ingestion and 1 in
+  pack-curation, 3 in readme-source-generation, 2 in source-ingestion and 1 in
   pack-cli.
-- Modifies 2 requirements whose scenarios keep their names: curation
-  documentation and the dual-screen build model.
+- Modifies 5 requirements whose scenarios keep their names: curation
+  documentation, the omnipack notification tracker, the dual-screen build
+  model, RJNY export flags and supported source types.
 - Adds no new requirement.
 - Scenarios: about 19 retired and 3 new, all in pack-curation and
   source-ingestion. pack-curation falls from 24 scenarios to about 8. The
-  readme-source-generation and pack-cli scenarios are restated, not removed.
+  readme-source-generation, pack-cli and GitLab scenarios are restated, not
+  removed.
 - Estimated implementation change: one word in the generated track-only
   sentence in `src/omnipack/source_generation.py`, and the same word in one
   entry of `config/catalogs/codm.json`.
@@ -154,12 +161,14 @@ None.
 
 - `pack-curation`: per-app requirements removed; regression checks, curation
   documentation and the upstream tracker exclusion restated as generic rules;
-  the omnipack notification tracker unchanged.
+  the omnipack notification tracker keeps its rules and now refers to the
+  generic upstream tracker exclusion.
 - `readme-source-generation`: reviewed rules, APK package-ID resolution and
   track-only resources restated without named projects; the generated
   track-only description no longer calls every resource a mod.
 - `source-ingestion`: committed codm2000 semantics restated without named
-  projects.
+  projects; the RJNY export-flag, source-type and GitLab identity requirements
+  lose their per-app examples.
 - `pack-cli`: the source-generation command's track-only scenario restated
   generically.
 - `pack-composition`: the dual-screen build model loses its per-app
