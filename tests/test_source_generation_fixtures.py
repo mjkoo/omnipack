@@ -331,6 +331,9 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     # covering candidate are chosen is immaterial.
     host_family = min(family for family, variant in before if variant is Variant.SINGLE)
     host = before[(host_family, Variant.SINGLE)]
+    # The host must have a dual selection too, so the all-selections equality
+    # below covers its entry in both packs.
+    assert (host_family, Variant.DUAL) in before
     covering = min(
         (
             app
