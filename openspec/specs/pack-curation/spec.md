@@ -2,9 +2,9 @@
 
 ## Purpose
 
-Defines the maintained app additions and per-app version policies that make the
-published packs useful beyond their upstream catalogs, including the limits of
-source-version tracking and the evidence supporting each policy.
+Defines how curated app decisions are recorded, protected and documented, plus
+the pack's own notification tracker and the exclusion of upstream pack
+trackers.
 
 ## Requirements
 
