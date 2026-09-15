@@ -97,22 +97,8 @@ def test_missing_both_fails(tmp_path: Path) -> None:
 
 
 def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
-    path = tmp_path / ".build/verify.json"
-    path.parent.mkdir()
-    path.write_text(
-        json.dumps(
-            {
-                "schemaVersion": 3,
-                "verifier": verifier_identity(),
-                "mode": "offline",
-                "startedAt": "2026-09-01T00:00:00+00:00",
-                "completedAt": None,
-                "complete": False,
-                "status": "running",
-                "inputs": {name: {"state": "missing"} for name in INPUT_PATHS},
-                "errors": [],
-            }
-        )
+    write_verification_report(
+        tmp_path, completedAt=None, complete=False, status="running"
     )
     output = format_reports(tmp_path)
     assert "Status: running" in output
@@ -276,21 +262,21 @@ def test_build_report_missing_a_field_is_rejected(tmp_path: Path, field: str) ->
 def test_findings_display_location_and_field(tmp_path, monkeypatch, capsys) -> None:
     from omnipack.cli import main
 
-    copy_inputs(tmp_path)
-    report = run_verification(tmp_path)
-    report["errors"] = [
-        {
-            "stage": "offline",
-            "code": "invalid",
-            "message": "bad field",
-            "variant": "dual",
-            "index": 4,
-            "field": "url",
-        }
-    ]
-    report["status"] = "failed"
+    write_verification_report(
+        tmp_path,
+        status="failed",
+        errors=[
+            {
+                "stage": "offline",
+                "code": "invalid",
+                "message": "bad field",
+                "variant": "dual",
+                "index": 4,
+                "field": "url",
+            }
+        ],
+    )
     path = tmp_path / ".build/verify.json"
-    path.write_text(json.dumps(report))
     before = path.read_bytes()
 
     def forbidden(*args, **kwargs):

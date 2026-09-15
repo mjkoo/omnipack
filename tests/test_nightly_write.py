@@ -57,16 +57,9 @@ def _seed(tmp_path: Path, name: str = "seed") -> Path:
     )
 
 
-def _bare_from(seed: Path, tmp_path: Path, name: str = "remote.git") -> Path:
-    return bare_remote(seed, tmp_path, name=name)
-
-
-def _bot_commit(root: Path, changes: dict[str, str | None]) -> str:
-    """Commit as the bot identity, honoring None as 'replace with a symlink'."""
+def _bot_commit(root: Path, changes: dict[str, str]) -> str:
     for relative, content in changes.items():
         path = root / relative
-        if content is None:
-            continue
         path.write_text(content)
         _git(root, "add", "--", relative)
     _git(
@@ -82,25 +75,15 @@ def _bot_commit(root: Path, changes: dict[str, str | None]) -> str:
     return _git(root, "rev-parse", "HEAD")
 
 
-def _bundle(seed: Path, base: str, path: Path) -> Path:
-    return bundle(seed, base, path)
-
-
-def _write_side(
-    tmp_path: Path, bare: Path, base: str, name: str = "write-side"
-) -> Path:
-    return shallow_checkout(tmp_path, bare, base, name=name)
-
-
 def test_advanced_main_fails_before_push_and_reports_main_advanced(
     tmp_path: Path,
 ) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
 
     # Another run's push lands on main first.
     other = tmp_path / "other"
@@ -145,10 +128,10 @@ def test_push_propagates_handoff_rejection_before_remote_write(
 def test_commit_touching_disallowed_path_is_rejected(tmp_path: Path) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     sha = _bot_commit(seed, {"tracked.txt": "sneaky\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
 
     result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
@@ -160,11 +143,11 @@ def test_commit_touching_disallowed_path_is_rejected(tmp_path: Path) -> None:
 def test_commit_changing_nothing_is_rejected(tmp_path: Path) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     _git(seed, "commit", "--allow-empty", "-qm", "empty")
     sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
 
     result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
@@ -178,24 +161,14 @@ def test_commit_replacing_allowed_file_with_symlink_is_rejected(
 ) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     target = seed / ALLOWED_PATHS[0]
     target.unlink()
     target.symlink_to(seed / "README.md")
     _git(seed, "add", "--", ALLOWED_PATHS[0])
-    _git(
-        seed,
-        "-c",
-        "user.name=github-actions[bot]",
-        "-c",
-        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit",
-        "-qm",
-        "chore(dist): nightly rebuild 2026-09-12",
-    )
-    sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    sha = _bot_commit(seed, {})
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
 
     result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
@@ -207,23 +180,13 @@ def test_commit_replacing_allowed_file_with_symlink_is_rejected(
 def test_commit_setting_executable_bit_is_rejected(tmp_path: Path) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     _git(seed, "config", "core.fileMode", "true")
     (seed / "README.md").chmod(0o755)
     _git(seed, "add", "--", "README.md")
-    _git(
-        seed,
-        "-c",
-        "user.name=github-actions[bot]",
-        "-c",
-        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit",
-        "-qm",
-        "chore(dist): nightly rebuild 2026-09-12",
-    )
-    sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    sha = _bot_commit(seed, {})
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
 
     result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
@@ -265,10 +228,10 @@ def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
 ) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
     summary_path = tmp_path / "summary.md"
     gh = _push_gh(auth_ok=False)
     monkeypatch.setattr(write_module, "SubprocessGhRunner", lambda: gh)
@@ -289,10 +252,10 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
 ) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
     install_failing_hooks(
         write_side, "pre-push", "post-checkout", "reference-transaction"
     )
@@ -319,10 +282,10 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
 ) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
     pre_receive = bare / "hooks" / "pre-receive"
     pre_receive.write_text(
         "#!/bin/sh\necho 'protected branch: fixture says no' >&2\nexit 1\n"
@@ -350,10 +313,10 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
 ) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
+    bare = bare_remote(seed, tmp_path)
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
     # The remote accepts the push, then leaves the write side's index locked,
     # so the detach that follows the push fails.
     post_receive = bare / "hooks" / "post-receive"
@@ -486,6 +449,9 @@ def test_comparison_ignores_the_recorded_commit_and_uses_digests_only(
     # The recorded commit is stale and unrelated; only the digests decide
     # "unchanged", never this field.
     view = _valid_release("9" * 40)
+    assets = view["assets"]
+    assert isinstance(assets, list)
+    assets.append({"name": "extra-file.txt", "digest": "sha256:" + "7" * 64})
     gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
@@ -522,24 +488,6 @@ def test_malformed_record_line_counts_as_no_valid_record(tmp_path: Path) -> None
 
     assert result.status == "advanced"
     assert result.summary == "revision 4"
-
-
-def test_unexpected_extra_assets_are_ignored(tmp_path: Path) -> None:
-    root, sha = _release_repo(tmp_path)
-    view = _valid_release(
-        sha,
-        assets=[
-            {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
-            {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
-            {"name": "extra-file.txt", "digest": "sha256:" + "7" * 64},
-        ],
-    )
-    gh = _release_gh(view=view)
-
-    result = run_release(root, gh=gh)
-
-    assert result.status == "unchanged"
-    assert result.summary == "unchanged at revision 3"
 
 
 def test_differing_record_uploads_and_edits_with_canonical_body(

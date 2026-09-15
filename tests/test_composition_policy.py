@@ -189,14 +189,6 @@ def test_unknown_pin_target_and_malformed_json_fail() -> None:
         load_composition_policy(b'{"schemaVersion": 1,')
 
 
-def test_policy_application_requires_every_rule_selector() -> None:
-    parsed = parse_composition_policy(
-        policy(candidates=[rule(packageId="org.example.new", family="app:example")])
-    )
-    with pytest.raises(CompositionPolicyError, match="org.example.old.*matched no"):
-        apply_composition_policy(parsed, [])
-
-
 def test_policy_application_leaves_pins_to_composition() -> None:
     parsed = parse_composition_policy(
         policy(

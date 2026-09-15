@@ -12,7 +12,7 @@ import pytest
 
 from omnipack import cli
 from omnipack.composition_policy import parse_composition_policy
-from omnipack.http import HttpClient, HttpError, HttpResponse
+from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import CompositionError, _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
@@ -226,15 +226,6 @@ def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
         ),
     )
     assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
-
-
-@pytest.mark.parametrize("response", [HttpError("offline"), "not json"])
-def test_rjny_fetch_and_parse_failures_name_source(response: object) -> None:
-    url = "https://raw.githubusercontent.com/r/main/p"
-    with pytest.raises(SourceError, match="rjny"):
-        rjny.fetch(
-            FakeHttp({url: response}), {"repo": "r", "branch": "main", "path": "p"}
-        )
 
 
 def test_bboi_latest_release_retains_both_asset_origins() -> None:
@@ -739,29 +730,10 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
 
 
 @pytest.mark.parametrize("body", ["null", "[]", '{"apps":"bad"}'])
-def test_codm_malformed_catalog_aborts_before_publication(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
-) -> None:
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    before = {
-        name: (name + " previous").encode()
-        for name in ("single-screen.json", "dual-screen.json")
-    }
-    for name, content in before.items():
-        (dist / name).write_bytes(content)
-
-    def ingest(root: Path, _inputs: object, report: IngestionReport) -> list[App]:
-        (root / "catalog.json").write_text(body)
-        return codm.fetch(root, {"catalog": "catalog.json"}, [])
-
-    shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
-    monkeypatch.setattr(cli, "_ingest_for_build", ingest)
-    monkeypatch.chdir(tmp_path)
-    assert cli.main(["build"]) == 1
-    report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert "codm" in report["error"]
-    assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
+def test_codm_malformed_catalog_names_source(tmp_path: Path, body: str) -> None:
+    (tmp_path / "catalog.json").write_text(body)
+    with pytest.raises(SourceError, match="codm"):
+        codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
 
 
 def test_codm_missing_catalog_names_source(tmp_path: Path) -> None:

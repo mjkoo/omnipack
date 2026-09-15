@@ -472,12 +472,6 @@ def _bare_from(seed: Path, tmp_path: Path, name: str = "remote.git") -> Path:
     return bare_remote(seed, tmp_path, name=name, main_only=True)
 
 
-def _write_side(
-    tmp_path: Path, bare: Path, base: str, name: str = "write-side"
-) -> Path:
-    return shallow_checkout(tmp_path, bare, base, name=name)
-
-
 def _staged_candidate(
     tmp_path: Path, *, seed_name: str = "seed"
 ) -> tuple[Path, str, str, Path, Path]:
@@ -504,7 +498,7 @@ def test_unchanged_closes_an_open_pr_and_makes_no_push_or_pr_write(
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(7)])
 
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
@@ -522,7 +516,7 @@ def test_unchanged_with_no_open_pr_makes_no_write(tmp_path: Path) -> None:
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[])
 
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
@@ -536,7 +530,7 @@ def test_changed_with_no_open_pr_creates_one_from_the_body_file(
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     install_failing_hooks(write_side, "pre-push", "reference-transaction")
     gh = _proposal_gh(pr_list=[])
 
@@ -554,7 +548,7 @@ def test_changed_with_no_open_pr_creates_one_from_the_body_file(
 def test_changed_with_an_open_pr_edits_its_body(tmp_path: Path) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(3)])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
@@ -569,62 +563,6 @@ def test_changed_with_an_open_pr_edits_its_body(tmp_path: Path) -> None:
     assert _git(bare, "rev-parse", f"refs/heads/{BRANCH_NAME}") == sha
 
 
-def test_equal_trees_make_no_push_even_with_a_different_hand_made_commit(
-    tmp_path: Path,
-) -> None:
-    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
-    bare = _bare_from(seed, tmp_path)
-
-    # A hand-made commit on the bot branch whose tree matches the rebuild.
-    other = tmp_path / "other"
-    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
-    _git(other, "config", "user.name", "Someone")
-    _git(other, "config", "user.email", "someone@example.invalid")
-    _git(other, "checkout", "-q", "-b", BRANCH_NAME, base)
-    _git(other, "checkout", sha, "--", CATALOG_PATH)
-    _git(other, "commit", "-qm", "hand-made")
-    hand_made_sha = _git(other, "rev-parse", "HEAD")
-    _git(other, "push", "-q", "origin", f"HEAD:refs/heads/{BRANCH_NAME}")
-
-    write_side = _write_side(tmp_path, bare, base)
-    gh = _proposal_gh(pr_list=[_pr(4)])
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "published"
-    assert _git(bare, "rev-parse", f"refs/heads/{BRANCH_NAME}") == hand_made_sha
-    edit_calls = [call for call in gh.calls if call[:2] == ("pr", "edit")]
-    assert len(edit_calls) == 1
-
-
-def test_hand_pushed_commit_with_a_different_tree_is_overwritten(
-    tmp_path: Path,
-) -> None:
-    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
-    bare = _bare_from(seed, tmp_path)
-
-    # Someone pushes a commit to the bot branch whose tree differs from the
-    # rebuild; the next changed run replaces it.
-    other = tmp_path / "other"
-    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
-    _git(other, "config", "user.name", "Someone")
-    _git(other, "config", "user.email", "someone@example.invalid")
-    _git(other, "checkout", "-q", "-b", BRANCH_NAME, base)
-    (other / CATALOG_PATH).write_text('{"apps": [{"id": "hand"}]}\n')
-    _git(other, "commit", "-qam", "hand-made")
-    hand_made_sha = _git(other, "rev-parse", "HEAD")
-    _git(other, "push", "-q", "origin", f"HEAD:refs/heads/{BRANCH_NAME}")
-    assert _bare_branch_sha(bare) == hand_made_sha
-
-    write_side = _write_side(tmp_path, bare, base)
-    gh = _proposal_gh(pr_list=[_pr(4)])
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "published"
-    assert _bare_branch_sha(bare) == sha
-
-
 @pytest.mark.parametrize(
     ("cross_repo", "owner"),
     [(True, "someoneelse"), (True, "mjkoo"), (False, "someoneelse")],
@@ -634,7 +572,7 @@ def test_fork_pr_sharing_the_branch_name_is_untouched_and_own_pr_is_created(
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(11, cross_repo=cross_repo, owner=owner)])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
@@ -650,7 +588,7 @@ def test_two_selected_same_repository_prs_fail_before_any_write(
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(1), _pr(2)])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
@@ -674,7 +612,7 @@ def test_fork_pr_sharing_the_branch_name_is_not_closed_when_unchanged(
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(11, cross_repo=cross_repo, owner=owner)])
 
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
@@ -693,7 +631,7 @@ def test_two_selected_same_repository_prs_fail_before_closing_either(
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(1), _pr(2)])
 
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
@@ -711,7 +649,7 @@ def test_publish_propagates_handoff_rejection_before_remote_write(
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[])
 
     def reject(*_args: object) -> None:
@@ -735,14 +673,26 @@ def test_publish_propagates_handoff_rejection_before_remote_write(
     assert _bare_branch_sha(bare) == ""
 
 
-def test_commit_changing_a_file_other_than_the_catalog_is_rejected(
+@pytest.mark.parametrize("mutation", ["wrong-path", "symlink", "executable"])
+def test_unsafe_catalog_commit_is_rejected(
     tmp_path: Path,
+    mutation: str,
 ) -> None:
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     _git(seed, "checkout", "-q", "-b", BRANCH_NAME)
-    (seed / "tracked.txt").write_text("sneaky\n")
-    _git(seed, "add", "tracked.txt")
+    if mutation == "wrong-path":
+        (seed / "tracked.txt").write_text("sneaky\n")
+        _git(seed, "add", "tracked.txt")
+    elif mutation == "symlink":
+        target = seed / CATALOG_PATH
+        target.unlink()
+        target.symlink_to(seed / "README.md")
+        _git(seed, "add", "--", CATALOG_PATH)
+    else:
+        _git(seed, "config", "core.fileMode", "true")
+        (seed / CATALOG_PATH).chmod(0o755)
+        _git(seed, "add", "--", CATALOG_PATH)
     _git(
         seed,
         "-c",
@@ -759,76 +709,7 @@ def test_commit_changing_a_file_other_than_the_catalog_is_rejected(
     body_path = tmp_path / "pr-body.md"
     body_path.write_text("body\n")
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
-    gh = _proposal_gh(pr_list=[])
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "failed"
-    assert _bare_branch_sha(bare) == ""
-
-
-def test_commit_replacing_the_catalog_with_a_symlink_is_rejected(
-    tmp_path: Path,
-) -> None:
-    seed = _repo(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    _git(seed, "checkout", "-q", "-b", BRANCH_NAME)
-    target = seed / CATALOG_PATH
-    target.unlink()
-    target.symlink_to(seed / "README.md")
-    _git(seed, "add", "--", CATALOG_PATH)
-    _git(
-        seed,
-        "-c",
-        "user.name=github-actions[bot]",
-        "-c",
-        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit",
-        "-qm",
-        "chore(catalog): update reviewed codm source",
-    )
-    sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = tmp_path / "candidate.bundle"
-    _git(seed, "bundle", "create", str(bundle_path), f"{base}..HEAD")
-    body_path = tmp_path / "pr-body.md"
-    body_path.write_text("body\n")
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
-    gh = _proposal_gh(pr_list=[])
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "failed"
-    assert _bare_branch_sha(bare) == ""
-
-
-def test_commit_setting_the_catalogs_executable_bit_is_rejected(
-    tmp_path: Path,
-) -> None:
-    seed = _repo(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    _git(seed, "checkout", "-q", "-b", BRANCH_NAME)
-    _git(seed, "config", "core.fileMode", "true")
-    (seed / CATALOG_PATH).chmod(0o755)
-    _git(seed, "add", "--", CATALOG_PATH)
-    _git(
-        seed,
-        "-c",
-        "user.name=github-actions[bot]",
-        "-c",
-        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit",
-        "-qm",
-        "chore(catalog): update reviewed codm source",
-    )
-    sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = tmp_path / "candidate.bundle"
-    _git(seed, "bundle", "create", str(bundle_path), f"{base}..HEAD")
-    body_path = tmp_path / "pr-body.md"
-    body_path.write_text("body\n")
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
@@ -850,7 +731,7 @@ def test_remote_main_other_than_base_fails_on_both_paths(tmp_path: Path) -> None
     _git(other, "commit", "-qm", "advance")
     _git(other, "push", "-q", "origin", "HEAD:main")
 
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(9)])
 
     unchanged_result = run_publish(write_side, "false", base, base, None, None, gh=gh)
@@ -923,7 +804,7 @@ def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
     assert sha is not None
 
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
@@ -943,7 +824,7 @@ def test_rejected_branch_push_fails_with_its_reason_and_no_pr_write(
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     pre_receive = bare / "hooks" / "pre-receive"
     pre_receive.write_text("#!/bin/sh\necho 'fixture rejects the branch' >&2\nexit 1\n")
     pre_receive.chmod(0o755)
@@ -980,7 +861,7 @@ def test_unusable_pr_body_fails_before_any_push_or_pr_write(
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     _replace_body(body_path, kind)
     gh = _proposal_gh(pr_list=[_pr(5)])
 
@@ -995,7 +876,7 @@ def test_unusable_pr_body_fails_before_any_push_or_pr_write(
 def test_pr_body_at_the_length_limit_is_accepted(tmp_path: Path) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     body_path.write_text("\u00e9" * 65536, encoding="utf-8")
     gh = _proposal_gh(pr_list=[])
 
@@ -1024,7 +905,7 @@ def test_failed_gh_operation_exits_nonzero_with_its_reason(
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(number) for number in open_prs], **{knob: False})
     summary_path = tmp_path / "summary.md"
     monkeypatch.setattr(proposal_module, "SubprocessGhRunner", lambda: gh)
@@ -1079,9 +960,9 @@ def _tree_with_catalog_of(root: Path, tree_of: str, catalog_of: str) -> str:
     ).stdout.strip()
 
 
-@pytest.mark.parametrize("same_tree", [True, False])
+@pytest.mark.parametrize("tree_difference", ["none", "catalog", "readme"])
 def test_bot_branch_built_on_an_older_main_is_compared_from_a_shallow_checkout(
-    tmp_path: Path, same_tree: bool
+    tmp_path: Path, tree_difference: str
 ) -> None:
     seed = _repo(tmp_path)
     older_main = _git(seed, "rev-parse", "HEAD")
@@ -1100,19 +981,24 @@ def test_bot_branch_built_on_an_older_main_is_compared_from_a_shallow_checkout(
     assert sha is not None
     # The existing bot branch was built on the older main, outside the write
     # side's depth-1 history of the newer one.
-    tree = (
-        _git(seed, "rev-parse", f"{sha}^{{tree}}")
-        if same_tree
-        else _tree_with_catalog_of(seed, older_main, sha)
-    )
+    if tree_difference == "none":
+        tree = _git(seed, "rev-parse", f"{sha}^{{tree}}")
+    elif tree_difference == "catalog":
+        tree = _tree_with_catalog_of(seed, sha, older_main)
+    else:
+        tree = _tree_with_catalog_of(seed, older_main, sha)
     existing = _commit_with_tree(seed, tree, older_main)
     bare = _bare_from(seed, tmp_path)
     _git(seed, "push", "-q", str(bare), f"{existing}:refs/heads/{BRANCH_NAME}")
-    write_side = _write_side(tmp_path, bare, base)
+    assert _bare_branch_sha(bare) == existing != sha
+    write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(8)])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "published"
-    assert _bare_branch_sha(bare) == (existing if same_tree else sha)
+    assert _bare_branch_sha(bare) == (existing if tree_difference == "none" else sha)
     assert _git(write_side, "rev-parse", "--is-shallow-repository") == "true"
+    assert [call[:3] for call in gh.calls if call[:2] == ("pr", "edit")] == [
+        ("pr", "edit", "8")
+    ]

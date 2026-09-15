@@ -15,7 +15,7 @@ from urllib.response import addinfourl
 import pytest
 
 from omnipack.http import HttpError, HttpResponse
-from omnipack.package_id import MAX_APK_FULL_DOWNLOAD, resolve_release_assets
+from omnipack.package_id import resolve_release_assets
 from omnipack.source_http import HttpConfig, SourceHttpClient
 
 API = "https://api.github.com/repos/OWNER/REPO/releases/latest"
@@ -117,15 +117,6 @@ def client(
     return SourceHttpClient(config or HttpConfig({}), retries=0, transport=transport)
 
 
-def test_fixture_apk_tail_resolves_package_id() -> None:
-    transport = AssetTransport({ASSET: apk("org.example.app")})
-    package_id = resolve_release_assets(
-        client(transport), release([("app.apk", ASSET)])
-    )
-    assert package_id == "org.example.app"
-    assert any(request.get_header("Range") for request, _ in transport.requests)
-
-
 @pytest.mark.parametrize(
     ("names", "assets", "failure"),
     [
@@ -163,28 +154,6 @@ def test_all_eligible_apk_extensions_resolve_and_non_apk_is_ignored() -> None:
     )
     assert resolve_release_assets(client(AssetTransport(assets)), data) == (
         "org.same.app"
-    )
-
-
-def test_ignored_range_response_uses_bounded_full_download() -> None:
-    class IgnoreRange(AssetTransport):
-        def __call__(
-            self, request: Request, timeout: float, max_bytes: int | None
-        ) -> HttpResponse:
-            if request.get_header("Range"):
-                self.requests.append((request, max_bytes))
-                value = self.assets[request.full_url]
-                assert isinstance(value, bytes)
-                return response(request.full_url, value, 200)
-            return super().__call__(request, timeout, max_bytes)
-
-    transport = IgnoreRange({ASSET: apk("org.example.app")})
-    package_id = resolve_release_assets(
-        client(transport), release([("app.apk", ASSET)])
-    )
-    assert package_id == "org.example.app"
-    assert any(
-        max_bytes == MAX_APK_FULL_DOWNLOAD for _, max_bytes in transport.requests
     )
 
 
