@@ -28,4 +28,4 @@
 
 - [x] 5.1 Run full tests, isolated Python 3.12 publication tests and applicable repository checks; record results, total cases and net test/helper lines, and confirm production, workflow, configuration, evidence and output files unchanged.
 - [x] 5.2 Complete the independent parallel whole-diff review wave, address findings with scoped re-review, and record rulings.
-- [ ] 5.3 Pass the final independent checkbox/evidence audit after fixes and rerun the full suite; leave the branch and change active with a self-contained validation record.
+- [x] 5.3 Pass the final independent checkbox/evidence audit after fixes and rerun the full suite; leave the branch and change active with a self-contained validation record.

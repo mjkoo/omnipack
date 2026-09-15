@@ -38,7 +38,7 @@ Affected suite: 473 passed in 28.28 seconds. Ruff and ty passed. The remaining s
 - Mocked catalog build failure: real pipeline and output preservation remain in `test_build_runs_the_real_pipeline_with_transport_only_fixtures` and `test_failed_build_reports_exact_stage_and_preserves_outputs`.
 - Tracker observed-state helper: real current-config tracker composition owns all retained assertions.
 - App dataclass layout: focused source adapters own eligibility translation; `test_dual_preference_is_derived_from_dual_only_eligibility` owns derived preference behavior.
-- Pretty-print helper meta-test: `test_committed_catalog_bytes_are_the_canonical_rendering_of_its_entries` owns canonical committed bytes.
+- Pretty-print helper meta-test: `test_committed_catalog_is_valid_canonical_and_composable` owns canonical committed bytes after the curation consolidation.
 - Four-source omnibus preference: focused RJNY, BBoi, codm and extras tests own their translations.
 - Regroup-after-suppression: `test_codm_suppression_follows_source_dual_eligibility` owns suppression and composition-policy tests own regrouping.
 - Omnibus selection reasons: the focused dual preference, pin and source-fallback tests own each reason.
@@ -265,3 +265,11 @@ Scoped re-review of a7f2c2f..7dce3f5 approved both whole-wave fixes with no find
 - Build setup stays separate from serialized verification setup because precreating packs would conceal first-build states. The trade-off is retaining a small amount of setup duplication.
 - Loss of lazy annotation evaluation from the removed signature assertion is intentional; runtime body coverage is preserved. The suite no longer constrains that internal signature through introspection.
 - Harness concurrency limits required sequencing some review seats and batching a distinct scoped correction review into the independent correctness seat. Every named lens and evidence duty still ran; the trade-off is elapsed time and shared context between those two narrow review duties.
+
+## Completion audit and final run
+
+A fresh independent evidence audit of 308257e..90477d8 confirmed all 16 checked implementation/review boxes with implementing commits and proving tests or recorded checks. It found zero unevidenced boxes and zero Critical findings. It checked the final source tree as well as commit history, including the renamed canonical-catalog successor. The final completion box remained pending during the audit.
+
+After that audit, the complete suite passed again: 694 tests in 29.61 seconds. No implementation changed after the audit. This result and the self-contained validation record complete the last task. All 17 tasks are checked.
+
+Implementation is complete on `refactor/test-surface`. The change remains active; separate OpenSpec verification and archive were not invoked. Nothing was pushed, merged or published.
