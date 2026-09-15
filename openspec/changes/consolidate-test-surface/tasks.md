@@ -22,7 +22,7 @@
 - [x] 4.1 Consolidate denial outcomes and mocked pipeline success, transferring unique assertions; remove covered signature/identity/projection layout checks; verify composition, adapter and CLI tests.
 - [x] 4.2 Reduce transaction failure/permission permutations and share minimal verification inputs; move repeated malformed-report CLI checks to representative reader validation while retaining distinct predicates; verify rollback, verification and report tests.
 - [x] 4.3 Replace copied color expectations and trim redundant equality/count and HTTP choreography assertions while retaining bounded reads, credentials and retry/error outcomes; verify rendering, catalog and HTTP/APK tests.
-- [ ] 4.4 Record survivor ownership and explained execution-coverage changes, run affected tests, and pass independent evidencing review of the batch.
+- [x] 4.4 Record survivor ownership and explained execution-coverage changes, run affected tests, and pass independent evidencing review of the batch.
 
 ## 5. Completion checks and reviews
 

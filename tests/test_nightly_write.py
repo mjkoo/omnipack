@@ -708,22 +708,20 @@ def test_interrupted_upload_then_run_returning_to_recorded_pair_repairs(
 
 
 @pytest.mark.parametrize(
-    ("overrides", "view_ok", "reason_substring"),
+    ("overrides", "reason_substring"),
     [
-        (None, False, "missing"),
-        ({"name": "omnipack revision 1", "body": "no marker here"}, True, "marker"),
-        ({"name": "not a revision"}, True, "title"),
+        ({"name": "omnipack revision 1", "body": "no marker here"}, "marker"),
+        ({"name": "not a revision"}, "title"),
     ],
 )
-def test_missing_release_marker_or_title_fails_with_bootstrap_guidance(
+def test_invalid_release_marker_or_title_fails_with_bootstrap_guidance(
     tmp_path: Path,
-    overrides: dict[str, object] | None,
-    view_ok: bool,
+    overrides: dict[str, object],
     reason_substring: str,
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = None if overrides is None else _valid_release(sha, **overrides)
-    gh = _release_gh(view=view, view_ok=view_ok)
+    view = _valid_release(sha, **overrides)
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -940,9 +938,12 @@ def test_release_not_found_is_missing_with_bootstrap_guidance(tmp_path: Path) ->
 
     result = run_release(root, gh=gh)
 
+    assert result.status == "failed"
     assert result.summary == (
         f"release failed: release is missing; {write_module.BOOTSTRAP_GUIDANCE}"
     )
+    assert not any(call[:2] == ("release", "upload") for call in gh.calls)
+    assert not any(call[:2] == ("release", "edit") for call in gh.calls)
 
 
 def test_release_cli_fails_when_the_release_edit_fails(

@@ -23,7 +23,7 @@ def action_steps(job, action):
 
 
 def command_step(job, *words):
-    return next(s for s in job["steps"] if command(s)[: len(words)] == list(words))
+    return next(s for s in job["steps"] if command(s) == list(words))
 
 
 def output(owner, field):
@@ -146,11 +146,10 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
         if stage_id == "prepare"
         else ["python3", "-m", "scripts.source_proposal", "publish"]
     )
-    assert tokens[:4] == expected
-    assert (
-        tokens[tokens.index("--bundle") + 1]
-        == "$RUNNER_TEMP/" + directory + "/candidate.bundle"
-    )
+    expected += ["--bundle", "$RUNNER_TEMP/" + directory + "/candidate.bundle"]
+    if stage_id == "stage":
+        expected += ["--body-file", "$RUNNER_TEMP/source-handoff/pr-body.md"]
+    assert tokens == expected
     token_steps = [
         s
         for s in publish["steps"]
@@ -166,10 +165,6 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
     else:
         assert "if" not in writer
         assert writer["env"]["CHANGED"] == output(f"needs.{check_name}", "changed")
-        assert (
-            tokens[tokens.index("--body-file") + 1]
-            == "$RUNNER_TEMP/source-handoff/pr-body.md"
-        )
         assert token_steps == [writer]
     assert all(s["env"]["GH_TOKEN"] == "${{ github.token }}" for s in token_steps)
 

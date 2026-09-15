@@ -95,7 +95,7 @@ The shared standard-library/pytest helper replaces repeated Git setup and fake G
 | Release advances for duplicate/malformed/different record | `test_duplicate_record_lines_count_as_no_valid_record`; `test_malformed_record_line_counts_as_no_valid_record`; `test_differing_record_uploads_and_edits_with_canonical_body` |
 | Release bootstrap advances to revision 1 | `test_bootstrap_seed_is_replaced_by_the_canonical_body_at_revision_1` |
 | Release repairs stale, missing or partially replaced served assets without edit | `test_matching_record_with_differing_served_digest_repairs_without_edit`; `test_missing_or_absent_served_digest_repairs_without_edit`; `test_interrupted_upload_then_run_returning_to_recorded_pair_repairs` |
-| Release ownership/bootstrap failures | `test_missing_release_marker_or_title_fails_with_bootstrap_guidance`; `test_draft_non_prerelease_or_immutable_fails_with_bootstrap_guidance`; `test_release_not_found_is_missing_with_bootstrap_guidance` |
+| Release ownership/bootstrap failures | `test_invalid_release_marker_or_title_fails_with_bootstrap_guidance`; `test_draft_non_prerelease_or_immutable_fails_with_bootstrap_guidance`; `test_release_not_found_is_missing_with_bootstrap_guidance` |
 | Release local asset and repository failures | `test_symlinked_pack_file_fails_before_any_release_call`; `test_head_read_failure_fails_with_release_failed_reason`; `test_missing_pack_file_fails_with_release_failed_reason_and_no_writes` |
 | Release upload/edit failure sequencing | `test_upload_failure_prevents_edit_without_bootstrap_guidance`; `test_release_cli_fails_when_the_release_edit_fails` |
 | Release remote/auth/view failures | `test_remote_main_other_than_head_fails_without_bootstrap_guidance`; `test_gh_auth_failure_fails_with_specific_reason_and_no_writes`; `test_ls_remote_command_failure_fails_with_specific_reason_and_no_writes`; `test_release_view_failure_other_than_not_found_has_no_bootstrap_guidance` |
@@ -147,7 +147,7 @@ Six modules changed. 147 affected cases passed in 1.97 seconds; Ruff format/lint
 - Transaction restoration keeps staging/replacement failure at the second output, each with existing outputs and absent outputs; README rollback integration, temporary-file cleanup, non-default 0640 mode preservation and normal creation permissions remain. First/last generic failure positions and equivalent permission values are retired.
 - Render category colors use explicit fixed expected values instead of copied hashing code. Upstream default-key parity and settings behavior remain; three implementation-size assertions are removed.
 - Catalog round-trip parsed equality remains; redundant sorted serialization equality is removed.
-- Adapter test retains source candidate data/identity values without function-signature or Python object-identity constraints.
+- Adapter test retains candidate IDs and unassigned families without function-signature or Python object-identity constraints.
 - Agreeing policy rules now assert corrected candidate ID/family through application, not internal projections layout. Offline family/pin correctness remains in verifier and policy behavior tests.
 - HTTP retry scenarios retain successful package identification, multiple GET attempts and positive backoff without exact HEAD/GET order or sleep values. Fallback reads must be bounded and nonempty; credentials, redirects and error outcomes remain covered.
 
@@ -236,3 +236,17 @@ Comparison with main confirms no changes to production source, scripts, workflow
 ### Final-batch review correction
 
 The group review found a lost unique assertion in the empty-family denial case. It now checks the exact package/variant multiset: two dual removals and one single removal for shared.pkg. The ingestion test name now accurately describes preserved IDs and unassigned families. Four focused cases, Ruff formatting/lint and ty passed. Credential/redirect ownership remains in the unchanged source HTTP authorization, redirect and APK download tests; these passed in the full suite.
+
+Scoped re-review of b7b66bb..a7f2c2f approved both final-batch corrections with no findings. The independent whole-diff correctness review also found no additional issues: the nonempty CLI pipeline's restricted transport and committed-pair offline test retain no-network assurance despite the smaller verification fixtures.
+
+## Whole-diff review
+
+Four independent named lenses reviewed main 308257e through b7b66bb: proportionality, idiomatic patterns, correctness, and publication security/failure modes. Review seats ran within available harness capacity, with later seats sequential when concurrent dispatch was rejected. There were no Critical findings.
+
+Proportionality found an equivalent missing-release matrix row duplicating the named missing-release test. Publication review demonstrated that appending `|| true` to each of pytest, pack verification and catalog validation was incorrectly accepted by command-prefix matching. Both Important findings are accepted for one combined fix round. Idiomatic patterns had no findings; correctness had no additional findings beyond the independently corrected final-batch assertion transfer. Artifact convergence had no residual warnings to close.
+
+### Whole-diff review fixes
+
+The missing-release row is removed; the standalone test now owns failed status, exact guidance and no upload/edit. Remaining marker/title rows no longer carry a constant view-success parameter or optional fixture branch. Required workflow entrypoints, including full writer arguments, now use complete normalized-token comparisons. Labels, quoting and whitespace remain flexible.
+
+Fifty affected cases and the runtime-boundary case passed; Ruff lint/format and full ty passed. Six independent in-memory `|| true` mutations (pytest, verification, catalog diff, nightly push, nightly release and source publication) passed the previous checks and fail the corrected checks. Both workflows still accept renamed labels and harmless whitespace. No workflow files changed.
