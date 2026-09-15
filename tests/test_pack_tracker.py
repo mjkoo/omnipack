@@ -1,57 +1,47 @@
 from __future__ import annotations
 
 import json
-from copy import deepcopy
 from pathlib import Path
 
-from omnipack.model import Variant
-from omnipack.overlay import ComposedApp
+from omnipack.merge import CompositionResult
+from omnipack.model import App, Variant
 from omnipack.render import render
-from omnipack.sources.extras import fetch
+from omnipack.sources import codm
+from tests.test_source_generation_fixtures import (
+    _compose_with_codm_catalog,
+    captured_higher,
+    load_json,
+)
 
 ROOT = Path(__file__).parents[1]
 TRACKER_ID = "809443320"
 
 
-def _tracker():
-    entries = fetch(json.loads((ROOT / "config/extras.json").read_text()))
-    return next(entry for entry in entries if entry.id == TRACKER_ID)
+def _current_candidates(tmp_path: Path) -> tuple[list[App], CompositionResult]:
+    higher = captured_higher(load_json(ROOT / "config/extras.json"))
+    catalog = load_json(ROOT / "config/catalogs/codm.json")
+    result = _compose_with_codm_catalog(catalog, tmp_path, higher)
+    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, higher)
+    return [*higher, *generated], result
 
 
-def _render_tracker(variant: Variant) -> str:
-    tracker = _tracker()
-    data = deepcopy(tracker.raw)
-    data.update(
-        id=tracker.id,
-        url=tracker.url,
-        name=tracker.name,
-        categories=list(tracker.categories),
-        overrideSource=tracker.source_type.value,
-        additionalSettings=tracker.additional_settings,
-    )
-    return render([ComposedApp(f"package:{tracker.id}", data)])
-
-
-def test_tracker_id_does_not_collide_with_any_source_or_output_fixture() -> None:
-    paths = [
-        ROOT / "config/extras.json",
-        *(
-            path
-            for path in ROOT.glob("tests/fixtures/**/*.json")
-            if "pre-migration-config" not in path.parts
-        ),
+def test_tracker_id_does_not_collide_with_any_current_candidate(
+    tmp_path: Path,
+) -> None:
+    candidates, _ = _current_candidates(tmp_path)
+    matches = [candidate for candidate in candidates if candidate.id == TRACKER_ID]
+    assert [(candidate.provenance.source, candidate.url) for candidate in matches] == [
+        ("extras", "https://github.com/mjkoo/omnipack")
     ]
-    occurrences: list[Path] = []
-    for path in paths:
-        if TRACKER_ID in path.read_text():
-            occurrences.append(path.relative_to(ROOT))
-    assert occurrences == [Path("config/extras.json")]
 
 
-def test_tracker_is_identical_and_present_once_in_both_variants() -> None:
+def test_tracker_is_identical_and_present_once_in_both_variants(
+    tmp_path: Path,
+) -> None:
+    _, result = _current_candidates(tmp_path)
     rendered = {}
     for variant in Variant:
-        document = json.loads(_render_tracker(variant))
+        document = json.loads(render(result.apps[variant]))
         matches = [entry for entry in document["apps"] if entry["id"] == TRACKER_ID]
         assert len(matches) == 1
         rendered[variant] = matches[0]
@@ -66,29 +56,5 @@ def test_tracker_is_identical_and_present_once_in_both_variants() -> None:
     assert settings["includePrereleases"] is True
     assert settings["fallbackToOlderReleases"] is True
     assert settings["versionDetection"] is False
-
-
-def test_observed_revision_is_not_rendered_state() -> None:
-    tracker = _tracker()
-    data = dict(tracker.raw)
-    data.update(
-        id=tracker.id,
-        url=tracker.url,
-        name=tracker.name,
-        categories=list(tracker.categories),
-        overrideSource=tracker.source_type.value,
-        additionalSettings=tracker.additional_settings,
-    )
-    original = deepcopy(data)
-    records = {
-        variant: ComposedApp(f"package:{tracker.id}", data) for variant in Variant
-    }
-    before = {variant: render([record]) for variant, record in records.items()}
-    after = {variant: render([record]) for variant, record in records.items()}
-    assert data == original
-    assert data["additionalSettings"] is tracker.additional_settings
-    assert before == after
-    for document in after.values():
-        [entry] = json.loads(document)["apps"]
-        assert "installedVersion" not in entry
-        assert "latestVersion" not in entry
+    assert "installedVersion" not in rendered[Variant.SINGLE]
+    assert "latestVersion" not in rendered[Variant.SINGLE]

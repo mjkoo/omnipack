@@ -62,7 +62,11 @@ def axml(package_id: str) -> bytes:
 def apk(package_id: str) -> bytes:
     stream = BytesIO()
     with zipfile.ZipFile(stream, "w", zipfile.ZIP_DEFLATED) as archive:
-        archive.writestr("AndroidManifest.xml", axml(package_id))
+        manifest = zipfile.ZipInfo(
+            "AndroidManifest.xml", date_time=(2026, 1, 1, 0, 0, 0)
+        )
+        manifest.compress_type = zipfile.ZIP_DEFLATED
+        archive.writestr(manifest, axml(package_id))
     return stream.getvalue()
 
 

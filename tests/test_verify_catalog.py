@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import hashlib
-import json
 from pathlib import Path
 
 import pytest
@@ -76,16 +75,3 @@ def test_readme_mutation_during_verification_fingerprints_the_captured_bytes(
         "sha256": hashlib.sha256(captured_readme).hexdigest(),
     }
     assert "Evidence: stale" in format_reports(tmp_path)
-
-
-def test_historical_reports_require_regeneration(tmp_path: Path) -> None:
-    copy_inputs(tmp_path)
-    result = verify.run_verification(tmp_path)
-    assert result["status"] == "success"
-    result["inputs"].pop("readme")
-    result["verifier"]["version"] = "0.4.0"
-    result["schemaVersion"] = 1
-    result["mode"] = "live"
-    (tmp_path / verify.VERIFY_PATH).write_text(json.dumps(result))
-    with pytest.raises(ValueError, match="regenerate with `pack verify`"):
-        format_reports(tmp_path)

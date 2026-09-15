@@ -174,6 +174,7 @@ def test_changed_candidate_writes_bundle_and_body_with_run_url_and_base_sha(
     body_text = body_path.read_text()
     assert "https://github.example/runs/9" in body_text
     assert base in body_text
+    assert f"Base SHA: {base}" in outcome.summary
 
 
 def _pre_block(text: str) -> str:
@@ -342,19 +343,6 @@ def test_missing_generated_candidate_fails_naming_it(tmp_path: Path) -> None:
     assert outcome.summary == f"stage failed: {CANDIDATE_DIR}/catalog.json is missing"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
-
-
-def test_base_sha_line_in_summary_names_the_branch_creation_commit(
-    tmp_path: Path,
-) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    _write_candidate(root, '{"apps": [1]}\n', _report())
-    outcome = run_stage(
-        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
-    )
-
-    assert f"Base SHA: {base}" in outcome.summary
 
 
 def test_retained_failures_appear_in_the_summary(tmp_path: Path) -> None:

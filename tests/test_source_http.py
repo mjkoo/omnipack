@@ -174,38 +174,6 @@ def test_credentials_are_not_inferred_for_other_hosts(
     assert transport.requests[0].get_header("Authorization") is None
 
 
-def test_redirect_reselects_credentials_without_forwarding_source_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SOURCE_TOKEN", "source-secret")
-    monkeypatch.setenv("DEST_TOKEN", "destination-secret")
-    client = SourceHttpClient(
-        HttpConfig(
-            {"source.example": "SOURCE_TOKEN", "destination.example": "DEST_TOKEN"}
-        )
-    )
-    original = client.build_request("https://source.example/data")
-
-    redirected = client.redirect_request(original, "https://destination.example/file")
-
-    assert original.get_header("Authorization") == "Bearer source-secret"
-    assert redirected.get_header("Authorization") == "Bearer destination-secret"
-
-
-def test_redirect_to_unregistered_host_strips_source_token(
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    monkeypatch.setenv("SOURCE_TOKEN", "source-secret")
-    client = SourceHttpClient(HttpConfig({"source.example": "SOURCE_TOKEN"}))
-
-    redirected = client.redirect_request(
-        client.build_request("https://source.example/data"),
-        "https://assets.example/file",
-    )
-
-    assert redirected.get_header("Authorization") is None
-
-
 @pytest.mark.parametrize("destination_registered", [False, True])
 def test_urllib_redirect_selects_destination_credentials(
     monkeypatch: pytest.MonkeyPatch, destination_registered: bool

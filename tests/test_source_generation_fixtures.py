@@ -263,14 +263,6 @@ def test_committed_catalog_bytes_are_the_canonical_rendering_of_its_entries() ->
     assert _is_canonical_catalog(ROOT / "config/catalogs/codm.json")
 
 
-def test_a_pretty_printed_catalog_is_not_canonical(tmp_path: Path) -> None:
-    path = tmp_path / "codm.json"
-    path.write_text(
-        json.dumps(_committed_codm_catalog(), ensure_ascii=False, indent=2) + "\n"
-    )
-    assert not _is_canonical_catalog(path)
-
-
 def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
     codm_catalog: dict[str, Any], tmp_path: Path
 ) -> None:

@@ -49,7 +49,7 @@ def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     output = format_reports(tmp_path)
     assert "No build report recorded" in output
     assert "Evidence: current" in output
-    assert "Mode: offline" in output
+    assert "Mode: offline (structural checks only)" in output
     (tmp_path / "config/overlay.json").write_text(
         '{"changed.app":{"name":"Changed"}}\n'
     )
@@ -131,13 +131,6 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
     assert "Status: running" in output
     assert "Complete: no" in output
     assert "Observed: 2026-09-01T00:00:00+00:00" in output
-
-
-def test_structural_mode_is_explicit(tmp_path: Path) -> None:
-    copy_inputs(tmp_path)
-    report = run_verification(tmp_path)
-    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
-    assert "Mode: offline (structural checks only)" in format_reports(tmp_path)
 
 
 @pytest.mark.parametrize(

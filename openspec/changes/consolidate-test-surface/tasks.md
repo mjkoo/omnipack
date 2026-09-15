@@ -1,8 +1,8 @@
 ## 1. Repair assertions and remove the shortlist
 
-- [ ] 1.1 Record a clean branch baseline, counts and production execution coverage; verify the full suite passes.
-- [ ] 1.2 Replace tracker rendering with real composition and identity checks, fix APK timestamp/oracle handling, and remove unrelated HEAD checks; verify affected tests and tracker/ZIP counterexamples.
-- [ ] 1.3 Remove the 17 functions listed in design.md with all four assertion transfers and unused-helper cleanup; verify full tests and no lost baseline executed production lines/arcs.
+- [x] 1.1 Record a clean branch baseline, counts and production execution coverage; verify the full suite passes.
+- [x] 1.2 Replace tracker rendering with real composition and identity checks, fix APK timestamp/oracle handling, and remove unrelated HEAD checks; verify affected tests and tracker/ZIP counterexamples.
+- [x] 1.3 Remove the 17 functions listed in design.md with all four assertion transfers and unused-helper cleanup; verify full tests and no lost baseline executed production lines/arcs.
 - [ ] 1.4 Record surviving assertion ownership and pass an independent evidencing review of this batch's commit range.
 
 ## 2. Consolidate publication and workflows

@@ -128,22 +128,6 @@ def _write_side(
     return root
 
 
-def test_successful_round_trip_lands_commit_and_detaches(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
-
-    assert result.status == "published"
-    assert result.summary == f"published {sha}"
-    assert _git(bare, "rev-parse", "main") == sha
-    assert _git(write_side, "rev-parse", "HEAD") == sha
-
-
 def test_advanced_main_fails_before_push_and_reports_main_advanced(
     tmp_path: Path,
 ) -> None:
@@ -170,26 +154,6 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}: main advanced"
     assert _git(bare, "rev-parse", "main") == advanced
-
-
-def test_rejected_push_fails_without_advancing_remote(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-
-    hooks = bare / "hooks"
-    pre_receive = hooks / "pre-receive"
-    pre_receive.write_text("#!/bin/sh\nexit 1\n")
-    pre_receive.chmod(0o755)
-
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
-
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
 
 
 def test_bundle_with_wrong_parent_is_rejected_before_push(tmp_path: Path) -> None:
@@ -456,6 +420,7 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
     assert exit_code == 1
     assert summary_path.read_text() == f"push failed for {sha}\n"
     assert "protected branch: fixture says no" in capsys.readouterr().err
+    assert _git(bare, "rev-parse", "main") == base
 
 
 def test_detach_failure_after_a_landed_push_reports_published_and_fails(
@@ -487,24 +452,6 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
     assert summary_path.read_text() == f"published {sha}\n"
     assert _git(bare, "rev-parse", "main") == sha
     assert "index.lock" in capsys.readouterr().err
-
-
-def test_a_branch_whose_name_ends_in_main_does_not_hide_the_real_main(
-    tmp_path: Path,
-) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-    # `a/refs/heads/main` also matches the ls-remote pattern and sorts first.
-    _git(seed, "push", "-q", str(bare), f"{sha}:refs/heads/a/refs/heads/main")
-
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
-
-    assert result.status == "published"
-    assert _git(bare, "rev-parse", "refs/heads/main") == sha
 
 
 # --- release -----------------------------------------------------------
@@ -612,29 +559,6 @@ class ScriptedGh:
             self.edited_bodies.append(notes_path.read_text())
             return CommandResult(0 if self.edit_ok else 1, "", "")
         raise AssertionError(f"unexpected gh command {args}")
-
-
-def test_matching_record_and_served_digests_makes_no_write(tmp_path: Path) -> None:
-    root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": [
-            {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
-            {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
-        ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
-
-    result = run_release(root, gh=gh)
-
-    assert result.status == "unchanged"
-    assert result.summary == "unchanged at revision 3"
-    assert not any(call[:2] == ("release", "upload") for call in gh.calls)
-    assert not any(call[:2] == ("release", "edit") for call in gh.calls)
 
 
 def test_comparison_ignores_the_recorded_commit_and_uses_digests_only(

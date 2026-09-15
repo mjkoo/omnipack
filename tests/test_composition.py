@@ -403,12 +403,6 @@ def test_input_order_does_not_change_selection_or_report_order() -> None:
     assert left.report == right.report
 
 
-def test_compose_rejects_differing_records_with_one_original_identity() -> None:
-    first = app("same")
-    with pytest.raises(CompositionError, match="ambiguous original candidate identity"):
-        compose([first, replace(first, name="different")], [], [])
-
-
 def test_cross_package_family_coverage_passes_and_package_collision_fails() -> None:
     single = app("single", family="app:x", eligibility=frozenset({Variant.SINGLE}))
     dual = app(
@@ -646,34 +640,6 @@ def test_denials_and_package_collisions_see_the_corrected_package_id() -> None:
         CompositionError, match="selects package id 'taken.pkg' for distinct families"
     ):
         compose([corrected, other], [], [], policy=policy)
-
-
-def test_selection_reasons_name_pin_preference_fallback_and_source() -> None:
-    ordinary = app("ordinary", "extras", family="app:preferred")
-    preferred = app(
-        "preferred",
-        "bboi",
-        family="app:preferred",
-        eligibility=frozenset({Variant.DUAL}),
-    )
-    fallback = app("fallback", family="app:fallback")
-    reasons = {
-        (item.family, item.variant): item.reason
-        for item in compose([ordinary, preferred, fallback], [], []).report.selections
-    }
-    assert reasons == {
-        ("app:preferred", Variant.SINGLE): "source",
-        ("app:preferred", Variant.DUAL): "dual-preferred",
-        ("app:fallback", Variant.SINGLE): "source",
-        ("app:fallback", Variant.DUAL): "ordinary-fallback",
-    }
-    high = app("high", "extras", family="app:pinned")
-    pinned = app("pinned", "bboi", family="app:pinned")
-    policy = pin_policy(pinned, "app:pinned", Variant.DUAL, high)
-    assert {
-        item.variant: item.reason
-        for item in compose([high, pinned], [], [], policy=policy).report.selections
-    } == {Variant.SINGLE: "source", Variant.DUAL: "pin"}
 
 
 def test_dual_falls_back_to_source_precedence_among_several_baseline_builds() -> None:

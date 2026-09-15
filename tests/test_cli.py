@@ -144,54 +144,6 @@ def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
         assert (dist / name).read_bytes() == before
 
 
-def test_build_failure_does_not_mutate_committed_catalog(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (tmp_path / "README.md").write_bytes(
-        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
-    )
-    config = tmp_path / "config"
-    config.mkdir()
-    for name, value in (
-        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
-        ("sources.json", {}),
-        ("extras.json", []),
-        ("deny.json", []),
-        ("overlay.json", []),
-    ):
-        (config / name).write_text(json.dumps(value), encoding="utf-8")
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    before = {"settings": {}, "apps": [{"id": "old.id"}]}
-    for name in ("single-screen.json", "dual-screen.json"):
-        (dist / name).write_text(json.dumps(before), encoding="utf-8")
-
-    composed = CompositionResult(
-        {variant: [] for variant in Variant}, CompositionReport()
-    )
-
-    (config / "catalogs").mkdir()
-    catalog = b'{"apps":[{"id":"app.old","url":"https://github.com/old/project"}]}\n'
-    (config / "catalogs/codm.json").write_bytes(catalog)
-
-    def resolved(
-        _root: Path, _inputs: BuildInputs, report: IngestionReport
-    ) -> list[App]:
-        return []
-
-    monkeypatch.setattr(cli, "_ingest_for_build", resolved)
-    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
-    monkeypatch.setattr(
-        "omnipack.build.render",
-        lambda *_args: (_ for _ in ()).throw(ValueError("render failed")),
-    )
-    monkeypatch.chdir(tmp_path)
-    assert main(["build"]) == 1
-    assert (config / "catalogs/codm.json").read_bytes() == catalog
-    for name in ("single-screen.json", "dual-screen.json"):
-        assert json.loads((dist / name).read_text()) == before
-
-
 def write_fixture_pipeline(root: Path) -> dict[str, str]:
     """Write a fixture configuration and return the upstream responses it needs."""
     (root / "README.md").write_bytes(

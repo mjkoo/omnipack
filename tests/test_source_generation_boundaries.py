@@ -507,7 +507,16 @@ def test_heimdall_newest_matching_release_never_searches_older_apk(tmp_path):
     )
 
 
-def test_apk_filter_and_all_eligible_agreement(tmp_path):
+@pytest.mark.parametrize(
+    ("second", "expected_status"),
+    [
+        (apk("org.example.app"), "success"),
+        (apk("org.example.different"), "failed"),
+        (b"unreadable", "failed"),
+    ],
+    ids=["matching-id", "mixed-ids", "unreadable"],
+)
+def test_apk_filter_and_all_eligible_agreement(tmp_path, second, expected_status):
     source = setup(
         tmp_path, {"kind": "apk", "additionalSettings": {"apkFilterRegEx": "^app.*"}}
     )
@@ -515,21 +524,18 @@ def test_apk_filter_and_all_eligible_agreement(tmp_path):
         {"name": name, "browser_download_url": "https://fixture.test/" + name}
         for name in ["app.apk", "app-arm.APK", "debug.apk"]
     ]
-    for second in [apk("org.example.app"), apk("org.example.different"), b"unreadable"]:
-        http = MappingHttp(
-            {
-                source: README,
-                API: release(assets=assets),
-                ASSET: apk("org.example.app"),
-                "https://fixture.test/app-arm.APK": second,
-            }
-        )
-        result = generate_codm(tmp_path, http=http)
-        assert result["status"] == (
-            "success" if second == apk("org.example.app") else "failed"
-        )
-        assert result["filteredAssets"] == [{"url": PROJECT, "names": ["debug.apk"]}]
-        assert "https://fixture.test/debug.apk" not in http.urls
+    http = MappingHttp(
+        {
+            source: README,
+            API: release(assets=assets),
+            ASSET: apk("org.example.app"),
+            "https://fixture.test/app-arm.APK": second,
+        }
+    )
+    result = generate_codm(tmp_path, http=http)
+    assert result["status"] == expected_status
+    assert result["filteredAssets"] == [{"url": PROJECT, "names": ["debug.apk"]}]
+    assert "https://fixture.test/debug.apk" not in http.urls
 
 
 def test_equal_publication_time_uses_numeric_id():
@@ -666,9 +672,9 @@ def test_duplicate_policy_keys_and_inactive_rules(tmp_path):
     assert result["inactiveRules"] == ["github.com/inactive/app"]
 
 
-def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch):
-    import subprocess
-
+def test_cli_real_generation_preserves_inputs_and_cleans_failed_candidates(
+    tmp_path, monkeypatch
+):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
     accept(tmp_path)
@@ -681,8 +687,6 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
         for p in tmp_path.rglob("*")
         if p.is_file() and ".build" not in p.parts
     }
-    repository = Path(__file__).resolve().parents[1]
-    head = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository)
     monkeypatch.chdir(tmp_path)
     monkeypatch.setattr(
         "omnipack.source_generation.HttpConfig.from_path", lambda path: None
@@ -713,10 +717,6 @@ def test_cli_real_generation_preserves_inputs_and_history(tmp_path, monkeypatch)
         assert report["apk"][0]["status"] == "resolved"
         assert report["status"] == ("failed" if late_failure else "success")
         assert all(p.read_bytes() == content for p, content in tracked.items())
-        assert (
-            subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=repository)
-            == head
-        )
         if late_failure:
             assert {p.name for p in output.iterdir()} == {"report.json"}
 
