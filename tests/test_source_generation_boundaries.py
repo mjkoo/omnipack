@@ -408,7 +408,7 @@ def test_retries_never_accept_partial_resolutions(tmp_path):
     source = setup(tmp_path)
     readme = README + b"| [Other](https://github.com/other/app) | app |\n"
     other = "https://api.github.com/repos/other/app/releases/latest"
-    for attempt in range(3):
+    for recovered in (False, True):
         values = {
             source: readme,
             API: release(),
@@ -416,7 +416,7 @@ def test_retries_never_accept_partial_resolutions(tmp_path):
             other: release(
                 8,
                 assets=[]
-                if attempt < 2
+                if not recovered
                 else [{"name": "other.apk", "browser_download_url": ASSET + "?other"}],
             ),
             ASSET + "?other": apk("org.example.other"),
@@ -424,11 +424,11 @@ def test_retries_never_accept_partial_resolutions(tmp_path):
         http = MappingHttp(values)
         result = generate_codm(tmp_path, http=http)
         assert ASSET in http.urls
-        assert result["status"] == ("failed" if attempt < 2 else "success")
+        assert result["status"] == ("success" if recovered else "failed")
         candidate_exists = (
             tmp_path / ".build/source-generation/codm/catalog.json"
         ).exists()
-        assert candidate_exists == (attempt == 2)
+        assert candidate_exists == recovered
 
 
 @pytest.mark.parametrize("other_kind", ["apk", "track-only"])
@@ -777,7 +777,7 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
 
 @pytest.mark.parametrize(
     "identifier",
-    ["", "9", "10", "0", "-1", "invalid", -1, 0, True, None],
+    ["9", True, 0, -1],
     ids=lambda value: f"{type(value).__name__}-{value}",
 )
 def test_invalid_host_release_identifier(identifier):

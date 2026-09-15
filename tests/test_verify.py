@@ -122,12 +122,9 @@ def test_http_config_is_not_read_or_fingerprinted(tmp_path, monkeypatch) -> None
     assert "http" not in result["inputs"]
 
 
-@pytest.mark.parametrize("entry", [[], None])
-def test_nonobject_exclusion_completes_failed_evidence(
-    tmp_path: Path, entry: object
-) -> None:
+def test_nonobject_exclusion_completes_failed_evidence(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
-    (tmp_path / "config/deny.json").write_text(json.dumps([entry]))
+    (tmp_path / "config/deny.json").write_text("[null]")
     result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"
     assert result["complete"] is True

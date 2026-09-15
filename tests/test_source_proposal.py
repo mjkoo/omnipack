@@ -122,6 +122,15 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
             added=("https://example.test/a?x=1&y=2",),
             removed=("https://example.test/<removed>",),
             changed=("https://example.test/c&d",),
+            retained_failures=(
+                (
+                    "https://example.test/proj",
+                    (
+                        "[x](https://example.test) ![i](https://example.test/i.png) "
+                        '`y` <script>alert(1)</script> & "quoted"'
+                    ),
+                ),
+            ),
         ),
     )
     body_path = tmp_path / "pr-body.md"
@@ -134,10 +143,14 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
         "Added:\nhttps://example.test/a?x=1&amp;y=2\n\n"
         "Removed:\nhttps://example.test/&lt;removed&gt;\n\n"
         "Changed:\nhttps://example.test/c&amp;d\n\n"
-        "Retained failures:\n"
+        "Retained failures:\nhttps://example.test/proj: "
+        "[x](https://example.test) ![i](https://example.test/i.png) `y` "
+        "&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quoted&quot;\n"
     )
-    assert expected in _pre_block(outcome.summary)
-    assert expected in _pre_block(body_path.read_text())
+    for rendered in (outcome.summary, body_path.read_text()):
+        assert expected in _pre_block(rendered)
+        assert "<script>alert(1)</script>" not in rendered
+        assert "[x](https://example.test)" not in rendered[: rendered.index("<pre>")]
 
 
 def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) -> None:
@@ -174,15 +187,19 @@ def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) ->
     ]
 
 
-def test_symlinked_generated_candidate_fails_with_no_commit_or_bundle(
-    tmp_path: Path,
+@pytest.mark.parametrize(
+    "symlink_path", [f"{CANDIDATE_DIR}/catalog.json", CATALOG_PATH]
+)
+def test_symlinked_stage_input_fails_with_no_commit_or_bundle(
+    tmp_path: Path, symlink_path: str
 ) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     _write_candidate(root, '{"apps": [1]}\n', _report())
-    candidate_path = root / CANDIDATE_DIR / "catalog.json"
-    candidate_path.unlink()
-    candidate_path.symlink_to(root / CATALOG_PATH)
+    target = root / symlink_path
+    target.unlink()
+    link_target = CATALOG_PATH if symlink_path != CATALOG_PATH else "README.md"
+    target.symlink_to(root / link_target)
     bundle_path = tmp_path / "candidate.bundle"
     body_path = tmp_path / "pr-body.md"
 
@@ -190,29 +207,7 @@ def test_symlinked_generated_candidate_fails_with_no_commit_or_bundle(
 
     assert outcome.status == "failed"
     assert outcome.stage == "files"
-    assert outcome.summary == (
-        f"stage failed: {CANDIDATE_DIR}/catalog.json is a symlink"
-    )
-    assert _git(root, "rev-parse", "HEAD") == base
-    assert not bundle_path.exists()
-    assert not body_path.exists()
-
-
-def test_symlinked_catalog_fails_with_no_commit_or_bundle(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    _write_candidate(root, '{"apps": [1]}\n', _report())
-    catalog_path = root / CATALOG_PATH
-    catalog_path.unlink()
-    catalog_path.symlink_to(root / "README.md")
-    bundle_path = tmp_path / "candidate.bundle"
-    body_path = tmp_path / "pr-body.md"
-
-    outcome = run_stage(root, base, "run", bundle_path, body_path)
-
-    assert outcome.status == "failed"
-    assert outcome.stage == "files"
-    assert outcome.summary == f"stage failed: {CATALOG_PATH} is a symlink"
+    assert outcome.summary == f"stage failed: {symlink_path} is a symlink"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
     assert not body_path.exists()
@@ -231,51 +226,6 @@ def test_missing_generated_candidate_fails_naming_it(tmp_path: Path) -> None:
     assert outcome.summary == f"stage failed: {CANDIDATE_DIR}/catalog.json is missing"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
-
-
-def test_markdown_bearing_retained_failure_message_is_escaped_in_a_pre_block(
-    tmp_path: Path,
-) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    # A backtick is HTML-safe as-is, so escaping is visible only through the
-    # bracket and bang characters, which html.escape leaves untouched too;
-    # the real assertion is structural: the text sits inside <pre>...</pre>
-    # rather than being interpreted as Markdown by anything upstream of it.
-    message = "[x](https://example.test) ![i](https://example.test/i.png) `y`"
-    _write_candidate(
-        root,
-        '{"apps": []}\n',
-        _report(retained_failures=(("https://example.test/proj", message),)),
-    )
-    outcome = run_stage(
-        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
-    )
-
-    assert "<pre>" in outcome.summary
-    pre_start = outcome.summary.index("<pre>")
-    pre_end = outcome.summary.index("</pre>")
-    assert f"https://example.test/proj: {message}" in outcome.summary[pre_start:pre_end]
-    assert message not in outcome.summary[:pre_start]
-
-
-def test_html_bearing_retained_failure_message_is_html_escaped(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    message = '<script>alert(1)</script> & "quoted"'
-    _write_candidate(
-        root,
-        '{"apps": []}\n',
-        _report(retained_failures=(("https://example.test/proj", message),)),
-    )
-    outcome = run_stage(
-        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
-    )
-
-    assert message not in outcome.summary
-    assert "&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quoted&quot;" in (
-        outcome.summary
-    )
 
 
 def test_stage_cli_reads_env_and_exit_code_and_writes_outputs(

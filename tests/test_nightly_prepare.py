@@ -216,80 +216,36 @@ def test_prepare_cli_writes_changed_false_for_a_no_op(
     assert process.calls == [BUILD_COMMAND, STRUCTURAL_VERIFY_COMMAND]
 
 
-def test_out_of_scope_tracked_change_fails_allowlist(tmp_path: Path) -> None:
+@pytest.mark.parametrize(
+    "case",
+    ["out-of-scope", "deleted", "symlink", "executable", "absent-at-base"],
+)
+def test_unsafe_build_output_fails_allowlist(tmp_path: Path, case: str) -> None:
     root = _repo(tmp_path)
+    if case == "absent-at-base":
+        (root / ALLOWED_PATHS[1]).unlink()
+        _git(root, "add", "-A")
+        _git(root, "commit", "-qm", "drop a pack file")
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
-    process.on_build.append(lambda: (root / "tracked.txt").write_text("mutated\n"))
-    bundle_path = tmp_path / "candidate.bundle"
+    if case == "out-of-scope":
+        process.on_build.append(lambda: (root / "tracked.txt").write_text("mutated\n"))
+    elif case == "deleted":
+        process.on_build.append(lambda: (root / ALLOWED_PATHS[0]).unlink())
+    elif case == "symlink":
 
-    outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)
+        def replace_with_symlink() -> None:
+            target = root / ALLOWED_PATHS[0]
+            target.unlink()
+            target.symlink_to(root / "tracked.txt")
 
-    assert outcome.status == "failed"
-    assert outcome.stage == "allowlist"
-    assert _git(root, "rev-parse", "HEAD") == base
-    assert not bundle_path.exists()
-
-
-def test_deleted_allowed_file_fails_allowlist(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    process = ScriptedProcess(root)
-    process.on_build.append(lambda: (root / ALLOWED_PATHS[0]).unlink())
-    bundle_path = tmp_path / "candidate.bundle"
-
-    outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)
-
-    assert outcome.status == "failed"
-    assert outcome.stage == "allowlist"
-    assert _git(root, "rev-parse", "HEAD") == base
-    assert not bundle_path.exists()
-
-
-def test_allowed_file_replaced_by_symlink_fails_allowlist(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    process = ScriptedProcess(root)
-
-    def replace_with_symlink() -> None:
-        target = root / ALLOWED_PATHS[0]
-        target.unlink()
-        target.symlink_to(root / "tracked.txt")
-
-    process.on_build.append(replace_with_symlink)
-    bundle_path = tmp_path / "candidate.bundle"
-
-    outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)
-
-    assert outcome.status == "failed"
-    assert outcome.stage == "allowlist"
-    assert _git(root, "rev-parse", "HEAD") == base
-    assert not bundle_path.exists()
-
-
-def test_allowed_file_executable_bit_fails_allowlist(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    process = ScriptedProcess(root)
-    process.on_build.append(lambda: (root / ALLOWED_PATHS[0]).chmod(0o755))
-    bundle_path = tmp_path / "candidate.bundle"
-
-    outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)
-
-    assert outcome.status == "failed"
-    assert outcome.stage == "allowlist"
-    assert _git(root, "rev-parse", "HEAD") == base
-    assert not bundle_path.exists()
-
-
-def test_new_allowed_file_missing_at_base_fails_allowlist(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    (root / ALLOWED_PATHS[1]).unlink()
-    _git(root, "add", "-A")
-    _git(root, "commit", "-qm", "drop a pack file")
-    base = _git(root, "rev-parse", "HEAD")
-    process = ScriptedProcess(root)
-    process.on_build.append(lambda: (root / ALLOWED_PATHS[1]).write_text("new pack\n"))
+        process.on_build.append(replace_with_symlink)
+    elif case == "executable":
+        process.on_build.append(lambda: (root / ALLOWED_PATHS[0]).chmod(0o755))
+    else:
+        process.on_build.append(
+            lambda: (root / ALLOWED_PATHS[1]).write_text("new pack\n")
+        )
     bundle_path = tmp_path / "candidate.bundle"
 
     outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)

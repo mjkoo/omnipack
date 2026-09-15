@@ -56,8 +56,6 @@ Consolidate denials into same-package carriers removed, different-package fallba
 
 Reduce transaction faults to second-output staging and replacement failures, with/without existing packs. Keep README rollback integration, cleanup, a non-default permission and new-file permissions. Share minimal verification inputs, focus malformed-report cases at reader boundary, retain one CLI rejection. Keep missing fields, distinct validators and bool/int distinctions; reduce equivalent wrong-value permutations. Remove signature, object identity and projection layout assertions when behavior survives. Replace copied color calculation with fixed values and trim redundant counts/equalities. Keep HTTP credentials, redirect, bounded-read and retry/error outcomes without exact request/read choreography.
 
-## Risks / Trade-offs
-
 ### Approved follow-up audit
 
 Delete the unused catalog support module. Reduce the nine-case build integration
@@ -83,6 +81,8 @@ Drop the assertion about the helper-created empty catalog interior. Retain the
 compact render-permutation loop: reducing its iterations does not simplify its
 two-line expression. Confirm substantive assertion transfers with temporary
 counterexamples and explain any lost production line or arc execution.
+
+## Risks / Trade-offs
 
 - Execution overlap can hide lost assertions. Record a surviving test for each retained outcome and use temporary counterexamples for substantive replacements.
 - Representative fault/schema cases intentionally reduce permutation coverage. Enumerate any lost production execution and attribute it to an explicitly retired low-risk permutation; unexplained losses block completion.

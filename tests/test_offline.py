@@ -184,7 +184,7 @@ def test_track_only_id_need_not_be_an_android_package_name() -> None:
     assert validate_offline(inputs([value])) == ()
 
 
-@pytest.mark.parametrize("source", [{}, [], None, 1, True])
+@pytest.mark.parametrize("source", [{}, None])
 def test_malformed_source_produces_findings_without_stopping_other_entries(
     source: object,
 ) -> None:

@@ -273,3 +273,81 @@ A fresh independent evidence audit of 308257e..90477d8 confirmed all 16 checked 
 After that audit, the complete suite passed again: 694 tests in 29.61 seconds. No implementation changed after the audit. This result and the self-contained validation record complete the last task. All 17 tasks are checked.
 
 Implementation is complete on `refactor/test-surface`. The change remains active; separate OpenSpec verification and archive were not invoked. Nothing was pushed, merged or published.
+
+## Follow-up audit implementation
+
+The user approved another complete audit and its proposed reductions. At a960176,
+the starting surface was 669 cases, 353 functions and 10,552 Python lines in 35
+test/support files. The clean baseline passed 669 cases in 31.85 seconds.
+
+### Changes and surviving coverage
+
+- Removed the unused 21-line catalog support module after a repository-wide
+  caller search found only its own definition.
+- The real build integration matrix now has five named scenarios: successful
+  first build, partial prior output and rebuild, plus invalid single with absent
+  outputs and invalid dual with existing outputs. All admissions, diffs, evidence,
+  cache and transport checks remain. The separate stage-failure matrix retains
+  rendering/report-writing diagnostics with existing outputs and publication with
+  both absent and existing outputs. Dedicated transaction and README rollback
+  tests retain their absent/existing cases.
+- Release identifiers retain string-number, bool/int, zero and negative checks;
+  retired extras fields retain one row per field; nonobject exclusions retain
+  null; malformed sources retain an unhashable object and null. Explicit retired
+  policy fields retain unknown-field diagnostics without generic duplicate rows.
+- The undeclared GitLab-to-HTML expectation moved into the existing URL table.
+  RJNY export parity keeps identity sets and equal lengths without hard-coded
+  fixture counts. Exact output snapshots replace repeated individual content
+  assertions. Generation still tests failure then fresh successful recovery,
+  without the second identical failed invocation. The helper-created empty
+  catalog assertion is removed; captured-byte verification remains.
+- Cinderbox's exact presence, name, author, categories and rendered release
+  settings now use real current composition in both variants. The historical
+  overlay test retains exact setting and unrelated-field comparisons for the
+  frozen baseline alone. Manual Cinderbox insertion and record reconstruction
+  are gone; independent manifest-correction evidence remains unchanged.
+- Mixed Markdown, HTML, ampersand and quote escaping now has one stage
+  summary/body test. It checks pre-block containment, escaped content and absence
+  of raw HTML. The real stage-to-create-PR body handoff and truncation boundaries
+  remain. Five prepare allowlist cases, four push rejection cases and two stage
+  symlink paths share explicit parameterized setup, preserving every prior
+  diagnostic and commit/bundle/remote preservation assertion.
+
+### Validation and counterexamples
+
+The 268 affected local cases passed in 2.87 seconds; seven curation/reconciliation/
+tracker cases passed in 0.14 seconds; 111 publication/preparation cases passed in
+22.05 seconds. The combined full suite passed 646 cases in 29.58 seconds. The
+isolated CPython 3.12.14 publication suite passed 104 cases in 22.62 seconds.
+Full Ruff formatting, Ruff lint, ty and whitespace checks passed. Strict OpenSpec
+artifact validation passed, accepting the declared test-only spec skip.
+
+Temporary process-local counterexamples confirmed that the retained invalid-single
+integration case rejects bypassing offline validation, the revised Cinderbox test
+rejects removing Cinderbox from real composed output, and the consolidated
+escaping test rejects both identity HTML escaping and removed pre tags. No
+production or configuration files were edited by those probes.
+
+Coverage uses the C tracer with source-directory measurement and per-test contexts.
+Compared with the clean follow-up baseline, there are zero lost or added production
+lines and zero lost or added arcs across source and scripts. Initial instrumentation
+attempts exposed unsupported contexts in the default Python 3.14 tracer and a
+package-import warning; the clean runs use the supported tracer and directory
+targets. These were measurement setup issues, not product failures.
+
+The resulting surface is 646 cases, 342 functions and 10,377 Python lines in 34
+test/support files: 23 fewer cases, 11 fewer functions and 175 fewer lines for this
+pass. Production, scripts, workflows, configuration, frozen evidence, generated
+outputs and dependency files remain unchanged.
+
+### Follow-up rulings
+
+- Continue the existing active test-maintenance change with the approved audit
+  as an added task batch. This preserves one reviewable branch and does not
+  authorize separate verification or archive.
+- Retain the optional two-line render-permutation loop. Fewer iterations would
+  not simplify its expression; the cost is retaining its small execution overhead.
+- For test removal and consolidation, baseline and retained-test counterexamples
+  provide the red/green evidence without adding disposable committed tests.
+
+Independent follow-up reviews and completion audit are recorded below when complete.

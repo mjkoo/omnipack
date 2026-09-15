@@ -109,14 +109,13 @@ def test_rjny_matches_both_upstream_exports() -> None:
             "path": "src/applications.json",
         },
     )
-    for variant, export_name, count in (
-        (Variant.SINGLE, "rjny-single.json", 62),
-        (Variant.DUAL, "rjny-dual.json", 66),
+    for variant, export_name in (
+        (Variant.SINGLE, "rjny-single.json"),
+        (Variant.DUAL, "rjny-dual.json"),
     ):
         expected = json.loads(fixture(export_name))["apps"]
-        assert len(expected) == count
         eligible = [app for app in apps if variant in app.eligibility]
-        assert len(eligible) == count
+        assert len(eligible) == len(expected)
         assert {(app.id, app.url) for app in eligible} == {
             (entry["id"], entry["url"]) for entry in expected
         }
@@ -154,17 +153,6 @@ def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
     )
     assert app.source_type is SourceType.GITLAB
     assert app.url == f"https://gitlab.com/{path}"
-
-
-def test_undeclared_extra_keeps_existing_url_inference() -> None:
-    records = [
-        {"id": "github", "name": "GitHub", "url": "https://github.com/a/b"},
-        {"id": "other", "name": "Other", "url": "https://gitlab.com/a/b"},
-    ]
-    assert [app.source_type for app in extras.fetch(records)] == [
-        SourceType.GITHUB,
-        SourceType.HTML,
-    ]
 
 
 @pytest.mark.parametrize(
@@ -585,9 +573,7 @@ def test_extras_rejects_non_boolean_dual_screen(value: object) -> None:
     ("field", "value"),
     [
         ("variants", ["single", "dual"]),
-        ("variants", ["dual"]),
         ("dualPreferred", True),
-        ("dualPreferred", False),
     ],
 )
 def test_extras_rejects_retired_fields_naming_entry_and_field(
@@ -676,8 +662,6 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     }
     assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
-    assert single.read_text(encoding="utf-8") == "old single"
-    assert dual.read_text(encoding="utf-8") == "old dual"
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["status"] == "failed"
     assert report["stage"] == "ingestion"
@@ -703,6 +687,7 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         ("https://github.com/owner/repo", SourceType.GITHUB),
         ("https://www.github.com/owner/repo/releases/latest", SourceType.GITHUB),
         ("https://github.com/owner/repo/tree/main", SourceType.GITHUB),
+        ("https://gitlab.com/a/b", SourceType.HTML),
     ],
 )
 def test_extras_derives_github_only_for_repository_urls(

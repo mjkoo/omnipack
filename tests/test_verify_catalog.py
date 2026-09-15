@@ -56,8 +56,7 @@ def test_readme_mutation_during_verification_fingerprints_the_captured_bytes(
 ) -> None:
     copy_inputs(tmp_path)
     captured_readme = (tmp_path / "README.md").read_bytes()
-    prefix, interior, suffix = split_catalog(captured_readme)
-    assert interior == b""
+    prefix, _, suffix = split_catalog(captured_readme)
     original = verify.validate_offline
 
     def mutate(inputs):

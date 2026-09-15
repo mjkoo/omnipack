@@ -124,9 +124,7 @@ def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
     "document, message",
     [
         ({"schemaVersion": True, "candidates": [], "pins": []}, "schemaVersion"),
-        (policy(extra=[]), "unknown field"),
         (policy(history=[]), "unknown field 'history'"),
-        (policy(candidates=[rule(extra=True)]), "unknown field"),
         (policy(candidates=[rule(family="package:forbidden")]), "family"),
         (policy(candidates=[rule(family="app:bad family")]), "family"),
         (

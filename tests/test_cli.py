@@ -165,8 +165,17 @@ def test_build_verify_and_report_sequence_records_no_findings(
     assert "Evidence: current" in output
 
 
-@pytest.mark.parametrize("existing", ["none", "dual", "both"])
-@pytest.mark.parametrize("invalid_variant", [None, "single", "dual"])
+@pytest.mark.parametrize(
+    ("existing", "invalid_variant"),
+    [
+        ("none", None),
+        ("dual", None),
+        ("both", None),
+        ("none", "single"),
+        ("both", "dual"),
+    ],
+    ids=["first-build", "partial-outputs", "rebuild", "invalid-single", "invalid-dual"],
+)
 def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
@@ -259,8 +268,16 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     assert not (tmp_path / "dist/report.json").exists()
 
 
-@pytest.mark.parametrize("stage", ["rendering", "report writing", "publication"])
-@pytest.mark.parametrize("existing", [False, True])
+@pytest.mark.parametrize(
+    ("stage", "existing"),
+    [
+        ("rendering", True),
+        ("report writing", True),
+        ("publication", False),
+        ("publication", True),
+    ],
+    ids=["rendering", "report-writing", "first-publication", "replacement"],
+)
 def test_failed_build_reports_exact_stage_and_preserves_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stage: str, existing: bool
 ) -> None:

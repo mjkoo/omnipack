@@ -125,66 +125,27 @@ def test_push_propagates_handoff_rejection_before_remote_write(
     assert gh.calls == []
 
 
-def test_commit_touching_disallowed_path_is_rejected(tmp_path: Path) -> None:
+@pytest.mark.parametrize("case", ["disallowed", "empty", "symlink", "executable"])
+def test_unsafe_candidate_commit_is_rejected(tmp_path: Path, case: str) -> None:
     seed = _seed(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {"tracked.txt": "sneaky\n"})
-    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = shallow_checkout(tmp_path, bare, base)
-
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
-
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
-
-
-def test_commit_changing_nothing_is_rejected(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = bare_remote(seed, tmp_path)
-    _git(seed, "commit", "--allow-empty", "-qm", "empty")
-    sha = _git(seed, "rev-parse", "HEAD")
-    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = shallow_checkout(tmp_path, bare, base)
-
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
-
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
-
-
-def test_commit_replacing_allowed_file_with_symlink_is_rejected(
-    tmp_path: Path,
-) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = bare_remote(seed, tmp_path)
-    target = seed / ALLOWED_PATHS[0]
-    target.unlink()
-    target.symlink_to(seed / "README.md")
-    _git(seed, "add", "--", ALLOWED_PATHS[0])
-    sha = _bot_commit(seed, {})
-    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = shallow_checkout(tmp_path, bare, base)
-
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
-
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
-
-
-def test_commit_setting_executable_bit_is_rejected(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = bare_remote(seed, tmp_path)
-    _git(seed, "config", "core.fileMode", "true")
-    (seed / "README.md").chmod(0o755)
-    _git(seed, "add", "--", "README.md")
-    sha = _bot_commit(seed, {})
+    if case == "disallowed":
+        sha = _bot_commit(seed, {"tracked.txt": "sneaky\n"})
+    elif case == "empty":
+        _git(seed, "commit", "--allow-empty", "-qm", "empty")
+        sha = _git(seed, "rev-parse", "HEAD")
+    elif case == "symlink":
+        target = seed / ALLOWED_PATHS[0]
+        target.unlink()
+        target.symlink_to(seed / "README.md")
+        _git(seed, "add", "--", ALLOWED_PATHS[0])
+        sha = _bot_commit(seed, {})
+    else:
+        _git(seed, "config", "core.fileMode", "true")
+        (seed / "README.md").chmod(0o755)
+        _git(seed, "add", "--", "README.md")
+        sha = _bot_commit(seed, {})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
 
