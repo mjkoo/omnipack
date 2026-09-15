@@ -8,13 +8,14 @@ import pytest
 
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import parse_composition_policy
-from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
-from omnipack.sources import rjny
 from omnipack.sources.extras import fetch
-from tests.test_sources import FakeHttp
+from tests.current_config_support import (
+    CurrentConfiguration,
+    current_configuration_fixture,  # noqa: F401
+)
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "fixtures/curation"
@@ -35,28 +36,30 @@ def read(path):
     return json.loads(path.read_text())
 
 
-def test_upstream_pack_tracker_stays_excluded_after_refresh():
-    source = read(ROOT / "config/sources.json")["rjny"]
-    url = f"https://raw.githubusercontent.com/{source['repo']}/{source['branch']}/{source['path']}"
-    records = read(ROOT / "tests/fixtures/rjny-applications.json")["apps"]
-    selected = [r for r in records if r["id"] in {"904332840", "aenu.aps3e"}]
-    assert len(selected) == 2
-    policy = parse_composition_policy(
-        {"schemaVersion": 1, "candidates": [], "pins": []}
+def test_upstream_pack_tracker_stays_excluded_from_current_composition(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    rjny_candidates = {
+        app.id
+        for app in current_configuration.candidates
+        if app.provenance.source == "rjny"
+    }
+    assert {"904332840", "aenu.aps3e"} <= rjny_candidates
+    packs = {
+        variant: render(current_configuration.result.apps[variant]).encode()
+        for variant in Variant
+    }
+    for pack in packs.values():
+        ids = {app["id"] for app in json.loads(pack)["apps"]}
+        assert "aenu.aps3e" in ids
+        assert "904332840" not in ids
+    catalog = generate_catalog(
+        packs[Variant.SINGLE],
+        packs[Variant.DUAL],
+        parse_composition_policy(current_configuration.policy),
     )
-    exclusions = read(ROOT / "config/deny.json")
-    for refresh in range(2):
-        upstream = deepcopy(selected)
-        upstream[0]["name"] += f" refresh {refresh}"
-        apps = rjny.fetch(FakeHttp({url: json.dumps({"apps": upstream})}), source)
-        assert {a.id for a in apps} == {"904332840", "aenu.aps3e"}
-        result = compose(apps, exclusions, [], policy=policy)
-        packs = {v: render(result.apps[v]).encode() for v in Variant}
-        for pack in packs.values():
-            assert [a["id"] for a in json.loads(pack)["apps"]] == ["aenu.aps3e"]
-        catalog = generate_catalog(packs[Variant.SINGLE], packs[Variant.DUAL], policy)
-        assert b"aPS3e" in catalog
-        assert b"Obtainium-Emulation-Pack" not in catalog
+    assert b"aPS3e" in catalog
+    assert b"Obtainium-Emulation-Pack" not in catalog
 
 
 def effective_id(record):

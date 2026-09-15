@@ -123,3 +123,17 @@ Full suite after publication consolidation: 738 passed in 38.01 seconds. Isolate
 ### Publication review correction
 
 The first publication review accepted fixture/handoff consolidation but found missing trigger-presence checks and universal job-security coverage. The workflow test now requires scheduled/manual triggers without fixing cron values and applies repository/main guards, action pins, cache restrictions, unsafe-expression checks and nonpublisher permission limits to every job. The preparation success test accepts either UTC date bracketing the call, avoiding midnight timing failure. Thirty affected tests, Ruff formatting/lint, full ty and diff checks passed. Twenty-four unsafe in-memory workflow mutations changed from accepted to rejected; ten safe variants (additional read-only jobs, labels and cron changes) pass. No production or workflow files changed.
+
+Scoped re-review of 33d3b3d..6cc8b85 approved the workflow correction with no findings. Publication fixture consolidation remains approved; the batch is complete.
+
+## Curation and catalog consolidation
+
+Shared session fixture ingests captured upstreams with actual current extras, policy, catalog, denial and overlay inputs. Baseline-extra expectations use original source/origin/id/normalized URL and explicit single pin exemptions, independent of production policy application. Tracker identity and composed presence use this real pipeline. Manifest package observations still independently check corrections; frozen pre-migration golden exports and input hashes are untouched.
+
+Committed catalog validation is centralized. Catalog add/remove noninterference now uses one explicit higher-source app and two explicit generated entries with empty policy; it does not freeze current catalog membership. Initial small-fixture runs caught missing policy arguments/schema metadata; corrected to use the real parser's empty versioned policy. Current catalog composability remains separately tested. Redundant refresh calls, capture-date/hash-length assertions and helper meta-tests removed.
+
+Survivors: test_committed_configuration_selects_each_baseline_extra_in_single owns configured baseline extras; tracker identity/presence tests own actual tracker selection; test_manifest_evidence_matches_configured_corrections owns manifest mapping; test_frozen_captured_baseline_reproduces_exact_exports_and_family_winners owns historical golden bytes; test_committed_catalog_is_valid_canonical_and_composable owns current catalog shape/canonical bytes; test_catalog_addition_and_removal_leave_single_screen_selection_unchanged owns independent noninterference; source semantics test retains tracker/prerelease/source eligibility and covering candidates.
+
+In-memory current-config probes: denying configured Cinderbox makes direct extra guard fail; removing tracker makes both identity and presence tests fail. No production or frozen fixture edits. Ruff and ty passed before final fixture correction; final full coverage results are in validation.md.
+
+Full suite: 720 passed in 34.82 seconds. Ruff and full ty passed. Actual production execution comparison with the publication batch: zero lost or added lines and arcs.

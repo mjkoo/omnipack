@@ -5,8 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
@@ -17,6 +15,10 @@ from omnipack.sources import bboi, codm, rjny
 from omnipack.sources.common import normalize_record
 from omnipack.sources.extras import fetch as fetch_extras
 from omnipack.urls import normalize_project_url
+from tests.current_config_support import (
+    CurrentConfiguration,
+    current_configuration_fixture,  # noqa: F401
+)
 from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
@@ -95,9 +97,7 @@ def compose_captured_baseline() -> CompositionResult:
     )
 
 
-def test_current_captured_baseline_reproduces_exact_exports_and_family_winners() -> (
-    None
-):
+def test_frozen_captured_baseline_reproduces_exact_exports_and_family_winners() -> None:
     index = load_json(FIXTURES / "baseline/index.json")
     result = compose_captured_baseline()
 
@@ -119,130 +119,15 @@ def test_current_captured_baseline_reproduces_exact_exports_and_family_winners()
     assert derived_winners == index["familyWinners"]
 
 
-def _committed_codm_catalog() -> dict[str, Any]:
-    return load_json(ROOT / "config/catalogs/codm.json")
-
-
-ADDED_ID = "com.example.testinvariant.added"
-
-
-def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
-    """Vary the committed catalog the way a source proposal might.
-
-    The removed entry is the last one that composition admits and does not
-    depend on: no dual-eligible higher-source candidate covers its project, so
-    ingestion keeps it; no package denial names it; no candidate rule, pin or
-    overlay record targets it; and no higher-source candidate or identity
-    correction carries its package ID, so it cannot be a family's only
-    dual-screen build. When no entry qualifies, the variant is skipped rather
-    than silently testing only an addition.
-    """
-    apps = list(_committed_codm_catalog()["apps"])
-    policy = load_json(ROOT / "config/composition.json")
-    targeted = {
-        (rule["match"]["id"], normalize_project_url(rule["match"]["url"]))
-        for rule in [*policy["candidates"], *policy["pins"]]
-        if rule["match"]["source"] == "codm2000"
-    } | {
-        (record["id"], normalize_project_url(record["url"]))
-        for record in load_json(ROOT / "config/overlay.json")
-    }
-    higher = captured_higher()
-    covered = {
-        normalize_project_url(app.url)
-        for app in higher
-        if Variant.DUAL in app.eligibility
-    }
-    carried = {app.id for app in higher} | {
-        rule["packageId"] for rule in policy["candidates"] if "packageId" in rule
-    }
-    denied = {entry["id"] for entry in load_json(ROOT / "config/deny.json")}
-    removable = [
-        app
-        for app in apps
-        if normalize_project_url(app["url"]) not in covered
-        and (app["id"], normalize_project_url(app["url"])) not in targeted
-        and app["id"] not in carried
-        and app["id"] not in denied
-    ]
-    if not removable:
-        pytest.skip("composition depends on every codm2000 entry, so none can go")
-    apps.remove(removable[-1])
-    # The added project copies an APK entry, chosen for its kind rather than
-    # its position, under an ID and URL the catalog does not already use.
-    template = next(
-        (
-            app
-            for app in apps
-            if not json.loads(app["additionalSettings"]).get("trackOnly", False)
-        ),
-        {"additionalSettings": json.dumps({"trackOnly": False}), "categories": []},
-    )
-    used_ids = {app["id"] for app in apps}
-    used_urls = {normalize_project_url(app["url"]) for app in apps}
-    added_id, added_url = ADDED_ID, "https://github.com/example/testinvariant-added"
-    while added_id in used_ids or normalize_project_url(added_url) in used_urls:
-        added_id, added_url = f"{added_id}x", f"{added_url}x"
-    added = {
-        **template,
-        "id": added_id,
-        "url": added_url,
-        "name": "Test Invariant Added",
-        "author": "example",
-    }
-    # Route through the generator's own serializer so the variant is itself a
-    # canonical catalog, matching what a real generation run would commit.
-    return json.loads(_render_catalog([*apps, added]))
-
-
-@pytest.fixture(params=["committed", "one-added-one-removed"])
-def codm_catalog(request: pytest.FixtureRequest) -> dict[str, Any]:
-    if request.param == "committed":
-        return _committed_codm_catalog()
-    return _catalog_with_one_project_added_and_one_removed()
-
-
-def _compose_with_codm_catalog(
-    catalog: dict[str, Any],
-    tmp_path: Path,
-    higher: list[App],
-    *,
-    policy_document: dict[str, Any] | None = None,
-    denials: list[dict[str, str]] | None = None,
-) -> CompositionResult:
-    """Compose the committed configuration, or the given policy, over a catalog.
-
-    `denials` are added to the committed denials.
-    """
-    policy = parse_composition_policy(
-        load_json(ROOT / "config/composition.json")
-        if policy_document is None
-        else policy_document
-    )
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "codm.json").write_text(json.dumps(catalog))
-    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, higher)
-    return compose(
-        [*higher, *generated],
-        [*load_json(ROOT / "config/deny.json"), *(denials or [])],
-        load_json(ROOT / "config/overlay.json"),
-        policy=policy,
-    )
-
-
-def test_committed_catalog_entries_have_unique_ids_and_urls(
-    codm_catalog: dict[str, Any],
+def test_committed_catalog_is_valid_canonical_and_composable(
+    current_configuration: CurrentConfiguration,
 ) -> None:
-    ids = [app["id"] for app in codm_catalog["apps"]]
-    urls = [normalize_project_url(app["url"]) for app in codm_catalog["apps"]]
+    catalog = current_configuration.catalog
+    ids = [app["id"] for app in catalog["apps"]]
+    urls = [normalize_project_url(app["url"]) for app in catalog["apps"]]
     assert len(ids) == len(set(ids))
     assert len(urls) == len(set(urls))
-
-
-def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
-    codm_catalog: dict[str, Any],
-) -> None:
-    for app in codm_catalog["apps"]:
+    for app in catalog["apps"]:
         settings = json.loads(app["additionalSettings"])
         if settings.get("trackOnly"):
             assert app["id"].isdecimal()
@@ -252,42 +137,53 @@ def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
         else:
             assert settings.get("trackOnly", False) is False
             assert _is_valid_package_id(app["id"])
+    raw = (ROOT / "config/catalogs/codm.json").read_bytes()
+    assert _render_catalog(catalog["apps"]) == raw
+    assert current_configuration.result.apps[Variant.DUAL]
 
 
-def _is_canonical_catalog(path: Path) -> bool:
-    raw = path.read_bytes()
-    return _render_catalog(json.loads(raw)["apps"]) == raw
-
-
-def test_committed_catalog_bytes_are_the_canonical_rendering_of_its_entries() -> None:
-    assert _is_canonical_catalog(ROOT / "config/catalogs/codm.json")
-
-
-def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
-    codm_catalog: dict[str, Any], tmp_path: Path
-) -> None:
-    higher, _ = captured_pipeline()
-    result = _compose_with_codm_catalog(codm_catalog, tmp_path, higher)
-    assert result.apps[Variant.DUAL]
-    added = {app["id"] for app in codm_catalog["apps"]} - {
-        app["id"] for app in _committed_codm_catalog()["apps"]
-    }
-    assert added <= {app.id for app in result.apps[Variant.DUAL]}
-
-
-def test_committed_catalog_leaves_the_single_screen_pack_unchanged(
+def test_catalog_addition_and_removal_leave_single_screen_selection_unchanged(
     tmp_path: Path,
 ) -> None:
-    higher, _ = captured_pipeline()
-    committed = _compose_with_codm_catalog(
-        _committed_codm_catalog(), tmp_path / "committed", higher
+    higher = fetch_extras(
+        [
+            {
+                "id": "com.example.base",
+                "url": "https://github.com/example/base",
+                "name": "Base",
+            }
+        ]
     )
-    modified = _compose_with_codm_catalog(
-        _catalog_with_one_project_added_and_one_removed(),
-        tmp_path / "modified",
-        higher,
-    )
-    assert committed.apps[Variant.SINGLE] == modified.apps[Variant.SINGLE]
+    results = []
+    for name in ("removed", "added"):
+        directory = tmp_path / name
+        directory.mkdir()
+        entry = _codm_entry(
+            f"com.example.{name}", f"https://github.com/example/{name}", name, {}
+        )
+        (directory / "codm.json").write_text(json.dumps({"apps": [entry]}))
+        generated = codm.fetch(directory, {"catalog": "codm.json"}, higher)
+        results.append(
+            compose(
+                [*higher, *generated],
+                [],
+                [],
+                policy=parse_composition_policy(
+                    {"schemaVersion": 1, "candidates": [], "pins": []}
+                ),
+            )
+        )
+    before, after = results
+    assert [app.id for app in before.apps[Variant.SINGLE]] == ["com.example.base"]
+    assert before.apps[Variant.SINGLE] == after.apps[Variant.SINGLE]
+    assert {app.id for app in before.apps[Variant.DUAL]} == {
+        "com.example.base",
+        "com.example.removed",
+    }
+    assert {app.id for app in after.apps[Variant.DUAL]} == {
+        "com.example.base",
+        "com.example.added",
+    }
 
 
 def _codm_entry(

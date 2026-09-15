@@ -9,12 +9,12 @@
 
 - [x] 2.1 Share isolated stdlib/pytest Git and fake GitHub fixtures, combine preparation success cases, centralize shared handoff rejection with caller propagation, retain caller-specific allowlists/modes, and consolidate release fixtures/equivalent failure setup; verify publication tests and a rejected-handoff counterexample.
 - [x] 2.2 Replace incidental workflow literals with shared structured security/publication contracts and simplify runtime AST style checks as designed; verify workflow tests, equal/unequal SHA guard execution and a broken-guard counterexample.
-- [ ] 2.3 Record survivor ownership and explained execution-coverage changes, run affected tests including isolated Python 3.12, and pass independent evidencing review of the batch.
+- [x] 2.3 Record survivor ownership and explained execution-coverage changes, run affected tests including isolated Python 3.12, and pass independent evidencing review of the batch.
 
 ## 3. Simplify curation and catalog fixtures
 
-- [ ] 3.1 Share real current-configuration composition, replace curation helper/meta-test infrastructure with direct original-selector expectations and pin exemptions, retaining policy correction and independent manifest guards; verify curation tests and a representative displacement counterexample.
-- [ ] 3.2 Validate committed catalog once, replace synthetic mutation builder with explicit add/remove noninterference, and remove repeated refresh/static evidence bookkeeping; verify frozen golden, curation and catalog tests.
+- [x] 3.1 Share real current-configuration composition, replace curation helper/meta-test infrastructure with direct original-selector expectations and pin exemptions, retaining policy correction and independent manifest guards; verify curation tests and a representative displacement counterexample.
+- [x] 3.2 Validate committed catalog once, replace synthetic mutation builder with explicit add/remove noninterference, and remove repeated refresh/static evidence bookkeeping; verify frozen golden, curation and catalog tests.
 - [ ] 3.3 Record survivor ownership and explained execution-coverage changes, run affected tests, and pass independent evidencing review of the batch.
 
 ## 4. Trim remaining duplication
