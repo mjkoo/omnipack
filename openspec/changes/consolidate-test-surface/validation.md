@@ -350,14 +350,13 @@ outputs and dependency files remain unchanged.
 - For test removal and consolidation, baseline and retained-test counterexamples
   provide the red/green evidence without adding disposable committed tests.
 
-Independent follow-up reviews and completion audit are recorded below when complete.
+Independent follow-up reviews and completion audit are recorded below.
 
 The independent group review of a960176..9ed8558 approved all three implementation
 boxes with commit and surviving-test evidence, confirmed the recorded checks and
 counterexamples, and found no correctness, completeness or idiom issues. The
 review independently confirmed the removed catalog support module had no callers.
-Offline `pack verify` also passed. The whole-diff wave and completion audit remain
-pending.
+Offline `pack verify` also passed.
 
 Three independent whole-diff reviewers checked merge-base 308257e through 9ed8558
 with separate proportionality, idiomatic-pattern, and correctness/failure-mode
@@ -367,4 +366,15 @@ Critical, Important or Minor findings and no residual warnings. No fix round was
 needed. Proportionality found no further deletion with a clear cognitive-load
 benefit that would preserve distinct outcomes. The correctness review checked
 surviving redirect/APK and embedded-credential coverage where diff context was
-insufficient. The final checkbox audit remains pending.
+insufficient.
+
+The final independent completion auditor checked all 21 marked tasks across the
+branch through 6f49a02, naming an implementing commit and proving test or process
+evidence for each. It confirmed 21 of 21, with zero unevidenced or Critical items.
+The last follow-up checkbox remained pending until this audit and the final run
+finished. The full suite then passed again: 646 tests in 28.22 seconds. No test
+or production changes occurred after the reviews or audit.
+
+All 22 tasks are complete. Follow-up implementation is complete on
+`refactor/test-surface`; the change remains active for separately requested
+OpenSpec verification. Nothing was pushed, merged, archived or published.
