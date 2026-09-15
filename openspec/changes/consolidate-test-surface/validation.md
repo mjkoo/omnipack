@@ -250,3 +250,18 @@ Proportionality found an equivalent missing-release matrix row duplicating the n
 The missing-release row is removed; the standalone test now owns failed status, exact guidance and no upload/edit. Remaining marker/title rows no longer carry a constant view-success parameter or optional fixture branch. Required workflow entrypoints, including full writer arguments, now use complete normalized-token comparisons. Labels, quoting and whitespace remain flexible.
 
 Fifty affected cases and the runtime-boundary case passed; Ruff lint/format and full ty passed. Six independent in-memory `|| true` mutations (pytest, verification, catalog diff, nightly push, nightly release and source publication) passed the previous checks and fail the corrected checks. Both workflows still accept renamed labels and harmless whitespace. No workflow files changed.
+
+### Final implementation measurements
+
+At 7dce3f5, the full suite passed 694 cases in 33.79 seconds and isolated CPython 3.12.14 passed 111 publication cases in 26.47 seconds. There are 382 test functions and 35 test/support Python files, totaling 11,208 physical lines including all helpers. Relative to baseline, this removes 104 cases, 78 functions and 1,405 lines (11.1%). Production remains 6,145 lines; ratio 1.82:1. Protected files remain unchanged.
+
+Coverage after both review corrections is identical to the prior consolidation run. Compared with the original baseline, the only lost execution remains six lazy-annotation lines and fourteen associated arcs from retired signature inspection; one empty-catalog arc is added. No production function-body line or behavior branch was lost.
+
+Scoped re-review of a7f2c2f..7dce3f5 approved both whole-wave fixes with no findings. All group and whole-diff review findings are closed; no warnings are parked.
+
+## Implementation rulings
+
+- The existing request to implement the plan authorized materializing/converging missing planning artifacts and continuing into apply. This did not authorize separate verification or archive. A narrower reading would have required another instruction before implementation.
+- Build setup stays separate from serialized verification setup because precreating packs would conceal first-build states. The trade-off is retaining a small amount of setup duplication.
+- Loss of lazy annotation evaluation from the removed signature assertion is intentional; runtime body coverage is preserved. The suite no longer constrains that internal signature through introspection.
+- Harness concurrency limits required sequencing some review seats and batching a distinct scoped correction review into the independent correctness seat. Every named lens and evidence duty still ran; the trade-off is elapsed time and shared context between those two narrow review duties.
