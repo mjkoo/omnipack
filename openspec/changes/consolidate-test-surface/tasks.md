@@ -35,5 +35,5 @@
 - [x] 6.1 Remove unused catalog support, reduce integration and equivalent schema cases, and remove repeated generation/fixture assertions while retaining named behavioral coverage.
 - [x] 6.2 Move Cinderbox checks to real current composition, remove historical insertion scaffolding, and prove selection loss is detected while historical overlay assertions remain intact.
 - [x] 6.3 Combine escaping scenarios and consolidate publication rejection setup, retaining each distinct outcome and proving escaping regressions are detected.
-- [ ] 6.4 Record survivor ownership, counterexamples, full and isolated Python 3.12 results, formatting/lint/types and explained execution changes; pass an independent group evidencing review.
+- [x] 6.4 Record survivor ownership, counterexamples, full and isolated Python 3.12 results, formatting/lint/types and explained execution changes; pass an independent group evidencing review.
 - [ ] 6.5 Pass the whole-diff review wave and final completion audit, resolve findings and rerun the full suite; leave the change active on its implementation branch.

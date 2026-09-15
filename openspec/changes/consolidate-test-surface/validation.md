@@ -351,3 +351,20 @@ outputs and dependency files remain unchanged.
   provide the red/green evidence without adding disposable committed tests.
 
 Independent follow-up reviews and completion audit are recorded below when complete.
+
+The independent group review of a960176..9ed8558 approved all three implementation
+boxes with commit and surviving-test evidence, confirmed the recorded checks and
+counterexamples, and found no correctness, completeness or idiom issues. The
+review independently confirmed the removed catalog support module had no callers.
+Offline `pack verify` also passed. The whole-diff wave and completion audit remain
+pending.
+
+Three independent whole-diff reviewers checked merge-base 308257e through 9ed8558
+with separate proportionality, idiomatic-pattern, and correctness/failure-mode
+lenses. The first two ran alongside the group review; the correctness seat ran
+when capacity became available. All three returned clean verdicts with no
+Critical, Important or Minor findings and no residual warnings. No fix round was
+needed. Proportionality found no further deletion with a clear cognitive-load
+benefit that would preserve distinct outcomes. The correctness review checked
+surviving redirect/APK and embedded-credential coverage where diff context was
+insufficient. The final checkbox audit remains pending.
