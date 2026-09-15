@@ -185,7 +185,9 @@ def test_prepare_cli_writes_changed_sha_and_base_for_a_candidate(
     )
     monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
 
+    date_before = datetime.now(UTC).date()
     exit_code = nightly_module.main(["prepare"])
+    date_after = datetime.now(UTC).date()
 
     sha = _git(root, "rev-parse", "HEAD")
     assert exit_code == 0
@@ -200,10 +202,10 @@ def test_prepare_cli_writes_changed_sha_and_base_for_a_candidate(
     assert _git(root, "show", "-s", "--format=%an <%ae>%n%cn <%ce>", sha) == (
         f"{BOT_NAME} <{BOT_EMAIL}>\n{BOT_NAME} <{BOT_EMAIL}>"
     )
-    assert (
-        _git(root, "show", "-s", "--format=%s", sha)
-        == f"chore(dist): nightly rebuild {datetime.now(UTC):%Y-%m-%d}"
-    )
+    assert _git(root, "show", "-s", "--format=%s", sha) in {
+        f"chore(dist): nightly rebuild {date:%Y-%m-%d}"
+        for date in (date_before, date_after)
+    }
     body = _git(root, "show", "-s", "--format=%b", sha)
     assert "https://github.example/mjkoo/omnipack/actions/runs/42" in body
     assert base in body

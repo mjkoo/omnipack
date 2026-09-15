@@ -36,6 +36,10 @@ def workflow(request):
 
 
 def test_publication_permissions_and_runtime_boundaries(workflow):
+    # PyYAML's YAML 1.1 loader parses the unquoted `on` key as True.
+    triggers = workflow.get("on", workflow.get(True, {}))
+    assert triggers["schedule"]
+    assert "workflow_dispatch" in triggers
     assert workflow["permissions"] == {}
     assert workflow["concurrency"]["cancel-in-progress"] is False
     publish = workflow["jobs"]["publish"]
@@ -48,13 +52,18 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
         else {"contents": "write"}
     )
     for job, depth in [(check, 0), (publish, 1)]:
-        assert job["if"] == (
-            "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
-        )
         [checkout] = action_steps(job, "actions/checkout")
         assert checkout["with"]["ref"] == "${{ github.sha }}"
         assert checkout["with"]["persist-credentials"] is False
         assert checkout["with"]["fetch-depth"] == depth
+    for job_name, job in workflow["jobs"].items():
+        assert job["if"] == (
+            "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
+        )
+        if job_name != "publish":
+            assert job.get("permissions", {}) in ({}, {"contents": "read"})
+        for setup in action_steps(job, "astral-sh/setup-uv"):
+            assert setup["with"]["enable-cache"] is False
         for step in job["steps"]:
             if "uses" in step:
                 assert re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", step["uses"])
@@ -71,8 +80,7 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
         word in str(check["steps"])
         for word in ("GH_TOKEN", "GITHUB_TOKEN", "github.token", "secrets.")
     )
-    [setup] = action_steps(check, "astral-sh/setup-uv")
-    assert setup["with"]["enable-cache"] is False
+    assert len(action_steps(check, "astral-sh/setup-uv")) == 1
     assert not action_steps(publish, "astral-sh/setup-uv")
     assert all("uv" not in command(step) for step in publish["steps"])
     assert command_step(check, "uv", "sync", "--locked")

@@ -119,3 +119,7 @@ that no production mutation remained.
 
 
 Full suite after publication consolidation: 738 passed in 38.01 seconds. Isolated CPython 3.12.14: 112 passed in 27.64 seconds. Actual coverage comparison with the previous batch lost zero production lines or arcs, with zero additions. A final source-publisher log assertion also passed its focused test.
+
+### Publication review correction
+
+The first publication review accepted fixture/handoff consolidation but found missing trigger-presence checks and universal job-security coverage. The workflow test now requires scheduled/manual triggers without fixing cron values and applies repository/main guards, action pins, cache restrictions, unsafe-expression checks and nonpublisher permission limits to every job. The preparation success test accepts either UTC date bracketing the call, avoiding midnight timing failure. Thirty affected tests, Ruff formatting/lint, full ty and diff checks passed. Twenty-four unsafe in-memory workflow mutations changed from accepted to rejected; ten safe variants (additional read-only jobs, labels and cron changes) pass. No production or workflow files changed.
