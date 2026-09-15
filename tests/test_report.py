@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import shutil
 from pathlib import Path
 from typing import Any
 
@@ -10,7 +9,12 @@ import pytest
 from omnipack.report import format_reports, write_report
 from omnipack.sources import IngestionReport
 from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
-from tests.test_verify import composition_without_extras
+from tests.verification_support import (
+    write_verification_inputs as copy_inputs,
+)
+from tests.verification_support import (
+    write_verification_report,
+)
 
 
 def build_report(
@@ -27,20 +31,6 @@ def build_report(
     document.update(fields)
     path.write_text(json.dumps(document))
     return document
-
-
-def copy_inputs(root: Path) -> None:
-    for relative in INPUT_PATHS.values():
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if relative.name == "overlay.json":
-            target.write_text("[]")
-        elif relative.name == "composition.json" and relative.exists():
-            target.write_text(composition_without_extras())
-        elif relative.exists():
-            shutil.copyfile(relative, target)
-        elif relative.name == "composition.json":
-            target.write_text('{"schemaVersion":1,"candidates":[],"pins":[]}')
 
 
 def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
@@ -75,22 +65,19 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    capsys: pytest.CaptureFixture[str],
     document: dict[str, object],
 ) -> None:
-    from omnipack.cli import main
-
     path = tmp_path / ".build/report.json"
     path.parent.mkdir()
     path.write_text(json.dumps(document))
-    monkeypatch.chdir(tmp_path)
-    assert main(["report"]) == 1
-    error = capsys.readouterr().err
-    assert (
-        f"unsupported build report schema {document.get('schemaVersion')!r}; "
-        "regenerate with `pack build`"
-    ) in error
+    with pytest.raises(
+        ValueError,
+        match=(
+            rf"unsupported build report schema {document.get('schemaVersion')!r}; "
+            r"regenerate with `pack build`"
+        ),
+    ):
+        format_reports(tmp_path)
 
 
 @pytest.mark.parametrize(
@@ -154,18 +141,14 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
         {"status": "running"},
         {"status": "failed"},
         {"errors": [{"stage": "probe", "code": "oops"}]},
-        {"warnings": []},
-        {"entries": []},
+        {"unexpected": []},
         {"schemaVersion": True},
     ],
 )
 def test_malformed_verification_records_are_rejected(
     tmp_path: Path, mutation: dict
 ) -> None:
-    copy_inputs(tmp_path)
-    report = run_verification(tmp_path)
-    report.update(mutation)
-    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    write_verification_report(tmp_path, **mutation)
     with pytest.raises(ValueError):
         format_reports(tmp_path)
 
@@ -181,14 +164,7 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
 
 
 def test_schema_2_verification_report_requires_regeneration(tmp_path: Path) -> None:
-    copy_inputs(tmp_path)
-    report = run_verification(tmp_path)
-    inputs = dict(report["inputs"])
-    inputs["common_overlay"] = inputs.pop("overlay")
-    inputs["dual_overlay"] = inputs["settings"] = {"state": "missing"}
-    report.update(schemaVersion=2, inputs=inputs)
-    report["verifier"]["version"] = "1.0.0"
-    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    write_verification_report(tmp_path, schemaVersion=2)
     with pytest.raises(
         ValueError,
         match=r"unsupported verification report schema 2; regenerate with `pack verify`",
@@ -213,38 +189,67 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
 
 
 @pytest.mark.parametrize(
-    "mutation",
+    ("mutation", "message"),
     [
-        {"schemaVersion": []},
-        {"schemaVersion": {}},
-        {"schemaVersion": True},
-        {"schemaVersion": None},
-        {"status": []},
-        {"status": {}},
-        {"offlineVerification": []},
-        {"offlineVerification": None},
-        {"offlineVerification": {"status": [], "findings": []}},
-        {"offlineVerification": {"status": "success", "findings": {}}},
-        {"offlineVerification": {"status": "failed", "findings": [{}]}},
-        {"status": "failed", "stage": "rendering", "error": []},
-        {"status": "failed", "stage": {}, "error": "bad"},
-        {"status": "failed", "stage": "rendering"},
-        {"stage": "rendering", "error": "bad"},
-        {"displacements": []},
-        {"changes": {"single": {"added": []}}},
-        {"changes": {"single": {"added": [], "removed": [1]}, "dual": {}}},
-        {"sourceAdmissions": None},
-        {"denylistRemovals": ["removed"]},
-        {"staleExclusions": {}},
-        {"selections": None},
+        ({"schemaVersion": True}, "unsupported build report schema True"),
+        ({"status": []}, "malformed build report: status is required"),
+        (
+            {"status": "failed", "stage": "rendering", "error": []},
+            "malformed build report diagnostics",
+        ),
+        (
+            {"status": "failed", "stage": "rendering"},
+            "malformed build report fields",
+        ),
+        (
+            {"changes": {"single": {"added": []}}},
+            "malformed build package changes",
+        ),
+        (
+            {
+                "changes": {
+                    "single": {"added": [], "removed": [1]},
+                    "dual": {"added": [], "removed": []},
+                }
+            },
+            "malformed build package changes",
+        ),
+        ({"sourceAdmissions": None}, "malformed build report sourceAdmissions"),
+        (
+            {"sourceAdmissions": ["admitted"]},
+            "malformed build report sourceAdmissions",
+        ),
+        ({"offlineVerification": []}, "malformed build offline verification"),
+        (
+            {"offlineVerification": {"status": [], "findings": []}},
+            "malformed build offline verification",
+        ),
+        (
+            {"offlineVerification": {"status": "success", "findings": {}}},
+            "malformed build offline verification",
+        ),
+        (
+            {"offlineVerification": {"status": "failed", "findings": [{}]}},
+            "malformed build offline verification",
+        ),
     ],
 )
+def test_malformed_build_report_records_are_rejected(
+    tmp_path: Path, mutation: dict[str, Any], message: str
+) -> None:
+    build_report(tmp_path, **mutation)
+    with pytest.raises(ValueError, match=message):
+        format_reports(tmp_path)
+
+
 def test_malformed_build_report_is_concise_cli_failure(
-    tmp_path, monkeypatch, capsys, mutation
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     from omnipack.cli import main
 
-    document = build_report(tmp_path, **mutation)
+    document = build_report(tmp_path, sourceAdmissions=None)
     monkeypatch.chdir(tmp_path)
     assert main(["report"]) == 1
     assert "Traceback" not in capsys.readouterr().err

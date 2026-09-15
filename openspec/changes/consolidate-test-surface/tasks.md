@@ -15,13 +15,13 @@
 
 - [x] 3.1 Share real current-configuration composition, replace curation helper/meta-test infrastructure with direct original-selector expectations and pin exemptions, retaining policy correction and independent manifest guards; verify curation tests and a representative displacement counterexample.
 - [x] 3.2 Validate committed catalog once, replace synthetic mutation builder with explicit add/remove noninterference, and remove repeated refresh/static evidence bookkeeping; verify frozen golden, curation and catalog tests.
-- [ ] 3.3 Record survivor ownership and explained execution-coverage changes, run affected tests, and pass independent evidencing review of the batch.
+- [x] 3.3 Record survivor ownership and explained execution-coverage changes, run affected tests, and pass independent evidencing review of the batch.
 
 ## 4. Trim remaining duplication
 
-- [ ] 4.1 Consolidate denial outcomes and mocked pipeline success, transferring unique assertions; remove covered signature/identity/projection layout checks; verify composition, adapter and CLI tests.
-- [ ] 4.2 Reduce transaction failure/permission permutations and share minimal verification inputs; move repeated malformed-report CLI checks to representative reader validation while retaining distinct predicates; verify rollback, verification and report tests.
-- [ ] 4.3 Replace copied color expectations and trim redundant equality/count and HTTP choreography assertions while retaining bounded reads, credentials and retry/error outcomes; verify rendering, catalog and HTTP/APK tests.
+- [x] 4.1 Consolidate denial outcomes and mocked pipeline success, transferring unique assertions; remove covered signature/identity/projection layout checks; verify composition, adapter and CLI tests.
+- [x] 4.2 Reduce transaction failure/permission permutations and share minimal verification inputs; move repeated malformed-report CLI checks to representative reader validation while retaining distinct predicates; verify rollback, verification and report tests.
+- [x] 4.3 Replace copied color expectations and trim redundant equality/count and HTTP choreography assertions while retaining bounded reads, credentials and retry/error outcomes; verify rendering, catalog and HTTP/APK tests.
 - [ ] 4.4 Record survivor ownership and explained execution-coverage changes, run affected tests, and pass independent evidencing review of the batch.
 
 ## 5. Completion checks and reviews

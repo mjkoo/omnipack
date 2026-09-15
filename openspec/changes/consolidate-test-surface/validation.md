@@ -130,10 +130,97 @@ Scoped re-review of 33d3b3d..6cc8b85 approved the workflow correction with no fi
 
 Shared session fixture ingests captured upstreams with actual current extras, policy, catalog, denial and overlay inputs. Baseline-extra expectations use original source/origin/id/normalized URL and explicit single pin exemptions, independent of production policy application. Tracker identity and composed presence use this real pipeline. Manifest package observations still independently check corrections; frozen pre-migration golden exports and input hashes are untouched.
 
-Committed catalog validation is centralized. Catalog add/remove noninterference now uses one explicit higher-source app and two explicit generated entries with empty policy; it does not freeze current catalog membership. Initial small-fixture runs caught missing policy arguments/schema metadata; corrected to use the real parser's empty versioned policy. Current catalog composability remains separately tested. Redundant refresh calls, capture-date/hash-length assertions and helper meta-tests removed.
+Committed catalog validation is centralized. Catalog add/remove noninterference now uses one explicit higher-source app and two explicit generated entries with empty policy; it does not freeze current catalog membership. Current catalog composability remains separately tested. Redundant refresh calls, capture-date/hash-length assertions and helper meta-tests removed.
 
 Survivors: test_committed_configuration_selects_each_baseline_extra_in_single owns configured baseline extras; tracker identity/presence tests own actual tracker selection; test_manifest_evidence_matches_configured_corrections owns manifest mapping; test_frozen_captured_baseline_reproduces_exact_exports_and_family_winners owns historical golden bytes; test_committed_catalog_is_valid_canonical_and_composable owns current catalog shape/canonical bytes; test_catalog_addition_and_removal_leave_single_screen_selection_unchanged owns independent noninterference; source semantics test retains tracker/prerelease/source eligibility and covering candidates.
 
-In-memory current-config probes: denying configured Cinderbox makes direct extra guard fail; removing tracker makes both identity and presence tests fail. No production or frozen fixture edits. Ruff and ty passed before final fixture correction; final full coverage results are in validation.md.
+In-memory current-config probes: denying configured Cinderbox makes direct extra guard fail; removing tracker makes both identity and presence tests fail. No production or frozen fixture edits. Ruff and ty passed after the final fixture correction.
 
 Full suite: 720 passed in 34.82 seconds. Ruff and full ty passed. Actual production execution comparison with the publication batch: zero lost or added lines and arcs.
+
+Independent curation evidencing review of 6cc8b85..a81b845 approved both implementation boxes with no findings.
+
+## Remaining surface
+
+Six modules changed. 147 affected cases passed in 1.97 seconds; Ruff format/lint and full ty passed.
+
+- Transaction restoration keeps staging/replacement failure at the second output, each with existing outputs and absent outputs; README rollback integration, temporary-file cleanup, non-default 0640 mode preservation and normal creation permissions remain. First/last generic failure positions and equivalent permission values are retired.
+- Render category colors use explicit fixed expected values instead of copied hashing code. Upstream default-key parity and settings behavior remain; three implementation-size assertions are removed.
+- Catalog round-trip parsed equality remains; redundant sorted serialization equality is removed.
+- Adapter test retains source candidate data/identity values without function-signature or Python object-identity constraints.
+- Agreeing policy rules now assert corrected candidate ID/family through application, not internal projections layout. Offline family/pin correctness remains in verifier and policy behavior tests.
+- HTTP retry scenarios retain successful package identification, multiple GET attempts and positive backoff without exact HEAD/GET order or sleep values. Fallback reads must be bounded and nonempty; credentials, redirects and error outcomes remain covered.
+
+No production edits or dependencies introduced. Frozen fixture files remain unchanged.
+
+### Verification, denial and CLI outcome ownership
+
+
+| Outcome | Surviving owner |
+|---|---|
+| A package denial removes every eligible carrier across sources and records the separate stale denial | `test_package_denial_outcomes[all-carriers]` |
+| A denied dual-only package falls back to another package in the family | `test_package_denial_outcomes[different-package-fallback]` |
+| Denying all same-package standard and dual builds leaves the family empty and records all three variant removals | `test_package_denial_outcomes[empty-family]` |
+| A denied candidate eligible for neither pack is matched without a removal or stale diagnosis | `test_denial_of_a_build_eligible_for_neither_pack_is_not_stale` |
+| Denylist required fields and forbidden family/variant fields | `test_denylist_entries_hold_exactly_a_package_id_and_reason` |
+| Same-package standard/dual selection remains independent of denial coverage | `test_shared_package_builds_split_by_kind_without_a_pin` and `test_dual_pin_keeps_a_standard_build_over_its_shared_package_dual_build` |
+| A real build writes both variants, exact change records and no public report artifact | expanded `test_build_verify_and_report_sequence_records_no_findings` |
+| Real ingestion, composition, offline-gate failure, transport boundaries, admissions and existing-output diffs | `test_build_runs_the_real_pipeline_with_transport_only_fixtures` |
+| Verification fingerprints the exact serialized input set and persists identical evidence | `test_offline_evidence_fingerprints_exact_inputs` |
+| Interruptions write no new report and preserve existing evidence | `test_interrupted_verification_does_not_replace_evidence[absent/present]` |
+| Verification uses captured bytes and reports later edits as stale | `test_report_fingerprints_the_bytes_captured_before_a_later_edit`, `test_composition_only_change_makes_recorded_evidence_stale` and the README capture test |
+| Build-report schema type, status, diagnostics, field set, package-change shape, record container/item shape and offline status/findings/finding shape | `test_malformed_build_report_records_are_rejected` |
+| Every required build report field | `test_build_report_missing_a_field_is_rejected` |
+| Nested winner and considered-candidate validation | `test_malformed_selection_records_are_rejected` |
+| Bool is rejected where the build and verification schemas require an integer | the `schemaVersion=True` rows in both malformed-record matrices |
+| Verification fingerprint states, digests, timestamps, completion/status consistency, finding shape and exact top-level fields | `test_malformed_verification_records_are_rejected` |
+| Unsupported historical build and verification schemas | reader-boundary schema rejection tests |
+| Malformed reports produce one concise CLI error without replacing bytes | `test_malformed_build_report_is_concise_cli_failure` |
+| The report CLI formats finding location and performs no network or evidence write | `test_findings_display_location_and_field` |
+| Offline CLI verification does not read the network or alter protected inputs, with and without a build report | `test_offline_cli_succeeds_without_network_or_protected_file_changes` |
+
+## Rows retired or combined
+
+- Five overlapping composition denial functions become three named matrix
+  rows. The all-carriers row combines source-carrier removal, fallback selection
+  and stale-denial reporting. The other rows retain the distinct dual-only
+  different-package fallback and empty-family outcomes.
+- The mocked build-success test is removed. Its status, two rendered outputs,
+  exact per-variant change records and absence of `dist/report.json` are asserted
+  by the real build/verify/report sequence.
+- Two interruption functions become one two-row parameter. The absent and
+  present evidence outcomes remain separate collected cases.
+- The 22-row malformed build-report CLI matrix becomes 12 focused reader rows
+  plus one CLI rejection. Retired values exercise the same predicates: list,
+  object and null schema values collapse to the retained bool/int row; a second
+  invalid status type, null offline record, a second invalid diagnostic field,
+  and repeated unexpected-field/list-record containers are removed.
+- The six-field missing-report matrix and four nested selection rows remain
+  unchanged. Container and item validation each retain a representative row.
+- The malformed verification matrix replaces two equivalent unexpected-field
+  rows with one. State, digest, timestamp, completion, status, finding and
+  bool/int predicates remain represented.
+- Historical build schema cases now call the report reader directly. One CLI
+  case owns exception-to-exit-status conversion and concise diagnostics.
+- `test_verify.py` and `test_report.py` no longer copy current repository inputs
+  or derive a composition document from committed configuration.
+  `test_verification_integration.py` no longer rebuilds the same app/settings
+  fixture. `verification_support.py` writes explicit empty serialized packs,
+  empty denial/overlay/policy inputs and a matching empty README catalog. Its
+  report builder is explicit and does not call the verifier writer, composer,
+  renderer or catalog generator.
+
+The six verification/composition/CLI modules collect 162 cases versus 175 before this batch.
+Across the six replacements plus the new 59-line support module, the change has
+204 inserted and 260 deleted lines, a net reduction of 56 lines.
+
+
+The build fixture remains separate: sharing serialized verification inputs would precreate pack outputs and obscure first-build and rollback states. The independent verification helper calls no composer, renderer or catalog generator.
+
+### Remaining-surface checks and execution changes
+
+The six verification/composition/CLI modules passed 162 cases in 2.02 seconds. Final report-only annotation/import cleanup passed 53 cases. Ruff, formatting and ty passed. In-memory counterexamples applied to tracked survivors detected both denial of only the first matching carrier and acceptance of a malformed report container; original implementations passed before each probe. No production files were edited.
+
+Full combined suite: 695 passed in 32.75 seconds. Execution comparison with the previous batch lost six lines and fourteen arcs, all belonging to Python 3.14 lazy annotation evaluation for `ingest_all`'s signature (sources/__init__.py lines 27-33). Their sole previous context was the explicitly retired signature-inspection assertion; function-body coverage is unchanged. One arc was added, catalog.py 105 to 107, from rendering an empty catalog with the minimal verification fixture. No schema/fault behavior branch became unexecuted.
+
+Isolated CPython 3.12.14 publication suite: 112 passed in 23.59 seconds.

@@ -56,57 +56,6 @@ def test_verify_missing_inputs_fails_and_report_displays_failure(
     assert main(["report"]) == 0
 
 
-def test_build_writes_both_variants_and_report(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (tmp_path / "README.md").write_bytes(
-        b"<!-- omnipack:catalog:start -->\n<!-- omnipack:catalog:end -->\n"
-    )
-    (tmp_path / "config").mkdir()
-    for name, value in (
-        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
-        ("sources.json", {}),
-        ("extras.json", []),
-        ("deny.json", []),
-        ("overlay.json", []),
-    ):
-        (tmp_path / "config" / name).write_text(json.dumps(value), encoding="utf-8")
-    app = ComposedApp(
-        "package:app.test",
-        {
-            "id": "app.test",
-            "url": "https://example.test/app",
-            "name": "App",
-            "overrideSource": "HTML",
-            "categories": [],
-        },
-    )
-    composed = CompositionResult(
-        {
-            Variant.SINGLE: [app],
-            Variant.DUAL: [ComposedApp(app.family, dict(app.data))],
-        },
-        CompositionReport(),
-    )
-    monkeypatch.setattr(cli, "_ingest_for_build", lambda root, inputs, report: [])
-    monkeypatch.setattr(cli, "compose", lambda *args, **kwargs: composed)
-    monkeypatch.chdir(tmp_path)
-
-    assert cli.main(["build"]) == 0
-    assert (
-        json.loads((tmp_path / "dist/single-screen.json").read_text())["apps"][0]["id"]
-        == "app.test"
-    )
-    assert (
-        json.loads((tmp_path / "dist/dual-screen.json").read_text())["apps"][0]["id"]
-        == "app.test"
-    )
-    report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["status"] == "success"
-    assert report["changes"]["single"]["added"] == ["app.test"]
-    assert not (tmp_path / "dist/report.json").exists()
-
-
 def test_build_failure_returns_nonzero_and_writes_diagnostic_report(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -240,7 +189,23 @@ def test_build_verify_and_report_sequence_records_no_findings(
 
     assert main(["build"]) == 0
     build_report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert build_report["status"] == "success"
     assert build_report["offlineVerification"] == {"status": "success", "findings": []}
+    for variant in Variant:
+        expected_ids = (
+            ["app.fixture"]
+            if variant is Variant.SINGLE
+            else ["app.fixture", "app.generated", "app.retained"]
+        )
+        rendered = json.loads(
+            (tmp_path / "dist" / f"{variant.value}-screen.json").read_text()
+        )
+        assert [app["id"] for app in rendered["apps"]] == expected_ids
+        assert build_report["changes"][variant.value] == {
+            "added": expected_ids,
+            "removed": [],
+        }
+    assert not (tmp_path / "dist/report.json").exists()
     assert main(["verify"]) == 0
     verification = json.loads((tmp_path / ".build/verify.json").read_text())
     assert (verification["status"], verification["errors"]) == ("success", [])

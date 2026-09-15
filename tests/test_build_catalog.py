@@ -13,13 +13,11 @@ MARKED = b"Guide\r\n<!-- omnipack:catalog:start -->\r\nold\n<!-- omnipack:catalo
 
 
 @pytest.mark.parametrize("existing", [False, True])
-@pytest.mark.parametrize("failure_at", [0, 1, 2])
 @pytest.mark.parametrize("operation", ["stage", "replace"])
 def test_output_transaction_restores_bytes_or_absence_and_cleans_temporary_files(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     existing: bool,
-    failure_at: int,
     operation: str,
 ) -> None:
     paths = [
@@ -42,7 +40,7 @@ def test_output_transaction_restores_bytes_or_absence_and_cleans_temporary_files
         nonlocal calls
         call = calls
         calls += 1
-        if call == failure_at:
+        if call == 1:
             original_write(path, b"partial")
             raise OSError("injected staging failure")
         return original_write(path, content)
@@ -51,7 +49,7 @@ def test_output_transaction_restores_bytes_or_absence_and_cleans_temporary_files
         nonlocal calls
         call = calls
         calls += 1
-        if call == failure_at:
+        if call == 1:
             raise OSError("injected replacement failure")
         return original_replace(path, target)
 
@@ -71,18 +69,15 @@ def test_output_transaction_restores_bytes_or_absence_and_cleans_temporary_files
     }
 
 
-@pytest.mark.parametrize("mode", [0o600, 0o640, 0o644, 0o755])
-def test_output_replacement_preserves_existing_permissions(
-    tmp_path: Path, mode: int
-) -> None:
+def test_output_replacement_preserves_existing_permissions(tmp_path: Path) -> None:
     output = tmp_path / "README.md"
     output.write_bytes(b"previous")
-    output.chmod(mode)
+    output.chmod(0o640)
 
     build._replace_outputs({output: b"new"})
 
     assert output.read_bytes() == b"new"
-    assert S_IMODE(output.stat().st_mode) == mode
+    assert S_IMODE(output.stat().st_mode) == 0o640
 
 
 def test_new_output_uses_normal_file_creation_permissions(tmp_path: Path) -> None:

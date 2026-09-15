@@ -232,9 +232,6 @@ def test_redirect_fixture_matches_the_real_decoder_round_trip() -> None:
 
     assert decoded == fixture["app"]
     assert imported == fixture["app"]
-    assert json.dumps(imported, sort_keys=True) == json.dumps(
-        fixture["app"], sort_keys=True
-    )
 
 
 def test_split_and_replace_preserve_every_byte_outside_marker_interior() -> None:

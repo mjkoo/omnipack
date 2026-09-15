@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import json
 import shutil
 from email.message import Message
@@ -481,13 +480,11 @@ def ingest_over_codm_entry(
     )
 
 
-def test_ingestion_takes_no_policy_and_returns_candidates_unmodified(
+def test_ingestion_preserves_source_candidate_data(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    assert "policy" not in inspect.signature(ingest_all).parameters
     higher = rjny_candidate(frozenset({Variant.SINGLE}))
     result = ingest_over_codm_entry(tmp_path, monkeypatch, [higher])
-    assert result[0] is higher
     assert [(app.id, app.family) for app in result] == [
         ("app.standard", None),
         ("app.generated", None),
