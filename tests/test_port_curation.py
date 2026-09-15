@@ -11,9 +11,7 @@ from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, Variant
-from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
-from omnipack.sources import codm
 from omnipack.sources.extras import fetch
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
@@ -199,74 +197,18 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
     assert expected <= selected
 
 
-@pytest.mark.parametrize(
-    "package_id,url,name,limitation",
-    [
-        (
-            "igawa6.dualsouls",
-            "https://github.com/igawa6/dualsouls",
-            "Hollow Knight: Dual Souls",
-            "second screen",
-        ),
-        (
-            "com.jakobkhansen.silksong",
-            "https://github.com/jakobkhansen/SilksongAndroid",
-            "Hollow Knight: Silksong",
-            "Android 13",
-        ),
-    ],
-)
-def test_hollow_knight_overlay_preserves_dual_identity_and_adds_setup(
-    package_id, url, name, limitation
+def test_hollow_knight_source_composition_preserves_dual_only_catalog(
+    current_configuration: CurrentConfiguration,
 ):
-    original = {
-        "id": package_id,
-        "url": url,
-        "name": "raw project name",
-        "author": "upstream",
-        "overrideSource": "GitHub",
-        "categories": ["Games"],
-        "additionalSettings": {},
-    }
-    app = ComposedApp(f"package:{package_id}", original)
-    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
-    [curated] = apply_overlay([app], overlay)
-    assert curated.data["id"] == package_id
-    assert curated.data["url"] == url
-    assert curated.data["name"] == name
-    assert curated.data["categories"] == ["PC Ports"]
-    assert limitation in curated.data["additionalSettings"]["about"]
-    assert "user-supplied" in curated.data["additionalSettings"]["about"]
-    catalog = generate_catalog(
-        render([]).encode(),
-        render([curated]).encode(),
-        parse_composition_policy(read(ROOT / "config/composition.json")),
-    )
-    assert name.encode() in catalog
-    assert b"PC Ports" in catalog
-
-
-def test_hollow_knight_source_composition_preserves_dual_only_catalog():
-    config = read(ROOT / "config/sources.json")["codm"]
-    candidates = codm.fetch(ROOT, config, [])
     ids = {"igawa6.dualsouls", "com.jakobkhansen.silksong"}
-    selected = [app for app in candidates if app.id in ids]
-    assert {app.id for app in selected} == ids
-    assert all(app.eligibility == frozenset({Variant.DUAL}) for app in selected)
-    policy_document = read(ROOT / "config/composition.json")
-    policy_document["candidates"] = [
-        rule for rule in policy_document["candidates"] if rule["match"]["id"] in ids
-    ]
-    policy_document["pins"] = [
-        rule for rule in policy_document["pins"] if rule["match"]["id"] in ids
-    ]
-    policy = parse_composition_policy(policy_document)
-    overlays = [
-        rule for rule in read(ROOT / "config/overlay.json") if rule["id"] in ids
-    ]
-    result = compose(selected, [], overlays, policy=policy)
-    assert result.apps[Variant.SINGLE] == []
-    assert len(result.apps[Variant.DUAL]) == 2
+    candidates = [app for app in current_configuration.candidates if app.id in ids]
+    assert {app.id for app in candidates} == ids
+    assert all(app.eligibility == frozenset({Variant.DUAL}) for app in candidates)
+    result = current_configuration.result
+    selected = [app for app in result.apps[Variant.DUAL] if app.data["id"] in ids]
+    assert len(selected) == 2
+    assert {app.data["id"] for app in selected} == ids
+    assert not any(app.data["id"] in ids for app in result.apps[Variant.SINGLE])
     expected = {
         "igawa6.dualsouls": (
             "https://github.com/igawa6/dualsouls",
@@ -277,13 +219,17 @@ def test_hollow_knight_source_composition_preserves_dual_only_catalog():
             "Hollow Knight: Silksong",
         ),
     }
-    for app in result.apps[Variant.DUAL]:
+    for app in selected:
         url, name = expected[app.data["id"]]
         # Overlay records find their targets by normalized project URL.
         assert normalize_project_url(app.data["url"]) == normalize_project_url(url)
         assert app.data["name"] == name
         assert app.data["categories"] == ["PC Ports"]
-        if app.data["id"] == "com.jakobkhansen.silksong":
+        about = app.data["additionalSettings"]["about"]
+        assert "user-supplied" in about
+        if app.data["id"] == "igawa6.dualsouls":
+            assert "second screen" in about
+        else:
             assert "Android 13 only" in app.data["additionalSettings"]["about"]
             assert (
                 "Android 15 is unsupported" in app.data["additionalSettings"]["about"]
@@ -291,9 +237,13 @@ def test_hollow_knight_source_composition_preserves_dual_only_catalog():
     catalog = generate_catalog(
         render(result.apps[Variant.SINGLE]).encode(),
         render(result.apps[Variant.DUAL]).encode(),
-        policy,
+        parse_composition_policy(current_configuration.policy),
     ).decode()
+    ports_section = catalog.split("<summary>PC Ports</summary>", 1)[1].split(
+        "</details>", 1
+    )[0]
     for _, name in expected.values():
         rows = [line for line in catalog.splitlines() if name in line]
         assert len(rows) == 1
         assert rows[0].startswith(f"| {name} | - | <a href=")
+        assert rows[0] in ports_section

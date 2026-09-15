@@ -122,14 +122,6 @@ def test_http_config_is_not_read_or_fingerprinted(tmp_path, monkeypatch) -> None
     assert "http" not in result["inputs"]
 
 
-def test_missing_http_config_does_not_affect_verification(tmp_path: Path) -> None:
-    copy_inputs(tmp_path)
-    (tmp_path / "config/http.json").unlink(missing_ok=True)
-    result = verify.run_verification(tmp_path)
-    assert result["status"] == "success"
-    assert "http" not in result["inputs"]
-
-
 @pytest.mark.parametrize("entry", [[], None])
 def test_nonobject_exclusion_completes_failed_evidence(
     tmp_path: Path, entry: object

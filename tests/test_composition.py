@@ -135,25 +135,12 @@ def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
         "source",
         "dual-preferred",
     ]
-
-
-def test_dual_preferred_bboi_reports_the_ordinary_rjny_entry_as_considered() -> None:
-    ordinary = app("ordinary.app", "rjny", family="app:shared")
-    preferred = app(
-        "dual.app",
-        "bboi",
-        family="app:shared",
-        eligibility=frozenset({Variant.DUAL}),
-        origin="bboi-dual-asset",
-    )
-    result = compose([ordinary, preferred], [], [])
     [dual_selection] = [
         item for item in result.report.selections if item.variant is Variant.DUAL
     ]
-    assert dual_selection.reason == "dual-preferred"
-    assert dual_selection.effective_id == "dual.app"
+    assert dual_selection.effective_id == "dual"
     assert dual_selection.considered == (
-        ConsideredCandidate("rjny", "rjny-catalog", "ordinary.app", ordinary.url),
+        ConsideredCandidate("extras", "extras", "ordinary", ordinary.url),
     )
 
 

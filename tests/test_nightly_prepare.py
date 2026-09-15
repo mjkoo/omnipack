@@ -96,26 +96,6 @@ def _now() -> datetime:
     return datetime(2026, 9, 12, 3, 0, tzinfo=UTC)
 
 
-def test_dirty_checkout_fails_before_build(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    (root / "tracked.txt").write_text("dirty\n")
-    process = ScriptedProcess(root)
-
-    outcome = run_prepare(
-        root,
-        _git(root, "rev-parse", "HEAD"),
-        "run",
-        tmp_path / "candidate.bundle",
-        process=process,
-        now=_now,
-    )
-
-    assert outcome.status == "failed"
-    assert outcome.stage == "checkout"
-    assert outcome.summary_line == "checkout"
-    assert process.calls == []
-
-
 def test_head_other_than_github_sha_fails(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     process = ScriptedProcess(root)
@@ -357,20 +337,6 @@ def test_verification_failure_fails_the_run(tmp_path: Path) -> None:
     assert not bundle_path.exists()
 
 
-def test_build_failure_fails_before_any_git_change(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    process = ScriptedProcess(root)
-    _fail_build(process)
-    bundle_path = tmp_path / "candidate.bundle"
-
-    outcome = run_prepare(root, base, "run", bundle_path, process=process, now=_now)
-
-    assert outcome.status == "failed"
-    assert outcome.stage == "build"
-    assert _git(root, "rev-parse", "HEAD") == base
-
-
 def test_allowed_file_changed_during_verification_fails_drift(tmp_path: Path) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
@@ -401,6 +367,7 @@ def test_stale_reports_are_removed_even_when_build_fails(tmp_path: Path) -> None
     assert outcome.stage == "build"
     assert not (root / ".build/report.json").exists()
     assert not (root / ".build/verify.json").exists()
+    assert _git(root, "rev-parse", "HEAD") == base
 
 
 def test_stale_reports_are_removed_even_when_the_checkout_check_fails(
@@ -418,7 +385,10 @@ def test_stale_reports_are_removed_even_when_the_checkout_check_fails(
         root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
     )
 
+    assert outcome.status == "failed"
     assert outcome.stage == "checkout"
+    assert outcome.summary_line == "checkout"
+    assert process.calls == []
     assert not (root / ".build/report.json").exists()
     assert not (root / ".build/verify.json").exists()
 

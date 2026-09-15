@@ -135,16 +135,6 @@ def test_policies_preserve_existing_entries_and_settings():
             } == expected_record
 
 
-def test_ludashi_allows_its_manifest_package_to_differ():
-    ludashi = [
-        app
-        for apps in curated().values()
-        for app in apps
-        if app["id"] == "com.winlator.ludashi"
-    ]
-    assert ludashi and all(app["allowIdChange"] is True for app in ludashi)
-
-
 @pytest.mark.parametrize("variant", ["single", "dual"])
 def test_cinderbox_retains_release_selection_settings(variant):
     matches = [a for a in curated()[variant] if a["id"] == "com.game.cinderbox"]

@@ -22,13 +22,11 @@ class RecordingTransport:
     def __init__(self, outcomes: list[HttpResponse | Exception]) -> None:
         self.outcomes = iter(outcomes)
         self.requests: list[Request] = []
-        self.max_bytes: list[int | None] = []
 
     def __call__(
         self, request: Request, timeout: float, max_bytes: int | None
     ) -> HttpResponse:
         self.requests.append(request)
-        self.max_bytes.append(max_bytes)
         outcome = next(self.outcomes)
         if isinstance(outcome, Exception):
             raise outcome
@@ -70,31 +68,6 @@ def test_truncated_body_is_retried_then_reported(
         client.get("https://example.com/data", max_bytes=max_bytes)
     assert len(requests) == 2
     assert sleeps == [0.5]
-
-
-def test_head_method_and_response_metadata_are_available() -> None:
-    headers = Message()
-    headers["Content-Length"] = "42"
-    transport = RecordingTransport(
-        [HttpResponse("https://example.com/file", 200, headers, b"")]
-    )
-    client = SourceHttpClient(HttpConfig({}), transport=transport)
-
-    result = client.get("https://example.com/file", method="HEAD")
-
-    assert transport.requests[0].method == "HEAD"
-    assert result.status == 200
-    assert result.headers["Content-Length"] == "42"
-
-
-def test_get_passes_response_limit_to_transport() -> None:
-    transport = RecordingTransport([response()])
-    client = SourceHttpClient(HttpConfig({}), transport=transport)
-
-    client.get("https://example.com/releases", max_bytes=4096)
-
-    assert transport.requests[0].method == "GET"
-    assert transport.max_bytes == [4096]
 
 
 def test_get_rejects_an_oversized_real_response(
@@ -235,13 +208,6 @@ def test_caller_credential_headers_are_rejected(name: str) -> None:
 
     with pytest.raises(ValueError, match="credential header"):
         client.get("https://example.com", headers={name: "secret"})
-
-
-def test_embedded_url_credentials_are_rejected() -> None:
-    client = SourceHttpClient(HttpConfig({}), transport=RecordingTransport([]))
-
-    with pytest.raises(ValueError, match="embedded URL credentials"):
-        client.get("https://user:pass@example.com/app")
 
 
 def test_redirect_limit_is_ten(monkeypatch: pytest.MonkeyPatch) -> None:

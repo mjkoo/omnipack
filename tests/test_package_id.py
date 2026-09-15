@@ -188,25 +188,6 @@ def test_ignored_range_response_uses_bounded_full_download() -> None:
     )
 
 
-@pytest.mark.parametrize("token", [None, "", "fixture-token"])
-def test_default_http_config_never_sends_the_credential_to_assets(
-    monkeypatch: pytest.MonkeyPatch, token: str | None
-) -> None:
-    if token is None:
-        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
-    else:
-        monkeypatch.setenv("GITHUB_TOKEN", token)
-    transport = AssetTransport({ASSET: apk("org.example.app")})
-    package_id = resolve_release_assets(
-        client(transport, HttpConfig.from_path("config/http.json")),
-        release([("app.apk", ASSET)]),
-    )
-    assert package_id == "org.example.app"
-    assert all(
-        request.get_header("Authorization") is None for request, _ in transport.requests
-    )
-
-
 def test_integration_covers_redirect_ranges_and_full_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

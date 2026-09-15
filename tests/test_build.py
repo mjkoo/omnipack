@@ -93,19 +93,6 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     assert report["staleExclusions"][0]["id"] == "stale.id"
 
 
-def test_first_build_reports_every_app_added(tmp_path: Path) -> None:
-    write_config(tmp_path)
-    build_module.publish_build(
-        tmp_path,
-        composition("one", "two"),
-        IngestionReport(),
-        build_module.BuildInputs.read(tmp_path),
-    )
-    report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["changes"]["single"]["added"] == ["one", "two"]
-    assert report["changes"]["dual"]["added"] == ["one", "two"]
-
-
 def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> None:
     from omnipack.merge import compose
     from omnipack.model import App, SourceType

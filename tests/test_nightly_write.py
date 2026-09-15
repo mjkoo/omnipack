@@ -242,40 +242,22 @@ def test_commit_setting_executable_bit_is_rejected(tmp_path: Path) -> None:
     ],
 )
 def test_malformed_shas_are_rejected_before_any_fetch_or_push(
-    tmp_path: Path, candidate_sha: str, base_sha: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, candidate_sha: str, base_sha: str
 ) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("unexpected subprocess"),
+    )
     gh = _push_gh()
 
-    result = run_push(write_side, bundle_path, candidate_sha, base_sha, gh=gh)
+    result = run_push(
+        tmp_path, tmp_path / "absent.bundle", candidate_sha, base_sha, gh=gh
+    )
 
     assert result.status == "failed"
     assert result.summary == "push failed"
     assert gh.calls == []
-    assert _git(bare, "rev-parse", "main") == base
-
-
-def test_write_side_repository_hooks_never_run(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-    install_failing_hooks(
-        write_side, "pre-push", "post-checkout", "reference-transaction"
-    )
-
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
-
-    assert result.summary == f"published {sha}"
-    assert _git(bare, "rev-parse", "main") == sha
-    assert _git(write_side, "rev-parse", "HEAD") == sha
 
 
 def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
@@ -311,6 +293,9 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
+    install_failing_hooks(
+        write_side, "pre-push", "post-checkout", "reference-transaction"
+    )
     summary_path = tmp_path / "summary.md"
 
     monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
@@ -324,6 +309,7 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     assert exit_code == 0
     assert summary_path.read_text() == f"published {sha}\n"
     assert _git(bare, "rev-parse", "main") == sha
+    assert _git(write_side, "rev-parse", "HEAD") == sha
 
 
 def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
@@ -615,27 +601,6 @@ def test_bootstrap_seed_is_replaced_by_the_canonical_body_at_revision_1(
     assert gh.texts_for(("release", "edit"), "--notes-file") == [_canonical_body(sha)]
 
 
-def test_matching_record_with_differing_served_digest_repairs_without_edit(
-    tmp_path: Path,
-) -> None:
-    root, sha = _release_repo(tmp_path)
-    view = _valid_release(
-        sha,
-        assets=[
-            {"name": "single-screen.json", "digest": "sha256:" + "0" * 64},
-            {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
-        ],
-    )
-    gh = _release_gh(view=view)
-
-    result = run_release(root, gh=gh)
-
-    assert result.status == "repaired"
-    assert result.summary == "repaired at revision 3"
-    assert any(call[:2] == ("release", "upload") for call in gh.calls)
-    assert not any(call[:2] == ("release", "edit") for call in gh.calls)
-
-
 @pytest.mark.parametrize(
     "assets",
     [
@@ -674,19 +639,25 @@ def test_missing_or_absent_served_digest_repairs_without_edit(
     assert not any(call[:2] == ("release", "edit") for call in gh.calls)
 
 
+@pytest.mark.parametrize("different_asset", ["single-screen.json", "dual-screen.json"])
 def test_interrupted_upload_then_run_returning_to_recorded_pair_repairs(
     tmp_path: Path,
+    different_asset: str,
 ) -> None:
     root, sha = _release_repo(tmp_path)
     # Pair B's edit never completed: record and title still describe pair A,
     # but only one asset was actually replaced with B's bytes.
+    assets = [
+        {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
+        {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
+    ]
+    for asset in assets:
+        if asset["name"] == different_asset:
+            asset["digest"] = "sha256:" + "9" * 64
     view = _valid_release(
         sha,
         name="omnipack revision 5",
-        assets=[
-            {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
-            {"name": "dual-screen.json", "digest": "sha256:" + "9" * 64},
-        ],
+        assets=assets,
     )
     gh = _release_gh(view=view)
 

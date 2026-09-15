@@ -769,6 +769,10 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
     assert "mod.zip" not in (output / "catalog.json").read_text()
     assert app.get("installedVersion") in (None, "")
     assert app.get("latestVersion") in (None, "")
+    report = json.loads((output / "report.json").read_text())
+    assert report["tracking"] == [
+        {"url": PROJECT, "id": "1845280017", "status": "verified"}
+    ]
 
 
 @pytest.mark.parametrize(

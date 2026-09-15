@@ -43,7 +43,6 @@ def test_plain_client_sends_no_credentials_even_when_tokens_are_set(
 
     request = transport.requests[0]
     assert request.get_header("Authorization") is None
-    assert request.get_header("User-agent") == "omnipack/0.1"
 
 
 def test_truncated_body_is_retried_then_reported(

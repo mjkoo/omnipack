@@ -480,17 +480,6 @@ def ingest_over_codm_entry(
     )
 
 
-def test_ingestion_preserves_candidate_ids_and_unassigned_families(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    higher = rjny_candidate(frozenset({Variant.SINGLE}))
-    result = ingest_over_codm_entry(tmp_path, monkeypatch, [higher])
-    assert [(app.id, app.family) for app in result] == [
-        ("app.standard", None),
-        ("app.generated", None),
-    ]
-
-
 @pytest.mark.parametrize(
     ("eligibility", "suppressed"),
     [
@@ -509,7 +498,10 @@ def test_codm_suppression_follows_source_dual_eligibility(
     result = ingest_over_codm_entry(
         tmp_path, monkeypatch, [rjny_candidate(eligibility)]
     )
-    assert ("app.generated" not in {app.id for app in result}) is suppressed
+    expected = [("app.standard", None)]
+    if not suppressed:
+        expected.append(("app.generated", None))
+    assert [(app.id, app.family) for app in result] == expected
 
 
 @pytest.mark.parametrize(
@@ -695,6 +687,15 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
     assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
     assert single.read_text(encoding="utf-8") == "old single"
     assert dual.read_text(encoding="utf-8") == "old dual"
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["status"] == "failed"
+    assert report["stage"] == "ingestion"
+    assert report["offlineVerification"] == {"status": "not-run", "findings": []}
+    assert report["changes"] is None
+    assert "rjny" in report["error"]
+    assert (
+        "failed after" if failure == "unreachable" else "Expecting value"
+    ) in report["error"]
 
 
 @pytest.mark.parametrize(

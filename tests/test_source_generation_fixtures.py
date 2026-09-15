@@ -31,8 +31,8 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
-def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
-    """Ingest the captured upstream catalogs with the frozen or the given extras."""
+def captured_higher() -> list[App]:
+    """Ingest the captured upstream catalogs with the frozen extras."""
     sources = load_json(PRE_MIGRATION / "sources.json")
     release = load_json(CAPTURED / "bboi-release.json")
     standard_url, dual_url = (
@@ -52,17 +52,12 @@ def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
             standard_url: (CAPTURED / "bboi-standard.json").read_text(),
             dual_url: (CAPTURED / "bboi-dual.json").read_text(),
             rjny_url: (CAPTURED / "rjny.json").read_text(),
-            sources["codm"]["readme_url"]: (
-                ROOT / "tests/fixtures/codm-readme.md"
-            ).read_text(),
         }
     )
     return [
         *rjny.fetch(http, sources["rjny"]),
         *bboi.fetch(http, sources["bboi"]),
-        *fetch_extras(
-            load_json(PRE_MIGRATION / "extras.json") if extras is None else extras
-        ),
+        *fetch_extras(load_json(PRE_MIGRATION / "extras.json")),
     ]
 
 
@@ -203,18 +198,17 @@ def _codm_entry(
 def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     tmp_path: Path,
 ) -> None:
-    higher, _ = captured_pipeline()
-    # Rules and pins that name codm2000 candidates, and the overlay records,
-    # target entries this fixture catalog does not carry.
-    policy_document = load_json(PRE_MIGRATION / "composition.json")
-    for key in ("candidates", "pins"):
-        policy_document[key] = [
-            item
-            for item in policy_document[key]
-            if item["match"]["source"] != "codm2000"
+    host_url = "https://github.com/example/host"
+    covering_url = "https://github.com/example/covered"
+    higher = fetch_extras(
+        [
+            {"id": "com.example.host", "url": host_url, "name": "Host"},
+            {"id": "com.example.higher", "url": covering_url, "name": "Covering App"},
         ]
-    policy = parse_composition_policy(policy_document)
-    deny = load_json(PRE_MIGRATION / "deny.json")
+    )
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": [], "pins": []}
+    )
 
     def compose_catalog(
         apps: list[dict[str, Any]], directory: Path
@@ -222,33 +216,22 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
         directory.mkdir()
         (directory / "codm.json").write_text(json.dumps({"apps": apps}))
         generated = codm.fetch(directory, {"catalog": "codm.json"}, higher)
-        return generated, compose([*higher, *generated], deny, [], policy=policy)
+        return generated, compose([*higher, *generated], [], [], policy=policy)
 
     _, baseline = compose_catalog([], tmp_path / "baseline")
     before = {(item.family, item.variant): item for item in baseline.report.selections}
-    # The min() picks only make the fixture deterministic; which host and which
-    # covering candidate are chosen is immaterial.
-    host_family = min(family for family, variant in before if variant is Variant.SINGLE)
-    host = before[(host_family, Variant.SINGLE)]
-    # The host must have a dual selection too, so the all-selections equality
-    # below covers its entry in both packs.
-    assert (host_family, Variant.DUAL) in before
-    covering = min(
-        (
-            app
-            for app in higher
-            if Variant.DUAL in app.eligibility
-            and app.url.startswith("https://github.com/")
-        ),
-        key=lambda app: normalize_project_url(app.url),
-    )
+    assert set(before) == {
+        (f"package:{package_id}", variant)
+        for package_id in ("com.example.host", "com.example.higher")
+        for variant in Variant
+    }
     prerelease_settings = {
         "includePrereleases": True,
         "apkFilterRegEx": r"^Fixture-v[0-9.]+-rc[0-9]+\.apk$",
         "trackOnly": False,
     }
     tracker_about = (
-        f"A mod for the app at {host.url}. Install or update it through that app."
+        f"A mod for the app at {host_url}. Install or update it through that app."
     )
     catalog = [
         _codm_entry(
@@ -271,7 +254,7 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
         ),
         _codm_entry(
             "com.example.covered",
-            covering.url,
+            covering_url,
             "Covered App",
             {"includePrereleases": True, "trackOnly": False},
         ),

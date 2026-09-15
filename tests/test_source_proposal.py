@@ -233,22 +233,6 @@ def test_missing_generated_candidate_fails_naming_it(tmp_path: Path) -> None:
     assert not bundle_path.exists()
 
 
-def test_retained_failures_appear_in_the_summary(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    _write_candidate(
-        root,
-        '{"apps": []}\n',
-        _report(retained_failures=(("https://example.test/proj", "network error"),)),
-    )
-    outcome = run_stage(
-        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
-    )
-
-    assert "https://example.test/proj" in outcome.summary
-    assert "network error" in outcome.summary
-
-
 def test_markdown_bearing_retained_failure_message_is_escaped_in_a_pre_block(
     tmp_path: Path,
 ) -> None:
@@ -271,7 +255,7 @@ def test_markdown_bearing_retained_failure_message_is_escaped_in_a_pre_block(
     assert "<pre>" in outcome.summary
     pre_start = outcome.summary.index("<pre>")
     pre_end = outcome.summary.index("</pre>")
-    assert message in outcome.summary[pre_start:pre_end]
+    assert f"https://example.test/proj: {message}" in outcome.summary[pre_start:pre_end]
     assert message not in outcome.summary[:pre_start]
 
 
@@ -302,19 +286,9 @@ def test_stage_cli_reads_env_and_exit_code_and_writes_outputs(
     _write_candidate(
         root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
     )
-    runner_temp = tmp_path / "runner-temp"
-    runner_temp.mkdir()
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
     output_path = tmp_path / "output.txt"
     summary_path = tmp_path / "summary.md"
-
-    monkeypatch.chdir(root)
-    monkeypatch.setenv("GITHUB_SHA", base)
-    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp))
-    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
-    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
-    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.example")
-    monkeypatch.setenv("GITHUB_REPOSITORY", "mjkoo/omnipack")
-    monkeypatch.setenv("GITHUB_RUN_ID", "42")
     install_failing_hooks(
         root, "pre-commit", "commit-msg", "post-commit", "post-checkout"
     )
@@ -563,6 +537,7 @@ def test_changed_with_no_open_pr_creates_one_from_the_body_file(
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
     bare = _bare_from(seed, tmp_path)
     write_side = _write_side(tmp_path, bare, base)
+    install_failing_hooks(write_side, "pre-push", "reference-transaction")
     gh = _proposal_gh(pr_list=[])
 
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
@@ -726,19 +701,6 @@ def test_two_selected_same_repository_prs_fail_before_closing_either(
     assert result.status == "failed"
     assert result.summary == "publish failed: more than one source-update PR"
     assert not any(call[:2] == ("pr", "close") for call in gh.calls)
-
-
-def test_repository_hooks_never_run_when_publishing(tmp_path: Path) -> None:
-    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
-    install_failing_hooks(write_side, "pre-push", "reference-transaction")
-    gh = _proposal_gh(pr_list=[])
-
-    result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
-
-    assert result.status == "published"
-    assert _bare_branch_sha(bare) == sha
 
 
 def test_publish_propagates_handoff_rejection_before_remote_write(
@@ -920,17 +882,20 @@ def test_remote_main_other_than_base_fails_on_both_paths(tmp_path: Path) -> None
     ],
 )
 def test_malformed_env_values_are_rejected_before_any_fetch_or_write(
-    tmp_path: Path, changed: str, candidate_sha: str, base_sha: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    changed: str,
+    candidate_sha: str,
+    base_sha: str,
 ) -> None:
-    seed = _repo(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    write_side = _write_side(tmp_path, bare, base)
+    monkeypatch.setattr(
+        subprocess,
+        "run",
+        lambda *_args, **_kwargs: pytest.fail("unexpected subprocess"),
+    )
     gh = _proposal_gh(pr_list=[])
 
-    result = run_publish(
-        write_side, changed, candidate_sha, base_sha, None, None, gh=gh
-    )
+    result = run_publish(tmp_path, changed, candidate_sha, base_sha, None, None, gh=gh)
 
     assert result.status == "failed"
     assert result.summary == "publish failed"
