@@ -58,6 +58,32 @@ Reduce transaction faults to second-output staging and replacement failures, wit
 
 ## Risks / Trade-offs
 
+### Approved follow-up audit
+
+Delete the unused catalog support module. Reduce the nine-case build integration
+product to three successful prior-output states and two validation failures,
+covering absent and existing outputs. Keep all three stage-failure diagnostics;
+rendering and report writing each need one prior-output state, while publication
+keeps both. Retain bool/int and zero/negative boundaries while trimming equivalent
+release identifiers, retired-field values, nonobject exclusions, malformed source
+values and generic unknown-field rows already covered by explicit retired names.
+
+Move Cinderbox presence and rendered settings checks onto current composition.
+Remove its hand-built insertion from the historical overlay fixture; keep exact
+historical settings and unrelated-field preservation, and independent manifest
+correction evidence. Combine retained-failure Markdown/HTML escaping in the
+summary-and-body scenario, preserving pre-block containment, quotes and body
+handoff. Consolidate nightly allowlist, push rejection and stage symlink setup
+without retiring distinct path/mode outcomes or introducing a scenario framework.
+
+Remove the repeated identical generation failure before recovery, transfer the
+undeclared GitLab inference row to the existing URL table, and remove frozen
+fixture counts and repeated file-content checks already covered by exact snapshots.
+Drop the assertion about the helper-created empty catalog interior. Retain the
+compact render-permutation loop: reducing its iterations does not simplify its
+two-line expression. Confirm substantive assertion transfers with temporary
+counterexamples and explain any lost production line or arc execution.
+
 - Execution overlap can hide lost assertions. Record a surviving test for each retained outcome and use temporary counterexamples for substantive replacements.
 - Representative fault/schema cases intentionally reduce permutation coverage. Enumerate any lost production execution and attribute it to an explicitly retired low-risk permutation; unexplained losses block completion.
 - Helper abstraction can obscure scenarios. Keep helpers small, data explicit, imports isolated, and count support code in final totals.

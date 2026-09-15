@@ -9,6 +9,7 @@ The suite contains 12,613 Python lines against 6,145 application and script line
 - Consolidate publication fixtures and structured workflow contracts, keeping distinct write and failure outcomes.
 - Simplify curation and catalog fixtures and remove low-risk validation and filesystem permutations.
 - Record surviving behavioral ownership, counterexample probes, and explained execution-coverage changes.
+- Follow up with unused-helper removal, representative integration/schema cases, real-composition Cinderbox checks and smaller publication fixtures while preserving distinct failure outcomes.
 
 ## Capabilities
 
