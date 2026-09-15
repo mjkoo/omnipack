@@ -480,7 +480,7 @@ def ingest_over_codm_entry(
     )
 
 
-def test_ingestion_preserves_source_candidate_data(
+def test_ingestion_preserves_candidate_ids_and_unassigned_families(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     higher = rjny_candidate(frozenset({Variant.SINGLE}))

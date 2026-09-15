@@ -224,3 +224,15 @@ The six verification/composition/CLI modules passed 162 cases in 2.02 seconds. F
 Full combined suite: 695 passed in 32.75 seconds. Execution comparison with the previous batch lost six lines and fourteen arcs, all belonging to Python 3.14 lazy annotation evaluation for `ingest_all`'s signature (sources/__init__.py lines 27-33). Their sole previous context was the explicitly retired signature-inspection assertion; function-body coverage is unchanged. One arc was added, catalog.py 105 to 107, from rendering an empty catalog with the minimal verification fixture. No schema/fault behavior branch became unexecuted.
 
 Isolated CPython 3.12.14 publication suite: 112 passed in 23.59 seconds.
+
+## Completion checks
+
+Before whole-diff review, the suite contains 695 cases across 382 test functions and 35 test/support Python files. Test/support physical lines fall from 12,613 to 11,204, a reduction of 1,409 (11.2%). Production Python remains 6,145 lines; the ratio falls from 2.05:1 to 1.82:1. Support modules are included. Case count is not used as a correctness metric or a reduction target.
+
+The complete 695-case run and isolated 112-case Python 3.12 run passed. Commit hooks passed Ruff formatting/lint, ty, conventional commit validation and text checks. Locked dependency validation, actionlint, zizmor, offline link checking, Nix formatting, native flake checks and `pack verify` passed. Zizmor reported its normal offline-audit limitation; native flake checking omitted incompatible systems. These checks were run during this change and their inputs did not change afterward.
+
+Comparison with main confirms no changes to production source, scripts, workflows, configuration, frozen fixtures/evidence, generated packs, README, dependency files or public schemas. Only test/support code and this change's planning/validation artifacts differ. No device or external publication operation was performed.
+
+### Final-batch review correction
+
+The group review found a lost unique assertion in the empty-family denial case. It now checks the exact package/variant multiset: two dual removals and one single removal for shared.pkg. The ingestion test name now accurately describes preserved IDs and unassigned families. Four focused cases, Ruff formatting/lint and ty passed. Credential/redirect ownership remains in the unchanged source HTTP authorization, redirect and APK download tests; these passed in the full suite.

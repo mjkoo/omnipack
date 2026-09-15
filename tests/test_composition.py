@@ -330,6 +330,14 @@ def test_package_denial_outcomes(outcome: str) -> None:
     assert len(result.report.removals) == expected_removals
     assert {item.package_id for item in result.report.removals} == {"shared.pkg"}
     assert result.report.stale_exclusions == expected_stale
+    if outcome == "empty-family":
+        assert sorted(
+            (item.package_id, item.variant.value) for item in result.report.removals
+        ) == [
+            ("shared.pkg", "dual"),
+            ("shared.pkg", "dual"),
+            ("shared.pkg", "single"),
+        ]
 
 
 def test_dual_pin_keeps_a_standard_build_over_its_shared_package_dual_build() -> None:
