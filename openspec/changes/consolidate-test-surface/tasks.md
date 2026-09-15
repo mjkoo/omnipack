@@ -3,12 +3,12 @@
 - [x] 1.1 Record a clean branch baseline, counts and production execution coverage; verify the full suite passes.
 - [x] 1.2 Replace tracker rendering with real composition and identity checks, fix APK timestamp/oracle handling, and remove unrelated HEAD checks; verify affected tests and tracker/ZIP counterexamples.
 - [x] 1.3 Remove the 17 functions listed in design.md with all four assertion transfers and unused-helper cleanup; verify full tests and no lost baseline executed production lines/arcs.
-- [ ] 1.4 Record surviving assertion ownership and pass an independent evidencing review of this batch's commit range.
+- [x] 1.4 Record surviving assertion ownership and pass an independent evidencing review of this batch's commit range.
 
 ## 2. Consolidate publication and workflows
 
-- [ ] 2.1 Share isolated stdlib/pytest Git and fake GitHub fixtures, combine preparation success cases, centralize shared handoff rejection with caller propagation, retain caller-specific allowlists/modes, and consolidate release fixtures/equivalent failure setup; verify publication tests and a rejected-handoff counterexample.
-- [ ] 2.2 Replace incidental workflow literals with shared structured security/publication contracts and simplify runtime AST style checks as designed; verify workflow tests, equal/unequal SHA guard execution and a broken-guard counterexample.
+- [x] 2.1 Share isolated stdlib/pytest Git and fake GitHub fixtures, combine preparation success cases, centralize shared handoff rejection with caller propagation, retain caller-specific allowlists/modes, and consolidate release fixtures/equivalent failure setup; verify publication tests and a rejected-handoff counterexample.
+- [x] 2.2 Replace incidental workflow literals with shared structured security/publication contracts and simplify runtime AST style checks as designed; verify workflow tests, equal/unequal SHA guard execution and a broken-guard counterexample.
 - [ ] 2.3 Record survivor ownership and explained execution-coverage changes, run affected tests including isolated Python 3.12, and pass independent evidencing review of the batch.
 
 ## 3. Simplify curation and catalog fixtures

@@ -8,7 +8,6 @@ project's own interpreter.
 from __future__ import annotations
 
 import json
-import os
 import subprocess
 from pathlib import Path
 
@@ -20,7 +19,24 @@ from scripts.nightly_write import (
     run_push,
     run_release,
 )
-from scripts.workflow_support import CommandResult
+from scripts.workflow_support import HandoffRejected
+from tests.publication_support import (
+    OK,
+    CommandResult,
+    FakeGh,
+    bare_remote,
+    bundle,
+    failure,
+    install_failing_hooks,
+    isolated_git_identity,
+    repository,
+    shallow_checkout,
+)
+from tests.publication_support import (
+    git as _git,
+)
+
+pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
 
 ALLOWED_PATHS = (
     "dist/single-screen.json",
@@ -29,63 +45,20 @@ ALLOWED_PATHS = (
 )
 
 
-@pytest.fixture(autouse=True)
-def _isolated_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for name in list(os.environ):
-        if name.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_")):
-            monkeypatch.delenv(name)
-
-
-class StubGh:
-    def __init__(self) -> None:
-        self.calls: list[tuple[str, ...]] = []
-        self.auth_ok = True
-
-    def run(self, args):
-        self.calls.append(tuple(args))
-        return CommandResult(0 if self.auth_ok else 1, "", "")
-
-
-def _install_failing_hooks(root: Path, *names: str) -> None:
-    """Hooks that would fail any git command that ran them."""
-    hooks = root / ".git" / "hooks"
-    hooks.mkdir(parents=True, exist_ok=True)
-    for name in names:
-        hook = hooks / name
-        hook.write_text("#!/bin/sh\necho 'a repository hook ran' >&2\nexit 1\n")
-        hook.chmod(0o755)
-
-
-def _git(root: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True
-    ).stdout.strip()
+def _push_gh(*, auth_ok: bool = True) -> FakeGh:
+    return FakeGh({("auth", "setup-git"): OK if auth_ok else failure()})
 
 
 def _seed(tmp_path: Path, name: str = "seed") -> Path:
-    root = tmp_path / name
-    root.mkdir()
-    _git(root, "init", "-q", "--initial-branch=main")
-    _git(root, "config", "user.name", "Test")
-    _git(root, "config", "user.email", "test@example.invalid")
-    for relative in ALLOWED_PATHS:
-        path = root / relative
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(f"base:{relative}\n")
-    _git(root, "add", ".")
-    _git(root, "commit", "-qm", "base")
-    return root
+    return repository(
+        tmp_path,
+        {relative: f"base:{relative}\n" for relative in ALLOWED_PATHS},
+        name=name,
+    )
 
 
 def _bare_from(seed: Path, tmp_path: Path, name: str = "remote.git") -> Path:
-    bare = tmp_path / name
-    subprocess.run(["git", "clone", "-q", "--bare", str(seed), str(bare)], check=True)
-    return bare
+    return bare_remote(seed, tmp_path, name=name)
 
 
 def _bot_commit(root: Path, changes: dict[str, str | None]) -> str:
@@ -110,22 +83,13 @@ def _bot_commit(root: Path, changes: dict[str, str | None]) -> str:
 
 
 def _bundle(seed: Path, base: str, path: Path) -> Path:
-    path.parent.mkdir(parents=True, exist_ok=True)
-    _git(seed, "bundle", "create", str(path), f"{base}..HEAD")
-    return path
+    return bundle(seed, base, path)
 
 
 def _write_side(
     tmp_path: Path, bare: Path, base: str, name: str = "write-side"
 ) -> Path:
-    root = tmp_path / name
-    root.mkdir()
-    _git(root, "init", "-q")
-    _git(root, "remote", "add", "origin", f"file://{bare}")
-    _git(root, "fetch", "-q", "--depth", "1", "origin", base)
-    _git(root, "checkout", "-q", "--detach", "FETCH_HEAD")
-    assert _git(root, "rev-parse", "--is-shallow-repository") == "true"
-    return root
+    return shallow_checkout(tmp_path, bare, base, name=name)
 
 
 def test_advanced_main_fails_before_push_and_reports_main_advanced(
@@ -149,45 +113,33 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
     _git(other, "push", "-q", "origin", "HEAD:main")
     advanced = _git(other, "rev-parse", "HEAD")
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}: main advanced"
     assert _git(bare, "rev-parse", "main") == advanced
 
 
-def test_bundle_with_wrong_parent_is_rejected_before_push(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    # Two allowed-path commits on base, bundled from base: the bundle verifies
-    # against the write side's base checkout and the diff touches only
-    # allowed files, so only the parent check can reject it.
-    _bot_commit(seed, {ALLOWED_PATHS[1]: "intermediate\n"})
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
+def test_push_propagates_handoff_rejection_before_remote_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    candidate = "a" * 40
+    gh = _push_gh()
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    def reject(*_args: object) -> None:
+        raise HandoffRejected("fixture rejection")
 
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
-
-
-def test_bundle_head_not_matching_candidate_is_rejected(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-
-    result = run_push(write_side, bundle_path, "a" * 40, base, gh=StubGh())
+    monkeypatch.setattr(write_module, "verify_handoff", reject)
+    result = run_push(
+        tmp_path, tmp_path / "candidate.bundle", candidate, "b" * 40, gh=gh
+    )
 
     assert result.status == "failed"
-    assert result.summary == f"push failed for {'a' * 40}"
-    assert _git(bare, "rev-parse", "main") == base
+    assert result.summary == f"push failed for {candidate}"
+    assert "hand-off rejected: fixture rejection" in capsys.readouterr().err
+    assert gh.calls == []
 
 
 def test_commit_touching_disallowed_path_is_rejected(tmp_path: Path) -> None:
@@ -198,7 +150,7 @@ def test_commit_touching_disallowed_path_is_rejected(tmp_path: Path) -> None:
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}"
@@ -214,7 +166,7 @@ def test_commit_changing_nothing_is_rejected(tmp_path: Path) -> None:
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}"
@@ -245,7 +197,7 @@ def test_commit_replacing_allowed_file_with_symlink_is_rejected(
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}"
@@ -273,7 +225,7 @@ def test_commit_setting_executable_bit_is_rejected(tmp_path: Path) -> None:
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}"
@@ -298,7 +250,7 @@ def test_malformed_shas_are_rejected_before_any_fetch_or_push(
     _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
-    gh = StubGh()
+    gh = _push_gh()
 
     result = run_push(write_side, bundle_path, candidate_sha, base_sha, gh=gh)
 
@@ -315,11 +267,11 @@ def test_write_side_repository_hooks_never_run(tmp_path: Path) -> None:
     sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
-    _install_failing_hooks(
+    install_failing_hooks(
         write_side, "pre-push", "post-checkout", "reference-transaction"
     )
 
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.summary == f"published {sha}"
     assert _git(bare, "rev-parse", "main") == sha
@@ -336,8 +288,7 @@ def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
     bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = _write_side(tmp_path, bare, base)
     summary_path = tmp_path / "summary.md"
-    gh = StubGh()
-    gh.auth_ok = False
+    gh = _push_gh(auth_ok=False)
     monkeypatch.setattr(write_module, "SubprocessGhRunner", lambda: gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
@@ -351,23 +302,6 @@ def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
     assert _git(bare, "rev-parse", "main") == base
 
 
-def test_dirty_tree_before_push_fails_without_pushing(tmp_path: Path) -> None:
-    seed = _seed(tmp_path)
-    base = _git(seed, "rev-parse", "HEAD")
-    bare = _bare_from(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
-    bundle_path = _bundle(seed, base, tmp_path / "candidate.bundle")
-    write_side = _write_side(tmp_path, bare, base)
-    (write_side / "stray.txt").write_text("unexpected\n")
-
-    result = run_push(write_side, bundle_path, sha, base, gh=StubGh())
-
-    assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}"
-    assert _git(bare, "rev-parse", "main") == base
-    assert _git(write_side, "rev-parse", "HEAD") == base
-
-
 def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -379,7 +313,7 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     write_side = _write_side(tmp_path, bare, base)
     summary_path = tmp_path / "summary.md"
 
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", StubGh)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
@@ -409,7 +343,7 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
     )
     pre_receive.chmod(0o755)
     summary_path = tmp_path / "summary.md"
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", StubGh)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
@@ -440,7 +374,7 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
     post_receive.write_text(f"#!/bin/sh\ntouch '{write_side}/.git/index.lock'\n")
     post_receive.chmod(0o755)
     summary_path = tmp_path / "summary.md"
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", StubGh)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
@@ -458,19 +392,16 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
 
 
 def _release_repo(tmp_path: Path) -> tuple[Path, str]:
-    root = tmp_path / "release-repo"
-    root.mkdir()
-    _git(root, "init", "-q", "--initial-branch=main")
-    _git(root, "config", "user.name", "Test")
-    _git(root, "config", "user.email", "test@example.invalid")
-    (root / "dist").mkdir()
-    (root / "dist/single-screen.json").write_text('{"apps": []}')
-    (root / "dist/dual-screen.json").write_text('{"apps": [1]}')
-    _git(root, "add", ".")
-    _git(root, "commit", "-qm", "base")
+    root = repository(
+        tmp_path,
+        {
+            "dist/single-screen.json": '{"apps": []}',
+            "dist/dual-screen.json": '{"apps": [1]}',
+        },
+        name="release-repo",
+    )
     sha = _git(root, "rev-parse", "HEAD")
-    bare = tmp_path / "release-remote.git"
-    subprocess.run(["git", "clone", "-q", "--bare", str(root), str(bare)], check=True)
+    bare = bare_remote(root, tmp_path, name="release-remote.git")
     _git(root, "remote", "add", "origin", str(bare))
     _git(root, "push", "-q", "origin", "main")
     return root, sha
@@ -523,53 +454,10 @@ def _body(*, marker: bool = True, record: str | None = None) -> str:
     return "\n".join(lines)
 
 
-class ScriptedGh:
-    def __init__(
-        self,
-        *,
-        view: dict | None,
-        view_ok: bool = True,
-        view_stderr: str = "release not found",
-        upload_ok: bool = True,
-        edit_ok: bool = True,
-        auth_ok: bool = True,
-    ) -> None:
-        self.view = view
-        self.view_ok = view_ok
-        self.view_stderr = view_stderr
-        self.upload_ok = upload_ok
-        self.edit_ok = edit_ok
-        self.auth_ok = auth_ok
-        self.calls: list[tuple[str, ...]] = []
-        self.edited_bodies: list[str] = []
-
-    def run(self, args):
-        args = tuple(args)
-        self.calls.append(args)
-        if args[:2] == ("auth", "setup-git"):
-            return CommandResult(0 if self.auth_ok else 1, "", "")
-        if args[:2] == ("release", "view"):
-            if not self.view_ok:
-                return CommandResult(1, "", self.view_stderr)
-            return CommandResult(0, json.dumps(self.view), "")
-        if args[:2] == ("release", "upload"):
-            return CommandResult(0 if self.upload_ok else 1, "", "")
-        if args[:2] == ("release", "edit"):
-            notes_path = Path(args[args.index("--notes-file") + 1])
-            self.edited_bodies.append(notes_path.read_text())
-            return CommandResult(0 if self.edit_ok else 1, "", "")
-        raise AssertionError(f"unexpected gh command {args}")
-
-
-def test_comparison_ignores_the_recorded_commit_and_uses_digests_only(
-    tmp_path: Path,
-) -> None:
-    root, _sha = _release_repo(tmp_path)
-    view = {
+def _valid_release(commit: str, **overrides: object) -> dict[str, object]:
+    view: dict[str, object] = {
         "name": "omnipack revision 3",
-        # The recorded commit is a stale, unrelated SHA; only the digests
-        # must decide "unchanged", never this field.
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, "9" * 40)),
+        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, commit)),
         "assets": [
             {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
             {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
@@ -578,7 +466,41 @@ def test_comparison_ignores_the_recorded_commit_and_uses_digests_only(
         "isPrerelease": True,
         "isImmutable": False,
     }
-    gh = ScriptedGh(view=view)
+    view.update(overrides)
+    return view
+
+
+def _release_gh(
+    *,
+    view: dict | None,
+    view_ok: bool = True,
+    view_stderr: str = "release not found",
+    upload_ok: bool = True,
+    edit_ok: bool = True,
+    auth_ok: bool = True,
+) -> FakeGh:
+    return FakeGh(
+        {
+            ("auth", "setup-git"): OK if auth_ok else failure(),
+            ("release", "view"): (
+                CommandResult(0, json.dumps(view), "")
+                if view_ok
+                else failure(view_stderr)
+            ),
+            ("release", "upload"): OK if upload_ok else failure(),
+            ("release", "edit"): OK if edit_ok else failure(),
+        }
+    )
+
+
+def test_comparison_ignores_the_recorded_commit_and_uses_digests_only(
+    tmp_path: Path,
+) -> None:
+    root, _sha = _release_repo(tmp_path)
+    # The recorded commit is stale and unrelated; only the digests decide
+    # "unchanged", never this field.
+    view = _valid_release("9" * 40)
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -591,18 +513,8 @@ def test_comparison_ignores_the_recorded_commit_and_uses_digests_only(
 def test_duplicate_record_lines_count_as_no_valid_record(tmp_path: Path) -> None:
     root, sha = _release_repo(tmp_path)
     record = _record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=record) + f"\n{record}\n",
-        "assets": [
-            {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
-            {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
-        ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    view = _valid_release(sha, body=_body(record=record) + f"\n{record}\n")
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -617,18 +529,8 @@ def test_malformed_record_line_counts_as_no_valid_record(tmp_path: Path) -> None
         f"<!-- omnipack:digests single-screen.json={SINGLE_DIGEST[:-1]} "
         f"dual-screen.json={DUAL_DIGEST} commit={sha} -->"
     )
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=malformed),
-        "assets": [
-            {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
-            {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
-        ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    view = _valid_release(sha, body=_body(record=malformed))
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -638,19 +540,15 @@ def test_malformed_record_line_counts_as_no_valid_record(tmp_path: Path) -> None
 
 def test_unexpected_extra_assets_are_ignored(tmp_path: Path) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": [
+    view = _valid_release(
+        sha,
+        assets=[
             {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
             {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
             {"name": "extra-file.txt", "digest": "sha256:" + "7" * 64},
         ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    )
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -662,15 +560,12 @@ def test_differing_record_uploads_and_edits_with_canonical_body(
     tmp_path: Path,
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
-        "assets": [],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    view = _valid_release(
+        sha,
+        body=_body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
+        assets=[],
+    )
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -689,7 +584,7 @@ def test_differing_record_uploads_and_edits_with_canonical_body(
         str(root / "dist/dual-screen.json"),
         "--clobber",
     )
-    assert gh.edited_bodies == [_canonical_body(sha)]
+    assert gh.texts_for(("release", "edit"), "--notes-file") == [_canonical_body(sha)]
     assert "omnipack revision 4" in edit_calls[0]
 
 
@@ -697,15 +592,10 @@ def test_bootstrap_seed_is_replaced_by_the_canonical_body_at_revision_1(
     tmp_path: Path,
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 0",
-        "body": BOOTSTRAP_BODY,
-        "assets": [],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    view = _valid_release(
+        sha, name="omnipack revision 0", body=BOOTSTRAP_BODY, assets=[]
+    )
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -722,25 +612,21 @@ def test_bootstrap_seed_is_replaced_by_the_canonical_body_at_revision_1(
             "--clobber",
         )
     ]
-    assert gh.edited_bodies == [_canonical_body(sha)]
+    assert gh.texts_for(("release", "edit"), "--notes-file") == [_canonical_body(sha)]
 
 
 def test_matching_record_with_differing_served_digest_repairs_without_edit(
     tmp_path: Path,
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": [
+    view = _valid_release(
+        sha,
+        assets=[
             {"name": "single-screen.json", "digest": "sha256:" + "0" * 64},
             {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
         ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    )
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -768,15 +654,8 @@ def test_missing_or_absent_served_digest_repairs_without_edit(
     tmp_path: Path, assets: list[dict]
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": assets,
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    view = _valid_release(sha, assets=assets)
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -801,18 +680,15 @@ def test_interrupted_upload_then_run_returning_to_recorded_pair_repairs(
     root, sha = _release_repo(tmp_path)
     # Pair B's edit never completed: record and title still describe pair A,
     # but only one asset was actually replaced with B's bytes.
-    view = {
-        "name": "omnipack revision 5",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": [
+    view = _valid_release(
+        sha,
+        name="omnipack revision 5",
+        assets=[
             {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
             {"name": "dual-screen.json", "digest": "sha256:" + "9" * 64},
         ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view)
+    )
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -832,40 +708,22 @@ def test_interrupted_upload_then_run_returning_to_recorded_pair_repairs(
 
 
 @pytest.mark.parametrize(
-    ("view", "view_ok", "reason_substring"),
+    ("overrides", "view_ok", "reason_substring"),
     [
         (None, False, "missing"),
-        (
-            {
-                "name": "omnipack revision 1",
-                "body": "no marker here",
-                "assets": [],
-                "isDraft": False,
-                "isPrerelease": True,
-                "isImmutable": False,
-            },
-            True,
-            "marker",
-        ),
-        (
-            {
-                "name": "not a revision",
-                "body": _body(),
-                "assets": [],
-                "isDraft": False,
-                "isPrerelease": True,
-                "isImmutable": False,
-            },
-            True,
-            "title",
-        ),
+        ({"name": "omnipack revision 1", "body": "no marker here"}, True, "marker"),
+        ({"name": "not a revision"}, True, "title"),
     ],
 )
 def test_missing_release_marker_or_title_fails_with_bootstrap_guidance(
-    tmp_path: Path, view: dict | None, view_ok: bool, reason_substring: str
+    tmp_path: Path,
+    overrides: dict[str, object] | None,
+    view_ok: bool,
+    reason_substring: str,
 ) -> None:
-    root, _sha = _release_repo(tmp_path)
-    gh = ScriptedGh(view=view, view_ok=view_ok)
+    root, sha = _release_repo(tmp_path)
+    view = None if overrides is None else _valid_release(sha, **overrides)
+    gh = _release_gh(view=view, view_ok=view_ok)
 
     result = run_release(root, gh=gh)
 
@@ -889,15 +747,14 @@ def test_draft_non_prerelease_or_immutable_fails_with_bootstrap_guidance(
     tmp_path: Path, is_draft: bool, is_prerelease: bool, is_immutable: bool, reason: str
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": [],
-        "isDraft": is_draft,
-        "isPrerelease": is_prerelease,
-        "isImmutable": is_immutable,
-    }
-    gh = ScriptedGh(view=view)
+    view = _valid_release(
+        sha,
+        assets=[],
+        isDraft=is_draft,
+        isPrerelease=is_prerelease,
+        isImmutable=is_immutable,
+    )
+    gh = _release_gh(view=view)
 
     result = run_release(root, gh=gh)
 
@@ -916,7 +773,7 @@ def test_symlinked_pack_file_fails_before_any_release_call(tmp_path: Path) -> No
     pack = root / "dist/single-screen.json"
     pack.unlink()
     pack.symlink_to(runner_file)
-    gh = ScriptedGh(view=None)
+    gh = _release_gh(view=None)
 
     result = run_release(root, gh=gh)
 
@@ -940,16 +797,13 @@ def test_bootstrap_guidance_command_matches_the_publishing_guide() -> None:
 def test_upload_failure_prevents_edit_without_bootstrap_guidance(
     tmp_path: Path,
 ) -> None:
-    root, _sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
-        "assets": [],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
-    gh = ScriptedGh(view=view, upload_ok=False)
+    root, sha = _release_repo(tmp_path)
+    view = _valid_release(
+        sha,
+        body=_body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
+        assets=[],
+    )
+    gh = _release_gh(view=view, upload_ok=False)
 
     result = run_release(root, gh=gh)
 
@@ -976,7 +830,7 @@ def test_remote_main_other_than_head_fails_without_bootstrap_guidance(
     _git(other, "commit", "-qm", "advance")
     _git(other, "push", "-q", "origin", "HEAD:main")
 
-    gh = ScriptedGh(view=None, view_ok=False)
+    gh = _release_gh(view=None, view_ok=False)
 
     result = run_release(root, gh=gh)
 
@@ -995,7 +849,7 @@ def test_head_read_failure_fails_with_release_failed_reason(
     (root / "dist").mkdir()
     (root / "dist/single-screen.json").write_text('{"apps": []}')
     (root / "dist/dual-screen.json").write_text('{"apps": [1]}')
-    gh = ScriptedGh(view=None, view_ok=False)
+    gh = _release_gh(view=None, view_ok=False)
 
     result = run_release(root, gh=gh)
 
@@ -1010,7 +864,7 @@ def test_missing_pack_file_fails_with_release_failed_reason_and_no_writes(
 ) -> None:
     root, _sha = _release_repo(tmp_path)
     (root / "dist/single-screen.json").unlink()
-    gh = ScriptedGh(view=None, view_ok=False)
+    gh = _release_gh(view=None, view_ok=False)
 
     result = run_release(root, gh=gh)
 
@@ -1023,7 +877,7 @@ def test_gh_auth_failure_fails_with_specific_reason_and_no_writes(
     tmp_path: Path,
 ) -> None:
     root, _sha = _release_repo(tmp_path)
-    gh = ScriptedGh(view=None, view_ok=False, auth_ok=False)
+    gh = _release_gh(view=None, view_ok=False, auth_ok=False)
 
     result = run_release(root, gh=gh)
 
@@ -1038,7 +892,7 @@ def test_ls_remote_command_failure_fails_with_specific_reason_and_no_writes(
 ) -> None:
     root, _sha = _release_repo(tmp_path)
     _git(root, "remote", "remove", "origin")
-    gh = ScriptedGh(view=None, view_ok=False)
+    gh = _release_gh(view=None, view_ok=False)
 
     result = run_release(root, gh=gh)
 
@@ -1052,21 +906,11 @@ def test_release_cli_exit_code_and_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root, sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line(SINGLE_DIGEST, DUAL_DIGEST, sha)),
-        "assets": [
-            {"name": "single-screen.json", "digest": f"sha256:{SINGLE_DIGEST}"},
-            {"name": "dual-screen.json", "digest": f"sha256:{DUAL_DIGEST}"},
-        ],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
+    view = _valid_release(sha)
     summary_path = tmp_path / "summary.md"
 
     monkeypatch.setattr(
-        write_module, "SubprocessGhRunner", lambda: ScriptedGh(view=view)
+        write_module, "SubprocessGhRunner", lambda: _release_gh(view=view)
     )
     monkeypatch.chdir(root)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
@@ -1081,7 +925,7 @@ def test_release_view_failure_other_than_not_found_has_no_bootstrap_guidance(
     tmp_path: Path,
 ) -> None:
     root, _sha = _release_repo(tmp_path)
-    gh = ScriptedGh(view=None, view_ok=False, view_stderr="HTTP 502: Bad Gateway")
+    gh = _release_gh(view=None, view_ok=False, view_stderr="HTTP 502: Bad Gateway")
 
     result = run_release(root, gh=gh)
 
@@ -1092,7 +936,7 @@ def test_release_view_failure_other_than_not_found_has_no_bootstrap_guidance(
 
 def test_release_not_found_is_missing_with_bootstrap_guidance(tmp_path: Path) -> None:
     root, _sha = _release_repo(tmp_path)
-    gh = ScriptedGh(view=None, view_ok=False, view_stderr="release not found\n")
+    gh = _release_gh(view=None, view_ok=False, view_stderr="release not found\n")
 
     result = run_release(root, gh=gh)
 
@@ -1104,20 +948,17 @@ def test_release_not_found_is_missing_with_bootstrap_guidance(tmp_path: Path) ->
 def test_release_cli_fails_when_the_release_edit_fails(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root, _sha = _release_repo(tmp_path)
-    view = {
-        "name": "omnipack revision 3",
-        "body": _body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
-        "assets": [],
-        "isDraft": False,
-        "isPrerelease": True,
-        "isImmutable": False,
-    }
+    root, sha = _release_repo(tmp_path)
+    view = _valid_release(
+        sha,
+        body=_body(record=_record_line("0" * 64, "1" * 64, "a" * 40)),
+        assets=[],
+    )
     summary_path = tmp_path / "summary.md"
     monkeypatch.setattr(
         write_module,
         "SubprocessGhRunner",
-        lambda: ScriptedGh(view=view, edit_ok=False),
+        lambda: _release_gh(view=view, edit_ok=False),
     )
     monkeypatch.chdir(root)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
