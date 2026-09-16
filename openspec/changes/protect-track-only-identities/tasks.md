@@ -7,4 +7,4 @@
 ## 2. Complete implementation validation and reviews
 
 - [x] 2.1 Run the full suite and applicable repository checks, including offline pack verification and strict artifact validation; record results and confirm configuration, committed packs and workflows remain unchanged.
-- [ ] 2.2 Complete the implementation workflow's independent whole-diff review wave and checkbox/evidence audit, resolve findings, rerun affected checks after fixes, and retain a self-contained validation record. Leave the change active and report the implementation branch.
+- [x] 2.2 Complete the implementation workflow's independent whole-diff review wave and checkbox/evidence audit, resolve findings, rerun affected checks after fixes, and retain a self-contained validation record. Leave the change active and report the implementation branch.

@@ -78,3 +78,21 @@ The fix commit `bc9c3e8` removes only that redundant candidate and initializes t
 earlier track-only candidate directly. All 29 policy tests, Ruff checks and
 commit hooks passed after the fix. The assertion identifying the offending
 ordinary candidate is unchanged.
+
+The scoped re-review approved `ab4efb4..bc9c3e8` and confirmed the sole finding
+resolved, with no remaining findings. The independent validation-group review
+approved the recorded checks and completed review-wave work in `edf2304`.
+
+## Completion audit
+
+A fresh independent auditor confirmed all four completed implementation/check
+boxes with commit and test evidence and found zero gaps. It also confirmed the
+review/fix/evidence portions of the final review task and authorized its completion
+mark upon successful audit. Evidence maps to `ab4efb4` for the implementation and
+regressions, `bc9c3e8` for the test simplification, and `edf2304` for the durable
+validation and review record. No findings were deferred and no scope exceptions
+were taken. The change remains active on `protect-track-only-identities`.
+
+After the completion audit, the final full-suite rerun passed all 663 tests in
+29.04 seconds. OpenSpec apply reports 5/5 tasks complete. Separate verification
+and archive workflows were not invoked.
