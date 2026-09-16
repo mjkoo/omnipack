@@ -207,36 +207,6 @@ def tracking_root(tmp_path: Path) -> tuple[str, str]:
     return source_url, project
 
 
-def test_track_only_generation_writes_current_candidate_without_apk_state(
-    tmp_path: Path,
-) -> None:
-    source_url, project = tracking_root(tmp_path)
-    release_url = "https://api.github.com/repos/example/tracker/releases/latest"
-    http = MappingHttp(
-        {
-            source_url: b"| Project | Note |\n| --- | --- |\n| [Tracker](https://github.com/example/tracker) | mod |\n",
-            release_url: {
-                "id": 7,
-                "published_at": "2026-09-10T00:00:00Z",
-                "assets": [
-                    {
-                        "name": "mod.zip",
-                        "browser_download_url": "https://fixture.test/mod.zip",
-                    }
-                ],
-            },
-        }
-    )
-    report = generate_codm(tmp_path, http=http)
-    output = tmp_path / ".build/source-generation/codm"
-    assert report["status"] == "success"
-    app = json.loads((output / "catalog.json").read_text())["apps"][0]
-    settings = json.loads(app["additionalSettings"])
-    assert app["id"] == "12345" and settings["trackOnly"] is True
-    assert "https://fixture.test/mod.zip" not in http.urls
-    assert report["tracking"] == [{"url": project, "id": "12345", "status": "verified"}]
-
-
 def test_every_invocation_resolves_every_project_afresh(tmp_path: Path) -> None:
     source_url, project = tracking_root(tmp_path)
     readme = b"| Project | Note |\n| --- | --- |\n| [Tracker](https://github.com/example/tracker) | mod |\n"

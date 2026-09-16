@@ -5,8 +5,6 @@ import json
 from pathlib import Path
 from typing import Any
 
-import pytest
-
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
@@ -17,6 +15,10 @@ from omnipack.sources import bboi, codm, rjny
 from omnipack.sources.common import normalize_record
 from omnipack.sources.extras import fetch as fetch_extras
 from omnipack.urls import normalize_project_url
+from tests.current_config_support import (
+    CurrentConfiguration,
+    current_configuration_fixture,  # noqa: F401
+)
 from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
@@ -29,8 +31,8 @@ def load_json(path: Path) -> Any:
     return json.loads(path.read_text())
 
 
-def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
-    """Ingest the captured upstream catalogs with the frozen or the given extras."""
+def captured_higher() -> list[App]:
+    """Ingest the captured upstream catalogs with the frozen extras."""
     sources = load_json(PRE_MIGRATION / "sources.json")
     release = load_json(CAPTURED / "bboi-release.json")
     standard_url, dual_url = (
@@ -50,17 +52,12 @@ def captured_higher(extras: list[dict[str, Any]] | None = None) -> list[App]:
             standard_url: (CAPTURED / "bboi-standard.json").read_text(),
             dual_url: (CAPTURED / "bboi-dual.json").read_text(),
             rjny_url: (CAPTURED / "rjny.json").read_text(),
-            sources["codm"]["readme_url"]: (
-                ROOT / "tests/fixtures/codm-readme.md"
-            ).read_text(),
         }
     )
     return [
         *rjny.fetch(http, sources["rjny"]),
         *bboi.fetch(http, sources["bboi"]),
-        *fetch_extras(
-            load_json(PRE_MIGRATION / "extras.json") if extras is None else extras
-        ),
+        *fetch_extras(load_json(PRE_MIGRATION / "extras.json")),
     ]
 
 
@@ -95,9 +92,7 @@ def compose_captured_baseline() -> CompositionResult:
     )
 
 
-def test_current_captured_baseline_reproduces_exact_exports_and_family_winners() -> (
-    None
-):
+def test_frozen_captured_baseline_reproduces_exact_exports_and_family_winners() -> None:
     index = load_json(FIXTURES / "baseline/index.json")
     result = compose_captured_baseline()
 
@@ -119,130 +114,15 @@ def test_current_captured_baseline_reproduces_exact_exports_and_family_winners()
     assert derived_winners == index["familyWinners"]
 
 
-def _committed_codm_catalog() -> dict[str, Any]:
-    return load_json(ROOT / "config/catalogs/codm.json")
-
-
-ADDED_ID = "com.example.testinvariant.added"
-
-
-def _catalog_with_one_project_added_and_one_removed() -> dict[str, Any]:
-    """Vary the committed catalog the way a source proposal might.
-
-    The removed entry is the last one that composition admits and does not
-    depend on: no dual-eligible higher-source candidate covers its project, so
-    ingestion keeps it; no package denial names it; no candidate rule, pin or
-    overlay record targets it; and no higher-source candidate or identity
-    correction carries its package ID, so it cannot be a family's only
-    dual-screen build. When no entry qualifies, the variant is skipped rather
-    than silently testing only an addition.
-    """
-    apps = list(_committed_codm_catalog()["apps"])
-    policy = load_json(ROOT / "config/composition.json")
-    targeted = {
-        (rule["match"]["id"], normalize_project_url(rule["match"]["url"]))
-        for rule in [*policy["candidates"], *policy["pins"]]
-        if rule["match"]["source"] == "codm2000"
-    } | {
-        (record["id"], normalize_project_url(record["url"]))
-        for record in load_json(ROOT / "config/overlay.json")
-    }
-    higher = captured_higher()
-    covered = {
-        normalize_project_url(app.url)
-        for app in higher
-        if Variant.DUAL in app.eligibility
-    }
-    carried = {app.id for app in higher} | {
-        rule["packageId"] for rule in policy["candidates"] if "packageId" in rule
-    }
-    denied = {entry["id"] for entry in load_json(ROOT / "config/deny.json")}
-    removable = [
-        app
-        for app in apps
-        if normalize_project_url(app["url"]) not in covered
-        and (app["id"], normalize_project_url(app["url"])) not in targeted
-        and app["id"] not in carried
-        and app["id"] not in denied
-    ]
-    if not removable:
-        pytest.skip("composition depends on every codm2000 entry, so none can go")
-    apps.remove(removable[-1])
-    # The added project copies an APK entry, chosen for its kind rather than
-    # its position, under an ID and URL the catalog does not already use.
-    template = next(
-        (
-            app
-            for app in apps
-            if not json.loads(app["additionalSettings"]).get("trackOnly", False)
-        ),
-        {"additionalSettings": json.dumps({"trackOnly": False}), "categories": []},
-    )
-    used_ids = {app["id"] for app in apps}
-    used_urls = {normalize_project_url(app["url"]) for app in apps}
-    added_id, added_url = ADDED_ID, "https://github.com/example/testinvariant-added"
-    while added_id in used_ids or normalize_project_url(added_url) in used_urls:
-        added_id, added_url = f"{added_id}x", f"{added_url}x"
-    added = {
-        **template,
-        "id": added_id,
-        "url": added_url,
-        "name": "Test Invariant Added",
-        "author": "example",
-    }
-    # Route through the generator's own serializer so the variant is itself a
-    # canonical catalog, matching what a real generation run would commit.
-    return json.loads(_render_catalog([*apps, added]))
-
-
-@pytest.fixture(params=["committed", "one-added-one-removed"])
-def codm_catalog(request: pytest.FixtureRequest) -> dict[str, Any]:
-    if request.param == "committed":
-        return _committed_codm_catalog()
-    return _catalog_with_one_project_added_and_one_removed()
-
-
-def _compose_with_codm_catalog(
-    catalog: dict[str, Any],
-    tmp_path: Path,
-    higher: list[App],
-    *,
-    policy_document: dict[str, Any] | None = None,
-    denials: list[dict[str, str]] | None = None,
-) -> CompositionResult:
-    """Compose the committed configuration, or the given policy, over a catalog.
-
-    `denials` are added to the committed denials.
-    """
-    policy = parse_composition_policy(
-        load_json(ROOT / "config/composition.json")
-        if policy_document is None
-        else policy_document
-    )
-    tmp_path.mkdir(parents=True, exist_ok=True)
-    (tmp_path / "codm.json").write_text(json.dumps(catalog))
-    generated = codm.fetch(tmp_path, {"catalog": "codm.json"}, higher)
-    return compose(
-        [*higher, *generated],
-        [*load_json(ROOT / "config/deny.json"), *(denials or [])],
-        load_json(ROOT / "config/overlay.json"),
-        policy=policy,
-    )
-
-
-def test_committed_catalog_entries_have_unique_ids_and_urls(
-    codm_catalog: dict[str, Any],
+def test_committed_catalog_is_valid_canonical_and_composable(
+    current_configuration: CurrentConfiguration,
 ) -> None:
-    ids = [app["id"] for app in codm_catalog["apps"]]
-    urls = [normalize_project_url(app["url"]) for app in codm_catalog["apps"]]
+    catalog = current_configuration.catalog
+    ids = [app["id"] for app in catalog["apps"]]
+    urls = [normalize_project_url(app["url"]) for app in catalog["apps"]]
     assert len(ids) == len(set(ids))
     assert len(urls) == len(set(urls))
-
-
-def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
-    codm_catalog: dict[str, Any],
-) -> None:
-    for app in codm_catalog["apps"]:
+    for app in catalog["apps"]:
         settings = json.loads(app["additionalSettings"])
         if settings.get("trackOnly"):
             assert app["id"].isdecimal()
@@ -252,50 +132,53 @@ def test_committed_catalog_entries_have_kind_appropriate_ids_and_flags(
         else:
             assert settings.get("trackOnly", False) is False
             assert _is_valid_package_id(app["id"])
+    raw = (ROOT / "config/catalogs/codm.json").read_bytes()
+    assert _render_catalog(catalog["apps"]) == raw
+    assert current_configuration.result.apps[Variant.DUAL]
 
 
-def _is_canonical_catalog(path: Path) -> bool:
-    raw = path.read_bytes()
-    return _render_catalog(json.loads(raw)["apps"]) == raw
-
-
-def test_committed_catalog_bytes_are_the_canonical_rendering_of_its_entries() -> None:
-    assert _is_canonical_catalog(ROOT / "config/catalogs/codm.json")
-
-
-def test_a_pretty_printed_catalog_is_not_canonical(tmp_path: Path) -> None:
-    path = tmp_path / "codm.json"
-    path.write_text(
-        json.dumps(_committed_codm_catalog(), ensure_ascii=False, indent=2) + "\n"
-    )
-    assert not _is_canonical_catalog(path)
-
-
-def test_committed_catalog_composes_with_frozen_captured_sources_without_errors(
-    codm_catalog: dict[str, Any], tmp_path: Path
-) -> None:
-    higher, _ = captured_pipeline()
-    result = _compose_with_codm_catalog(codm_catalog, tmp_path, higher)
-    assert result.apps[Variant.DUAL]
-    added = {app["id"] for app in codm_catalog["apps"]} - {
-        app["id"] for app in _committed_codm_catalog()["apps"]
-    }
-    assert added <= {app.id for app in result.apps[Variant.DUAL]}
-
-
-def test_committed_catalog_leaves_the_single_screen_pack_unchanged(
+def test_catalog_addition_and_removal_leave_single_screen_selection_unchanged(
     tmp_path: Path,
 ) -> None:
-    higher, _ = captured_pipeline()
-    committed = _compose_with_codm_catalog(
-        _committed_codm_catalog(), tmp_path / "committed", higher
+    higher = fetch_extras(
+        [
+            {
+                "id": "com.example.base",
+                "url": "https://github.com/example/base",
+                "name": "Base",
+            }
+        ]
     )
-    modified = _compose_with_codm_catalog(
-        _catalog_with_one_project_added_and_one_removed(),
-        tmp_path / "modified",
-        higher,
-    )
-    assert committed.apps[Variant.SINGLE] == modified.apps[Variant.SINGLE]
+    results = []
+    for name in ("removed", "added"):
+        directory = tmp_path / name
+        directory.mkdir()
+        entry = _codm_entry(
+            f"com.example.{name}", f"https://github.com/example/{name}", name, {}
+        )
+        (directory / "codm.json").write_text(json.dumps({"apps": [entry]}))
+        generated = codm.fetch(directory, {"catalog": "codm.json"}, higher)
+        results.append(
+            compose(
+                [*higher, *generated],
+                [],
+                [],
+                policy=parse_composition_policy(
+                    {"schemaVersion": 1, "candidates": [], "pins": []}
+                ),
+            )
+        )
+    before, after = results
+    assert [app.id for app in before.apps[Variant.SINGLE]] == ["com.example.base"]
+    assert before.apps[Variant.SINGLE] == after.apps[Variant.SINGLE]
+    assert {app.id for app in before.apps[Variant.DUAL]} == {
+        "com.example.base",
+        "com.example.removed",
+    }
+    assert {app.id for app in after.apps[Variant.DUAL]} == {
+        "com.example.base",
+        "com.example.added",
+    }
 
 
 def _codm_entry(
@@ -315,18 +198,17 @@ def _codm_entry(
 def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     tmp_path: Path,
 ) -> None:
-    higher, _ = captured_pipeline()
-    # Rules and pins that name codm2000 candidates, and the overlay records,
-    # target entries this fixture catalog does not carry.
-    policy_document = load_json(PRE_MIGRATION / "composition.json")
-    for key in ("candidates", "pins"):
-        policy_document[key] = [
-            item
-            for item in policy_document[key]
-            if item["match"]["source"] != "codm2000"
+    host_url = "https://github.com/example/host"
+    covering_url = "https://github.com/example/covered"
+    higher = fetch_extras(
+        [
+            {"id": "com.example.host", "url": host_url, "name": "Host"},
+            {"id": "com.example.higher", "url": covering_url, "name": "Covering App"},
         ]
-    policy = parse_composition_policy(policy_document)
-    deny = load_json(PRE_MIGRATION / "deny.json")
+    )
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": [], "pins": []}
+    )
 
     def compose_catalog(
         apps: list[dict[str, Any]], directory: Path
@@ -334,33 +216,22 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
         directory.mkdir()
         (directory / "codm.json").write_text(json.dumps({"apps": apps}))
         generated = codm.fetch(directory, {"catalog": "codm.json"}, higher)
-        return generated, compose([*higher, *generated], deny, [], policy=policy)
+        return generated, compose([*higher, *generated], [], [], policy=policy)
 
     _, baseline = compose_catalog([], tmp_path / "baseline")
     before = {(item.family, item.variant): item for item in baseline.report.selections}
-    # The min() picks only make the fixture deterministic; which host and which
-    # covering candidate are chosen is immaterial.
-    host_family = min(family for family, variant in before if variant is Variant.SINGLE)
-    host = before[(host_family, Variant.SINGLE)]
-    # The host must have a dual selection too, so the all-selections equality
-    # below covers its entry in both packs.
-    assert (host_family, Variant.DUAL) in before
-    covering = min(
-        (
-            app
-            for app in higher
-            if Variant.DUAL in app.eligibility
-            and app.url.startswith("https://github.com/")
-        ),
-        key=lambda app: normalize_project_url(app.url),
-    )
+    assert set(before) == {
+        (f"package:{package_id}", variant)
+        for package_id in ("com.example.host", "com.example.higher")
+        for variant in Variant
+    }
     prerelease_settings = {
         "includePrereleases": True,
         "apkFilterRegEx": r"^Fixture-v[0-9.]+-rc[0-9]+\.apk$",
         "trackOnly": False,
     }
     tracker_about = (
-        f"A mod for the app at {host.url}. Install or update it through that app."
+        f"A mod for the app at {host_url}. Install or update it through that app."
     )
     catalog = [
         _codm_entry(
@@ -383,7 +254,7 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
         ),
         _codm_entry(
             "com.example.covered",
-            covering.url,
+            covering_url,
             "Covered App",
             {"includePrereleases": True, "trackOnly": False},
         ),

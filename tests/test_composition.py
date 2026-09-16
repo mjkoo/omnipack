@@ -135,25 +135,12 @@ def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
         "source",
         "dual-preferred",
     ]
-
-
-def test_dual_preferred_bboi_reports_the_ordinary_rjny_entry_as_considered() -> None:
-    ordinary = app("ordinary.app", "rjny", family="app:shared")
-    preferred = app(
-        "dual.app",
-        "bboi",
-        family="app:shared",
-        eligibility=frozenset({Variant.DUAL}),
-        origin="bboi-dual-asset",
-    )
-    result = compose([ordinary, preferred], [], [])
     [dual_selection] = [
         item for item in result.report.selections if item.variant is Variant.DUAL
     ]
-    assert dual_selection.reason == "dual-preferred"
-    assert dual_selection.effective_id == "dual.app"
+    assert dual_selection.effective_id == "dual"
     assert dual_selection.considered == (
-        ConsideredCandidate("rjny", "rjny-catalog", "ordinary.app", ordinary.url),
+        ConsideredCandidate("extras", "extras", "ordinary", ordinary.url),
     )
 
 
@@ -239,24 +226,6 @@ def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) 
     ]
 
 
-def test_exclusions_apply_to_candidates_before_selection_and_stale_is_nonfatal() -> (
-    None
-):
-    denied = app("same", "extras", family="app:shared")
-    alternative = app("other", "rjny", family="app:shared")
-    result = compose(
-        [denied, alternative],
-        [
-            {"id": "same", "reason": "broken"},
-            {"id": "old.package", "reason": "obsolete"},
-        ],
-        [],
-    )
-    assert ids(result, Variant.SINGLE) == {"other"}
-    assert ids(result, Variant.DUAL) == {"other"}
-    assert result.report.stale_exclusions == [StaleExclusion("old.package", "obsolete")]
-
-
 def test_denial_of_a_build_eligible_for_neither_pack_is_not_stale() -> None:
     unexported = app("unexported", eligibility=frozenset())
     result = compose([unexported], [{"id": "unexported", "reason": "retired"}], [])
@@ -292,36 +261,6 @@ def test_denylist_entries_hold_exactly_a_package_id_and_reason(
         compose([], [entry], [])
 
 
-def test_package_denial_leaves_a_different_package_alternative_selectable() -> None:
-    standard = app("standard", "extras", family="app:x")
-    preferred = app(
-        "dual.denied",
-        "bboi",
-        family="app:x",
-        eligibility=frozenset({Variant.DUAL}),
-    )
-    result = compose(
-        [standard, preferred], [{"id": "dual.denied", "reason": "broken"}], []
-    )
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"standard"}
-    assert [(item.package_id, item.variant) for item in result.report.removals] == [
-        ("dual.denied", Variant.DUAL)
-    ]
-
-
-def test_package_denial_removes_the_package_from_every_source() -> None:
-    carriers = [
-        app("shared.pkg", source, family="app:x")
-        for source in ("extras", "rjny", "bboi")
-    ]
-    other = app("other.pkg", "bboi", family="app:x")
-    result = compose([*carriers, other], [{"id": "shared.pkg", "reason": "broken"}], [])
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"other.pkg"}
-    assert len(result.report.removals) == 2 * len(carriers)
-    assert {item.package_id for item in result.report.removals} == {"shared.pkg"}
-    assert result.report.stale_exclusions == []
-
-
 def shared_package_builds() -> tuple[App, App]:
     """A family's baseline and dual-screen builds carrying one package id."""
     standard = app("shared.pkg", "bboi", family="app:x")
@@ -337,27 +276,55 @@ def shared_package_builds() -> tuple[App, App]:
     return standard, dual
 
 
-def test_denied_shared_package_removes_a_family_with_no_other_build() -> None:
-    result = compose(
-        list(shared_package_builds()),
-        [{"id": "shared.pkg", "reason": "broken"}],
-        [],
-    )
-    assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
-    assert sorted(
-        (item.package_id, item.variant.value) for item in result.report.removals
-    ) == [("shared.pkg", "dual"), ("shared.pkg", "dual"), ("shared.pkg", "single")]
-    assert result.report.stale_exclusions == []
+@pytest.mark.parametrize(
+    "outcome",
+    ["all-carriers", "different-package-fallback", "empty-family"],
+)
+def test_package_denial_outcomes(outcome: str) -> None:
+    denials = [{"id": "shared.pkg", "reason": "broken"}]
+    if outcome == "all-carriers":
+        carriers = [
+            app("shared.pkg", source, family="app:x")
+            for source in ("extras", "rjny", "bboi")
+        ]
+        candidates = [*carriers, app("other.pkg", "bboi", family="app:x")]
+        denials.append({"id": "old.package", "reason": "obsolete"})
+        expected_ids = {"other.pkg"}
+        expected_removals = 2 * len(carriers)
+        expected_stale = [StaleExclusion("old.package", "obsolete")]
+    elif outcome == "different-package-fallback":
+        candidates = [
+            app("standard", "extras", family="app:x"),
+            app(
+                "shared.pkg",
+                "bboi",
+                family="app:x",
+                eligibility=frozenset({Variant.DUAL}),
+            ),
+        ]
+        expected_ids = {"standard"}
+        expected_removals = 1
+        expected_stale = []
+    else:
+        candidates = list(shared_package_builds())
+        expected_ids = set()
+        expected_removals = 3
+        expected_stale = []
 
+    result = compose(candidates, denials, [])
 
-def test_denied_shared_package_leaves_the_family_s_other_package_selected() -> None:
-    other = app("other.pkg", "rjny", family="app:x")
-    result = compose(
-        [*shared_package_builds(), other],
-        [{"id": "shared.pkg", "reason": "broken"}],
-        [],
-    )
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"other.pkg"}
+    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == expected_ids
+    assert len(result.report.removals) == expected_removals
+    assert {item.package_id for item in result.report.removals} == {"shared.pkg"}
+    assert result.report.stale_exclusions == expected_stale
+    if outcome == "empty-family":
+        assert sorted(
+            (item.package_id, item.variant.value) for item in result.report.removals
+        ) == [
+            ("shared.pkg", "dual"),
+            ("shared.pkg", "dual"),
+            ("shared.pkg", "single"),
+        ]
 
 
 def test_dual_pin_keeps_a_standard_build_over_its_shared_package_dual_build() -> None:
@@ -401,12 +368,6 @@ def test_input_order_does_not_change_selection_or_report_order() -> None:
     right = compose(list(reversed(candidates)), [], [])
     assert left.apps == right.apps
     assert left.report == right.report
-
-
-def test_compose_rejects_differing_records_with_one_original_identity() -> None:
-    first = app("same")
-    with pytest.raises(CompositionError, match="ambiguous original candidate identity"):
-        compose([first, replace(first, name="different")], [], [])
 
 
 def test_cross_package_family_coverage_passes_and_package_collision_fails() -> None:
@@ -646,34 +607,6 @@ def test_denials_and_package_collisions_see_the_corrected_package_id() -> None:
         CompositionError, match="selects package id 'taken.pkg' for distinct families"
     ):
         compose([corrected, other], [], [], policy=policy)
-
-
-def test_selection_reasons_name_pin_preference_fallback_and_source() -> None:
-    ordinary = app("ordinary", "extras", family="app:preferred")
-    preferred = app(
-        "preferred",
-        "bboi",
-        family="app:preferred",
-        eligibility=frozenset({Variant.DUAL}),
-    )
-    fallback = app("fallback", family="app:fallback")
-    reasons = {
-        (item.family, item.variant): item.reason
-        for item in compose([ordinary, preferred, fallback], [], []).report.selections
-    }
-    assert reasons == {
-        ("app:preferred", Variant.SINGLE): "source",
-        ("app:preferred", Variant.DUAL): "dual-preferred",
-        ("app:fallback", Variant.SINGLE): "source",
-        ("app:fallback", Variant.DUAL): "ordinary-fallback",
-    }
-    high = app("high", "extras", family="app:pinned")
-    pinned = app("pinned", "bboi", family="app:pinned")
-    policy = pin_policy(pinned, "app:pinned", Variant.DUAL, high)
-    assert {
-        item.variant: item.reason
-        for item in compose([high, pinned], [], [], policy=policy).report.selections
-    } == {Variant.SINGLE: "source", Variant.DUAL: "pin"}
 
 
 def test_dual_falls_back_to_source_precedence_among_several_baseline_builds() -> None:

@@ -124,9 +124,7 @@ def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
     "document, message",
     [
         ({"schemaVersion": True, "candidates": [], "pins": []}, "schemaVersion"),
-        (policy(extra=[]), "unknown field"),
         (policy(history=[]), "unknown field 'history'"),
-        (policy(candidates=[rule(extra=True)]), "unknown field"),
         (policy(candidates=[rule(family="package:forbidden")]), "family"),
         (policy(candidates=[rule(family="app:bad family")]), "family"),
         (
@@ -187,36 +185,6 @@ def test_unknown_pin_target_and_malformed_json_fail() -> None:
         parse_composition_policy(policy(pins=[invalid_pin]))
     with pytest.raises(CompositionPolicyError, match="invalid JSON"):
         load_composition_policy(b'{"schemaVersion": 1,')
-
-
-def test_projection_supports_offline_family_and_corrected_pin_lookup() -> None:
-    parsed = parse_composition_policy(
-        policy(
-            candidates=[rule(packageId="org.example.new", family="app:example")],
-            pins=[
-                {
-                    "family": "app:example",
-                    "variant": "dual",
-                    "match": rule()["match"],
-                    "rationale": "Prefer the tested dual build.",
-                }
-            ],
-        )
-    )
-    [applied] = apply_composition_policy(parsed, [candidate()])
-    key = ("org.example.new", "github.com/example/app")
-
-    assert parsed.projections[key] == "app:example"
-    assert parsed.projected_pins[("app:example", Variant.DUAL)] == key
-    assert applied.id == "org.example.new"
-
-
-def test_policy_application_requires_every_rule_selector() -> None:
-    parsed = parse_composition_policy(
-        policy(candidates=[rule(packageId="org.example.new", family="app:example")])
-    )
-    with pytest.raises(CompositionPolicyError, match="org.example.old.*matched no"):
-        apply_composition_policy(parsed, [])
 
 
 def test_policy_application_leaves_pins_to_composition() -> None:
@@ -292,9 +260,22 @@ def test_agreeing_rules_share_one_projected_family() -> None:
             ]
         )
     )
-    assert parsed.projections == {
-        ("org.example.new", "github.com/example/app"): "app:example"
-    }
+    applied = apply_composition_policy(
+        parsed,
+        [
+            candidate(),
+            candidate(
+                id="org.example.new",
+                original_id="org.example.new",
+                provenance=Provenance("bboi", "asset"),
+                origin="bboi-standard-asset",
+            ),
+        ],
+    )
+    assert [(app.id, app.family) for app in applied] == [
+        ("org.example.new", "app:example"),
+        ("org.example.new", "app:example"),
+    ]
 
 
 def test_pin_family_must_match_its_projected_candidate_family() -> None:

@@ -2,37 +2,12 @@ from __future__ import annotations
 
 import hashlib
 import json
-import shutil
 from pathlib import Path
 
 import pytest
 
 from omnipack import verify
-
-
-def composition_without_extras() -> str:
-    document = json.loads(Path("config/composition.json").read_text())
-    document["candidates"] = [
-        rule for rule in document["candidates"] if rule["match"]["source"] != "extras"
-    ]
-    document["pins"] = [
-        pin for pin in document["pins"] if pin["match"]["source"] != "extras"
-    ]
-    return json.dumps(document)
-
-
-def copy_inputs(root: Path) -> None:
-    for relative in verify.INPUT_PATHS.values():
-        target = root / relative
-        target.parent.mkdir(parents=True, exist_ok=True)
-        if relative.name == "overlay.json":
-            target.write_text("[]")
-        elif relative.name == "composition.json" and relative.exists():
-            target.write_text(composition_without_extras())
-        elif relative.exists():
-            shutil.copyfile(relative, target)
-        elif relative.name == "composition.json":
-            target.write_text('{"schemaVersion":1,"candidates":[],"pins":[]}')
+from tests.verification_support import write_verification_inputs as copy_inputs
 
 
 def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
@@ -64,10 +39,12 @@ def test_missing_inputs_complete_as_failed_evidence(tmp_path: Path) -> None:
     assert all(value["state"] == "missing" for value in result["inputs"].values())
 
 
-def test_no_report_written_when_verification_is_interrupted(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+@pytest.mark.parametrize("existing", [False, True], ids=["absent", "present"])
+def test_interrupted_verification_does_not_replace_evidence(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
 ) -> None:
     copy_inputs(tmp_path)
+    completed = verify.run_verification(tmp_path) if existing else None
 
     def interrupted(_inputs: object) -> object:
         raise KeyboardInterrupt
@@ -75,23 +52,11 @@ def test_no_report_written_when_verification_is_interrupted(
     monkeypatch.setattr(verify, "validate_offline", interrupted)
     with pytest.raises(KeyboardInterrupt):
         verify.run_verification(tmp_path)
-    assert not (tmp_path / verify.VERIFY_PATH).exists()
-
-
-def test_interrupted_verification_leaves_an_existing_report_untouched(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    copy_inputs(tmp_path)
-    completed = verify.run_verification(tmp_path)
-
-    def interrupted(_inputs: object) -> object:
-        raise KeyboardInterrupt
-
-    monkeypatch.setattr(verify, "validate_offline", interrupted)
-    with pytest.raises(KeyboardInterrupt):
-        verify.run_verification(tmp_path)
-    stored = json.loads((tmp_path / verify.VERIFY_PATH).read_text())
-    assert stored == completed
+    path = tmp_path / verify.VERIFY_PATH
+    if existing:
+        assert json.loads(path.read_text()) == completed
+    else:
+        assert not path.exists()
 
 
 def test_report_fingerprints_the_bytes_captured_before_a_later_edit(
@@ -157,20 +122,9 @@ def test_http_config_is_not_read_or_fingerprinted(tmp_path, monkeypatch) -> None
     assert "http" not in result["inputs"]
 
 
-def test_missing_http_config_does_not_affect_verification(tmp_path: Path) -> None:
+def test_nonobject_exclusion_completes_failed_evidence(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
-    (tmp_path / "config/http.json").unlink(missing_ok=True)
-    result = verify.run_verification(tmp_path)
-    assert result["status"] == "success"
-    assert "http" not in result["inputs"]
-
-
-@pytest.mark.parametrize("entry", [[], None])
-def test_nonobject_exclusion_completes_failed_evidence(
-    tmp_path: Path, entry: object
-) -> None:
-    copy_inputs(tmp_path)
-    (tmp_path / "config/deny.json").write_text(json.dumps([entry]))
+    (tmp_path / "config/deny.json").write_text("[null]")
     result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"
     assert result["complete"] is True

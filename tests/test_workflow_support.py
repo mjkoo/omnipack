@@ -8,20 +8,32 @@ project's own interpreter.
 from __future__ import annotations
 
 import os
-import subprocess
 from pathlib import Path
 
 import pytest
 
 from scripts.workflow_support import (
     GitError,
+    HandoffRejected,
     SubprocessGhRunner,
     diff_raw_entries,
     git,
     git_output,
     ls_remote_sha,
     run_url,
+    verify_handoff,
 )
+from tests.publication_support import (
+    bare_remote,
+    bundle,
+    isolated_git_identity,
+    repository,
+)
+from tests.publication_support import (
+    git as _git,
+)
+
+pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
 
 RUN_ENVIRONMENT = {
     "GITHUB_SERVER_URL": "https://github.example/",
@@ -30,34 +42,8 @@ RUN_ENVIRONMENT = {
 }
 
 
-@pytest.fixture(autouse=True)
-def _isolated_git_identity(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    home = tmp_path / "home"
-    home.mkdir()
-    monkeypatch.setenv("HOME", str(home))
-    monkeypatch.setenv("GIT_CONFIG_GLOBAL", str(home / ".gitconfig"))
-    monkeypatch.setenv("GIT_CONFIG_NOSYSTEM", "1")
-    for name in list(os.environ):
-        if name.startswith(("GIT_AUTHOR_", "GIT_COMMITTER_")):
-            monkeypatch.delenv(name)
-
-
-def _git(root: Path, *args: str) -> str:
-    return subprocess.run(
-        ["git", *args], cwd=root, check=True, capture_output=True, text=True
-    ).stdout.strip()
-
-
 def _repo(tmp_path: Path, name: str = "repo") -> Path:
-    root = tmp_path / name
-    root.mkdir()
-    _git(root, "init", "-q", "--initial-branch=main")
-    _git(root, "config", "user.name", "Test")
-    _git(root, "config", "user.email", "test@example.invalid")
-    (root / "README.md").write_text("guide\n")
-    _git(root, "add", ".")
-    _git(root, "commit", "-qm", "base")
-    return root
+    return repository(tmp_path, {"README.md": "guide\n"}, name=name)
 
 
 def test_failed_git_command_writes_its_stderr_to_the_log(
@@ -127,6 +113,35 @@ def test_diff_reports_a_rename_as_a_deletion_and_an_addition(tmp_path: Path) -> 
     ]
 
 
+@pytest.mark.parametrize(
+    ("kind", "message"),
+    [
+        ("dirty", "the working tree is not clean"),
+        ("wrong-sha", "the bundle's HEAD is not the candidate"),
+        ("wrong-parent", "the candidate's only parent is not the base revision"),
+    ],
+)
+def test_verify_handoff_rejects_invalid_boundary(
+    tmp_path: Path, kind: str, message: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    if kind == "wrong-parent":
+        (root / "README.md").write_text("intermediate\n")
+        _git(root, "commit", "-qam", "intermediate")
+    (root / "README.md").write_text("candidate\n")
+    _git(root, "commit", "-qam", "candidate")
+    candidate = _git(root, "rev-parse", "HEAD")
+    bundle_path = bundle(root, base, tmp_path / "candidate.bundle")
+    _git(root, "checkout", "-q", "--detach", base)
+    if kind == "dirty":
+        (root / "stray.txt").write_text("dirty\n")
+    supplied_candidate = "a" * 40 if kind == "wrong-sha" else candidate
+
+    with pytest.raises(HandoffRejected, match=message):
+        verify_handoff(root, bundle_path, supplied_candidate, base)
+
+
 def test_ls_remote_reads_only_the_exact_ref(tmp_path: Path) -> None:
     seed = _repo(tmp_path, "seed")
     main_sha = _git(seed, "rev-parse", "HEAD")
@@ -136,8 +151,7 @@ def test_ls_remote_reads_only_the_exact_ref(tmp_path: Path) -> None:
     (seed / "README.md").write_text("decoy\n")
     _git(seed, "commit", "-qam", "decoy")
     decoy_sha = _git(seed, "rev-parse", "HEAD")
-    bare = tmp_path / "remote.git"
-    subprocess.run(["git", "clone", "-q", "--bare", str(seed), str(bare)], check=True)
+    bare = bare_remote(seed, tmp_path)
     client = tmp_path / "client"
     client.mkdir()
     _git(client, "init", "-q")

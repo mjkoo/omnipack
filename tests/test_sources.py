@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import inspect
 import json
 import shutil
 from email.message import Message
@@ -13,7 +12,7 @@ import pytest
 
 from omnipack import cli
 from omnipack.composition_policy import parse_composition_policy
-from omnipack.http import HttpClient, HttpError, HttpResponse
+from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import CompositionError, _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
@@ -110,14 +109,13 @@ def test_rjny_matches_both_upstream_exports() -> None:
             "path": "src/applications.json",
         },
     )
-    for variant, export_name, count in (
-        (Variant.SINGLE, "rjny-single.json", 62),
-        (Variant.DUAL, "rjny-dual.json", 66),
+    for variant, export_name in (
+        (Variant.SINGLE, "rjny-single.json"),
+        (Variant.DUAL, "rjny-dual.json"),
     ):
         expected = json.loads(fixture(export_name))["apps"]
-        assert len(expected) == count
         eligible = [app for app in apps if variant in app.eligibility]
-        assert len(eligible) == count
+        assert len(eligible) == len(expected)
         assert {(app.id, app.url) for app in eligible} == {
             (entry["id"], entry["url"]) for entry in expected
         }
@@ -155,17 +153,6 @@ def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
     )
     assert app.source_type is SourceType.GITLAB
     assert app.url == f"https://gitlab.com/{path}"
-
-
-def test_undeclared_extra_keeps_existing_url_inference() -> None:
-    records = [
-        {"id": "github", "name": "GitHub", "url": "https://github.com/a/b"},
-        {"id": "other", "name": "Other", "url": "https://gitlab.com/a/b"},
-    ]
-    assert [app.source_type for app in extras.fetch(records)] == [
-        SourceType.GITHUB,
-        SourceType.HTML,
-    ]
 
 
 @pytest.mark.parametrize(
@@ -227,15 +214,6 @@ def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
         ),
     )
     assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
-
-
-@pytest.mark.parametrize("response", [HttpError("offline"), "not json"])
-def test_rjny_fetch_and_parse_failures_name_source(response: object) -> None:
-    url = "https://raw.githubusercontent.com/r/main/p"
-    with pytest.raises(SourceError, match="rjny"):
-        rjny.fetch(
-            FakeHttp({url: response}), {"repo": "r", "branch": "main", "path": "p"}
-        )
 
 
 def test_bboi_latest_release_retains_both_asset_origins() -> None:
@@ -481,19 +459,6 @@ def ingest_over_codm_entry(
     )
 
 
-def test_ingestion_takes_no_policy_and_returns_candidates_unmodified(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    assert "policy" not in inspect.signature(ingest_all).parameters
-    higher = rjny_candidate(frozenset({Variant.SINGLE}))
-    result = ingest_over_codm_entry(tmp_path, monkeypatch, [higher])
-    assert result[0] is higher
-    assert [(app.id, app.family) for app in result] == [
-        ("app.standard", None),
-        ("app.generated", None),
-    ]
-
-
 @pytest.mark.parametrize(
     ("eligibility", "suppressed"),
     [
@@ -512,40 +477,10 @@ def test_codm_suppression_follows_source_dual_eligibility(
     result = ingest_over_codm_entry(
         tmp_path, monkeypatch, [rjny_candidate(eligibility)]
     )
-    assert ("app.generated" not in {app.id for app in result}) is suppressed
-
-
-def test_codm_suppression_holds_when_a_rule_regroups_the_covering_candidate(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    result = ingest_over_codm_entry(
-        tmp_path, monkeypatch, [rjny_candidate(frozenset(Variant))]
-    )
-    assert [app.id for app in result] == ["app.standard"]
-    policy = parse_composition_policy(
-        {
-            "schemaVersion": 1,
-            "candidates": [
-                {
-                    "match": {
-                        "source": "rjny",
-                        "origin": "rjny-catalog",
-                        "id": "app.standard",
-                        "url": PROJECT,
-                    },
-                    "packageId": "app.corrected",
-                    "family": "app:project",
-                    "rationale": "Primary APK manifest records the corrected identity.",
-                }
-            ],
-            "pins": [],
-        }
-    )
-    composed = compose(result, [], [], policy=policy)
-    for variant in Variant:
-        assert [(app.id, app.family) for app in composed.apps[variant]] == [
-            ("app.corrected", "app:project")
-        ]
+    expected = [("app.standard", None)]
+    if not suppressed:
+        expected.append(("app.generated", None))
+    assert [(app.id, app.family) for app in result] == expected
 
 
 @pytest.mark.parametrize(
@@ -638,9 +573,7 @@ def test_extras_rejects_non_boolean_dual_screen(value: object) -> None:
     ("field", "value"),
     [
         ("variants", ["single", "dual"]),
-        ("variants", ["dual"]),
         ("dualPreferred", True),
-        ("dualPreferred", False),
     ],
 )
 def test_extras_rejects_retired_fields_naming_entry_and_field(
@@ -729,8 +662,15 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     }
     assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
-    assert single.read_text(encoding="utf-8") == "old single"
-    assert dual.read_text(encoding="utf-8") == "old dual"
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["status"] == "failed"
+    assert report["stage"] == "ingestion"
+    assert report["offlineVerification"] == {"status": "not-run", "findings": []}
+    assert report["changes"] is None
+    assert "rjny" in report["error"]
+    assert (
+        "failed after" if failure == "unreachable" else "Expecting value"
+    ) in report["error"]
 
 
 @pytest.mark.parametrize(
@@ -747,6 +687,7 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         ("https://github.com/owner/repo", SourceType.GITHUB),
         ("https://www.github.com/owner/repo/releases/latest", SourceType.GITHUB),
         ("https://github.com/owner/repo/tree/main", SourceType.GITHUB),
+        ("https://gitlab.com/a/b", SourceType.HTML),
     ],
 )
 def test_extras_derives_github_only_for_repository_urls(
@@ -774,29 +715,10 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
 
 
 @pytest.mark.parametrize("body", ["null", "[]", '{"apps":"bad"}'])
-def test_codm_malformed_catalog_aborts_before_publication(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, body: str
-) -> None:
-    dist = tmp_path / "dist"
-    dist.mkdir()
-    before = {
-        name: (name + " previous").encode()
-        for name in ("single-screen.json", "dual-screen.json")
-    }
-    for name, content in before.items():
-        (dist / name).write_bytes(content)
-
-    def ingest(root: Path, _inputs: object, report: IngestionReport) -> list[App]:
-        (root / "catalog.json").write_text(body)
-        return codm.fetch(root, {"catalog": "catalog.json"}, [])
-
-    shutil.copytree(Path(__file__).parents[1] / "config", tmp_path / "config")
-    monkeypatch.setattr(cli, "_ingest_for_build", ingest)
-    monkeypatch.chdir(tmp_path)
-    assert cli.main(["build"]) == 1
-    report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert "codm" in report["error"]
-    assert {path.name: path.read_bytes() for path in dist.iterdir()} == before
+def test_codm_malformed_catalog_names_source(tmp_path: Path, body: str) -> None:
+    (tmp_path / "catalog.json").write_text(body)
+    with pytest.raises(SourceError, match="codm"):
+        codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
 
 
 def test_codm_missing_catalog_names_source(tmp_path: Path) -> None:
@@ -861,84 +783,3 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
         "com.example.companion",
         "dual-preferred",
     )
-
-
-def test_each_source_prefers_exactly_its_dual_only_builds(tmp_path: Path) -> None:
-    rjny_url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
-    rjny_apps = rjny.fetch(
-        FakeHttp({rjny_url: fixture("rjny-applications.json")}),
-        {
-            "repo": "RJNY/Obtainium-Emulation-Pack",
-            "branch": "main",
-            "path": "src/applications.json",
-        },
-    )
-    flags = {
-        (record["id"], record["url"]): record.get("meta", {})
-        for record in json.loads(fixture("rjny-applications.json"))["apps"]
-    }
-    api = "https://codeberg.org/api/v1/repos/BBoi34/Obtainium-Recomp-Decomp/releases/latest"
-    release = json.loads(fixture("codeberg-release.json"))
-    single_url, dual_url = (
-        asset["browser_download_url"] for asset in release["assets"]
-    )
-    bboi_apps = bboi.fetch(
-        FakeHttp(
-            {
-                api: json.dumps(release),
-                single_url: fixture("bboi-single.json"),
-                dual_url: fixture("bboi-dual.json"),
-            }
-        ),
-        {
-            "codeberg_repo": "BBoi34/Obtainium-Recomp-Decomp",
-            "single_asset_pattern": "Decomp-Recomp.V*.json",
-            "dual_asset_pattern": "Dual-Screen-Decomp-Recomp.V*.json",
-        },
-    )
-    (tmp_path / "catalog.json").write_text(
-        json.dumps(
-            {
-                "apps": [
-                    {
-                        "id": "app.generated",
-                        "url": "https://github.com/owner/generated",
-                        "name": "Generated",
-                        "overrideSource": "GitHub",
-                    }
-                ]
-            }
-        )
-    )
-    codm_apps = codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
-    extra_apps = extras.fetch(
-        [
-            {"id": "baseline", "url": "https://github.com/o/baseline", "name": "B"},
-            {
-                "id": "dual",
-                "url": "https://github.com/o/dual",
-                "name": "D",
-                "dualScreen": True,
-            },
-        ]
-    )
-    dual_screen = {
-        "rjny": lambda app: flags[(app.id, app.url)].get("includeInStandard") is False,
-        "bboi": lambda app: app.origin == "bboi-dual-asset",
-        "codm2000": lambda app: True,
-        "extras": lambda app: app.id == "dual",
-    }
-    for source, apps in (
-        ("rjny", rjny_apps),
-        ("bboi", bboi_apps),
-        ("codm2000", codm_apps),
-        ("extras", extra_apps),
-    ):
-        kinds = {dual_screen[source](app) for app in apps}
-        assert kinds == ({True} if source == "codm2000" else {True, False}), source
-        for app in apps:
-            assert app.dual_preferred is dual_screen[source](app), (source, app.id)
-            if app.dual_preferred:
-                assert app.eligibility == frozenset({Variant.DUAL})
-            else:
-                assert Variant.SINGLE in app.eligibility

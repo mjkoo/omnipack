@@ -8,38 +8,16 @@ import pytest
 from omnipack import cli
 from omnipack.http import HttpClient
 from omnipack.report import write_report
-from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.sources import IngestionReport
-from tests.catalog_support import write_catalog
+from tests.verification_support import write_verification_inputs
 
 
 def inputs(root: Path) -> dict[Path, bytes]:
-    (root / "config").mkdir()
-    for name, value in [
-        ("deny.json", []),
-        ("overlay.json", []),
-        ("composition.json", {"schemaVersion": 1, "candidates": [], "pins": []}),
-        ("http.json", {"credentials": {}}),
-    ]:
-        (root / "config" / name).write_text(json.dumps(value))
-    app = {
-        "id": "app.example",
-        "name": "Example",
-        "author": "Example",
-        "url": "https://github.com/example/app",
-        "overrideSource": "GitHub",
-        "categories": [],
-        "additionalSettings": json.dumps(SETTINGS_DEFAULTS["GitHub"]),
-    }
-    (root / "dist").mkdir()
-    for variant in ("single", "dual"):
-        (root / "dist" / f"{variant}-screen.json").write_text(
-            json.dumps({"apps": [app], "settings": {"categories": "{}"}})
-        )
+    write_verification_inputs(root)
+    (root / "config/http.json").write_text('{"credentials":{}}\n')
     write_report(root, {}, None, IngestionReport())
     (root / ".cache").mkdir()
     (root / ".cache/sentinel").write_bytes(b"cache bytes\x00")
-    write_catalog(root)
     return snapshot(root)
 
 

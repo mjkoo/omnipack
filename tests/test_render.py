@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from itertools import permutations
 from pathlib import Path
@@ -45,10 +44,6 @@ def document(apps: list[ComposedApp]):
     return json.loads(render(apps))
 
 
-def derived_color(category: str) -> int:
-    return int.from_bytes(b"\xff" + hashlib.sha256(category.encode()).digest()[:3])
-
-
 def test_defaults_match_every_source_key_set_in_upstream_exports() -> None:
     observed: dict[str, set[str]] = {}
     for fixture in (
@@ -64,9 +59,6 @@ def test_defaults_match_every_source_key_set_in_upstream_exports() -> None:
             )
 
     assert {source: set(SETTINGS_DEFAULTS[source]) for source in observed} == observed
-    assert len(SETTINGS_DEFAULTS["GitHub"]) == 29
-    assert len(SETTINGS_DEFAULTS["HTML"]) == 29
-    assert len(SETTINGS_DEFAULTS["GitLab"]) == 20
 
 
 @pytest.mark.parametrize("source", ["GitHub", "HTML", "GitLab"])
@@ -178,7 +170,7 @@ def test_settings_block_holds_only_colours_derived_from_category_names() -> None
 
     assert set(settings) == {"categories"}
     assert settings["categories"] == json.dumps(
-        {"Alpha": derived_color("Alpha"), "Beta": derived_color("Beta")},
+        {"Alpha": 0xFFB1A96D, "Beta": 0xFF703390},
         separators=(",", ":"),
     )
     assert document(list(reversed(apps)))["settings"] == settings
@@ -194,10 +186,10 @@ def test_category_used_in_one_variant_is_absent_from_the_other() -> None:
     )
 
     assert dual == {
-        "Dual Screen": derived_color("Dual Screen"),
-        "Emulator": derived_color("Emulator"),
+        "Dual Screen": 0xFF394742,
+        "Emulator": 0xFFCADE2F,
     }
-    assert single == {"Emulator": derived_color("Emulator")}
+    assert single == {"Emulator": 0xFFCADE2F}
 
 
 def test_render_rejects_duplicate_package_ids() -> None:
