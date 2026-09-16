@@ -47,3 +47,31 @@ def test_tracker_is_identical_and_present_once_in_both_variants(
     assert settings["versionDetection"] is False
     assert "installedVersion" not in rendered[Variant.SINGLE]
     assert "latestVersion" not in rendered[Variant.SINGLE]
+
+
+def test_all_track_only_ids_are_reserved_against_ordinary_effective_ids(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    from omnipack.composition_policy import (
+        apply_composition_policy,
+        parse_composition_policy,
+    )
+
+    reserved = {
+        app.id
+        for app in current_configuration.candidates
+        if app.additional_settings.get("trackOnly") is True
+    }
+    assert reserved
+    applied = apply_composition_policy(
+        parse_composition_policy(current_configuration.policy),
+        current_configuration.candidates,
+    )
+    assert (
+        not {
+            app.id
+            for app in applied
+            if app.additional_settings.get("trackOnly") is not True
+        }
+        & reserved
+    )

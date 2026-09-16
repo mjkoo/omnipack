@@ -634,3 +634,32 @@ def test_missing_local_input_fails_at_ingestion_before_any_fetch(
     assert report["stage"] == "ingestion"
     assert report["error"].startswith(f"{source}: ")
     assert not (tmp_path / "dist").exists()
+
+
+def test_invalid_track_only_policy_preserves_prior_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    from tests.test_composition_policy import candidate, policy, rule
+
+    write_config(tmp_path)
+    (tmp_path / "config/composition.json").write_text(
+        json.dumps(policy(candidates=[rule(family="app:example")]))
+    )
+    tracker = candidate(additional_settings={"trackOnly": True})
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [tracker]
+    )
+    paths = [
+        tmp_path / "dist" / name for name in ("single-screen.json", "dual-screen.json")
+    ]
+    paths[0].parent.mkdir()
+    before = b'{"apps": []}\n'
+    for path in paths:
+        path.write_bytes(before)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    assert all(path.read_bytes() == before for path in paths)
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "composition"
+    assert "track-only" in report["error"]
+    assert "org.example.old" in report["error"]

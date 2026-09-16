@@ -652,3 +652,22 @@ def test_considered_lists_only_other_available_candidates() -> None:
         Variant.SINGLE: ["single.only", "loser"],
         Variant.DUAL: ["loser"],
     }
+
+
+@pytest.mark.parametrize("hidden_by", ["pin", "denial"])
+def test_track_only_rule_fails_before_selection(hidden_by: str) -> None:
+    tracker = app("tracker", additional_settings={"trackOnly": True})
+    ordinary = app("ordinary", "extras")
+    policy = pin_policy(ordinary, "app:shared", Variant.DUAL, tracker)
+    denied = [{"id": "tracker", "reason": "hidden"}] if hidden_by == "denial" else []
+    if hidden_by == "denial":
+        policy = replace(policy, pins=(), projected_pins={})
+    with pytest.raises(CompositionError, match="track-only.*rjny.*tracker"):
+        compose([ordinary, tracker], denied, [], policy=policy)
+
+
+def test_denial_cannot_hide_ordinary_collision_with_track_only_id() -> None:
+    tracker = app("tracker", additional_settings={"trackOnly": True})
+    ordinary = app("tracker", "extras")
+    with pytest.raises(CompositionError, match="reserved track-only.*extras"):
+        compose([ordinary, tracker], [{"id": "tracker", "reason": "hidden"}], [])
