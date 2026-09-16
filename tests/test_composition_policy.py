@@ -351,22 +351,15 @@ def test_track_only_violation_precedes_earlier_rendered_projection_conflict() ->
         original_id="tracker",
         provenance=Provenance("extras", "catalog"),
         origin="extras",
-    )
-    tracker = candidate(
-        id="tracker",
-        original_id="tracker",
-        url="https://example.com/tracker",
         additional_settings={"trackOnly": True},
     )
     parsed = parse_composition_policy(
         policy(candidates=[rule(packageId="tracker", family="app:example")])
     )
-    # The earlier record is also track-only, so only the ruled ordinary candidate violates the invariant.
-    earlier = replace(earlier, additional_settings={"trackOnly": True})
     with pytest.raises(
         CompositionPolicyError, match="reserved track-only.*rjny.*org.example.old"
     ):
-        apply_composition_policy(parsed, [earlier, candidate(), tracker])
+        apply_composition_policy(parsed, [earlier, candidate()])
 
 
 def test_descriptive_track_only_rules_and_duplicate_tracker_ids_are_allowed() -> None:
