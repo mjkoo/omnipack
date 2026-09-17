@@ -292,3 +292,109 @@ def test_pin_family_must_match_its_projected_candidate_family() -> None:
                 ]
             )
         )
+
+
+@pytest.mark.parametrize(
+    "assignment",
+    [
+        {"family": "app:example"},
+        {"packageId": "changed"},
+        {"packageId": "org.example.old"},
+    ],
+)
+def test_track_only_assignments_fail_with_original_selector(
+    assignment: dict[str, str],
+) -> None:
+    parsed = parse_composition_policy(policy(candidates=[rule(**assignment)]))
+    with pytest.raises(
+        CompositionPolicyError, match="track-only.*rjny.*org.example.old"
+    ):
+        apply_composition_policy(
+            parsed, [candidate(additional_settings={"trackOnly": True})]
+        )
+
+
+@pytest.mark.parametrize(
+    "ordinary, rules",
+    [
+        (candidate(), [rule(packageId="tracker")]),
+        (candidate(id="tracker", original_id="tracker"), []),
+        (
+            candidate(id="tracker", original_id="tracker"),
+            [
+                rule(
+                    match={
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "tracker",
+                        "url": "https://github.com/example/app",
+                    }
+                )
+            ],
+        ),
+    ],
+    ids=["corrected", "ingested", "descriptive"],
+)
+def test_ordinary_effective_id_cannot_take_track_only_id(
+    ordinary: App, rules: list[dict[str, object]]
+) -> None:
+    tracker = candidate(
+        id="tracker",
+        original_id="tracker",
+        url="https://example.com/tracker",
+        additional_settings={"trackOnly": True},
+    )
+    with pytest.raises(
+        CompositionPolicyError, match="reserved track-only.*example/app"
+    ):
+        apply_composition_policy(
+            parse_composition_policy(policy(candidates=rules)), [ordinary, tracker]
+        )
+
+
+def test_track_only_violation_precedes_earlier_rendered_projection_conflict() -> None:
+    earlier = candidate(
+        id="tracker",
+        original_id="tracker",
+        provenance=Provenance("extras", "catalog"),
+        origin="extras",
+        additional_settings={"trackOnly": True},
+    )
+    parsed = parse_composition_policy(
+        policy(candidates=[rule(packageId="tracker", family="app:example")])
+    )
+    with pytest.raises(
+        CompositionPolicyError, match="reserved track-only.*rjny.*org.example.old"
+    ):
+        apply_composition_policy(parsed, [earlier, candidate()])
+
+
+def test_descriptive_track_only_rules_and_duplicate_tracker_ids_are_allowed() -> None:
+    tracker = candidate(additional_settings={"trackOnly": True})
+    other = replace(tracker, url="https://example.com/other")
+    results = apply_composition_policy(
+        parse_composition_policy(policy(candidates=[rule()])), [tracker, other]
+    )
+    assert [(app.id, app.family) for app in results] == [
+        (tracker.id, f"package:{tracker.id}")
+    ] * 2
+
+
+@pytest.mark.parametrize("setting", [False, "true", 1])
+def test_non_boolean_track_only_does_not_block_apk_rules(setting: object) -> None:
+    parsed = parse_composition_policy(
+        policy(candidates=[rule(packageId="corrected", family="app:example")])
+    )
+    [result] = apply_composition_policy(
+        parsed, [candidate(additional_settings={"trackOnly": setting})]
+    )
+    assert (result.id, result.family) == ("corrected", "app:example")
+
+
+def test_ordinary_identity_can_be_corrected_away_from_reserved_id() -> None:
+    tracker = candidate(
+        additional_settings={"trackOnly": True}, url="https://example.com/tracker"
+    )
+    parsed = parse_composition_policy(policy(candidates=[rule(packageId="corrected")]))
+    results = apply_composition_policy(parsed, [candidate(), tracker])
+    assert [app.id for app in results] == ["corrected", tracker.id]

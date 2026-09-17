@@ -47,3 +47,16 @@ def test_tracker_is_identical_and_present_once_in_both_variants(
     assert settings["versionDetection"] is False
     assert "installedVersion" not in rendered[Variant.SINGLE]
     assert "latestVersion" not in rendered[Variant.SINGLE]
+
+
+def test_current_candidates_include_track_only_ids_for_composition_to_reserve(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    # Composing the fixture fails if any other candidate takes one of these ids, so
+    # this only guards against the reservation being checked against nothing.
+    track_only = {
+        app.id
+        for app in current_configuration.candidates
+        if app.additional_settings.get("trackOnly") is True
+    }
+    assert TRACKER_ID in track_only
