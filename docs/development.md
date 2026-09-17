@@ -43,8 +43,8 @@ the exact verified commit to a separate write job that pushes it. Formatting,
 lint, types and the full suite remain development CI responsibilities. Main
 advancing past a run's base fails that run without another attempt; release
 synchronization is checked separately, after the main outcome. A verification
-report with any schema other than the current one requires regeneration with
-`uv run pack verify`, and old build report schemas with `uv run pack build`.
+or build report with any schema other than the current one requires regeneration
+with `uv run pack verify` or `uv run pack build` respectively.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.

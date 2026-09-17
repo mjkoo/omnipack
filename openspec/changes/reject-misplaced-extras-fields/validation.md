@@ -166,3 +166,20 @@ verification and archive workflows have not been run. No push or merge occurred.
 After the audit, the required final full-suite run passed all 686 tests in
 29.00 seconds. Offline `pack verify` and strict artifact validation passed again.
 No implementation changes followed the audit.
+
+## Post-audit cleanup
+
+A later review found no correctness or completeness issues and suggested
+behavior-neutral cleanups, which were applied afterwards. The overlay protected-field error
+now names one field chosen deterministically, matching the source ingestion
+error. The source guard tests dispatch through per-source fetch helpers instead
+of string comparison, use a neutral record helper, assert the exact error
+prefix, and drop a heuristic wording check. The CLI guard case also asserts that
+the build report records an ingestion failure from extras. Documentation
+describes build and verification report schema mismatches in the same terms and
+fixes a broken line wrap.
+
+`just lock-check format-check lint-check typecheck test verify check-links`
+passed again, with all 686 tests passing, offline `pack verify` succeeding, and
+zero link errors. `openspec validate reject-misplaced-extras-fields --strict`
+and `git diff --check` passed.

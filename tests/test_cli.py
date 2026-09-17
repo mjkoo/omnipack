@@ -304,6 +304,9 @@ def test_guarded_extras_field_fails_build_and_preserves_outputs(
     assert "Guarded extra" in error
     assert "packageId" in error
     assert "cannot come from a source record" in error
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "ingestion"
+    assert report["error"].startswith("extras: ")
 
 
 @pytest.mark.parametrize(

@@ -42,9 +42,9 @@ package IDs; codm discovery belongs to source generation.
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. A verification report with any schema other than the
 current one requires regeneration with `pack verify`. Build reports must use
-schema 3; an older build report requires regeneration with `pack build`. One
-available report is
-enough; missing both, corrupt reports and unsupported schemas fail display.
+schema 3; any other build report schema requires regeneration with `pack build`.
+One available report is enough; missing both, corrupt reports and unsupported
+schemas fail display.
 Displaying a recorded failed operation exits successfully.
 
 ## Structural checks and limits
