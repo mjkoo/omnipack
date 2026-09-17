@@ -115,3 +115,32 @@ report and fixture keys, prose, build-report schemas, unrelated historical
 app provenance, or the documented git push recovery command. The entire
 Retired configuration section was removed; current rules remain in the
 surrounding documentation.
+
+## Independent final reviews
+
+The validation group's evidencing review approved the input scan, byte comparison
+and repository-check evidence in `6ed361d`, with no findings. It independently
+reproduced the scan and both exact byte comparisons.
+
+Four independent whole-diff reviewers examined `341a4e8..6ed361d`:
+
+| Scope | Result |
+| --- | --- |
+| Source normalization, ingestion order and output-preserving failures | Approved, no findings |
+| Idiomatic patterns and maintainability | Approved, no findings |
+| Overlay and CLI public boundaries, diagnostics and documentation | Approved, no findings |
+| Test discrimination and proportionality | Approved, no findings |
+
+No fix round was needed. Review confirmed the accepted boundaries: export-excluded
+RJNY records bypass normalization; neither-pack RJNY records and suppressed codm
+records are guarded; invalid composition policy may fail before ingestion;
+configured source locations can change without adding a per-record bypass.
+The test reviewer found the ingestion matrix discriminating and proportionate,
+confirmed suppression's passing control, and accepted the CLI preservation and
+unsupported-argument tests. The reviewers confirmed deterministic field reporting,
+ownership-only diagnostics, generic denial coverage and explicit `pack verify`
+regeneration guidance. Retained source-generation failures still preserve accepted
+records verbatim, with source validation occurring at build ingestion. No parked
+warnings or unresolved findings remain.
+
+The independent checkbox/evidence audit is the remaining completion gate.
