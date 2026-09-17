@@ -30,8 +30,9 @@ configuration and device testing.
 
 `pack verify` validates setting types and local structural consistency. It does
 not resolve releases, evaluate extraction patterns, classify effective versions,
-or lint numeric formats. The retired `--live` and `--probe-assets` flags fail;
-regenerate old verification reports with `uv run pack verify`.
+or lint numeric formats. Unsupported arguments fail before verification. A
+verification report with any schema other than the current one requires
+regeneration with `uv run pack verify`.
 
 The recipes above describe intended Obtainium behavior. Check changed release
 selection and extraction in Obtainium, retain dated observations, and maintain

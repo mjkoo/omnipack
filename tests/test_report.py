@@ -149,19 +149,17 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     assert "Evidence: stale" in format_reports(tmp_path)
 
 
-def test_schema_2_verification_report_requires_regeneration(tmp_path: Path) -> None:
-    write_verification_report(tmp_path, schemaVersion=2)
+def test_unsupported_verification_schema_requires_regeneration(tmp_path: Path) -> None:
+    write_verification_report(tmp_path, schemaVersion=99)
     with pytest.raises(
         ValueError,
-        match=r"unsupported verification report schema 2; regenerate with `pack verify`",
+        match=r"unsupported verification report schema 99; regenerate with `pack verify`",
     ):
         format_reports(tmp_path)
 
 
-@pytest.mark.parametrize("value", ["not json", "[]", '{"schemaVersion":99}'])
-def test_corrupt_or_unsupported_verification_report_fails(
-    tmp_path: Path, value: str
-) -> None:
+@pytest.mark.parametrize("value", ["not json", "[]"])
+def test_corrupt_verification_report_fails(tmp_path: Path, value: str) -> None:
     path = tmp_path / ".build/verify.json"
     path.parent.mkdir()
     path.write_text(value)

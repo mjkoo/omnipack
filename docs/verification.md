@@ -16,11 +16,10 @@ Run commands from the repository root:
 | `uv run pack report` | Display available build and verification evidence without fetching or writing files |
 | `uv run pack build` | Ingest and compose sources, validate rendered bytes, then publish both packs and the catalog as a recoverable unit |
 
-The retired `--live` and `--probe-assets` arguments fail before verification starts
-and leave existing evidence untouched. Replace those invocations with `pack verify`.
-There is no generic whole-pack replacement. The separate `pack generate-source
-codm` operation resolves only the explicitly configured codm source candidate;
-it does not extend structural verification or change committed files.
+Unsupported arguments fail before verification starts and leave existing evidence
+untouched. The separate `pack generate-source codm` operation resolves only the
+explicitly configured codm source candidate; it does not extend structural
+verification or change committed files.
 
 Standalone verification writes schema 3 evidence to `.build/verify.json`, separately
 from the build report. It reads every input once, checks and fingerprints exactly
@@ -41,10 +40,10 @@ Verification never rebuilds or changes the packs, README, configuration or
 package IDs; codm discovery belongs to source generation.
 
 `pack report` labels supported evidence stale when any input fingerprint or the
-verifier identity differs. Older verification schemas, including schema 2 reports
-that fingerprinted the removed dual-screen overlay and pack settings files,
-require regeneration with `pack verify`. Build reports must use schema 3; an older
-build report requires regeneration with `pack build`. One available report is
+verifier identity differs. A verification report with any schema other than the
+current one requires regeneration with `pack verify`. Build reports must use
+schema 3; an older build report requires regeneration with `pack build`. One
+available report is
 enough; missing both, corrupt reports and unsupported schemas fail display.
 Displaying a recorded failed operation exits successfully.
 

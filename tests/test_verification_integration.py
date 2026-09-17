@@ -51,19 +51,27 @@ def test_offline_cli_succeeds_without_network_or_protected_file_changes(
     )
 
 
-@pytest.mark.parametrize("flag", ["--live", "--probe-assets"])
-def test_retired_verify_flags_fail_before_replacing_evidence(
+def test_unsupported_verify_argument_fails_before_verification(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
-    flag: str,
 ) -> None:
     inputs(tmp_path)
     report_path = tmp_path / ".build/verify.json"
     report_path.write_bytes(b'{"prior":"evidence"}')
+    monkeypatch.setattr(
+        cli,
+        "run_verification",
+        lambda *_args, **_kwargs: pytest.fail("verification ran"),
+    )
+    monkeypatch.setattr(
+        HttpClient,
+        "_urllib_transport",
+        lambda *_args, **_kwargs: pytest.fail("network request"),
+    )
     monkeypatch.chdir(tmp_path)
     with pytest.raises(SystemExit) as raised:
-        cli.main(["verify", flag])
+        cli.main(["verify", "--unsupported-option"])
     assert raised.value.code == 2
     assert "unrecognized arguments" in capsys.readouterr().err
     assert report_path.read_bytes() == b'{"prior":"evidence"}'

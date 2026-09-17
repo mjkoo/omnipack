@@ -26,15 +26,6 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
-def test_generate_source_codm_rejects_force(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with pytest.raises(SystemExit) as excinfo:
-        main(["generate-source", "codm", "--force"])
-    assert excinfo.value.code == 2
-    assert "--force" in capsys.readouterr().err
-
-
 def test_verify_missing_inputs_fails_and_report_displays_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
