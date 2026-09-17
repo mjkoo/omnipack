@@ -143,4 +143,26 @@ regeneration guidance. Retained source-generation failures still preserve accept
 records verbatim, with source validation occurring at build ingestion. No parked
 warnings or unresolved findings remain.
 
-The independent checkbox/evidence audit is the remaining completion gate.
+A fresh independent checkbox/evidence audit examined `341a4e8..06aa49e` after
+the review wave. It confirmed all nine previously checked tasks, with no
+unevidenced items or critical findings, naming the implementing commit and
+proving test or check for each. It explicitly confirmed that the clean wave
+plus this audit completes the remaining review task's gate. No implementation
+fixes or scope rulings were needed.
+
+## Completion audit evidence
+
+| Tasks | Implementation/evidence commit | Proof |
+| --- | --- | --- |
+| Source guard and source tests | `1ba38b3` | Five-path assigned/null matrix, RJNY ordering, codm suppression control, pass-through and CLI preservation tests; 119 passing focused tests |
+| Overlay and generic policy boundaries | `68629fe` | Six-field assigned/null matrix, origin patch control, non-array shape and generic policy/denial tests; 130 passing focused tests |
+| CLI and documentation cleanup | `3d7856d` | Unsupported argument and arbitrary schema tests; 96 passing focused tests; four updated docs and zero offline link errors |
+| Current inputs and repository checks | `6ed361d` | 572-record scan, exact pack bytes, 686-test full suite and repository checks |
+| Independent final reviews | `06aa49e` | Four clean whole-diff reviews and independently reproduced input/byte checks |
+
+The change remains active on `reject-misplaced-extras-fields`. Separate OpenSpec
+verification and archive workflows have not been run. No push or merge occurred.
+
+After the audit, the required final full-suite run passed all 686 tests in
+29.00 seconds. Offline `pack verify` and strict artifact validation passed again.
+No implementation changes followed the audit.
