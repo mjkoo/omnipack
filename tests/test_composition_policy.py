@@ -77,16 +77,16 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
     parsed = parse_composition_policy(
         policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
-    [result] = apply_composition_policy(parsed, [candidate()])
+    [result] = apply_composition_policy(
+        parsed, [candidate(raw={"futureField": {"retained": True}})]
+    )
 
     assert result.id == "org.example.new"
     assert result.original_id == "org.example.old"
     assert result.family == "app:example"
     assert result.eligibility == frozenset(Variant)
     assert result.dual_preferred is False
-    assert set(result.raw).isdisjoint(
-        {"family", "eligible", "eligibility", "dualPreferred", "origin", "originalId"}
-    )
+    assert result.raw == {"futureField": {"retained": True}}
 
     rendered = json.loads(
         render(
@@ -94,18 +94,8 @@ def test_policy_correction_retains_original_identity_and_internal_fields() -> No
         )
     )["apps"][0]
     assert rendered["id"] == "org.example.new"
-    assert set(rendered).isdisjoint(
-        {
-            "family",
-            "eligible",
-            "eligibility",
-            "dualPreferred",
-            "dual_preferred",
-            "origin",
-            "originalId",
-            "original_id",
-        }
-    )
+    assert rendered["futureField"] == {"retained": True}
+    assert set(rendered).isdisjoint({"family", "packageId", "variant"})
 
 
 def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
@@ -128,12 +118,8 @@ def test_identical_candidates_collapse_but_ambiguous_identity_fails() -> None:
         (policy(candidates=[rule(family="package:forbidden")]), "family"),
         (policy(candidates=[rule(family="app:bad family")]), "family"),
         (
-            policy(candidates=[rule(), rule(eligible=["dual"])]),
-            r"candidates\[1\] has unknown field 'eligible'",
-        ),
-        (
-            policy(candidates=[rule(), rule(dualPreferred=True)]),
-            r"candidates\[1\] has unknown field 'dualPreferred'",
+            policy(candidates=[rule(), rule(unexpected=True)]),
+            r"candidates\[1\] has unknown field 'unexpected'",
         ),
         (policy(candidates=[rule(rationale="  ")]), "rationale"),
         (

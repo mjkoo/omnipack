@@ -318,8 +318,8 @@ def test_overlay_target_may_exist_in_only_one_variant() -> None:
     assert findings == ()
 
 
-def test_retired_denial_selectors_are_reported() -> None:
-    entry = {"id": "org.example.app", "reason": "excluded", "variant": "dual"}
+def test_unknown_denial_field_is_reported() -> None:
+    entry = {"id": "org.example.app", "reason": "excluded", "unexpected": True}
     assert "invalid_composition_config" in codes(validate_offline(inputs(deny=[entry])))
 
 
