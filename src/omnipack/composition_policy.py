@@ -162,25 +162,7 @@ def apply_composition_policy(
                 f"selector {_show(shown)} matched no candidate"
             )
 
-    track_only_ids = {
-        app.id for app in collapsed if app.additional_settings.get("trackOnly") is True
-    }
-    for app in collapsed:
-        selector = candidate_selector(app)
-        rule = rules.get(selector.key)
-        if app.additional_settings.get("trackOnly") is True:
-            if rule is not None and (
-                rule.family is not None or rule.package_id is not None
-            ):
-                raise CompositionPolicyError(
-                    f"track-only candidate {_show(selector)} cannot assign family or packageId"
-                )
-        else:
-            effective_id = rule.package_id if rule and rule.package_id else app.id
-            if effective_id in track_only_ids:
-                raise CompositionPolicyError(
-                    f"reserved track-only id {effective_id!r} used by candidate {_show(selector)}"
-                )
+    _reject_track_only_conflicts(collapsed, rules)
 
     result: list[App] = []
     for app in collapsed:
@@ -189,7 +171,7 @@ def apply_composition_policy(
         if rule is None:
             updated = replace(app, family=f"package:{app.id}")
         else:
-            effective_id = rule.package_id or app.id
+            effective_id = _effective_id(app, rule)
             updated = replace(
                 app,
                 id=effective_id,
@@ -204,6 +186,43 @@ def apply_composition_policy(
         result.append(updated)
 
     return tuple(result)
+
+
+def _reject_track_only_conflicts(
+    collapsed: tuple[App, ...],
+    rules: dict[tuple[str, str, str, str], CandidateRule],
+) -> None:
+    """Keep track-only identities out of reach of every rule and other candidate.
+
+    This runs over all candidates before any rule is applied, so the error names
+    the offending selector even when another candidate sharing its rendered key
+    would otherwise fail the projection check first.
+    """
+    reserved = {app.id for app in collapsed if _is_track_only(app)}
+    for app in collapsed:
+        selector = candidate_selector(app)
+        rule = rules.get(selector.key)
+        if _is_track_only(app):
+            if rule is not None and (
+                rule.family is not None or rule.package_id is not None
+            ):
+                raise CompositionPolicyError(
+                    f"track-only candidate {_show(selector)} cannot assign "
+                    "family or packageId"
+                )
+        elif (effective_id := _effective_id(app, rule)) in reserved:
+            raise CompositionPolicyError(
+                f"reserved track-only id {effective_id!r} used by candidate "
+                f"{_show(selector)}"
+            )
+
+
+def _is_track_only(app: App) -> bool:
+    return app.additional_settings.get("trackOnly") is True
+
+
+def _effective_id(app: App, rule: CandidateRule | None) -> str:
+    return (rule.package_id if rule else None) or app.id
 
 
 def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:

@@ -302,7 +302,9 @@ def test_pin_family_must_match_its_projected_candidate_family() -> None:
         {"packageId": "org.example.old"},
     ],
 )
-def test_track_only_assignments_fail_with_original_selector(assignment) -> None:
+def test_track_only_assignments_fail_with_original_selector(
+    assignment: dict[str, str],
+) -> None:
     parsed = parse_composition_policy(policy(candidates=[rule(**assignment)]))
     with pytest.raises(
         CompositionPolicyError, match="track-only.*rjny.*org.example.old"
@@ -312,31 +314,36 @@ def test_track_only_assignments_fail_with_original_selector(assignment) -> None:
         )
 
 
-@pytest.mark.parametrize("mode", ["corrected", "ingested", "descriptive"])
-def test_ordinary_effective_id_cannot_take_track_only_id(mode: str) -> None:
+@pytest.mark.parametrize(
+    "ordinary, rules",
+    [
+        (candidate(), [rule(packageId="tracker")]),
+        (candidate(id="tracker", original_id="tracker"), []),
+        (
+            candidate(id="tracker", original_id="tracker"),
+            [
+                rule(
+                    match={
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "tracker",
+                        "url": "https://github.com/example/app",
+                    }
+                )
+            ],
+        ),
+    ],
+    ids=["corrected", "ingested", "descriptive"],
+)
+def test_ordinary_effective_id_cannot_take_track_only_id(
+    ordinary: App, rules: list[dict[str, object]]
+) -> None:
     tracker = candidate(
         id="tracker",
         original_id="tracker",
         url="https://example.com/tracker",
         additional_settings={"trackOnly": True},
     )
-    ordinary = (
-        candidate()
-        if mode == "corrected"
-        else candidate(id="tracker", original_id="tracker")
-    )
-    rules = [rule(packageId="tracker")] if mode == "corrected" else []
-    if mode == "descriptive":
-        rules = [
-            rule(
-                match={
-                    "source": "rjny",
-                    "origin": "rjny-catalog",
-                    "id": "tracker",
-                    "url": ordinary.url,
-                }
-            )
-        ]
     with pytest.raises(
         CompositionPolicyError, match="reserved track-only.*example/app"
     ):

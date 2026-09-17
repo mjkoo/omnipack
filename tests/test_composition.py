@@ -654,16 +654,62 @@ def test_considered_lists_only_other_available_candidates() -> None:
     }
 
 
-@pytest.mark.parametrize("hidden_by", ["pin", "denial"])
-def test_track_only_rule_fails_before_selection(hidden_by: str) -> None:
+def test_track_only_rule_fails_before_a_pin_selects() -> None:
     tracker = app("tracker", additional_settings={"trackOnly": True})
     ordinary = app("ordinary", "extras")
     policy = pin_policy(ordinary, "app:shared", Variant.DUAL, tracker)
-    denied = [{"id": "tracker", "reason": "hidden"}] if hidden_by == "denial" else []
-    if hidden_by == "denial":
-        policy = replace(policy, pins=(), projected_pins={})
     with pytest.raises(CompositionError, match="track-only.*rjny.*tracker"):
-        compose([ordinary, tracker], denied, [], policy=policy)
+        compose([ordinary, tracker], [], [], policy=policy)
+
+
+def test_denial_cannot_hide_track_only_rule() -> None:
+    tracker = app(
+        "tracker", family="app:shared", additional_settings={"trackOnly": True}
+    )
+    with pytest.raises(CompositionError, match="track-only.*rjny.*tracker"):
+        compose([tracker], [{"id": "tracker", "reason": "hidden"}], [])
+
+
+@pytest.mark.parametrize(
+    "pinned, denials",
+    [(["dual"], []), ([], [{"id": "tracker", "reason": "hidden"}])],
+    ids=["pin", "denial"],
+)
+def test_corrected_id_cannot_take_track_only_id_before_selection(
+    pinned: list[str], denials: list[dict[str, str]]
+) -> None:
+    ordinary = app("ordinary", "extras")
+    tracker = app("tracker", additional_settings={"trackOnly": True})
+    match = {
+        "source": "extras",
+        "origin": "extras",
+        "id": ordinary.id,
+        "url": ordinary.url,
+    }
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [
+                {
+                    "match": match,
+                    "family": "app:shared",
+                    "packageId": "tracker",
+                    "rationale": "Take the tracker's id.",
+                }
+            ],
+            "pins": [
+                {
+                    "family": "app:shared",
+                    "variant": variant,
+                    "match": match,
+                    "rationale": "Prefer the corrected build.",
+                }
+                for variant in pinned
+            ],
+        }
+    )
+    with pytest.raises(CompositionError, match="reserved track-only.*extras.*ordinary"):
+        compose([ordinary, tracker], denials, [], policy=policy)
 
 
 def test_denial_cannot_hide_ordinary_collision_with_track_only_id() -> None:

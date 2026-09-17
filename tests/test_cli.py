@@ -14,6 +14,8 @@ from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport
 from tests.test_build import write_config
+from tests.test_composition_policy import candidate as policy_candidate
+from tests.test_composition_policy import policy, rule
 
 EMPTY_POLICY = '{"schemaVersion":1,"candidates":[],"pins":[]}'
 
@@ -639,13 +641,11 @@ def test_missing_local_input_fails_at_ingestion_before_any_fetch(
 def test_invalid_track_only_policy_preserves_prior_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    from tests.test_composition_policy import candidate, policy, rule
-
     write_config(tmp_path)
     (tmp_path / "config/composition.json").write_text(
         json.dumps(policy(candidates=[rule(family="app:example")]))
     )
-    tracker = candidate(additional_settings={"trackOnly": True})
+    tracker = policy_candidate(additional_settings={"trackOnly": True})
     monkeypatch.setattr(
         cli, "_ingest_for_build", lambda root, inputs, report: [tracker]
     )

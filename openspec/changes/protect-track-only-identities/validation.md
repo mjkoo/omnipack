@@ -41,7 +41,7 @@ ingested-settings guard, as designed.
 
 Locked dependency check, formatting, lint, type checking, offline pack verification
 and strict change validation passed. Independent reviews and final suite results
-are recorded below as they complete.
+are recorded below.
 
 ## Independent implementation-group review
 
@@ -96,3 +96,20 @@ were taken. The change remains active on `protect-track-only-identities`.
 After the completion audit, the final full-suite rerun passed all 663 tests in
 29.04 seconds. OpenSpec apply reports 5/5 tasks complete. Separate verification
 and archive workflows were not invoked.
+
+## Follow-up code review
+
+A later review of the new code found no correctness or completeness defects and
+raised idiom points, all addressed without changing behavior. The track-only
+checks moved into a private helper that shares one track-only predicate and one
+effective-id computation with the rule transform, and its error messages now wrap
+like the rest of the module. Parametrized tests take their cases as data rather
+than branching on a mode, the CLI test imports its helpers at module level, and
+the current-configuration tracker test no longer repeats the check composition
+already performs; it asserts only that track-only candidates exist to reserve.
+One composition case was added: a rule correcting an ordinary candidate's
+`packageId` onto a track-only id fails before a pin or a denial can hide it.
+
+With the policy module restored to its pre-change version, all 13 track-only
+behavior tests failed. With the change, the full suite passed 665 tests, and Ruff
+format, Ruff lint, ty and strict change validation passed.
