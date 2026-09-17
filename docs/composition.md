@@ -30,6 +30,17 @@ Each source alone decides which kind a build is:
 No candidate rule or other composition setting changes a build's kind or which
 packs it can appear in.
 
+Source records from every catalog and extras must not carry top-level `family`,
+`packageId` or `variant`, even with null values. Ingestion rejects those fields
+with the source, entry and field identified. Composition policy in
+`config/composition.json` owns app families, package identities and per-pack
+selection; editing that policy does not repair an invalid source record.
+Validation applies before codm suppression, while RJNY entries excluded from
+export are dropped before normalization. Other unmodeled fields pass through
+unchanged. The extras adapter consumes `dualScreen` to set eligibility, so it
+never reaches that extra's rendered record; on upstream records it is an
+ordinary unmodeled field.
+
 A valid pin comes first: it selects the one candidate it names ahead of
 dual-screen replacement and source precedence. Nothing else makes the dual pack
 select a baseline build over an available dual-screen build. Among builds of one
@@ -97,9 +108,9 @@ denials. A denial does not disable a contradictory pin silently; the build fails
 
 Each denylist record contains exactly an effective package `id` and a `reason`,
 and applies to both packs. It removes every candidate carrying that package id
-before selection, whichever source supplied it. Any other field, including a
-`family` or `variant` selector, fails with the record identified. An unmatched
-denial is reported as stale but does not fail the build.
+before selection, whichever source supplied it. Any other field fails with the
+record identified. An unmatched denial is reported as stale but does not fail
+the build.
 
 The overlay file contains an array of `{id, url, patch}` records. A record matches
 the selected effective id and normalized project URL together, and patches the
@@ -108,8 +119,10 @@ satisfy a patch selector. Duplicate selectors and records that match no selected
 entry fail, so a fork switch must deliberately update its patches.
 
 Patches retain recursive JSON Merge Patch, including null deletion of allowed
-fields. They cannot assign or delete `id`, `url`, `overrideSource`, or composition
-metadata such as `dualScreen`. Whole-app removal uses the denylist.
+fields. The protected fields are exactly `id`, `url`, `overrideSource`, `family`,
+`packageId` and `variant`; patches cannot assign or delete them, including by
+null deletion. Every other field is patchable. Whole-app removal uses the
+denylist. A non-array overlay fails with an array-shape error.
 
 Valid denylist and overlay records are arrays whose selectors are explicit:
 
@@ -169,33 +182,12 @@ not check eligibility, which rendered entries cannot reveal, and it cannot prove
 source provenance, ranking, presence of losing upstream candidates, or that patch
 values were applied. Composition policy bytes participate in input fingerprints;
 changed inputs or a different supported verifier identity make evidence stale.
-Obsolete verification schemas require regeneration with `pack verify`.
+A verification report with any schema other than the current one requires
+regeneration with `pack verify`.
 
 Selected-project metadata failure prevents publication. It never switches to a
 family alternative. Existing configured fallback among releases of the selected
 project is unchanged. Nightly does not edit composition policy.
-
-## Retired configuration
-
-These pieces were removed, and configuration that still carries them fails:
-
-- History records and family-change reporting. A `history` array in the policy is
-  an unknown field. The report's `changes` still lists added and removed package
-  ids, and its selections name each family's current winner.
-- Rule-level eligibility and dual preference, and the extras `variants` list and
-  its dual-preference flag. Candidate rules and extras that carry them fail with
-  the field identified. An extra that belongs only in the dual-screen pack sets
-  `"dualScreen": true` instead.
-- Family denials, variant-scoped denials and coverage exemptions. Express a family
-  denial as one denial per package id. A variant-scoped denial has no replacement:
-  an app can no longer be published in single only.
-- The separate dual-screen overlay file and the pack settings file. One overlay
-  record patches every pack that selects its id-and-URL pair; a patch can no
-  longer target one pack only. Category colours are derived from category names,
-  and pack settings and colours can no longer be configured.
-- Per-alternative selection detail: loss reasons, differing fields and
-  history-based family classification. Selections keep the winner, the candidates
-  considered and one reason.
 
 ## Migration and rollback
 

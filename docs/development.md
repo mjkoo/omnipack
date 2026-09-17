@@ -26,9 +26,9 @@ README.
 
 Run `uv run pack verify` (or `just verify`) to validate the committed packs,
 README catalog and local configuration without network access.
-Verification does not consult HTTP configuration or credentials. The retired
-`--live` and `--probe-assets` flags are rejected; use Obtainium to investigate
-source selection and version behavior.
+Verification does not consult HTTP configuration or credentials. Unsupported
+arguments fail before verification and leave prior evidence intact. Use Obtainium
+to investigate source selection and version behavior.
 Verification leaves distribution files, README, configuration, and the build
 report unchanged. Standalone evidence is written to `.build/verify.json`.
 
@@ -42,9 +42,9 @@ nightly publication builds and verifies once, in a read-only job, then hands
 the exact verified commit to a separate write job that pushes it. Formatting,
 lint, types and the full suite remain development CI responsibilities. Main
 advancing past a run's base fails that run without another attempt; release
-synchronization is checked separately, after the main outcome. Old
-verification report schemas require regeneration with `uv run pack verify`, and
-old build report schemas with `uv run pack build`.
+synchronization is checked separately, after the main outcome. A verification
+or build report with any schema other than the current one requires regeneration
+with `uv run pack verify` or `uv run pack build` respectively.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.

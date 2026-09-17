@@ -60,14 +60,14 @@ whose only builds are dual-screen builds SHALL appear only in the dual-screen
 pack. Nothing other than a pin naming a specific candidate SHALL make the
 dual-screen pack select a baseline build over an available dual-screen build.
 
-A package denial removes builds, not families, as "Denied packages are excluded
-from both variants" defines. Where a family's baseline and dual-screen builds
-share a package id, a denial of that id SHALL remove both builds from both
-packs, and the family's builds carrying other package ids SHALL stay
-selectable. A family whose only builds share the denied package id is therefore
-absent from both packs. A dual pin naming a family's baseline build SHALL keep
-it in the dual-screen pack in place of the family's dual-screen build, whether
-or not the two builds share a package id.
+A package denial removes builds, not families, as "Package denials exclude
+candidates from both variants" defines. Where a family's baseline and
+dual-screen builds share a package id, a denial of that id SHALL remove both
+builds from both packs, and the family's builds carrying other package ids
+SHALL stay selectable. A family whose only builds share the denied package id
+is therefore absent from both packs. A dual pin naming a family's baseline
+build SHALL keep it in the dual-screen pack in place of the family's
+dual-screen build, whether or not the two builds share a package id.
 
 #### Scenario: A dual-screen build replaces the baseline in dual
 
@@ -131,7 +131,7 @@ pins for one family and target SHALL fail.
 - **WHEN** a pin names a candidate whose effective package is denied
 - **THEN** the build fails with the conflicting pin and denial identified
 
-### Requirement: Explicit policy separates app families from package identities
+### Requirement: Composition policy separates app families from package identities
 
 The system SHALL load a versioned committed composition policy. A candidate
 SHALL retain original source, source origin, package id and normalized project
@@ -162,9 +162,9 @@ identified. This restriction SHALL apply whether or not the candidate has a
 rule, and SHALL likewise apply before exclusions and selection, regardless of
 whether either candidate would win or be denied.
 
-A rule SHALL NOT set eligibility or dual
-preference, which come only from the build's source: an `eligible` or
-`dualPreferred` field SHALL fail as an unknown candidate-rule field with the
+A rule SHALL NOT set eligibility or dual preference, which come only from the
+build's source. A candidate-rule field other than `match`, `rationale`,
+`packageId` and `family` SHALL fail as an unknown candidate-rule field with the
 rule and field identified. Identity corrections SHALL have recorded primary APK
 manifest evidence. Rules projecting to the same effective id and normalized URL
 SHALL agree on family, so rendered-family interpretation is unambiguous, and a
@@ -172,8 +172,9 @@ projection SHALL carry the family only. Build SHALL reject any candidate
 sharing that rendered key whose family contradicts the projection, including
 candidates without their own rule. Projections SHALL impose no offline
 eligibility restriction, because source-derived eligibility cannot be
-reconstructed from rendered entries. Composition metadata SHALL NOT be
-serialized into Obtainium app records.
+reconstructed from rendered entries. Composition SHALL NOT serialize the
+family, original identity, eligibility or selection reason it computes into
+Obtainium app records.
 
 #### Scenario: Different package ids represent replacement builds
 
@@ -199,9 +200,10 @@ serialized into Obtainium app records.
   different families
 - **THEN** configuration fails instead of making offline interpretation ambiguous
 
-#### Scenario: A rule declares eligibility or dual preference
+#### Scenario: A rule carries an unknown field
 
-- **WHEN** a candidate rule carries an `eligible` or `dualPreferred` field
+- **WHEN** a candidate rule carries a field other than `match`, `rationale`,
+  `packageId` and `family`
 - **THEN** configuration fails with the rule and the unknown field identified
 
 #### Scenario: Track-only resource is assigned to an app family
@@ -251,9 +253,10 @@ The system SHALL normalize candidates, apply identity and family rules, remove
 excluded candidates, validate explicit selections, select by family and target,
 validate overlay targets, apply overlays, and check unique packages and family
 coverage. Exclusions SHALL observe corrected package identities before selection
-and SHALL NOT be re-applied after overlays. Overlays SHALL NOT change identity,
-URL, source type or composition metadata, including by null deletion. Failures
-SHALL preserve the previous output pair and diagnostics already collected.
+and SHALL NOT be re-applied after overlays. Overlays SHALL NOT assign or delete
+`id`, `url`, `overrideSource`, `family`, `packageId` or `variant`, including by
+null deletion. Failures SHALL preserve the previous output pair and diagnostics
+already collected.
 
 #### Scenario: An overlay cannot move an entry onto a denylisted package id
 
@@ -337,7 +340,7 @@ and stale exclusions SHALL also be reported.
 - **WHEN** an evidenced rule changes the winning candidate's effective package id
 - **THEN** the selection records both its original and effective package ids
 
-### Requirement: Denied packages are excluded from both variants
+### Requirement: Package denials exclude candidates from both variants
 
 A denylist entry SHALL contain exactly a nonempty effective package `id` and a
 nonempty `reason`. The system SHALL exclude every candidate carrying that
@@ -347,8 +350,8 @@ sources. A package denial SHALL NOT remove different-package alternatives merely
 because they share a family, so a family SHALL be absent from a variant after
 denials only when none of its remaining candidates is eligible there. An entry
 matching no candidate SHALL be reported as
-a stale exclusion and SHALL NOT fail the build. Any other field, including a
-family or variant selector, SHALL fail explicitly with the entry identified.
+a stale exclusion and SHALL NOT fail the build. Any other field SHALL fail
+explicitly with the entry identified.
 
 #### Scenario: Denied by package id
 
@@ -365,26 +368,28 @@ family or variant selector, SHALL fail explicitly with the entry identified.
 - **WHEN** a denial names a package that no candidate carries
 - **THEN** the exclusion is reported stale, changes nothing and does not fail the build
 
-#### Scenario: Denylist entry carries a retired selector
+#### Scenario: Denylist entry carries an unknown field
 
-- **WHEN** a denylist entry carries a `family` or `variant` field
+- **WHEN** a denylist entry carries a field other than `id` and `reason`
 - **THEN** the build fails with the entry and the unknown field identified
 
 ### Requirement: One overlay patches composed entries
 
 The overlay file SHALL contain an array of records with effective package `id`,
-project `url` and object `patch`. Each record SHALL apply to the matching
+project `url` and object `patch`. An overlay document that is not an array
+SHALL fail with the overlay identified. Each record SHALL apply to the matching
 selected entry in every variant that selects it. Matching SHALL use both
 effective id and normalized project URL. Duplicate selectors SHALL fail. A
-non-object patch, including null, SHALL fail. An obsolete id-keyed overlay
-object SHALL fail with migration guidance.
+non-object patch, including null, SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
-Patches SHALL NOT contain `id`, `url`, `overrideSource` or composition metadata
-fields with any value, including null. All other unpatched data SHALL remain
-unchanged. Shared settings for distinct project URLs SHALL require explicit
-records for each project; a common package id SHALL NOT make a patch transfer
-to another fork. Whole-app removal SHALL remain the denylist's responsibility.
+The protected patch fields SHALL be exactly `id`, `url`, `overrideSource`,
+`family`, `packageId` and `variant`: a patch SHALL NOT contain any of them with
+any value, including null. Every other key SHALL be patchable, and all other
+unpatched data SHALL remain unchanged. Shared settings for distinct project URLs
+SHALL require explicit records for each project; a common package id SHALL NOT
+make a patch transfer to another fork. Whole-app removal SHALL remain the
+denylist's responsibility.
 
 #### Scenario: Overlay changes a setting
 
@@ -403,8 +408,15 @@ to another fork. Whole-app removal SHALL remain the denylist's responsibility.
 
 #### Scenario: Protected field is assigned or deleted
 
-- **WHEN** a patch contains an id, URL, source type or composition field, including null
+- **WHEN** a patch contains `id`, `url`, `overrideSource`, `family`,
+  `packageId` or `variant`, with any value including null
 - **THEN** the build fails naming the selector and forbidden field
+
+#### Scenario: Overlay document is not an array
+
+- **WHEN** the overlay file holds a JSON object or another non-array value
+- **THEN** the build fails with the overlay identified as not being an array
+  of patch records
 
 #### Scenario: Overlay maps a package id to something other than an object
 

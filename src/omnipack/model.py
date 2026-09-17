@@ -22,26 +22,6 @@ class SourceType(str, Enum):
     GITLAB = "GitLab"
 
 
-# Composition field names, current and retired, that never belong in an
-# Obtainium record: normalization strips them from a source record, and an
-# overlay may neither assign nor delete them.
-COMPOSITION_ONLY_FIELDS = frozenset(
-    {
-        "variants",
-        "dualPreferred",
-        "dual_preferred",
-        "dualScreen",
-        "eligible",
-        "eligibility",
-        "family",
-        "origin",
-        "originalId",
-        "original_id",
-        "provenance",
-    }
-)
-
-
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Where an entry came from, for the build report."""

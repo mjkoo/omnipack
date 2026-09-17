@@ -6,7 +6,6 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from omnipack.model import COMPOSITION_ONLY_FIELDS
 from omnipack.urls import normalize_project_url
 
 
@@ -43,10 +42,7 @@ class OverlayPatch:
 
 def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
     if not isinstance(document, list):
-        raise OverlayError(
-            f"{label} must be an array of id-and-URL patch records; "
-            "legacy package-id objects are unsupported"
-        )
+        raise OverlayError(f"{label} must be an array of id-and-URL patch records")
     result: list[OverlayPatch] = []
     keys: set[tuple[str, str]] = set()
     for index, value in enumerate(document):
@@ -69,21 +65,18 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
             ) from error
         if not isinstance(patch, dict):
             raise OverlayError(f"{item_label}.patch must be an object")
-        protected = (
-            {
-                "id",
-                "url",
-                "overrideSource",
-                "variant",
-                "selectionReason",
-                "selection_reason",
-            }
-            | COMPOSITION_ONLY_FIELDS
-        ).intersection(patch)
+        protected = {
+            "id",
+            "url",
+            "overrideSource",
+            "family",
+            "packageId",
+            "variant",
+        }.intersection(patch)
         if protected:
             raise OverlayError(
                 f"{item_label}.patch for selector {(package_id, url)!r} "
-                "contains protected field " + ", ".join(sorted(protected))
+                f"contains protected field {min(protected)}"
             )
         record = OverlayPatch(package_id, url, deepcopy(patch))
         if record.key in keys:

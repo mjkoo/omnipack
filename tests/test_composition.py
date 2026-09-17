@@ -241,16 +241,8 @@ def test_denial_of_a_build_eligible_for_neither_pack_is_not_stale() -> None:
         ({"id": None, "reason": "x"}, r"denylist\[0\]\.id must be a nonempty string"),
         ({"id": "x"}, r"denylist\[0\]\.reason must be a nonempty string"),
         (
-            {"id": "x", "family": "app:x", "reason": "x"},
-            r"denylist\[0\] has unknown field 'family'",
-        ),
-        (
-            {"family": "app:x", "reason": "x"},
-            r"denylist\[0\] has unknown field 'family'",
-        ),
-        (
-            {"id": "x", "variant": "dual", "reason": "x"},
-            r"denylist\[0\] has unknown field 'variant'",
+            {"id": "x", "unexpected": True, "reason": "x"},
+            r"denylist\[0\] has unknown field 'unexpected'",
         ),
     ],
 )
@@ -501,10 +493,12 @@ def test_stale_losing_overlay_fails_after_selection_diagnostics_survive() -> Non
     assert [item.original_id for item in report.selections[0].considered] == ["loser"]
 
 
-@pytest.mark.parametrize("document", [{}, {"x": {"name": "old"}}])
-def test_legacy_overlay_objects_fail_actionably(document: object) -> None:
-    with pytest.raises(CompositionError, match=r"array.*legacy"):
-        compose([], [], document)
+def test_nonarray_overlay_error_identifies_the_overlay() -> None:
+    with pytest.raises(
+        CompositionError,
+        match=r"^overlay must be an array of id-and-URL patch records$",
+    ):
+        compose([], [], {"not": "an array"})
 
 
 def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
@@ -524,10 +518,8 @@ def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
         "url",
         "overrideSource",
         "family",
-        "origin",
-        "eligibility",
-        "dualPreferred",
-        "dualScreen",
+        "packageId",
+        "variant",
     ],
 )
 def test_overlay_rejects_assigning_or_deleting_identity_and_composition_fields(
@@ -541,6 +533,18 @@ def test_overlay_rejects_assigning_or_deleting_identity_and_composition_fields(
     message = str(raised.value)
     assert repr(rendered_key(candidate.id, candidate.url)) in message
     assert message.endswith(f"protected field {field}")
+
+
+def test_overlay_patches_unmodeled_origin() -> None:
+    candidate = app("x")
+    result = compose(
+        [candidate],
+        [],
+        overlays((candidate.id, candidate.url, {"origin": "overlay-value"})),
+    )
+    for variant in Variant:
+        [rendered] = result.apps[variant]
+        assert rendered.data["origin"] == "overlay-value"
 
 
 def test_selection_report_preserves_corrected_identity_and_origin() -> None:

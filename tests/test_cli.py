@@ -26,15 +26,6 @@ def test_no_command_is_an_error(capsys: pytest.CaptureFixture[str]) -> None:
     assert "required" in capsys.readouterr().err
 
 
-def test_generate_source_codm_rejects_force(
-    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    with pytest.raises(SystemExit) as excinfo:
-        main(["generate-source", "codm", "--force"])
-    assert excinfo.value.code == 2
-    assert "--force" in capsys.readouterr().err
-
-
 def test_verify_missing_inputs_fails_and_report_displays_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -268,6 +259,54 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "removed": [],
     }
     assert not (tmp_path / "dist/report.json").exists()
+
+
+def test_guarded_extras_field_fails_build_and_preserves_outputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    extras_path = tmp_path / "config/extras.json"
+    extras_path.write_text(
+        json.dumps(
+            [
+                {
+                    "id": "app.extra",
+                    "url": "https://example.test/extra",
+                    "name": "Guarded extra",
+                    "packageId": None,
+                }
+            ]
+        )
+    )
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    before = {
+        "single-screen.json": b'{"apps":[{"id":"before-single"}]}\n',
+        "dual-screen.json": b'{"apps":[{"id":"before-dual"}]}\n',
+    }
+    for name, body in before.items():
+        (dist / name).write_bytes(body)
+
+    def transport(
+        _client: HttpClient, request: Request, _timeout: float
+    ) -> HttpResponse:
+        body = responses[request.full_url].encode()
+        return HttpResponse(request.full_url, 200, Message(), body)
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    assert {name: (dist / name).read_bytes() for name in before} == before
+    error = capsys.readouterr().err
+    assert "extras" in error
+    assert "Guarded extra" in error
+    assert "packageId" in error
+    assert "cannot come from a source record" in error
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "ingestion"
+    assert report["error"].startswith("extras: ")
 
 
 @pytest.mark.parametrize(

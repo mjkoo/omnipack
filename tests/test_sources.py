@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
 from typing import Any
@@ -214,6 +215,159 @@ def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
         ),
     )
     assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
+
+
+def _record_with(field: str, value: object) -> dict[str, object]:
+    return {
+        "id": "app.entry",
+        "name": "Entry",
+        "url": "https://github.com/owner/entry",
+        "overrideSource": "GitHub",
+        field: value,
+    }
+
+
+def _fetch_rjny(records: list[dict[str, object]]) -> list[App]:
+    url = "https://raw.githubusercontent.com/r/main/p"
+    return rjny.fetch(
+        FakeHttp({url: json.dumps({"apps": records})}),
+        {"repo": "r", "branch": "main", "path": "p"},
+    )
+
+
+def _fetch_bboi(
+    standard: list[dict[str, object]], dual: list[dict[str, object]]
+) -> list[App]:
+    api = "https://codeberg.org/api/v1/repos/a/b/releases/latest"
+    single_url, dual_url = "https://asset/single.json", "https://asset/dual.json"
+    release = {
+        "assets": [
+            {"name": "single.json", "browser_download_url": single_url},
+            {"name": "dual.json", "browser_download_url": dual_url},
+        ]
+    }
+    return bboi.fetch(
+        FakeHttp(
+            {
+                api: json.dumps(release),
+                single_url: json.dumps({"apps": standard}),
+                dual_url: json.dumps({"apps": dual}),
+            }
+        ),
+        {
+            "codeberg_repo": "a/b",
+            "single_asset_pattern": "single.json",
+            "dual_asset_pattern": "dual.json",
+        },
+    )
+
+
+def _fetch_codm(
+    tmp_path: Path, records: list[dict[str, object]], higher: list[App]
+) -> list[App]:
+    (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
+    return codm.fetch(tmp_path, {"catalog": "catalog.json"}, higher)
+
+
+@pytest.mark.parametrize("field", ["family", "packageId", "variant"])
+@pytest.mark.parametrize("value", ["assigned", None], ids=["assigned", "null"])
+@pytest.mark.parametrize(
+    ("source", "fetch"),
+    [
+        pytest.param("rjny", lambda record, _: _fetch_rjny([record]), id="rjny"),
+        pytest.param(
+            "bboi", lambda record, _: _fetch_bboi([record], []), id="bboi-standard"
+        ),
+        pytest.param(
+            "bboi", lambda record, _: _fetch_bboi([], [record]), id="bboi-dual"
+        ),
+        pytest.param(
+            "codm2000",
+            lambda record, tmp_path: _fetch_codm(tmp_path, [record], []),
+            id="codm2000",
+        ),
+        pytest.param("extras", lambda record, _: extras.fetch([record]), id="extras"),
+    ],
+)
+def test_source_record_rejects_composition_policy_fields(
+    source: str,
+    fetch: Callable[[dict[str, object], Path], list[App]],
+    field: str,
+    value: object,
+    tmp_path: Path,
+) -> None:
+    with pytest.raises(SourceError) as excinfo:
+        fetch(_record_with(field, value), tmp_path)
+    message = str(excinfo.value)
+    assert message.startswith(f"{source}: entry 'Entry' field {field!r} ")
+    assert "cannot come from a source record" in message
+    assert "composition policy in config/composition.json owns app families" in message
+    assert "package identities and per-pack selection" in message
+
+
+def test_rjny_excluded_record_is_not_guarded_but_neither_pack_record_is() -> None:
+    excluded = _record_with("family", None)
+    excluded["meta"] = {"excludeFromExport": True}
+    assert _fetch_rjny([excluded]) == []
+
+    neither_pack = _record_with("family", None)
+    neither_pack["meta"] = {
+        "includeInStandard": False,
+        "includeInDualScreen": False,
+    }
+    with pytest.raises(SourceError, match="^rjny: entry 'Entry' field 'family' "):
+        _fetch_rjny([neither_pack])
+
+
+def test_suppressed_codm_record_is_still_guarded(tmp_path: Path) -> None:
+    higher = [rjny_candidate(frozenset({Variant.DUAL}))]
+    unguarded = _record_with("ordinary", True)
+    unguarded["url"] = PROJECT
+    assert _fetch_codm(tmp_path, [unguarded], higher) == []
+
+    guarded = _record_with("variant", "dual")
+    guarded["url"] = PROJECT
+    with pytest.raises(SourceError, match="^codm2000: entry 'Entry' field 'variant' "):
+        _fetch_codm(tmp_path, [guarded], higher)
+
+
+def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
+    upstream = _record_with("origin", "upstream-value")
+    upstream["dualScreen"] = {"unknown": True}
+    [upstream_app] = _fetch_rjny([upstream])
+    [extra_app] = extras.fetch(
+        [
+            {
+                "id": "app.extra",
+                "name": "Extra",
+                "url": "https://example.test/extra",
+                "origin": "extra-value",
+                "dualScreen": True,
+            }
+        ]
+    )
+    assert upstream_app.raw == {
+        "origin": "upstream-value",
+        "dualScreen": {"unknown": True},
+    }
+    assert extra_app.raw == {"origin": "extra-value"}
+    assert extra_app.eligibility == frozenset({Variant.DUAL})
+    assert extra_app.dual_preferred
+    rendered = {
+        entry["id"]: entry
+        for entry in json.loads(
+            render(
+                [
+                    ComposedApp("package:app.entry", _import_data(upstream_app)),
+                    ComposedApp("package:app.extra", _import_data(extra_app)),
+                ]
+            )
+        )["apps"]
+    }
+    assert rendered["app.entry"]["origin"] == "upstream-value"
+    assert rendered["app.entry"]["dualScreen"] == {"unknown": True}
+    assert rendered["app.extra"]["origin"] == "extra-value"
+    assert "dualScreen" not in rendered["app.extra"]
 
 
 def test_bboi_latest_release_retains_both_asset_origins() -> None:
@@ -567,50 +721,6 @@ def test_extras_rejects_non_boolean_dual_screen(value: object) -> None:
         extras.fetch(
             [{"id": "b", "url": "https://x", "name": "Typed", "dualScreen": value}]
         )
-
-
-@pytest.mark.parametrize(
-    ("field", "value"),
-    [
-        ("variants", ["single", "dual"]),
-        ("dualPreferred", True),
-    ],
-)
-def test_extras_rejects_retired_fields_naming_entry_and_field(
-    field: str, value: object
-) -> None:
-    with pytest.raises(SourceError, match=f"extras.*Retired.*unknown field '{field}'"):
-        extras.fetch([{"id": "r", "url": "https://x", "name": "Retired", field: value}])
-
-
-def test_extras_composition_fields_stay_out_of_the_rendered_record() -> None:
-    [app] = extras.fetch(
-        [
-            {
-                "id": "d",
-                "url": "https://x",
-                "name": "Preferred",
-                "dualScreen": True,
-                "family": "app:ignored",
-                "origin": "ignored",
-                "originalId": "ignored",
-                "provenance": {"source": "ignored"},
-            }
-        ]
-    )
-    assert app.dual_preferred
-    assert not app.raw.keys() & {
-        "dualScreen",
-        "family",
-        "origin",
-        "originalId",
-        "provenance",
-    }
-    [rendered] = json.loads(
-        render([ComposedApp(f"package:{app.id}", _import_data(app))])
-    )["apps"]
-    assert "dualScreen" not in rendered
-    assert "dualScreen" not in json.loads(rendered["additionalSettings"])
 
 
 def test_additional_settings_string_must_decode_to_object() -> None:

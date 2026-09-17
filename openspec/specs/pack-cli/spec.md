@@ -50,12 +50,12 @@ diff. Building SHALL NOT replace `.build/verify.json` or claim live health.
 - **THEN** the failure report retains the successful offline verdict and identifies
   the later failing stage
 
-### Requirement: The verify command performs structural checks only
+### Requirement: The verify command runs offline structural checks only
 
 The system SHALL implement `pack verify` to check both current distribution files,
 local configuration and generated catalog offline without network requests.
-The retired `--live` and `--probe-assets` flags SHALL be rejected as unsupported
-arguments with nonzero exit before verification runs. The command SHALL record
+An unsupported argument SHALL fail argument parsing with nonzero exit before
+verification runs. The command SHALL record
 structural evidence and exit zero only on a complete, error-free run. Report
 write failure SHALL cause nonzero exit with a concise stderr diagnostic.
 Verification SHALL NOT rebuild, resolve package IDs, alter distribution or
@@ -66,10 +66,10 @@ configuration files, or overwrite the build report.
 - **WHEN** the current exports, configuration and catalog pass local checks without a previous build report
 - **THEN** `pack verify` succeeds and writes structural evidence without network access
 
-#### Scenario: A retired flag is supplied
+#### Scenario: An unsupported argument is supplied
 
-- **WHEN** either `--live` or `--probe-assets` is supplied, alone or together
-- **THEN** argument parsing fails without network requests or replacement verification evidence
+- **WHEN** `pack verify` is invoked with a flag it does not define
+- **THEN** argument parsing fails with nonzero exit without network requests or replacement verification evidence
 
 #### Scenario: Report persistence fails
 
@@ -93,11 +93,11 @@ displaying a recorded failed operation SHALL exit zero. Build reports SHALL also
 display family selections with their reasons. The composition policy SHALL
 participate in freshness checks. An unsupported build report schema, including a
 report without a schema field, SHALL produce a regeneration diagnostic directing
-the user to `pack build`. Unsupported old verification schemas SHALL produce a
-regeneration diagnostic directing the user to `pack verify`, rather than being
-interpreted as current structural evidence. Reports SHALL describe structural
-scope without resolved versions or live-health claims. A supported schema with a
-different verifier identity SHALL be stale.
+the user to `pack build`. An unsupported verification report schema SHALL
+produce a regeneration diagnostic directing the user to `pack verify`, rather
+than being interpreted as current structural evidence. Reports SHALL describe
+structural scope without resolved versions or live-health claims. A supported
+schema with a different verifier identity SHALL be stale.
 
 #### Scenario: Configuration changed after successful structural verification
 
@@ -250,7 +250,7 @@ change.
 - **WHEN** selection fails on tied candidates or a package collision
 - **THEN** the report identifies the family, target and conflicting selectors and preserves prior diagnostics
 
-### Requirement: A separate command generates the reviewed README source catalog
+### Requirement: The generate-source command builds the reviewed README source catalog
 
 The system SHALL provide `pack generate-source codm`. Each invocation SHALL
 fetch the configured README, validate the reviewed project policy, resolve every
@@ -264,19 +264,13 @@ resources, retained failures, unresolved projects and catalog changes relative
 to the committed catalog. It SHALL NOT modify the reviewed project policy. A
 complete catalog SHALL account for every eligible project as an APK or an
 explicitly declared tracker; lack of an APK SHALL NOT imply permission to skip
-or track it. The retired `--force` flag SHALL be rejected as an unsupported
-argument. Only artifacts produced by the current invocation SHALL be offered as
-its result.
+or track it. Only artifacts produced by the current invocation SHALL be offered
+as its result.
 
 #### Scenario: Unchanged source
 
 - **WHEN** the README, the policy and every project's resolved identity match the committed catalog
 - **THEN** the command succeeds with a candidate catalog byte-identical to the committed catalog
-
-#### Scenario: Forced refresh
-
-- **WHEN** `--force` is supplied
-- **THEN** argument parsing fails before any network request, since every invocation already resolves every project
 
 #### Scenario: Incomplete generation
 
