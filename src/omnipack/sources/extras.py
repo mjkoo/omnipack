@@ -7,8 +7,6 @@ from collections.abc import Sequence
 from omnipack.model import App, Variant
 from omnipack.sources.common import SourceError, normalize_record
 
-_RETIRED_FIELDS = frozenset({"variants", "dualPreferred"})
-
 
 def fetch(entries: Sequence[object]) -> list[App]:
     """Return the hand-added entries, normalized.
@@ -23,17 +21,13 @@ def fetch(entries: Sequence[object]) -> list[App]:
         if not isinstance(entry, dict):
             raise SourceError("extras", f"entry {index} must be an object")
         label = entry.get("name") or entry.get("id") or f"entry {index}"
-        retired = _RETIRED_FIELDS & entry.keys()
-        if retired:
-            raise SourceError(
-                "extras", f"entry {label!r} has unknown field {min(retired)!r}"
-            )
         dual_screen = entry.get("dualScreen", False)
         if type(dual_screen) is not bool:
             raise SourceError("extras", f"entry {label!r} dualScreen must be boolean")
+        record = {key: value for key, value in entry.items() if key != "dualScreen"}
         result.append(
             normalize_record(
-                entry,
+                record,
                 source="extras",
                 derive_type=True,
                 eligibility=(
