@@ -266,7 +266,7 @@ dual-asset build without removing either.
   or a denial removed one whose package the standard build does not carry
 - **THEN** the retained standard build remains available for dual selection
 
-### Requirement: Hand-written extras are ingested as baseline or dual-screen builds
+### Requirement: Hand-written extras are baseline or dual-screen builds
 
 The system SHALL ingest each entry in the extras configuration as a candidate
 entry, and SHALL fail the build with an error naming the entry when an extras
@@ -277,11 +277,10 @@ entry SHALL be a baseline build, a candidate for both variants, unless it
 carries an optional boolean `dualScreen` set to true, which makes it a
 dual-screen build: a candidate for the dual-screen variant only, preferred
 there. `dualScreen` SHALL default to false, and a non-boolean value SHALL fail
-the build with an error naming the entry. An extras entry carrying a `variants`
-or `dualPreferred` field SHALL fail the build with an error naming the entry
-and the field. Composition policy SHALL NOT change an extra's eligibility or
-dual preference. `dualScreen` and the other composition-only fields SHALL NOT
-reach Obtainium app records.
+the build with an error naming the entry. Composition policy SHALL NOT change
+an extra's eligibility or dual preference. The extras adapter SHALL consume an
+extras entry's `dualScreen` field so it does not reach that entry's Obtainium
+app record.
 
 #### Scenario: Extras entry lacks a package id
 
@@ -312,11 +311,6 @@ reach Obtainium app records.
 - **WHEN** an extras entry's `dualScreen` field holds a value other than true
   or false
 - **THEN** the build fails with an error naming that entry
-
-#### Scenario: Extras entry carries a retired field
-
-- **WHEN** an extras entry carries a `variants` or `dualPreferred` field
-- **THEN** the build fails with an error naming that entry and the field
 
 #### Scenario: Ordinary extra competes with a dual fork
 
@@ -452,3 +446,63 @@ SHALL fail explicitly.
 - **WHEN** the committed catalog includes an explicit track-only resource
 - **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
 - **AND** neither pack's entry for the app the resource extends is replaced
+
+### Requirement: Source records carry no composition policy fields
+
+This requirement SHALL apply to every record a source normalizes, including a
+committed codm2000 record later suppressed by higher-precedence dual coverage,
+and SHALL NOT apply to an RJNY entry marked as excluded from export, which is
+dropped before normalization. Every such record, from each upstream catalog, the
+committed codm2000 catalog and the hand-written extras, SHALL be
+an Obtainium app object as its source publishes it, and the extras
+`dualScreen` field SHALL be the only field defined by this system that
+ingestion reads from a source record. A source record carrying `family`,
+`packageId` or `variant` at its top level SHALL fail ingestion regardless of
+the field's value, including null, with an error naming the source, the entry
+and the field, stating that the field cannot come from a source record, and
+stating that composition policy in `config/composition.json` owns app
+families, package identities and per-pack selection. The error SHALL NOT
+direct or imply that the failure can be corrected by editing composition
+policy. The failure SHALL persist while the configured source location serves
+a record carrying the field, and the system SHALL provide no override for an
+individual record or field; an extras entry or a committed codm2000 record is
+corrected by editing it. Ingestion SHALL reserve no other field name: every
+field it does not model SHALL be retained unchanged for rendering, from every
+source.
+
+#### Scenario: Upstream entry carries a package identity field
+
+- **WHEN** an otherwise valid upstream catalog entry carries a top-level
+  `packageId`
+- **THEN** ingestion fails naming that source, the entry and `packageId`,
+  stating that the field cannot come from a source record and that
+  composition policy in `config/composition.json` owns package identities,
+  without directing the correction to composition policy, and later builds
+  from that source location fail the same way while the record carries the
+  field
+
+#### Scenario: Extras entry carries a null family
+
+- **WHEN** an otherwise valid extras entry carries a top-level `family` whose
+  value is null
+- **THEN** ingestion fails naming extras, the entry and `family`
+
+#### Scenario: Entry excluded from export is not checked
+
+- **WHEN** an RJNY entry marked as excluded from export carries a top-level
+  `family`
+- **THEN** ingestion does not fail and the entry is dropped
+
+#### Scenario: Suppressed codm2000 entry is checked
+
+- **WHEN** a committed codm2000 entry whose normalized URL is covered by a
+  higher-precedence dual candidate carries a top-level `variant`
+- **THEN** ingestion fails naming codm2000, the entry and `variant`
+
+#### Scenario: Unrelated unmodeled field passes through
+
+- **WHEN** an otherwise valid entry from any source carries a top-level field
+  that ingestion does not model and that is not `family`, `packageId` or
+  `variant`
+- **THEN** ingestion retains the field unchanged for rendering rather than
+  rejecting or removing it

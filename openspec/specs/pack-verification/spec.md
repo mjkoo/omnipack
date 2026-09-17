@@ -186,8 +186,9 @@ Verification SHALL check and fingerprint one captured set of input bytes,
 collect independently discoverable errors across both variants, and succeed
 only when those bytes have no errors. The command's exit status SHALL be the
 verification outcome; the report SHALL NOT serve as authorization for
-publication. Previous reports SHALL NOT bypass these checks. Obsolete verification report schemas SHALL require regeneration with
-`pack verify`.
+publication. Previous reports SHALL NOT bypass these checks. A verification
+report with any schema other than the current one SHALL require regeneration
+with `pack verify`.
 
 #### Scenario: Independent errors in both variants
 
@@ -211,6 +212,5 @@ publication. Previous reports SHALL NOT bypass these checks. Obsolete verificati
 
 #### Scenario: Obsolete evidence
 
-- **WHEN** a report uses an older schema, including the retired live-capable
-  schema or one that fingerprints the removed dual overlay and pack settings
+- **WHEN** a report uses a schema other than the current one
 - **THEN** the user is instructed to regenerate it with `pack verify`
