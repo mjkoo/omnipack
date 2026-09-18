@@ -42,3 +42,23 @@ No live source generation, live build, release write or device access was needed
 - `pack --help` and `pack generate-source --help` confirmed the command surface.
 - `just check-links`: 553 total links, 332 unique, 52 checked OK, zero errors
   (remote links excluded by the existing offline command).
+
+## Publication and curation wording
+
+- Compared curation and publishing wording with `scripts/nightly_write.py`
+  `run_release`, `_upload` and `_edit`, and the rolling-pack-release spec:
+  served digests are inspected before choosing unchanged/repair/advance;
+  repair uploads without an edit; advance uploads then edits; neither branch
+  performs a post-upload readback. The stable URLs can expose mixed or missing
+  assets and the publishing page owns the raw-main fallback explanation.
+- Curation now has a single-line non-atomic visibility note and a publishing
+  link. Device acceptance remains explicitly separate. Rollback retains only
+  restoring extras/overlay and rebuilding, with no release timing assertion.
+- Ludashi review: composition owns deferred migration and retained selection
+  and source-version policy; curation owns the current APK filter and older
+  release fallback. Neither passage credits a past change; identity uncertainty
+  and migration/device precautions remain.
+- `just check-links`: 555 total, 333 unique, 54 checked OK, zero errors.
+  Publication and policy fragment targets were also checked against headings;
+  the offline link checker does not establish remote-link availability.
+- `git diff --check`: passed.

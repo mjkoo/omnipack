@@ -200,5 +200,5 @@ must be tested on a device; metadata success does not prove either.
 
 Rollback restores implementation, policy, overlay schema, and both output files
 as one compatible revision. Restoring JSON does not undo installations or restore
-removed app data. Ludashi's v4.0 flavor/identity migration remains deferred; this
-change preserves its current release selection and source-version policy.
+removed app data. Ludashi's v4.0 flavor/identity migration remains deferred; its
+current release selection and source-version policy remain in place.
