@@ -62,3 +62,37 @@ No live source generation, live build, release write or device access was needed
   Publication and policy fragment targets were also checked against headings;
   the offline link checker does not establish remote-link availability.
 - `git diff --check`: passed.
+
+## Remaining validation
+
+- The abridged composition report example passed `format_reports` when its
+  omitted fields were supplied by the existing `tests.test_report.build_report`
+  helper. The displayed result contained its original id, effective id and pin
+  reason. `parse_project_policy` accepted the committed codm rules whose behavior
+  the source-generation reference illustrates; the baseline's fixture checks
+  `test_reviewed_policy_sets_fallback_for_named_projects` and
+  `test_committed_catalog_is_valid_canonical_and_composable` passed.
+- Inspected help for `pack build`, `verify`, `report`, and `generate-source codm`:
+  each documented invocation is supported. No live operation was invoked by
+  checking help. The automated commands remain descriptions of automation.
+- `uv run pack verify`: exit 0, successful offline verification. It ran with a
+  writable temporary uv cache after dependency setup; the command and checked
+  inputs were unchanged.
+- Reviewed the report wording against `verify.INPUT_PATHS` and report staleness
+  logic: development links to the owning fingerprint list without repeating it,
+  and states that edits outside that set do not stale evidence until outputs
+  change. Existing `test_verification_only_report_is_current_then_stale` passed
+  in the baseline suite.
+- `git diff --check`: passed. `git diff --name-only main...HEAD` contained only
+  the five planned documentation paths and this change's artifacts. Production
+  code, configuration, workflows, pack outputs and README were unchanged.
+
+## Implementation review evidence
+
+- Editing guidance review: independent reviewer approved `d70d119..d12759c`.
+  Each of 1.1, 1.2 and 1.3 has implementation in `d12759c` and the parser,
+  render, path-trace and workflow-comparison evidence above. No findings.
+- Publication wording review: independent reviewer approved
+  `d12759c..3c3d448`. Each of 2.1 and 2.2 has implementation in `3c3d448` and
+  runtime/spec comparison, cross-page ownership and link evidence above.
+  No findings. No exceptions or deferred implementation were accepted.
