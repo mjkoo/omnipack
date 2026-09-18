@@ -96,3 +96,16 @@ No live source generation, live build, release write or device access was needed
   `d12759c..3c3d448`. Each of 2.1 and 2.2 has implementation in `3c3d448` and
   runtime/spec comparison, cross-page ownership and link evidence above.
   No findings. No exceptions or deferred implementation were accepted.
+- Validation-group evidencing review approved `3c3d448..2ecf13a` for 3.1 with
+  parser/render, fixture, CLI, link, verification and scope evidence. Task 3.2
+  remains pending the final process gate and audit.
+- Two independent final-wave reviewers examined `189e2cf..2ecf13a`: one for
+  maintenance/publication correctness and one for documentation idioms,
+  ownership and proportionality. Both reported no Critical, Important or Minor
+  findings. No fix round was necessary. The correctness reviewer closed the
+  parked categories warning: the recipe strongly recommends categories and
+  states first-entry heading/sort behavior and the `Other` fallback, consistent
+  with catalog generation. No warnings were deferred.
+- All 14 local fragment links on the edited pages resolve to actual headings;
+  the final link pass again found 555 total, 333 unique, 54 checked OK and zero
+  errors. No prose-only tests were added.
