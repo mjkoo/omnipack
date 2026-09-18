@@ -109,3 +109,31 @@ No live source generation, live build, release write or device access was needed
 - All 14 local fragment links on the edited pages resolve to actual headings;
   the final link pass again found 555 total, 333 unique, 54 checked OK and zero
   errors. No prose-only tests were added.
+
+## Completion audit
+
+The fresh independent checkbox auditor examined `189e2cf..aaa5852` after the
+review wave and the process evidencing review. All six checked tasks were
+CONFIRMED, with zero UNEVIDENCED tasks and no Critical findings. The process
+review approved all completed review stages; the auditor confirmed that this
+successful audit satisfied the final condition for the seventh task, which
+remained unchecked until that result.
+
+| Task | Implementation/evidence commit | Proving checks |
+| --- | --- | --- |
+| 1.1 | `d12759c` | Extracted examples through parsers and overlay renderer, preserved settings, selector and category checks |
+| 1.2 | `d12759c` | Ordinary/codm/no-op and conflict path traces, CLI help, report and staging boundary inspection |
+| 1.3 | `d12759c` | Main/source workflow and catalog-only staging/allowlist comparison |
+| 2.1 | `3c3d448` | Release branches and rolling spec comparison, visibility/fallback and rollback inspection |
+| 2.2 | `3c3d448` | Cross-page Ludashi ownership and retained precautions review |
+| 3.1 | `2ecf13a` | Parser/fixture checks, baseline suite, CLI help, offline verification, links, diff and path audit |
+| 3.2 | `aaa5852` and this audit record | Three group evidencing reviews, two independent final-wave reviews, process review and fresh 6/6 checkbox audit |
+
+No implementation exception, deferred warning or discretionary ruling was
+needed. The change remains active. The separate OpenSpec verification and
+archive workflows were not invoked.
+
+Final post-audit suite: `uv run pytest --cov` passed all 686 tests in 23.91s,
+93% coverage, no warnings. The final whitespace check passed. Only task status
+and this evidence record were updated after the audit; no implementation fix
+or behavior change followed the gate.
