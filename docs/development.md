@@ -67,8 +67,8 @@ For every manual edit affecting pack contents:
    ```
 
    Ordinary extras, overlay, denial, family and pin edits skip generation.
-   Do not use `scripts.source_proposal stage` for manual acceptance: it creates
-   commits and assumes workflow context.
+   Do not use `python -m scripts.source_proposal stage` for manual acceptance:
+   it creates commits and assumes workflow context.
 2. Run `uv run pack build`. Resolve or retry a failed live build before calling
    the edit built and reviewed; failure preserves the previous outputs.
 3. Review `git diff main...HEAD -- dist/ README.md` against the PR base, plus

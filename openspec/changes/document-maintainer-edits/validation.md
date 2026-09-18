@@ -158,3 +158,12 @@ verification paragraph, and an ambiguous sentence that said `pack report` does
 not print "those id lists" while the following step sent readers to two more
 lists it also omits. That sentence now names `selections` as the one list the
 command prints. Links, whitespace and the suite were rechecked after the edits.
+
+## Post-verification naming repair
+
+Verification re-derived every factual claim from source a second time and found
+none wrong. One naming imprecision was repaired, changing no claim: the manual
+acceptance step named the staging entry point as `scripts.source_proposal
+stage`, while the source-catalog workflow invokes it as `python -m
+scripts.source_proposal stage`. The step now uses the invocable form. Links,
+whitespace and the suite were rechecked after the edit.
