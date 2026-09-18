@@ -133,7 +133,6 @@ content or retained artifacts; nightly rebuilds and publishes outputs after
 merge. Manual policy PRs instead include their accepted catalog and changed
 outputs under the [manual review convention](development.md#manual-review-and-pr-contents).
 
-
 The **Reviewed source catalog** Actions workflow runs daily at 04:17 UTC and
 can be dispatched manually, with no inputs. It runs only for
 `mjkoo/omnipack` on `main`, under one non-canceling concurrency group, and

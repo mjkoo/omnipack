@@ -137,3 +137,24 @@ Final post-audit suite: `uv run pytest --cov` passed all 686 tests in 23.91s,
 93% coverage, no warnings. The final whitespace check passed. Only task status
 and this evidence record were updated after the audit; no implementation fix
 or behavior change followed the gate.
+
+## Post-audit editorial pass
+
+A later independent read of the shipped pages re-derived every factual claim
+from source and found none wrong: catalog heading, sort and `Other` fallback in
+`catalog.generate_catalog` with no colour claim; the repaired overlay example
+through `parse_overlay` and `merge_patch`; `changes` against the pre-build id
+snapshot; the fingerprinted set and staleness rule owned by the verification
+page; the upload, served-digest, repair and advance branches of `run_release`;
+the nightly allowed paths; both CI workflows; and the proposal staging path.
+`uv run pytest` (686 passed), `uv run pack verify` (exit 0), `just check-links`
+(555 total, 333 unique, 54 OK, zero errors) and `git diff --check` all passed
+again. All new fragment links were resolved against actual headings by hand,
+because the offline link checker does not follow fragments.
+
+Three editorial defects were then repaired, changing no claim: a stray blank
+line in the source-generation page, a ragged wrap in the development page's
+verification paragraph, and an ambiguous sentence that said `pack report` does
+not print "those id lists" while the following step sent readers to two more
+lists it also omits. That sentence now names `selections` as the one list the
+command prints. Links, whitespace and the suite were rechecked after the edits.

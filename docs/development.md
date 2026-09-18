@@ -79,7 +79,9 @@ For every manual edit affecting pack contents:
    `denylistRemovals`, `staleExclusions` and `changes`. `changes` contains only
    package ids added or removed relative to files present immediately before
    the build: settings or identity edits retaining the id set produce no entries,
-   and a second build can empty it. `pack report` does not print those id lists.
+   and a second build can empty it. `pack report` prints `selections` but not
+   `denylistRemovals`, `staleExclusions` or `changes`, so read those from the
+   file.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
    A new denial's id must appear in `denylistRemovals` and be absent from
@@ -142,16 +144,16 @@ Edits outside that set, such as extras, sources, the codm catalog or codm policy
 leave evidence reported as current until a rebuild changes the outputs.
 A matching fingerprint does not establish current upstream health.
 
-See [verification](verification.md#commands-and-evidence) for the fingerprinted set,
-structural checks, failure policy,
-and the limits of a successful check. CI verifies committed files offline;
-nightly publication builds and verifies once, in a read-only job, then hands
-the exact verified commit to a separate write job that pushes it. Formatting,
-lint, types and the full suite remain development CI responsibilities. Main
-advancing past a run's base fails that run without another attempt; release
-synchronization is checked separately, after the main outcome. A verification
-or build report with any schema other than the current one requires regeneration
-with `uv run pack verify` or `uv run pack build` respectively.
+See [verification](verification.md#commands-and-evidence) for the fingerprinted
+set, structural checks, failure policy, and the limits of a successful check.
+CI verifies committed files offline; nightly publication builds and verifies
+once, in a read-only job, then hands the exact verified commit to a separate
+write job that pushes it. Formatting, lint, types and the full suite remain
+development CI responsibilities. Main advancing past a run's base fails that
+run without another attempt; release synchronization is checked separately,
+after the main outcome. A verification or build report with any schema other
+than the current one requires regeneration with `uv run pack verify` or
+`uv run pack build` respectively.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
