@@ -131,7 +131,7 @@ Valid denylist and overlay records are arrays whose selectors are explicit:
 ```
 
 ```json
-[{"id": "org.example.app", "url": "https://github.com/example/app", "patch": {"additionalSettings": "{\"versionDetection\":false}"}}]
+[{"id": "org.example.app", "url": "https://github.com/example/app", "patch": {"additionalSettings": {"versionDetection": false}}}]
 ```
 
 Every family selected in single needs a dual winner, with no exemptions, so an app
