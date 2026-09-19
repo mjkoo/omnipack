@@ -49,6 +49,40 @@ def test_tracker_is_identical_and_present_once_in_both_variants(
     assert "latestVersion" not in rendered[Variant.SINGLE]
 
 
+def test_tracker_keeps_its_curated_identity_and_notification_settings(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    for variant in Variant:
+        document = json.loads(render(current_configuration.result.apps[variant]))
+        entry = next(e for e in document["apps"] if e["id"] == TRACKER_ID)
+        assert entry["name"] == "omnipack updates"
+        assert entry["url"] == "https://github.com/mjkoo/omnipack"
+        assert entry["categories"] == ["Utilities"]
+        assert entry["overrideSource"] == "GitHub"
+        # A revision is read from the release title alone, so neither the latest
+        # endpoint nor an asset date may decide the version.
+        settings = json.loads(entry["additionalSettings"])
+        assert settings["verifyLatestTag"] is False
+        assert settings["sortMethodChoice"] == "none"
+        assert settings["useLatestAssetDateAsReleaseDate"] is False
+        assert settings["releaseDateAsVersion"] is False
+        # Background notifications stay on: that is how a new revision reaches
+        # everyone who imported either variant.
+        assert settings["exemptFromBackgroundUpdates"] is False
+        assert settings["skipUpdateNotifications"] is False
+        # The whole key set, so an observed revision, an installed version or an
+        # asset URL cannot appear without failing here.
+        assert set(entry) == {
+            "additionalSettings",
+            "author",
+            "categories",
+            "id",
+            "name",
+            "overrideSource",
+            "url",
+        }
+
+
 def test_current_candidates_include_track_only_ids_for_composition_to_reserve(
     current_configuration: CurrentConfiguration,
 ) -> None:

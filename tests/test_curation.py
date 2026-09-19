@@ -59,6 +59,18 @@ def test_upstream_pack_tracker_stays_excluded_from_current_composition(
     assert b"Obtainium-Emulation-Pack" not in catalog
 
 
+def test_every_committed_denial_removes_a_current_candidate(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    # An unmatched denial is reported stale and does not fail the build, so a
+    # denial whose upstream drops the id would quietly stop excluding anything.
+    denied = {entry["id"] for entry in read(ROOT / "config/deny.json")}
+    report = current_configuration.result.report
+    stale = {item.package_id for item in report.stale_exclusions}
+    assert stale == set(), f"denials matching no candidate: {sorted(stale)}"
+    assert {item.package_id for item in report.removals} == denied
+
+
 def effective_id(record):
     corrections = {
         (rule["match"]["id"], rule["match"]["url"].lower()): rule["packageId"]
