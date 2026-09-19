@@ -702,3 +702,37 @@ def test_invalid_track_only_policy_preserves_prior_outputs(
     assert report["stage"] == "composition"
     assert "track-only" in report["error"]
     assert "org.example.old" in report["error"]
+
+
+def test_build_then_report_displays_diagnostics_without_changing_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    (tmp_path / "config/deny.json").write_text(
+        json.dumps(
+            [
+                {"id": "app.fixture", "reason": "excluded fixture"},
+                {"id": "app.absent", "reason": "unmatched denial"},
+            ]
+        )
+    )
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    path = tmp_path / ".build/report.json"
+    before = path.read_bytes()
+    capsys.readouterr()
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    assert "Change: dual added: app.generated" in output
+    for variant in Variant:
+        assert (
+            f"Exclusion: {variant.value} app.fixture; family: package:app.fixture; reason: excluded fixture"
+            in output
+        )
+    assert "Stale exclusion: app.absent; reason: unmatched denial" in output
+    assert (
+        "Admission: codm2000; URL: https://github.com/fixture/generated; kind: apk; committed id: app.generated"
+        in output
+    )
+    assert path.read_bytes() == before
