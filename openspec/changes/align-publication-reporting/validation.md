@@ -120,3 +120,34 @@ in the 691-test baseline.
 
 Independent documentation review of `f76a129..404e770`: approved with no
 findings; the reviewer confirmed the guide changes and link-check evidence.
+
+Independent publication review of `404e770..39277d3`, with the planning deltas
+and unchanged publication sources inspected: approved with no findings. The
+review confirmed both uploads precede publication, the failed-checkout path
+skips release, and all nine original scenarios and their rules survive once.
+
+## Repository checks
+
+All applicable `just check-all` recipes passed on 2026-09-19:
+
+- Lock consistency, Ruff formatting and lint, and ty type checking passed.
+- Full suite: 699 passed, 93% coverage, no test warnings.
+- Offline `pack verify` passed.
+- Python 3.12 write-side compatibility: 105 passed on Python 3.12.14.
+- actionlint passed; zizmor reported no findings.
+- Offline documentation links: 553 links, 0 errors.
+- Nix formatting: 0 files changed. Host-platform flake checks passed.
+- Strict OpenSpec validation passed.
+- The diff from the merge-base changes only report formatting, its tests,
+  development documentation and this change's artifacts. Configuration, committed
+  packs, distribution files, workflows and publication scripts are unchanged.
+
+The aggregate command initially stopped at the sandbox's Nix cache boundary;
+remaining recipes passed with cache/daemon access. A first resume accidentally
+passed the next recipe name as the optional Python argument; separate commands
+corrected that invocation. No check was skipped.
+
+Tool notices: zizmor uses its default offline audit mode; Nix reported a dirty
+working tree while review records were pending and excluded incompatible target
+systems. These are environment/check-scope notices, not test failures. The Nix
+check covers this macOS host, not a Linux runner execution.

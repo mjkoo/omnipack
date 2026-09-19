@@ -38,7 +38,7 @@
 
 ## 3. Confirm the publication requirements against the workflows and scripts
 
-- [ ] 3.1 Confirm against the checked-in workflow and publication scripts, and
+- [x] 3.1 Confirm against the checked-in workflow and publication scripts, and
   record the evidence in the change directory, that the read-only job summarizes
   a prepared candidate as a distinct outcome from a published commit, a no-op
   and a failing stage; that both diagnostics and hand-off uploads run in the
@@ -51,7 +51,7 @@
   conditioned on the publisher establishing the pushed commit locally. Confirm
   no workflow or script change is required by these deltas, and that the
   existing publication tests still pass unchanged.
-- [ ] 3.2 Confirm the split carries every rule and scenario of the removed
+- [x] 3.2 Confirm the split carries every rule and scenario of the removed
   requirement into the two that replace it, with no rule dropped and no scenario
   living on both sides, and that the credential boundary reads the same when the
   two are read together. Pass the group's independent evidencing review and
@@ -59,7 +59,7 @@
 
 ## 4. Complete implementation validation and reviews
 
-- [ ] 4.1 Run the full suite and applicable repository checks, including offline
+- [x] 4.1 Run the full suite and applicable repository checks, including offline
   pack verification and strict artifact validation; confirm configuration,
   committed packs, distribution files and workflows remain unchanged, and record
   the results in the change directory.
