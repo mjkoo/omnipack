@@ -32,3 +32,12 @@ Validation on 2026-09-19:
 
 The sandbox prevents use of the default uv cache; checks use
 `UV_CACHE_DIR=/private/tmp/omnipack-uv-cache` without changing project configuration.
+
+## Maintainer documentation
+
+The development guide now directs maintainers to `pack report` for all recorded
+lists, including admissions. It retains the limits of the package-id comparison
+and the check that a newly denied id appears among exclusions, not stale denials.
+It describes empty, unavailable and failed comparisons and no longer promises
+warnings. `just check-links` passed: 553 links, 0 errors. Strict OpenSpec artifact
+validation passed with `openspec validate align-publication-reporting --strict`.

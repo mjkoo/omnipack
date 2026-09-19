@@ -75,13 +75,16 @@ For every manual edit affecting pack contents:
    `git diff HEAD -- dist/ README.md` for uncommitted build results. This output
    diff is the primary evidence, including for overlay-only edits. Review the
    full diff for incidental upstream refreshes rather than hiding them by editing
-   generated files. Use `.build/report.json` for supporting `selections`,
-   `denylistRemovals`, `staleExclusions` and `changes`. `changes` contains only
+   generated files. Use `uv run pack report` for supporting `selections`,
+   `denylistRemovals`, `staleExclusions`, `sourceAdmissions` and `changes`,
+   recorded in `.build/report.json`. `changes` contains only
    package ids added or removed relative to files present immediately before
    the build: settings or identity edits retaining the id set produce no entries,
-   and a second build can empty it. `pack report` prints `selections` but not
-   `denylistRemovals`, `staleExclusions` or `changes`, so read those from the
-   file.
+   and a second build can empty it. The command lists all recorded entries,
+   including admitted committed candidates with their source, project URL,
+   entry kind and committed id. Empty categories print nothing; an unavailable
+   comparison is labelled unavailable, and a failed build's comparison describes
+   candidates that were not published.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
    A new denial's id must appear in `denylistRemovals` and be absent from
@@ -124,7 +127,8 @@ reads `config/http.json`. Only source generation reads it, so that an optional
 The JSON diagnostics are in `.build/report.json` (schema 3), including each
 family's selection with the candidates it was chosen over and the selection
 reason, original and effective package ids, denylist removals and stale
-exclusions, and the package ids added and removed since the previous output. A
+exclusions, admitted committed candidates with their identities, and the package
+ids added and removed since the previous output. A
 failed build returns a nonzero status and preserves the previous packs and
 README.
 
@@ -138,7 +142,8 @@ to investigate source selection and version behavior.
 Verification leaves distribution files, README, configuration, and the build
 report unchanged. Standalone evidence is written to `.build/verify.json`.
 
-Run `uv run pack report` to display build and verification results, warnings,
+Run `uv run pack report` to display build and verification results, recorded
+non-blocking build diagnostics,
 observation times, and whether verification matches its fingerprinted inputs.
 Edits outside that set, such as extras, sources, the codm catalog or codm policy,
 leave evidence reported as current until a rebuild changes the outputs.
