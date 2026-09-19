@@ -108,7 +108,7 @@ dual-screen build, whether or not the two builds share a package id.
 
 Policy SHALL permit one candidate pin per family and variant. A pin SHALL name
 an original candidate selector and a rationale, and SHALL select that candidate
-ahead of device preference or source ranking. A dual pin MAY therefore name a
+ahead of dual preference or source ranking. A dual pin MAY therefore name a
 dual-eligible baseline build even when the family has an available dual-screen
 build. A missing, ambiguous, excluded,
 wrong-family or target-ineligible pinned candidate SHALL fail the build. A pin
@@ -318,7 +318,7 @@ in each output, including when family rules separate candidates sharing an id.
 
 #### Scenario: An extras entry collides with an upstream entry
 
-- **WHEN** an extras entry shares a family with an upstream candidate at the same device-preference tier and no pin applies
+- **WHEN** an extras entry shares a family with an upstream candidate at the same dual-preference tier and no pin applies
 - **THEN** extras wins and its complete entry is selected
 
 ### Requirement: Family selections are reported
@@ -333,7 +333,7 @@ and stale exclusions SHALL also be reported.
 
 - **WHEN** a dual-preferred BBoi entry defeats an ordinary RJNY entry
 - **THEN** the report names the winner, lists the RJNY candidate as considered
-  and identifies device preference as the reason
+  and identifies dual preference as the reason
 
 #### Scenario: Identity correction is visible in the selection
 

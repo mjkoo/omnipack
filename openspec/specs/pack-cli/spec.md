@@ -56,8 +56,11 @@ The system SHALL implement `pack verify` to check both current distribution file
 local configuration and generated catalog offline without network requests.
 An unsupported argument SHALL fail argument parsing with nonzero exit before
 verification runs. The command SHALL record
-structural evidence and exit zero only on a complete, error-free run. Report
-write failure SHALL cause nonzero exit with a concise stderr diagnostic.
+structural evidence and exit zero only on a complete, error-free run, as
+"Structural verification evidence belongs to an exact input snapshot" in
+pack-verification defines; this requirement adds only the command-surface
+obligations. Report write failure SHALL cause nonzero exit with a concise
+stderr diagnostic.
 Verification SHALL NOT rebuild, resolve package IDs, alter distribution or
 configuration files, or overwrite the build report.
 
@@ -95,7 +98,8 @@ participate in freshness checks. An unsupported build report schema, including a
 report without a schema field, SHALL produce a regeneration diagnostic directing
 the user to `pack build`. An unsupported verification report schema SHALL
 produce a regeneration diagnostic directing the user to `pack verify`, rather
-than being interpreted as current structural evidence. Reports SHALL describe
+than being interpreted as current structural evidence, which is the reporting
+surface of the regeneration rule pack-verification states. Reports SHALL describe
 structural scope without resolved versions or live-health claims. A supported
 schema with a different verifier identity SHALL be stale.
 
