@@ -14,5 +14,9 @@
   {
     "id": "com.raekwon1603.supermetroidds",
     "reason": "Retire the reviewed old Super Metroid catalog entry; dual-screen devices use MetroidArch."
+  },
+  {
+    "id": "com.underdecoded.gen2recomped",
+    "reason": "Redundant with the curated Gen1Recomp entry, whose upstream covers Gold, Silver and Crystal, and a thinner provenance record: an unofficial fork whose added components are source-available, with redistribution and forking restricted."
   }
 ]

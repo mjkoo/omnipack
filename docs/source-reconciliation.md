@@ -58,6 +58,33 @@ unknown-code or future publisher-compromise risk.
   update path; that same-project secondary channel is part of the accepted trust
   boundary.
 
+## Later decisions
+
+Decisions taken after the 2026-09-10 review, each carrying its own observation
+date.
+
+- **Gen2Recomped is excluded (observed 2026-09-19 UTC).**
+  [UNDERdecoded/Gen2Recomped](https://github.com/UNDERdecoded/Gen2Recomped),
+  previously carried as `com.underdecoded.gen2recomped`, is denied in both
+  packs. It is an unofficial fork of
+  [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp), whose upstream also
+  covers Gold, Silver and Crystal, at phase 1 with its Generation 2 engine still
+  under construction, and which the packs already carry as a curated extra. The
+  fork's provenance record is thinner: files inherited from Gen1Recomp stay MIT,
+  while the Generation 2 components it adds are source-available only, with
+  redistribution and forking restricted, and further forks of it exist
+  regardless. No community assessment of the project was found, in either
+  direction, and no evidence of malicious behavior was found or is claimed. Its
+  README notes that Windows Defender may flag its Windows builds as
+  `Trojan:Win32/Wacatac!ml`; that is a Windows label that does not evaluate the
+  Android package the pack tracked, and the APK was never installed on the
+  reviewed device. The exclusion is a redundancy and provenance judgement under
+  the acceptance standard above, made without downloading or inspecting an APK.
+  It also settles the open identity question: the packs used
+  `com.underdecoded.gen2recomped` while an Obtainium entry predating the pack
+  used `com.underdecodedhd.gen2recomp`, and a denial keyed on the effective id
+  removes the entry without resolving which id the APK declares.
+
 The remaining reviewed sources stay as listed below. Community links corroborate
 use and reputation; they are not endorsements by the original game publishers.
 
@@ -160,6 +187,7 @@ observation about the selected official release, not a claim about future assets
 | Super Metroid successor | `com.raekwon.supermetroid` to `com.metroidarch.app.aarch64` | Dual pack adds MetroidArch as a separate install; old app remains until manually removed; isolate writable directories |
 | Other retained identity corrections | IDs listed above | Correct tracking definitions; no reinstall is implied |
 | Gen1Recomp URL rename | `com.theboisclub.pokemonred` | Canonical source URL; same inspected APK |
+| Gen2Recomped exclusion | `com.underdecoded.gen2recomped` | Dropped from both packs; re-import stops tracking it but removes no existing Obtainium entry or installed app |
 
 Re-import is not a deletion or synchronization protocol. Removing an entry from
 an export does not uninstall its Android package or necessarily remove its
