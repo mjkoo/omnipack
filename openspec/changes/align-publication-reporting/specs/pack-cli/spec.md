@@ -18,11 +18,11 @@ display family selections with their reasons, and every non-blocking outcome the
 build report records: the apps added and removed since the previous output, the
 denylist entries that excluded a candidate, the denylist entries that matched no
 candidate, and the admitted codm2000 candidates with their committed identities.
-A diagnostic the report records SHALL NOT be withheld from display, and a
-category the run recorded nothing in SHALL contribute nothing to the output. The
-recorded admissions and exclusions SHALL be listed in full on each run rather
-than summarized, sampled or elided, so a long diagnostics section is the
-expected steady state. A null candidate comparison SHALL be displayed as
+A non-blocking outcome the build report records SHALL NOT be withheld from
+display, and a category the run recorded nothing in SHALL contribute nothing to
+the output. The recorded candidate comparison, exclusions, stale denials and
+admissions SHALL be listed in full on each run rather than summarized, sampled
+or elided, so a long diagnostics section is the expected steady state. A null candidate comparison SHALL be displayed as
 unavailable, never as a build that added and removed nothing, and a comparison
 recorded by a build whose status is failed SHALL be displayed as candidates that
 were not published rather than as apps added and removed since the previous

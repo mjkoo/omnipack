@@ -43,8 +43,8 @@ same block, so the two are separated here rather than left fused.
   already records: the candidate changes, the denylist exclusions, the denylist
   entries that matched no candidate, and the admitted committed candidates. A
   category the run recorded nothing for contributes nothing to the output, and
-  the recorded admissions and exclusions are listed in full on each run, so a
-  steady-state build produces a long diagnostics section rather than a quiet
+  every recorded category is listed in full on each run, so a steady-state
+  build produces a long diagnostics section rather than a quiet
   one. A report whose candidate comparison is null is displayed as unavailable
   rather than as an empty one, which the build report requirement already
   forbids interpreting as an empty pack, and a comparison recorded by a failed
@@ -79,9 +79,10 @@ None.
 
 - `pack-cli`: replace the report command requirement with one that names the
   non-blocking diagnostics the build report records instead of warnings and
-  incomplete attempts, requires each recorded diagnostic to be displayed,
-  requires an absent category to contribute nothing, requires the recorded
-  admissions and exclusions to be listed in full each run, requires an
+  incomplete attempts, requires each non-blocking outcome the build report
+  records to be displayed, requires an absent category to contribute nothing,
+  requires the recorded comparison, exclusions, stale denials and admissions to
+  be listed in full each run, requires an
   unavailable candidate comparison to be distinguished from an empty one, and
   requires a failed build's comparison to be shown as candidates that were not
   published.
