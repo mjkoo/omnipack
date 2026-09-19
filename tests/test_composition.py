@@ -351,6 +351,26 @@ def test_winning_rank_tie_fails_but_losing_tier_tie_does_not() -> None:
     assert ids(compose([*reversed(tied), winner], [], []), Variant.SINGLE) == {"winner"}
 
 
+def test_rjny_outranks_bboi_and_the_winner_keeps_its_whole_entry() -> None:
+    entries = [
+        app("shared.pkg", "bboi", family="app:x", name="bboi build"),
+        app("shared.pkg", "rjny", family="app:x", name="rjny build"),
+    ]
+    result = compose(entries, [], [])
+    for variant in Variant:
+        selected = result.apps[variant]
+        assert [(item.data["name"], item.url) for item in selected] == [
+            ("rjny build", "https://example.com/rjny/shared.pkg")
+        ]
+    assert [
+        (item.variant, item.source, [c.source for c in item.considered])
+        for item in result.report.selections
+    ] == [
+        (Variant.SINGLE, "rjny", ["bboi"]),
+        (Variant.DUAL, "rjny", ["bboi"]),
+    ]
+
+
 def test_input_order_does_not_change_selection_or_report_order() -> None:
     candidates = [
         app("low", "bboi", family="app:x"),
