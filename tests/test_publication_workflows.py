@@ -35,6 +35,15 @@ def workflow(request):
     return yaml.safe_load((WORKFLOWS / request.param).read_text())
 
 
+def test_nightly_refreshes_daily_at_three_in_eastern_time():
+    # Only nightly keeps this schedule, so the shared fixture cannot assert it.
+    nightly = yaml.safe_load((WORKFLOWS / "nightly.yml").read_text())
+    triggers = nightly.get("on", nightly.get(True, {}))
+    assert triggers["schedule"] == [
+        {"cron": "0 3 * * *", "timezone": "America/New_York"}
+    ]
+
+
 def test_publication_permissions_and_runtime_boundaries(workflow):
     # PyYAML's YAML 1.1 loader parses the unquoted `on` key as True.
     triggers = workflow.get("on", workflow.get(True, {}))
