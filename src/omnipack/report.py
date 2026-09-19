@@ -92,6 +92,36 @@ def format_reports(root: Path) -> str:
                 f"  Considered: {_format_considered(considered)}"
                 for considered in item["considered"]
             )
+        changes = build["changes"]
+        if changes is None:
+            lines.append("Candidate comparison: unavailable")
+        else:
+            label = (
+                "Candidate (not published)" if build["status"] == "failed" else "Change"
+            )
+            for variant, comparison in changes.items():
+                for direction, ids in comparison.items():
+                    lines.extend(
+                        f"{label}: {variant} {direction}: {id_}" for id_ in ids
+                    )
+        for item in build["denylistRemovals"]:
+            if not _strings(item, ("id", "variant", "family", "reason")):
+                raise ReportFormatError("malformed build denylist exclusion")
+            lines.append(
+                f"Exclusion: {item['variant']} {item['id']}; "
+                f"family: {item['family']}; reason: {item['reason']}"
+            )
+        for item in build["staleExclusions"]:
+            if not _strings(item, ("id", "reason")):
+                raise ReportFormatError("malformed build stale exclusion")
+            lines.append(f"Stale exclusion: {item['id']}; reason: {item['reason']}")
+        for item in build["sourceAdmissions"]:
+            if not _strings(item, ("source", "url", "kind", "id")):
+                raise ReportFormatError("malformed build source admission")
+            lines.append(
+                f"Admission: {item['source']}; URL: {item['url']}; "
+                f"kind: {item['kind']}; committed id: {item['id']}"
+            )
         if build.get("stage"):
             lines.append(f"Stage: {build['stage']}")
         if build.get("error"):

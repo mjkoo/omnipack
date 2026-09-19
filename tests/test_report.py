@@ -377,3 +377,127 @@ def test_malformed_selection_records_are_rejected(
     build_report(tmp_path, selections=[selection])
     with pytest.raises(ValueError, match=message):
         format_reports(tmp_path)
+
+
+@pytest.mark.parametrize("failed", [False, True])
+def test_recorded_build_diagnostics_are_displayed_in_full(
+    tmp_path: Path, failed: bool
+) -> None:
+    # The writer's document shape, built literally so the lists can be long.
+    document = {
+        "schemaVersion": 3,
+        "status": "failed" if failed else "success",
+        "changes": {
+            variant: {
+                direction: [f"{variant}.{direction}.{i}" for i in range(40)]
+                for direction in ("added", "removed")
+            }
+            for variant in ("single", "dual")
+        },
+        "denylistRemovals": [
+            {
+                "id": f"denied.{i}",
+                "variant": "dual",
+                "family": f"family:{i}",
+                "reason": f"excluded {i}",
+            }
+            for i in range(40)
+        ],
+        "staleExclusions": [
+            {"id": f"stale.{i}", "reason": f"unmatched {i}"} for i in range(40)
+        ],
+        "sourceAdmissions": [
+            {
+                "source": "codm2000",
+                "url": f"https://example.test/{i}",
+                "kind": "apk",
+                "id": f"committed.{i}",
+            }
+            for i in range(40)
+        ],
+        "selections": [WINNER],
+        "offlineVerification": {"status": "not-run", "findings": []},
+    }
+    if failed:
+        document.update(stage="rendering", error="render failed")
+    path = tmp_path / ".build/report.json"
+    path.parent.mkdir()
+    path.write_text(json.dumps(document))
+    before = path.read_bytes()
+    output = format_reports(tmp_path)
+    prefix = "Candidate (not published)" if failed else "Change"
+    for variant in ("single", "dual"):
+        for direction in ("added", "removed"):
+            for i in range(40):
+                assert (
+                    f"{prefix}: {variant} {direction}: {variant}.{direction}.{i}\n"
+                    in output
+                )
+    for i in range(40):
+        assert (
+            f"Exclusion: dual denied.{i}; family: family:{i}; reason: excluded {i}\n"
+            in output
+        )
+        assert f"Stale exclusion: stale.{i}; reason: unmatched {i}\n" in output
+        assert (
+            f"Admission: codm2000; URL: https://example.test/{i}; kind: apk; committed id: committed.{i}\n"
+            in output
+        )
+    assert (
+        output.index("Selection:")
+        < output.index(prefix + ":")
+        < output.index("Offline verification:")
+    )
+    if failed:
+        assert "Change:" not in output
+        assert (
+            output.index("Admission:") < output.index("Stage:") < output.index("Error:")
+        )
+    assert path.read_bytes() == before
+
+
+@pytest.mark.parametrize("unavailable", [False, True])
+def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    unavailable: bool,
+) -> None:
+    from omnipack.cli import main
+
+    build_report(
+        tmp_path,
+        changes=None
+        if unavailable
+        else {variant: {"added": [], "removed": []} for variant in ("single", "dual")},
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    expected = "Build report\nStatus: success\n"
+    if unavailable:
+        expected += "Candidate comparison: unavailable\n"
+    expected += "Offline verification: not-run\n\nVerification report\nNo standalone verification recorded\n"
+    assert output == expected
+
+
+@pytest.mark.parametrize(
+    "field,record",
+    [
+        ("denylistRemovals", {"id": "denied", "variant": "dual", "family": "family"}),
+        ("staleExclusions", {"id": "stale", "reason": 7}),
+        (
+            "sourceAdmissions",
+            {"source": "codm2000", "url": "https://example.test", "kind": "apk"},
+        ),
+    ],
+)
+def test_malformed_diagnostic_elements_raise_report_format_error(
+    tmp_path: Path, field: str, record: dict[str, object]
+) -> None:
+    from omnipack.report import ReportFormatError
+
+    fields: dict[str, Any] = {field: [record]}
+    build_report(tmp_path, **fields)
+    with pytest.raises(ReportFormatError, match="malformed build"):
+        format_reports(tmp_path)
