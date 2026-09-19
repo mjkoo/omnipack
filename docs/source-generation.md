@@ -265,7 +265,10 @@ on success, or one fixed failure reason:
   `publish failed: PR create failed`.
 
 The error output of a failing `git` or `gh` command goes to the job log,
-never to the step summary.
+never to the step summary. Either command's failure reason goes to both, so
+`gh run view --log-failed` names the cause without opening the summary. Only
+failure reasons are logged, and they are fixed text: the success report, which
+carries upstream URLs and messages, stays in the step summary and the PR body.
 
 ### Recovering from an advanced main
 
