@@ -1,11 +1,11 @@
 ## Why
 
-`pack report` is the command a maintainer runs to find out what a build did.
-The report command requirement says it shows recorded failures, warnings and
-incomplete attempts. Neither of the last two exists. No build or verification
-code produces anything called a warning, and `pack verify` writes its report
-once, at the end, with completeness hardcoded true, so no run can record an
-incomplete attempt.
+`pack report` is the command a maintainer runs locally, after a local build, to
+find out what that build did. The report command requirement says it shows
+recorded failures, warnings and incomplete attempts. Neither of the last two
+exists. No build or verification code produces anything called a warning, and
+`pack verify` writes its report once, at the end, with completeness hardcoded
+true, so no run can record an incomplete attempt.
 
 What the build does record, and what the build report requirement already
 obliges it to record, is four lists of non-blocking outcomes: the apps added and
@@ -16,6 +16,9 @@ written to the build report and none of them is ever displayed. The maintainer
 guide tells readers to open the JSON file instead, which is the drift recorded
 in prose: a denial that quietly stops excluding anything, or a family that
 quietly switched packages, is invisible at the command that exists to show it.
+The reach of this is the local build-and-review loop, where a maintainer builds
+and then reports. The scheduled run never invokes the report command, so nothing
+here changes what an unattended run surfaces.
 
 The same region of the publication spec carries three further claims the
 workflows do not support. It enumerates the main outcomes a run summarizes as
@@ -39,11 +42,13 @@ same block, so the two are separated here rather than left fused.
 - `pack report` displays the non-blocking build diagnostics the build report
   already records: the candidate changes, the denylist exclusions, the denylist
   entries that matched no candidate, and the admitted committed candidates. A
-  category the run recorded nothing for contributes nothing to the output, so
-  an unremarkable build reads exactly as it does today. A report whose candidate
-  comparison is null is displayed as unavailable rather than as an empty one,
-  which the build report requirement already forbids interpreting as an empty
-  pack.
+  category the run recorded nothing for contributes nothing to the output, and
+  the recorded admissions and exclusions are listed in full on each run, so a
+  steady-state build produces a long diagnostics section rather than a quiet
+  one. A report whose candidate comparison is null is displayed as unavailable
+  rather than as an empty one, which the build report requirement already
+  forbids interpreting as an empty pack, and a comparison recorded by a failed
+  build is displayed as candidates that were not published.
 - **BREAKING**: the report command no longer promises to show warnings or
   incomplete attempts. Both name outcomes nothing produces. The recorded
   failures, verification mode, observation time and freshness labelling are
@@ -75,15 +80,22 @@ None.
 - `pack-cli`: replace the report command requirement with one that names the
   non-blocking diagnostics the build report records instead of warnings and
   incomplete attempts, requires each recorded diagnostic to be displayed,
-  requires an absent category to contribute nothing, and requires an
-  unavailable candidate comparison to be distinguished from an empty one.
+  requires an absent category to contribute nothing, requires the recorded
+  admissions and exclusions to be listed in full each run, requires an
+  unavailable candidate comparison to be distinguished from an empty one, and
+  requires a failed build's comparison to be shown as candidates that were not
+  published.
 - `nightly-publishing`: remove "Actions records publication outcomes" and add
   the two requirements it becomes, one for run summaries, artifacts and their
   contents and one for job and credential isolation; state the prepared
   candidate as a summarized main outcome; restate the diagnostics-failure
-  scenario over sequences the workflows can produce; and replace the
-  non-blocking warning sentence and its scenario in the verification
-  requirement with the diagnostics the build actually records.
+  scenario over sequences the workflows can produce; name the release outcome
+  in a run summary only when the release stage runs; replace the non-blocking
+  warning sentence and its scenario in the verification requirement with the
+  diagnostics the build actually records; and condition "Nightly completion
+  includes rolling release synchronization" on the publisher being able to
+  establish the pushed commit locally, so no unconditional claim that a
+  successful push is followed by release synchronization survives this change.
 - `rolling-pack-release`: require a release write to follow a push only when
   the publisher can establish the pushed commit locally, so a run that cannot
   fails with no release write and a later verified run repairs the release.
@@ -100,11 +112,12 @@ build. Stored build and verification reports written before this change remain
 readable and are displayed with their diagnostics.
 
 Estimate: two requirements added and one removed, all three in the split, for a
-net of one requirement; three requirements modified, one per capability. Five
+net of one requirement; four requirements modified, two in `nightly-publishing`
+and one each in `pack-cli` and `rolling-pack-release`. Five
 scenarios added: three on the report command (diagnostics displayed, nothing
 recorded, comparison unavailable), one for the prepared candidate, and one for
 a push that lands without an establishable commit; one scenario restated during
-the split and one inside a modified requirement; ten scenarios carried through
+the split and one inside a modified requirement; eight scenarios carried through
 the split unchanged. Implementation adds roughly 25 to 40 lines in one module
 and deletes none; tests add roughly 60 to 90 lines. What this retires: the
 obligation to display warnings and incomplete attempts, neither of which any

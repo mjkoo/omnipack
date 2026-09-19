@@ -52,6 +52,9 @@ publisher synchronizes the release after a successful main push.
   consolidation is separate work and this change stays out of its way.
 - Prescribing the printed layout. The requirement states what is displayed, not
   how a line is shaped.
+- Addressing the scheduled nightly run. It runs `pack build` and `pack verify`
+  and never invokes the report command, and this change touches no workflow, so
+  the new display is reachable only in the local build-and-review loop.
 
 ## Decisions
 
@@ -90,10 +93,16 @@ pointless regeneration of evidence that is still correct.
 ### Nothing recorded prints nothing
 
 Each category contributes output only when the run recorded something in it.
-This keeps the common build unchanged, and it keeps existing assertions about
-the command's output honest: a test that checks a substring is absent is
+This governs the genuinely empty categories, and it keeps existing assertions
+about the command's output honest: a test that checks a substring is absent is
 checking for a claim the command should not make, not for a section that should
 never exist.
+
+It does not make the ordinary build quiet. `sourceAdmissions` records one entry
+per retained committed codm2000 catalog entry, and the catalog holds 30 apps;
+`denylistRemovals` records one entry per denied candidate per eligible variant,
+from five standing denials. Neither is empty in steady state, so the steady-state
+report is long and every recorded entry is listed in full.
 
 ### The split assigns the credential-and-source-text scenario to reporting
 
@@ -141,6 +150,14 @@ requirement that already says release assets may only come from a verified pair
 associated with a successful push or a verified no-op, and that mutation
 requires main to still be at that commit.
 
+The publication capability still has to stop asserting the opposite. Its
+requirement "Nightly completion includes rolling release synchronization" opens
+by promising synchronization after every successful push, which would contradict
+the owner's precondition once both are main specs. That opening sentence is
+conditioned on the publisher being able to establish the pushed commit locally
+and nothing else in the requirement moves: the precondition's consequences, what
+the run does when it cannot, stay with the owner.
+
 ### Scenario names change only where a requirement is new
 
 A modified requirement must carry every scenario it has, so renaming one would
@@ -158,9 +175,12 @@ it still describes.
 
 ## Risks / Trade-offs
 
-- A build with many admitted candidates or a large candidate diff produces a
-  longer report. That is the point of the change, and every category is silent
-  when empty, so the quiet case stays quiet.
+- Every build produces a longer report, not just an eventful one. Admissions and
+  exclusions are listed in full on each run, and both are populated in steady
+  state, so a routine `pack report` grows by tens of lines. That is the point of
+  the change: a list that is only printed when something is wrong cannot show
+  that a denial stopped matching. Only the genuinely empty categories stay
+  silent.
 - Output tests that assert on the whole of `pack report` need updating. Tests
   that assert substrings, which is the house style here, do not.
 - Splitting one requirement into two means a later reader must consult both to

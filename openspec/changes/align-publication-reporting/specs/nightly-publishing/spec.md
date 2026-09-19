@@ -4,9 +4,9 @@
 
 Actions step results and logs SHALL be the failure record. The publisher SHALL
 write a short step summary identifying the main outcome (the published commit, a
-candidate prepared for publication, a no-op, or the failing stage) and the
-release outcome (a new revision, a repair of the served assets at the same
-revision, unchanged, or failure). A rejected or erroring push SHALL appear as
+candidate prepared for publication, a no-op, or the failing stage) and, when the
+release stage runs, the release outcome (a new revision, a repair of the served
+assets at the same revision, unchanged, or failure). A rejected or erroring push SHALL appear as
 the failing main stage, and a release failure SHALL state its reason, with
 bootstrap guidance when the release is absent, unowned, malformed, a draft, not
 a prerelease, or immutable. The build report and structural verification report
@@ -101,6 +101,50 @@ bootstrap, without automatic repository-setting changes.
 - **THEN** the write job fails before any push or release write, having run only code from the triggering revision
 
 ## MODIFIED Requirements
+
+### Requirement: Nightly completion includes rolling release synchronization
+
+After a successful main push whose pushed commit the publisher can establish as
+its own local revision, or after a verified main no-op, the publisher SHALL
+synchronize the owned rolling release from that run's verified JSON pair.
+Release readiness SHALL NOT be a prerequisite for otherwise valid main output.
+Release failure SHALL fail the workflow without undoing a successful main push,
+and the run summary SHALL report the main outcome separately from the release
+outcome. A main push that is rejected or reports an error SHALL prohibit release
+writes in that run. Release writes SHALL also require main to still be at the
+run's pushed commit or, after a verified no-op, at the run's base revision;
+otherwise the release stage SHALL fail without writes, so no run publishes an
+older pair after main has moved on. A later run whose verified output is
+already on main SHALL synchronize the release as a verified no-op.
+
+#### Scenario: Main push succeeds and release write fails
+
+- **WHEN** main publication succeeds but release synchronization fails
+- **THEN** the workflow fails with the pushed commit and the release failure reported separately
+- **AND** no rollback or issue maintenance occurs
+
+#### Scenario: Missing release seed
+
+- **WHEN** main output is eligible but the release seed is missing or unowned
+- **THEN** main publication or the verified no-op proceeds independently
+- **AND** the release stage fails without release writes
+
+#### Scenario: Main outcome is uncertain
+
+- **WHEN** the main push reports an error, whether or not the commit actually landed
+- **THEN** the run fails and performs no release writes
+- **AND** a later run that finds the commit on main treats it as a verified no-op and synchronizes the release
+
+#### Scenario: Later main no-op repairs the release
+
+- **WHEN** a later verified run needs no main commit but the release does not match its verified pair
+- **THEN** it synchronizes the release from that run's verified pair
+
+#### Scenario: Write job rerun after main advanced
+
+- **WHEN** the write job of an earlier run is rerun after a later run changed main
+- **THEN** it fails without a push or release write, and the summary reports that main advanced
+- **AND** the release keeps the later run's pair and revision
 
 ### Requirement: Publication requires fresh verification of committed-source builds
 

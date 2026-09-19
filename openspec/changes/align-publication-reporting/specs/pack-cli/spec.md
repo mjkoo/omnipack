@@ -19,9 +19,14 @@ build report records: the apps added and removed since the previous output, the
 denylist entries that excluded a candidate, the denylist entries that matched no
 candidate, and the admitted codm2000 candidates with their committed identities.
 A diagnostic the report records SHALL NOT be withheld from display, and a
-category the run recorded nothing in SHALL contribute nothing to the output. A
-null candidate comparison SHALL be displayed as unavailable, never as a build
-that added and removed nothing. The composition policy SHALL
+category the run recorded nothing in SHALL contribute nothing to the output. The
+recorded admissions and exclusions SHALL be listed in full on each run rather
+than summarized, sampled or elided, so a long diagnostics section is the
+expected steady state. A null candidate comparison SHALL be displayed as
+unavailable, never as a build that added and removed nothing, and a comparison
+recorded by a build whose status is failed SHALL be displayed as candidates that
+were not published rather than as apps added and removed since the previous
+output. The composition policy SHALL
 participate in freshness checks. An unsupported build report schema, including a
 report without a schema field, SHALL produce a regeneration diagnostic directing
 the user to `pack build`. An unsupported verification report schema SHALL
@@ -64,7 +69,8 @@ schema with a different verifier identity SHALL be stale.
   codm2000 candidate
 - **THEN** `pack report` displays each of them with the variant, package id,
   family, reason, source, project URL, entry kind or committed identity the
-  report holds for it, and exits zero
+  report holds for it, displays the candidate comparison with each package id
+  identified as added or removed for its variant, and exits zero
 
 #### Scenario: A build recorded no non-blocking diagnostics
 

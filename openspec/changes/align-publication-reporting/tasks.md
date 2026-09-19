@@ -5,10 +5,14 @@
   candidates displays each of them, identifying the variant and package id of a
   change, the package id, variant, family and reason of an exclusion, the
   package id and reason of a stale denial, and the source, project URL, entry
-  kind and committed id of an admission; a report recording none of them
+  kind and committed id of an admission, with a fixture carrying one added and
+  one removed package id in the same variant whose rendered lines differ by
+  direction; a report recording none of them
   displays the build section with no diagnostic output and exits zero; a report
   whose candidate comparison is null displays it as unavailable and never as a
-  build that added and removed nothing; a malformed element in any of the four
+  build that added and removed nothing; a failed build's populated comparison
+  displays as candidates that were not published rather than as apps added and
+  removed since the previous output; a malformed element in any of the four
   lists raises the report format error rather than printing a partial line; and
   a stored report written before this change still displays. Keep the existing
   absent-substring assertions passing.
@@ -40,9 +44,13 @@
   and a failing stage; that both diagnostics and hand-off uploads run in the
   read-only job and so cannot follow a push; and that a push that lands but
   whose commit cannot then be checked out reports the published commit, exits
-  nonzero and leaves the release step unrun. Confirm no workflow or script
-  change is required by these deltas, and that the existing publication tests
-  still pass unchanged.
+  nonzero and leaves the release step unrun. Confirm that no unconditional claim
+  that a successful push is followed by release synchronization survives in the
+  publication capability, by reading the change's nightly-publishing delta
+  against the main spec and finding the release-synchronization requirement
+  conditioned on the publisher establishing the pushed commit locally. Confirm
+  no workflow or script change is required by these deltas, and that the
+  existing publication tests still pass unchanged.
 - [ ] 3.2 Confirm the split carries every rule and scenario of the removed
   requirement into the two that replace it, with no rule dropped and no scenario
   living on both sides, and that the credential boundary reads the same when the
