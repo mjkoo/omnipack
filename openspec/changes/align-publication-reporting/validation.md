@@ -151,3 +151,21 @@ Tool notices: zizmor uses its default offline audit mode; Nix reported a dirty
 working tree while review records were pending and excluded incompatible target
 systems. These are environment/check-scope notices, not test failures. The Nix
 check covers this macOS host, not a Linux runner execution.
+
+## Final independent reviews
+
+The repository-check evidencing reviewer approved `b7b0f24..0c4fe3a` with no
+findings after reading the check logs and confirming the protected paths have
+no changes. The final workflow task remains unticked until the audit completes.
+
+Two independent whole-diff reviewers assessed `cb567fd..0c4fe3a` in parallel:
+
+- Correctness, public errors, compatibility and publication failure sequencing:
+  no findings. Full rendering, null/failed distinctions, malformed-record errors,
+  the requirement split and actual workflow ordering were confirmed.
+- Idiomatic patterns and test proportionality: no findings. Existing type guards
+  and error conventions are preserved, documentation matches the output, and
+  each added test discriminates a different failure. No redundant tests found.
+
+No parked warnings were carried from convergence and no fix round was needed.
+No implementation scope exceptions or deferred defects were accepted.
