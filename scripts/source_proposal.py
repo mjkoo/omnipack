@@ -517,6 +517,19 @@ def _handoff_paths(environ: Mapping[str, str]) -> tuple[Path, Path]:
     return directory / BUNDLE_NAME, directory / BODY_NAME
 
 
+def _report_outcome(environ: Mapping[str, str], summary: str, *, failed: bool) -> int:
+    """Record one command's outcome and return its exit code.
+
+    The step summary always carries it. A failure also goes to the job log, so
+    `gh run view --log-failed` names the cause. Only failure summaries are
+    logged, and those hold fixed text rather than upstream data.
+    """
+    append_summary(environ, summary + "\n")
+    if failed:
+        log(summary)
+    return 1 if failed else 0
+
+
 def _run_stage_command(environ: Mapping[str, str], *, root: Path | None = None) -> int:
     selected_root = root or Path.cwd()
     bundle_path, body_path = _handoff_paths(environ)
@@ -536,8 +549,7 @@ def _run_stage_command(environ: Mapping[str, str], *, root: Path | None = None) 
                 "base": outcome.base_sha or "",
             },
         )
-    append_summary(environ, outcome.summary + "\n")
-    return 0 if outcome.status != "failed" else 1
+    return _report_outcome(environ, outcome.summary, failed=outcome.status == "failed")
 
 
 def _run_publish_command(
@@ -556,8 +568,7 @@ def _run_publish_command(
         bundle_path,
         body_path,
     )
-    append_summary(environ, outcome.summary + "\n")
-    return 0 if outcome.status != "failed" else 1
+    return _report_outcome(environ, outcome.summary, failed=outcome.status == "failed")
 
 
 def main(argv: Sequence[str] | None = None) -> int:

@@ -352,6 +352,26 @@ def test_stage_cli_writes_changed_false_for_an_unchanged_candidate(
     assert _git(root, "branch", "--list", BRANCH_NAME) == ""
 
 
+def test_stage_cli_reports_its_failure_to_the_summary_and_the_job_log(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    report = _report(added=("https://example.test/a",))
+    report["status"] = "failed"
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', report)
+    _stage_environment(monkeypatch, root, tmp_path, base)
+
+    exit_code = proposal_module.main(["stage"])
+
+    reason = "stage failed: generation did not succeed"
+    assert exit_code == 1
+    assert (tmp_path / "summary.md").read_text() == f"{reason}\n"
+    assert reason in capsys.readouterr().err
+
+
 @pytest.mark.parametrize("missing", ["RUNNER_TEMP", "GITHUB_RUN_ID"])
 def test_stage_cli_without_a_required_variable_exits_before_any_commit(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, missing: str
@@ -848,6 +868,7 @@ def test_pr_body_at_the_length_limit_is_accepted(tmp_path: Path) -> None:
 def test_failed_gh_operation_exits_nonzero_with_its_reason(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     knob: str,
     changed: str,
     open_prs: list[int],
@@ -871,6 +892,7 @@ def test_failed_gh_operation_exits_nonzero_with_its_reason(
 
     assert exit_code == 1
     assert summary_path.read_text() == f"{reason}\n"
+    assert reason in capsys.readouterr().err
 
 
 def _commit_with_tree(root: Path, tree: str, parent: str) -> str:
