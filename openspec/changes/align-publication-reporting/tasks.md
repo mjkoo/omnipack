@@ -63,7 +63,7 @@
   pack verification and strict artifact validation; confirm configuration,
   committed packs, distribution files and workflows remain unchanged, and record
   the results in the change directory.
-- [ ] 4.2 Complete the implementation workflow's independent whole-diff review
+- [x] 4.2 Complete the implementation workflow's independent whole-diff review
   wave and checkbox and evidence audit, resolve findings, rerun affected checks
   after fixes, and retain a self-contained validation record. Leave the change
   active and report the implementation branch.

@@ -169,3 +169,28 @@ Two independent whole-diff reviewers assessed `cb567fd..0c4fe3a` in parallel:
 
 No parked warnings were carried from convergence and no fix round was needed.
 No implementation scope exceptions or deferred defects were accepted.
+
+## Completion audit
+
+A fresh independent reviewer audited `cb567fd..bd73e81` after the whole-diff
+wave. All seven checked boxes were confirmed; none was unevidenced. The auditor
+traced report implementation and tests to `f76a129`, documentation to `404e770`,
+publication corrections to the planning commits through `b9aebc0`, evidence to
+`39277d3`, and repository checks to `0c4fe3a`.
+
+The proving evidence was the report red/green run, full-list and empty/null
+formatter tests, malformed-record tests, the build-to-report integration test,
+link checks and documentation inspection, unchanged publication tests and the
+scenario/rule preservation mapping, and the full repository check results above.
+The auditor confirmed no protected configuration, pack, distribution, workflow,
+publication script, lock, flake or README change.
+
+The auditor also confirmed that the two clean whole-diff reviews recorded by
+`bd73e81` and this audit satisfy the final task's review requirements, subject to
+retaining this result and passing the final full suite. No defect was deferred
+and no implementation ruling changed the accepted scope.
+
+Final post-audit full suite: `uv run pytest --cov` passed all 699 tests with
+93% coverage in 27.25 seconds. All eight implementation tasks are complete.
+The change remains active on `align-publication-reporting`; separate OpenSpec
+verification and archive workflows have not been invoked.
