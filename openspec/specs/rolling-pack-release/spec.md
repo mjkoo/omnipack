@@ -10,7 +10,10 @@ Provide stable JSON downloads and a native Obtainium notification source through
 
 The publisher SHALL maintain one mutable prerelease at tag `continuous` in
 `mjkoo/omnipack`, with title `omnipack revision N` for a nonnegative integer N
-and assets named `single-screen.json` and `dual-screen.json`. The release SHALL
+and assets named `single-screen.json` and `dual-screen.json`. This title format
+is a wire format: the pack's own notification tracker selects releases by
+matching it, as "Both packs include one shared omnipack notification tracker" in
+pack-curation requires, so the two SHALL change together. The release SHALL
 carry the exact ownership marker `<!-- omnipack:rolling-pack -->`. The publisher
 SHALL NOT create per-run or per-variant releases, or delete and recreate the
 established release or tag. A pre-existing unowned or malformed release SHALL

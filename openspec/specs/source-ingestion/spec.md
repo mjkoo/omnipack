@@ -4,7 +4,9 @@
 
 Turns each upstream catalog and the hand-written extras into a normalized set
 of candidate app entries per pack variant, so that the rest of the pipeline
-never has to know how any individual upstream encodes its data.
+never has to know how any individual upstream encodes its data. It also owns
+how an entry's source identity is determined and kept, and the host-scoped
+credential rules that govern the requests made to reach those upstreams.
 
 ## Requirements
 
@@ -36,20 +38,20 @@ fetch the source README, inspect APKs or resolve package IDs.
 
 ### Requirement: HTTP credentials are optional and scoped to exact hosts
 
-Source-discovery HTTP requests SHALL use the shared standard-library HTTP
-helper, including the vendored package-id resolver's release metadata requests,
-ranged APK reads and full asset downloads. GitHub default stable-release
-metadata SHALL be requested from
+Every source-discovery HTTP request SHALL be subject to the host-scoped
+credential rules below, including release metadata requests made while resolving
+a package id, ranged APK reads and full asset downloads. GitHub default
+stable-release metadata SHALL be requested from
 `https://api.github.com/repos/OWNER/REPO/releases/latest`. Explicit prerelease
 or release-title policy SHALL use
 `https://api.github.com/repos/OWNER/REPO/releases` with bounded listing under
-the source-generation contract. Track-only release checks SHALL use the same
-host-scoped helper without APK requests. Routine build ingestion SHALL fetch
-upstream catalogs with standard-library requests that carry no credentials,
-and SHALL NOT read the HTTP credential configuration. Publication operations
-are outside this helper: release and PR operations SHALL use the `gh` CLI and
-branch pushes SHALL use `git`, under the publication credential rules of the
-workflows that make them.
+the source-generation contract. Track-only release checks SHALL be subject to
+the same host-scoped rules and SHALL make no APK requests. Routine build
+ingestion SHALL fetch upstream catalogs with requests that carry no credentials,
+and SHALL NOT read the HTTP credential configuration. Publication operations are
+outside these rules: release, pull-request and branch-push operations SHALL
+instead follow the publication credential rules of the workflows that make
+them.
 
 The system SHALL read host-to-environment-variable registrations from the
 `credentials` object in dedicated `config/http.json`, whose committed default
@@ -278,9 +280,9 @@ carries an optional boolean `dualScreen` set to true, which makes it a
 dual-screen build: a candidate for the dual-screen variant only, preferred
 there. `dualScreen` SHALL default to false, and a non-boolean value SHALL fail
 the build with an error naming the entry. Composition policy SHALL NOT change
-an extra's eligibility or dual preference. The extras adapter SHALL consume an
-extras entry's `dualScreen` field so it does not reach that entry's Obtainium
-app record.
+an extra's eligibility or dual preference. Ingestion SHALL consume an extras
+entry's `dualScreen` field so it does not reach that entry's Obtainium app
+record.
 
 #### Scenario: Extras entry lacks a package id
 
@@ -335,8 +337,8 @@ falling back to URL inference.
 
 Native GitLab entries SHALL follow the URL, identity and discovery boundary in
 "Public GitLab entries keep native source identity". Explicit per-app settings
-SHALL override hydrated defaults. Native GitLab selection SHALL NOT route through
-HTML defaults.
+SHALL override hydrated defaults. A native GitLab entry SHALL be hydrated with
+the defaults defined for GitLab, never those defined for HTML.
 
 #### Scenario: Upstream record declares a source type
 

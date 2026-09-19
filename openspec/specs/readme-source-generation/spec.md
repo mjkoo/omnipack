@@ -25,7 +25,8 @@ existing groups in the configured regex, with group zero denoting the full
 match. Leading and trailing selector whitespace SHALL be ignored for validation.
 
 Reviewed regexes SHALL reject `\d`, `\D`, `\s`, `\S`, `\w`, `\W`, `\b`, and
-`\B`, whose character or boundary semantics differ between Python and Dart.
+`\B`, whose character or boundary semantics differ between the engine that
+validates them here and the supported Obtainium client that applies them.
 Authors SHALL use explicit character classes for the intended matching set.
 Escaped literal backslashes SHALL remain supported.
 
@@ -124,9 +125,10 @@ as proposed deletions only after otherwise complete successful generation.
 
 ### Requirement: Release APKs determine package IDs automatically
 
-Generation SHALL use the shared host-scoped HTTP helper to resolve APK package
-IDs automatically. Default APK policy SHALL use the GitHub latest stable release
-endpoint. Explicit prerelease or release-title policy SHALL use a bounded list
+Generation SHALL resolve APK package IDs automatically, and its requests SHALL
+be subject to the same host-scoped credential rules as every other
+source-discovery request. Default APK policy SHALL use the GitHub latest stable
+release endpoint. Explicit prerelease or release-title policy SHALL use a bounded list
 of at most 100 releases, ignore drafts and disallowed prereleases, filter titles
 (using the tag when the title is empty), and choose the newest matching release
 by publication time with release ID as a deterministic tie-breaker. Invalid
@@ -429,8 +431,8 @@ write job SHALL install no project dependencies and run no generation, tests,
 build or verification: it SHALL check out afresh the main revision that
 triggered the run, receive from the read-only job only the checked commit, as
 git objects, and the escaped PR body, and run only a publication script that
-imports nothing outside the standard library, on the runner's preinstalled
-Python, with repository hooks disabled on every git command. The triggering
+needs no project dependency and no dependency installation step, with repository
+hooks disabled on every git command. The triggering
 event SHALL fix the revision whose code the write job runs: no output of the
 read-only job SHALL select it, and the write job SHALL fail before any write
 unless the base revision the read-only job reports is that triggering revision.
