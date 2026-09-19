@@ -77,14 +77,14 @@ For every manual edit affecting pack contents:
    full diff for incidental upstream refreshes rather than hiding them by editing
    generated files. Use `uv run pack report` for supporting `selections`,
    `denylistRemovals`, `staleExclusions`, `sourceAdmissions` and `changes`,
-   recorded in `.build/report.json`. `changes` contains only
-   package ids added or removed relative to files present immediately before
-   the build: settings or identity edits retaining the id set produce no entries,
-   and a second build can empty it. The command lists all recorded entries,
-   including admitted committed candidates with their source, project URL,
-   entry kind and committed id. Empty categories print nothing; an unavailable
-   comparison is labelled unavailable, and a failed build's comparison describes
-   candidates that were not published.
+   recorded in `.build/report.json`. `changes` contains only package ids added
+   or removed relative to files present immediately before the build: settings
+   or identity edits retaining the id set produce no entries, and a second build
+   can empty it. The command lists all recorded entries, including admitted
+   committed candidates with their source, project URL, entry kind and committed
+   id. Empty categories print nothing; an unavailable comparison is labeled
+   unavailable, and a failed build's comparison describes candidates that were
+   not published.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
    A new denial's id must appear in `denylistRemovals` and be absent from
@@ -128,9 +128,8 @@ The JSON diagnostics are in `.build/report.json` (schema 3), including each
 family's selection with the candidates it was chosen over and the selection
 reason, original and effective package ids, denylist removals and stale
 exclusions, admitted committed candidates with their identities, and the package
-ids added and removed since the previous output. A
-failed build returns a nonzero status and preserves the previous packs and
-README.
+ids added and removed since the previous output. A failed build returns a
+nonzero status and preserves the previous packs and README.
 
 ## Verify and inspect
 

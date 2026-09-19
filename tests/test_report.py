@@ -383,7 +383,7 @@ def test_malformed_selection_records_are_rejected(
 def test_recorded_build_diagnostics_are_displayed_in_full(
     tmp_path: Path, failed: bool
 ) -> None:
-    # This is the stored schema emitted before diagnostics were displayed.
+    # The writer's document shape, built literally so the lists can be long.
     document = {
         "schemaVersion": 3,
         "status": "failed" if failed else "success",
