@@ -55,15 +55,17 @@ folded only in the host and in a GitHub link's owner and repository; the case
 of any other path SHALL be preserved, so that two URLs on another host
 differing only in path case remain different projects.
 
-Reducing a GitHub link to its owner and repository SHALL discard anything the
-link carries beyond them, including a query and a fragment, because a GitHub
-project is identified by owner and repository alone. On any other host the
-normalized form SHALL retain a port, a query and a fragment, so two links to
-one host and path that differ in any of them SHALL be different projects: the
-system cannot know which parts of another host's link identify the project.
-The pipeline SHALL use this form wherever it compares URLs: deciding whether
-another source already contributes a link, and matching a generated project to
-its reviewed rule and to its entry in the committed source catalog.
+Reducing a GitHub link to its owner and repository SHALL discard the rest of
+its path, its query and its fragment, because a GitHub project is identified by
+owner and repository alone. An explicit port SHALL be retained on every host,
+github.com included, so two links that differ only in an explicit port SHALL be
+different projects. On any other host the normalized form SHALL also retain a
+query and a fragment, so two links to one host and path that differ in any of
+them SHALL be different projects: the system cannot know which parts of another
+host's link identify the project. The pipeline SHALL use this form wherever it
+compares URLs: deciding whether another source already contributes a link, and
+matching a generated project to its reviewed rule and to its entry in the
+committed source catalog.
 
 #### Scenario: Two spellings of one project
 
@@ -94,6 +96,13 @@ its reviewed rule and to its entry in the committed source catalog.
 - **THEN** they are the same project on github.com, whose links reduce to owner
   and repository, and different projects on any other host, whose query and
   fragment are retained
+
+#### Scenario: Links differ only in an explicit port
+
+- **WHEN** two URLs address the same host and path and one of them carries an
+  explicit port
+- **THEN** they are different projects on every host, github.com included,
+  because the normalized form retains an explicit port wherever it appears
 
 ### Requirement: One package id may resolve differently per variant
 

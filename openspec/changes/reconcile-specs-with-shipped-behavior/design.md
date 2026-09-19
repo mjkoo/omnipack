@@ -7,9 +7,13 @@ requirement against the module that implements it.
 resolves "despite a 404 from the stable latest endpoint". Release selection
 computes one endpoint from the rule's settings, asks for the bounded releases
 list when prereleases or a release-title filter are enabled and for the stable
-latest release otherwise, and issues exactly one request. The stable endpoint
-is never requested in the prerelease case, so it cannot 404, and the scenario
-describes a fallback the generator does not have. The same requirement says an
+latest release otherwise, and looks a release up exactly once against it. The
+stable endpoint is never requested in the prerelease case, so it cannot 404,
+and the scenario describes a fallback the generator does not have. The shared
+transport may retry that single lookup after a transient failure, always
+against the same endpoint, so the contract worth stating is which endpoint is
+asked and how many times a release is looked up, not how many HTTP attempts are
+made. The same requirement says an
 APK rule may set `fallbackToOlderReleases`, while policy validation forbids
 only `apkFilterRegEx`, `versionExtractionRegEx` and `matchGroupToUse` on a
 track-only rule and therefore accepts both `fallbackToOlderReleases` and
@@ -55,9 +59,9 @@ maintainer writes in reviewed configuration and that no requirement covers: the
 native GitLab adapter rejects a URL with credentials, a port, a query, a
 fragment, a path component that is exactly `-`, or more than twenty-one path
 components, beyond the three rejections the current scenario names; URL
-normalization keeps query, fragment and port for a non-GitHub link while
-reducing a GitHub link to owner and repository and discarding its query and
-fragment; a policy selector must name one of the supported sources and an
+normalization keeps an explicit port on every host and keeps query and fragment
+for a non-GitHub link, while reducing a GitHub link to owner and repository and
+discarding the rest of its path, its query and its fragment; a policy selector must name one of the supported sources and an
 origin belonging to that source; and an overlay record carrying any field other
 than `id`, `url` and `patch`, or a `url` that is not a project URL, fails with
 the record identified.
@@ -160,12 +164,18 @@ requirement that promises duplicates survive to composition. That rule is
 stated in `source-ingestion`, where the contradiction is, and the ingestion
 requirement is narrowed to the upstream catalogs it is true of.
 
-The rest of the list, unique normalized project URLs, kind-appropriate ids and
-flags, and canonical byte rendering, is asserted by the test suite and not by
-any build-time check. Moving it into `source-ingestion` would state a
-requirement the code does not implement, exactly the defect this change exists
-to remove. It stays in `pack-curation`, restated as the outcome the suite owes:
-a candidate catalog the pipeline accepts and that composes, builds and verifies
+The rest of the list is not a build-time rule, and moving any of it into
+`source-ingestion` would state a requirement no ingestion adapter implements,
+exactly the defect this change exists to remove. It splits by where it is
+really enforced. Unique normalized project URLs, kind-appropriate ids and
+flags, and canonical byte rendering all belong to generation, which produces
+the catalog and validates it again when it reads the accepted one back: a
+catalog holding one project twice fails there, naming the normalized project,
+and nothing in a pack build ever checks it. Those rules are stated in
+`readme-source-generation`, and `pack-curation` cross-references them by the
+stage that enforces each, so no reader infers a build-time protection that does
+not exist. What is left for `pack-curation` is the outcome the suite owes: a
+candidate catalog the pipeline accepts and that composes, builds and verifies
 over the suite's captured records does not fail the suite because of which
 projects it contains or how they resolved.
 
@@ -194,8 +204,8 @@ a check protects the tracker.
 
 ## Risks / Trade-offs
 
-- The change is large for a review round: four capabilities, twelve requirement
-  operations and roughly a dozen scenarios touched. The mitigation is that no
+- The change is large for a review round: four capabilities, thirteen
+  requirement operations and roughly a dozen scenarios touched. The mitigation is that no
   delta changes behavior, so each one can be checked against a named module
   rather than argued about.
 - Stating a previously unstated rule freezes it. The native GitLab boundary and

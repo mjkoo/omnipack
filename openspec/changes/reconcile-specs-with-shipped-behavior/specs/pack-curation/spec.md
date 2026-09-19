@@ -54,9 +54,13 @@ this guarantee. Which projects the catalog contains and how they resolved SHALL
 NOT decide whether the suite passes, so a source proposal whose catalog is
 valid and which composes, builds and verifies SHALL NOT fail the suite. What
 makes a catalog valid SHALL be stated where it is enforced rather than
-enumerated here: its entry ids are unique by "One package id may resolve
-differently per variant" in source-ingestion, and its shape, identities and
-canonical rendering by readme-source-generation, which produces it. Tests SHALL
+enumerated here, and no rule SHALL be attributed to a stage that does not
+check it: a build rejects a catalog that repeats an entry id, by "One package
+id may resolve differently per variant" in source-ingestion, while generation
+rejects a catalog holding one project twice or whose shape, identities or
+canonical rendering are wrong, by "Generation produces a deterministic
+Obtainium source catalog" in readme-source-generation, which produces the
+catalog and validates it again when it reads it back. Tests SHALL
 NOT require maintaining another implementation of Obtainium source resolution
 or regex semantics.
 

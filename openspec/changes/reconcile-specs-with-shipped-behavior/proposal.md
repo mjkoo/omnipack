@@ -10,9 +10,9 @@ stands.
 The worst of them asserts behavior that does not exist. A generation scenario
 says an explicitly enabled prerelease resolves "despite a 404 from the stable
 latest endpoint", but generation chooses its endpoint from the rule before it
-makes any request and issues exactly one: when prereleases are enabled it asks
-for the releases list and never asks for the stable latest release, so no 404
-is possible and no reader can tell what the system is supposed to do when the
+makes any request and looks a release up once against it: when prereleases are
+enabled it asks for the releases list and never asks for the stable latest
+release, so no 404 is possible and no reader can tell what the system is supposed to do when the
 stable endpoint fails. A composition requirement forbids "a separate lookup of
 the selected project's release metadata" after building, machinery no module
 has ever had, and two of its three scenarios describe a reselection path that
@@ -47,7 +47,8 @@ the code, one reconciliation.
   with its scenario.
 - Correct the generation scenario that claims a prerelease resolves despite a
   404 from the stable latest endpoint. State the actual contract: the rule
-  decides the endpoint before any request, exactly one request is made, and an
+  decides the endpoint before any request, exactly one release lookup is made
+  against that endpoint, a transport retry of it is not a second lookup, and an
   enabled prerelease or release-title rule reads the bounded releases list
   instead of the stable latest release.
 - Separate the two bounded-scan failures generation already distinguishes: a
@@ -60,8 +61,9 @@ the code, one reconciliation.
   asset pattern must match exactly one asset in that release.
 - State the shipped rules that change a maintainer's decisions and that no
   requirement covered: the native GitLab URL boundary, the identity of two
-  non-GitHub links that differ only in query, fragment or port, the asset count
-  each configured pattern must match, the validity of a policy selector's
+  links that differ only in query, fragment or port, the asset count each
+  configured pattern must match, the uniqueness of a normalized project URL
+  within the accepted source catalog, the validity of a policy selector's
   source and origin pairing, the fields an overlay record may carry, and the
   consumer settings a track-only rule may set.
 - Replace the unenforceable GitLab clause "Package ids for these explicit
@@ -97,17 +99,20 @@ None.
   supported source and an origin belonging to that source; state the fields an
   overlay record may carry and the project URL it must name.
 - `source-ingestion`: state upstream asset reading as an outcome with the
-  required asset count per configured pattern; state that query, fragment and
-  port identify a non-GitHub project while a GitHub link reduces to owner and
-  repository; state that a committed catalog repeating an id fails ingestion
+  required asset count per configured pattern; state that query and fragment
+  identify a non-GitHub project and that an explicit port identifies a project
+  on every host, while a GitHub link reduces to owner and repository; state that a committed catalog repeating an id fails ingestion
   while upstream duplicates reach composition; state the native GitLab URL
   boundary and restate the package-id clause as a maintainer obligation; rename
   the committed-catalog requirement.
 - `readme-source-generation`: correct the prerelease resolution scenario, scope
-  the consumer settings a track-only rule may carry, and separate the
-  over-bound response from the bounded response with no permitted release.
+  the consumer settings a track-only rule may carry, separate the over-bound
+  response from the bounded response with no permitted release, and state that
+  generation rejects an accepted catalog holding one normalized project twice,
+  which is where that uniqueness rule is enforced.
 - `pack-curation`: restate the curated-decision protections as outcomes rather
-  than a description of the test suite, and remove one tracker's per-app data
+  than a description of the test suite, attribute each catalog validity rule to
+  the stage that actually enforces it, and remove one tracker's per-app data
   from normative text.
 
 ## Impact
@@ -129,14 +134,14 @@ the data, and rebases onto the branch that carries it if it has not merged by
 then, so the requirement is never left without a regression net.
 
 Estimate: this change retires one requirement, "Selected build verification
-does not change composition", and adds none. It modifies eleven: three in
-`pack-composition`, four in `source-ingestion`, two in
+does not change composition", and adds none. It modifies twelve: three in
+`pack-composition`, four in `source-ingestion`, three in
 `readme-source-generation` and two in `pack-curation`, and renames one more in
-`source-ingestion` through a rename section carrying no other edit. It adds ten
-scenarios and rewrites four in place, keeping every existing scenario name so
-no requirement has to be removed and re-added. It
+`source-ingestion` through a rename section carrying no other edit. It adds
+twelve scenarios and rewrites four in place, keeping every existing scenario
+name so no requirement has to be removed and re-added. It
 adds no implementation lines, because no shipped behavior changes, and roughly
-120 to 180 test lines across eight new guards. No new requirement about
+140 to 210 test lines across ten new guards. No new requirement about
 retries, ownership, races, diagnostic formats or evidence is introduced: every
 rule stated here is a configuration or ingestion rule whose violation already
 fails a build visibly, and a rerun of an unchanged input reproduces it exactly.

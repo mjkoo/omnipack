@@ -31,12 +31,16 @@ in generated Obtainium entries so a resolved prerelease remains discoverable
 after import. Final-pack overlays SHALL NOT substitute for discovery policy.
 
 A rule SHALL choose which release to resolve before making any request, from
-its own settings alone, and generation SHALL make exactly one release request
-per project: a rule enabling prereleases or filtering release titles SHALL
-resolve from the bounded releases list, and every other rule SHALL resolve from
-the stable latest release. Neither SHALL be attempted as a fallback for the
-other, so a project whose chosen endpoint fails SHALL fail resolution rather
-than be retried against the other endpoint.
+its own settings alone, and generation SHALL perform exactly one release lookup
+per project, against the endpoint that choice names: a rule enabling
+prereleases or filtering release titles SHALL resolve from the bounded releases
+list, and every other rule SHALL resolve from the stable latest release.
+Neither endpoint SHALL be attempted as a fallback for the other, so a project
+whose chosen endpoint fails SHALL fail resolution rather than be retried
+against the other endpoint. A transport-level retry of that one lookup SHALL
+reissue the same request to the same endpoint and SHALL NOT be a second lookup:
+this requirement governs which endpoint is asked and how many times a release
+is looked up, not how many HTTP attempts the shared transport makes.
 
 The settings that select a release, namely prerelease admission, release-title
 filtering and the consumer setting `fallbackToOlderReleases`, SHALL be
@@ -92,6 +96,73 @@ generator resolves.
 
 - **WHEN** the README removes a project with a committed rule
 - **THEN** generation reports the inactive rule and proposes removal of the catalog entry without rewriting the rule
+
+### Requirement: Generation produces a deterministic Obtainium source catalog
+
+Generation SHALL parse GitHub repository links from the configured README's
+Project catalog tables, require recognizable table structure, normalize and
+deduplicate project URLs, and report unsupported links as skipped. Links outside
+those tables SHALL NOT introduce projects. Every supported GitHub repository
+link in those tables SHALL be accounted for under its explicit or default
+APK/track-only treatment independently of other catalogs, deny rules or final
+pack selection. Missing or malformed table structure and an
+unexpected empty eligible catalog SHALL fail generation rather than propose a
+mass deletion.
+
+The result SHALL be deterministic Obtainium-compatible JSON containing settings
+and records with GitHub source identity, repository-derived names unless a
+reviewed name is supplied, owner-derived authors and empty app categories.
+APK records SHALL have manifest-backed package IDs; explicitly declared
+track-only records SHALL have stable synthetic resource IDs. It SHALL use
+existing supported defaults and serialization conventions plus reviewed
+project settings, without final pack family selection or final-pack overlays.
+Different projects with the same entry ID, including tracker/APK collisions,
+SHALL fail catalog validation with both URLs identified rather than silently
+choose a project or emit an invalid import. Source removals SHALL be reflected
+as proposed deletions only after otherwise complete successful generation.
+
+Generation SHALL apply the entry-ID check both to the candidate catalog it
+emits and to the accepted catalog it reads back before generating. Reading the
+accepted catalog SHALL additionally fail when two of its entries carry project
+URLs that normalize to the same form, naming that normalized project, because
+one project holding two entries in a reviewed catalog is an error in the
+catalog rather than a choice for composition. The candidate catalog cannot
+repeat a normalized project URL, because the README links it is built from are
+deduplicated in that same normalized form. This uniqueness SHALL be owned here,
+where generation enforces it, and no build-time ingestion check SHALL be
+required to repeat it.
+
+#### Scenario: Duplicate URL spellings
+
+- **WHEN** two eligible links normalize to the same project
+- **THEN** one entry is generated with stable output for equivalent input orderings
+
+#### Scenario: Other catalogs already include the project
+
+- **WHEN** an eligible README project is also available in another upstream catalog
+- **THEN** source generation still includes it and leaves pack coverage filtering to ingestion
+
+#### Scenario: Table disappears
+
+- **WHEN** fetched content lacks the expected project table or has no eligible projects
+- **THEN** generation fails without offering a replacement catalog
+
+#### Scenario: A project is removed
+
+- **WHEN** a valid nonempty README revision removes a previously accepted project
+- **THEN** the complete candidate catalog omits it and diagnostics identify the deletion
+
+#### Scenario: One of multiple Project tables is malformed
+
+- **WHEN** a README contains a valid Project table and another Project header with a missing or invalid delimiter
+- **THEN** generation fails without proposing removals from the malformed table or emitting a candidate catalog
+
+#### Scenario: The accepted catalog holds one project twice
+
+- **WHEN** the accepted catalog carries two entries with different ids whose
+  project URLs normalize to the same form
+- **THEN** generation fails naming that normalized project, rather than reading
+  the catalog with one of the two entries silently shadowing the other
 
 ### Requirement: Release APKs determine package IDs automatically
 
