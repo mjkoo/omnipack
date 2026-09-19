@@ -1,6 +1,6 @@
 ## 1. Display the recorded build diagnostics in the report command
 
-- [ ] 1.1 Add failing report tests: a build report recording candidate changes,
+- [x] 1.1 Add failing report tests: a build report recording candidate changes,
   denylist exclusions, denials that matched no candidate and admitted committed
   candidates displays each of them, identifying the variant and package id of a
   change, the package id, variant, family and reason of an exclusion, the
@@ -16,12 +16,12 @@
   lists raises the report format error rather than printing a partial line; and
   a stored report written before this change still displays. Keep the existing
   absent-substring assertions passing.
-- [ ] 1.2 Emit the diagnostics between the selection lines and the stage and
+- [x] 1.2 Emit the diagnostics between the selection lines and the stage and
   error lines in `format_reports`, validating element fields where they are
   formatted with the existing string type guard and raising the report format
   error, leaving `_validate_build_report` and `BUILD_SCHEMA_VERSION` untouched;
   confirm the focused report tests pass.
-- [ ] 1.3 Add one command-level case that builds and then reports, confirming
+- [x] 1.3 Add one command-level case that builds and then reports, confirming
   the diagnostics reach the command's output and that the build report file is
   unchanged by reporting. Pass the group's independent evidencing review and
   record the result in the change directory.
