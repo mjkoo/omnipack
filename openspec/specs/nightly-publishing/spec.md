@@ -47,7 +47,8 @@ same revision in a write job, and make one refresh attempt.
 
 ### Requirement: Nightly completion includes rolling release synchronization
 
-After a successful main push or a verified main no-op, the publisher SHALL
+After a successful main push whose pushed commit the publisher can establish as
+its own local revision, or after a verified main no-op, the publisher SHALL
 synchronize the owned rolling release from that run's verified JSON pair.
 Release readiness SHALL NOT be a prerequisite for otherwise valid main output.
 Release failure SHALL fail the workflow without undoing a successful main push,
@@ -121,21 +122,64 @@ checkout, and output that already landed SHALL then be a verified no-op.
 - **WHEN** repository protection rejects the push
 - **THEN** the run fails without changing repository protections or synchronizing the release
 
-### Requirement: Actions records publication outcomes
+### Requirement: Actions summarizes and uploads each publication run's outcome
 
 Actions step results and logs SHALL be the failure record. The publisher SHALL
 write a short step summary identifying the main outcome (the published commit, a
-no-op, or the failing stage) and the release outcome (a new revision, a repair
-of the served assets at the same revision, unchanged, or failure). A rejected or
-erroring push SHALL appear as the failing main stage, and a release failure
-SHALL state its reason, with bootstrap guidance when the release is absent,
-unowned, malformed, a draft, not a prerelease, or immutable. The build report and structural verification report produced by
-the run SHALL be uploaded as artifacts with 14-day retention on success and
-failure when they exist. Missing reports after an early failure SHALL NOT imply
-verification success. Verification reports SHALL be identified as
-structural/offline without live-health claims. The workflow SHALL NOT maintain
-failure issues or request issue-write permission. Summary or upload failure SHALL
-remain a visible failed step without undoing publication.
+candidate prepared for publication, a no-op, or the failing stage) and, when the
+release stage runs, the release outcome (a new revision, a repair of the served
+assets at the same revision, unchanged, or failure). A rejected or erroring push SHALL appear as
+the failing main stage, and a release failure SHALL state its reason, with
+bootstrap guidance when the release is absent, unowned, malformed, a draft, not
+a prerelease, or immutable. The build report and structural verification report
+produced by the run SHALL be uploaded as artifacts with 14-day retention on
+success and failure when they exist. Missing reports after an early failure
+SHALL NOT imply verification success. Verification reports SHALL be identified
+as structural/offline without live-health claims. The workflow SHALL NOT
+maintain failure issues or request issue-write permission. Summary or upload
+failure SHALL remain a visible failed step without undoing a prepared candidate
+or a completed push.
+
+Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
+downloads, and source text SHALL be treated as data rather than executable
+input.
+
+#### Scenario: Setup fails before reports exist
+
+- **WHEN** runtime setup fails before any report is written
+- **THEN** Actions shows the failed step and its logs, with no issue write or fabricated verification evidence
+
+#### Scenario: Reused workspace fails before verification
+
+- **WHEN** a workspace contains reports from a prior run and the current build fails before verification
+- **THEN** only reports produced by the current run are uploaded
+
+#### Scenario: Release fails after a confirmed push
+
+- **WHEN** release synchronization fails after a successful main push
+- **THEN** the workflow fails and its summary shows the pushed commit separately from the release failure
+
+#### Scenario: Diagnostics fail around publication
+
+- **WHEN** summary generation fails after a successful push, or an artifact upload fails in the job that produced the diagnostics, before any push exists
+- **THEN** the failing step remains visible and neither the prepared candidate nor a completed push is undone
+
+#### Scenario: Push outcome is summarized
+
+- **WHEN** the push of the verified commit succeeds, or is rejected
+- **THEN** the summary names the published commit, or the push failure for that commit, on its own line
+
+#### Scenario: A candidate is prepared but not yet published
+
+- **WHEN** a run builds and verifies a candidate and hands it off without having pushed it
+- **THEN** the summary names that prepared candidate as its own outcome, distinct from a published commit, a no-op and a failing stage
+
+#### Scenario: Sensitive or executable source text
+
+- **WHEN** upstream diagnostics contain shell syntax or credential values
+- **THEN** reporting neither executes that text nor exposes credentials
+
+### Requirement: The publication credential belongs to the write job alone
 
 The workflow SHALL grant no permissions at workflow level. The publication
 credential SHALL be available only to the write job, which alone SHALL hold
@@ -157,30 +201,9 @@ SHA. Within the write job, the credential SHALL be
 passed only to the checkout of the triggering revision and to the steps that
 push to main or write the release, and every git command there SHALL run with
 repository hooks disabled. No checkout SHALL
-persist a credential in the repository configuration. Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
-downloads, and source text SHALL be treated as data rather than executable
-input. Documentation SHALL describe token permissions, direct-push prerequisites
-and the one-time release bootstrap, without automatic repository-setting changes.
-
-#### Scenario: Setup fails before reports exist
-
-- **WHEN** runtime setup fails before any report is written
-- **THEN** Actions shows the failed step and its logs, with no issue write or fabricated verification evidence
-
-#### Scenario: Reused workspace fails before verification
-
-- **WHEN** a workspace contains reports from a prior run and the current build fails before verification
-- **THEN** only reports produced by the current run are uploaded
-
-#### Scenario: Release fails after a confirmed push
-
-- **WHEN** release synchronization fails after a successful main push
-- **THEN** the workflow fails and its summary shows the pushed commit separately from the release failure
-
-#### Scenario: Reporting fails after publication
-
-- **WHEN** summary generation or artifact upload fails after a successful push
-- **THEN** the failing step remains visible and the push is not undone
+persist a credential in the repository configuration. Documentation SHALL
+describe token permissions, direct-push prerequisites and the one-time release
+bootstrap, without automatic repository-setting changes.
 
 #### Scenario: Build runs without the publication credential
 
@@ -199,16 +222,6 @@ and the one-time release bootstrap, without automatic repository-setting changes
 - **WHEN** the read-only job's outputs name a base other than the triggering revision, or a commit identifier that is not a full SHA
 - **THEN** the write job fails before any push or release write, having run only code from the triggering revision
 
-#### Scenario: Push outcome is summarized
-
-- **WHEN** the push of the verified commit succeeds, or is rejected
-- **THEN** the summary names the published commit, or the push failure for that commit, on its own line
-
-#### Scenario: Sensitive or executable source text
-
-- **WHEN** upstream diagnostics contain shell syntax or credential values
-- **THEN** reporting neither executes that text nor exposes credentials
-
 ### Requirement: Publication requires fresh verification of committed-source builds
 
 Each run SHALL set up the checked-out revision's locked runtime once, build
@@ -222,8 +235,9 @@ SHA, or whose parent is not the checked-out main revision, before any push or
 release write. A failed verification SHALL prevent publication of every
 candidate file and SHALL keep the write job from running. Nightly SHALL NOT repeat development CI formatting, lint, type or
 test-suite checks, verify old committed outputs before building, poll CI status,
-or accept a verification report from another run as authorization. Existing
-non-blocking composition warnings SHALL retain their policy. Source-generation
+or accept a verification report from another run as authorization. Non-blocking
+composition diagnostics SHALL retain their policy: they SHALL NOT block
+publication, and the run's build report SHALL record them. Source-generation
 failures SHALL be independent of nightly eligibility.
 
 Verification SHALL use `pack verify` and SHALL make no network requests.
@@ -232,8 +246,8 @@ codm2000 catalog locally, without README fetches or APK package-ID discovery.
 
 #### Scenario: Candidate verifies with warnings
 
-- **WHEN** the build and structural verification succeed with non-blocking build warnings
-- **THEN** the candidate is eligible and warnings remain visible without running development CI checks
+- **WHEN** the build and structural verification succeed with non-blocking composition diagnostics
+- **THEN** the candidate is eligible and those diagnostics stay recorded in the run's uploaded build report, without running development CI checks
 
 #### Scenario: Failed refresh
 

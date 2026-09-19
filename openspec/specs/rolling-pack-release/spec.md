@@ -54,7 +54,11 @@ revision. Release assets SHALL only come from a verified pair associated with a
 successful main push or a verified main no-op; a failed or erroring main push
 SHALL prohibit release mutation. Release mutation SHALL also require main to
 still be at the commit that pair came from, so a rerun of an earlier run's
-publisher cannot move the release back to an older pair.
+publisher cannot move the release back to an older pair. A push that lands SHALL
+authorize release mutation only while the publisher can establish that pushed
+commit as its own local revision; a run that cannot SHALL fail with the push
+reported and without release writes, so no run publishes the pair it happens to
+hold under a commit it did not establish.
 
 GitHub asset replacement is not atomic across the pair. The publisher SHALL NOT
 claim atomic download visibility during uploads. If synchronization stops before
@@ -95,6 +99,11 @@ visibly without changing repository settings or touching other releases.
 - **WHEN** a verified run's pair matches the recorded digests and both served-asset digests
 - **THEN** no asset or revision changes, even if main received a cache or catalog commit
 
+#### Scenario: The push lands but its commit cannot be established
+
+- **WHEN** the push of the verified commit succeeds and the publisher then cannot make that commit its own local revision
+- **THEN** the run fails with the published commit reported and performs no release write
+- **AND** a later verified run whose output is already on main synchronizes the release as a verified no-op
 ### Requirement: Bootstrap and device acceptance are explicit
 
 Initial activation SHALL establish an owned revision-zero prerelease as a
