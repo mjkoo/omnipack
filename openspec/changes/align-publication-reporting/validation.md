@@ -117,3 +117,6 @@ reach remains with isolation. `test_publication_permissions_and_runtime_boundari
 `workflow_support.git` disables hooks; the existing write-side runtime tests
 check standard-library-only imports. All these existing tests passed unchanged
 in the 691-test baseline.
+
+Independent documentation review of `f76a129..404e770`: approved with no
+findings; the reviewer confirmed the guide changes and link-check evidence.

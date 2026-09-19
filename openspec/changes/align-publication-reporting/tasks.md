@@ -28,7 +28,7 @@
 
 ## 2. Align the maintainer guide with the command
 
-- [ ] 2.1 Replace the passage in the development guide that tells readers the
+- [x] 2.1 Replace the passage in the development guide that tells readers the
   report command prints selections but not the denylist removals, stale
   exclusions or candidate changes, and stop describing the command's output as
   warnings; keep the guidance on what each list means and on checking a new
