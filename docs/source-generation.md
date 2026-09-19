@@ -127,6 +127,12 @@ keeps `com.digitaladventure.dw2003`. The companion is not catalogued.
 
 ## Proposal workflow
 
+Automated source PRs intentionally contain only `config/catalogs/codm.json`.
+Their generated packs and README are checked diagnostics, not committed PR
+content or retained artifacts; nightly rebuilds and publishes outputs after
+merge. Manual policy PRs instead include their accepted catalog and changed
+outputs under the [manual review convention](development.md#manual-review-and-pr-contents).
+
 The **Reviewed source catalog** Actions workflow runs daily at 04:17 UTC and
 can be dispatched manually, with no inputs. It runs only for
 `mjkoo/omnipack` on `main`, under one non-canceling concurrency group, and
@@ -160,8 +166,9 @@ failures would take the PR body past GitHub's 65,536-character limit, the
 list stops at the last one that fits and ends with an `and N more` line.
 
 When the candidate changed, `check` goes on to run the full test suite,
-`pack build` and `pack verify` against the candidate catalog, mirroring what
-CI on `main` runs right after such a change merges, then requires
+`pack build` and `pack verify` against the candidate catalog. This includes a
+live build beyond main CI, which tests and verifies committed outputs offline
+without rebuilding them. The workflow then requires
 `git diff --quiet "$SHA" -- config/catalogs/codm.json` (with `SHA` the
 `stage` commit) to confirm the working tree still matches the committed
 candidate. Any of those steps failing blocks the proposal: the bundle and PR

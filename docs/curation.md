@@ -15,9 +15,11 @@ apps it accompanied. Export exclusion does not guarantee deletion on a device.
 
 Both packs include the same track-only GitHub entry, **omnipack updates**
 (`809443320`). It follows the numeric title of the owned `continuous` prerelease.
-Either pack changing advances one shared revision after both JSON assets have
-been read back and verified. A notification therefore means the collection may
-have changed for either device variant; it does not identify which pack changed.
+Publishing a changed verified pair uploads both JSON assets before editing the
+shared revision and digest record. Served digests are checked before deciding
+to leave, repair or advance the release; repair uploads both assets without
+advancing the revision. There is no post-upload readback. A notification means
+the collection may have changed for either variant, not which pack changed.
 
 After an update notification, acknowledge the tracker update in Obtainium,
 download the appropriate pack, and import it again through **Settings >
@@ -35,12 +37,7 @@ The rolling release also exposes stable asset links:
 - [single-screen release asset](https://github.com/mjkoo/omnipack/releases/download/continuous/single-screen.json)
 - [dual-screen release asset](https://github.com/mjkoo/omnipack/releases/download/continuous/dual-screen.json)
 
-The two release assets cannot be replaced atomically. During an interrupted
-publication, one asset can be missing or the pair can temporarily differ. The
-release title remains at its last completed revision until both files match the
-new verified pair. Use the raw-main links if a release asset is temporarily
-unavailable, and wait for a later successful run before treating a new revision
-as complete.
+Release asset replacement is non-atomic; see [publication visibility and recovery](publishing.md#release-digest-record-and-served-asset-check).
 
 Offline verification validates the complete pair, including this tracker, without
 querying releases. After confirmed main publication or a verified no-op, release
@@ -155,8 +152,8 @@ establish successful device acceptance.
 
 [Ludashi releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
 include v4.0, but the existing APK filter still selects bionic-vanilla.apk from
-v3.1.h. The newer release renamed its assets. This work preserves that filter
-and records the older-release fallback without claiming v4.0 is selected.
+v3.1.h through the older-release fallback. The newer release uses renamed
+assets and is not selected by that filter.
 
 [XenDroid releases](https://github.com/rfandango/XenDroid/releases) exposed
 XenDroid-c4f6863 during refresh; its inspected manifest has the matching hash
@@ -182,6 +179,6 @@ Investigate changed source behavior in Obtainium and record new observations
 with their dates and provenance.
 
 Policies take effect on the next import. Rollback restores the previous extras
-and overlay and rebuilds both files; publication is a separate maintainer action.
+and overlay and rebuilds both files.
 See [validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md) for exact generated hashes, command
 outcomes, upstream drift and outstanding device acceptance.

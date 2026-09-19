@@ -197,8 +197,10 @@ Download the current pack pair directly from the stable URLs:
 <!-- omnipack:digests single-screen.json=<sha256> dual-screen.json=<sha256> commit=<sha> -->
 ```
 
-The stable download URLs above always serve the assets from the most
-recently completed edit.
+The stable download URLs serve whatever the most recent upload left in place.
+During publication an asset can be missing or the pair can be mixed across
+revisions. Use the [raw-main download links](curation.md#tracking-omnipack-itself)
+as the fallback until a later run completes or repairs the pair.
 
 ## Failure and rerun behavior
 
