@@ -45,3 +45,37 @@ authorized removing the existing final sentence linking to an archived change's
 validation record. A search for `openspec/changes`, `proposal.md`, `design.md`
 and `tasks.md` in the guide found no matches. Offline documentation-link
 validation passed with zero errors. No device was accessed.
+
+## Post-change checks
+
+`just check-all` passed after the spec and documentation edits:
+
+- Lock consistency, formatting, lint and types passed.
+- 758 Python tests passed, with 94% total coverage. This includes
+  `tests/test_write_side_runtime.py::test_write_side_modules_import_only_stdlib_and_scripts`,
+  which recursively rejects non-standard-library imports from write-side modules.
+- All 105 write-side tests passed under CPython 3.12.14.
+- Offline pack verification and both workflow linters passed.
+- Offline links: 552 total, 53 OK, 0 errors, 499 excluded.
+- Nix formatting changed no files; the host flake check passed.
+
+The same offline-linter and incompatible-system advisories appeared as in the
+baseline. Nix also noted the dirty tree while task checkboxes were being updated;
+that was documentation progress, not an input or dependency failure.
+
+`git diff --stat main` listed 10 files: the two main specs, `docs/curation.md`,
+and seven files in this change directory. An allowlist assertion over
+`git diff --name-only main` passed. No changes appear under `src/`, `scripts/`,
+`tests/`, `.github/`, `config/` or `dist/`. `git diff --check` passed.
+
+## Implementation reviews
+
+The main-spec group review approved commit `9055686`, confirming the declared
+edits, scenario preservation, strict validation and retired-name search. Its
+only minor note was the informational long-requirement output. The wording was
+retained to preserve the planned scope; this advisory does not indicate a
+validation failure or changed behavior.
+
+The documentation group review approved commit `c9b3d59`, confirming both
+acceptance statements, the authorized link removal and targeted checks, with
+no findings.

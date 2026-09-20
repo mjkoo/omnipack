@@ -1,12 +1,12 @@
 ## 1. Main specs
 
-- [ ] 1.1 Synchronize both deltas into the main specs without archiving the change, and verify `openspec validate --specs --strict` passes all 10 specs and `openspec list --specs --json` reports 4 requirements for `rolling-pack-release` and 7 for `nightly-publishing`
-- [ ] 1.2 Verify carried text by diffing each main spec against its pre-change version: the only differences are the edits proposal.md names, the two removed scenarios are absent, the three moved scenarios appear exactly once across the two specs, and "Main advances before a no-op" and "Release fails after a confirmed push" are untouched
-- [ ] 1.3 Search `openspec/specs/`, `README.md`, `AGENTS.md`, `docs/`, `tests/`, `scripts/` and `src/` for the three retired requirement names and verify nothing outside `openspec/changes/` cites them
+- [x] 1.1 Synchronize both deltas into the main specs without archiving the change, and verify `openspec validate --specs --strict` passes all 10 specs and `openspec list --specs --json` reports 4 requirements for `rolling-pack-release` and 7 for `nightly-publishing`
+- [x] 1.2 Verify carried text by diffing each main spec against its pre-change version: the only differences are the edits proposal.md names, the two removed scenarios are absent, the three moved scenarios appear exactly once across the two specs, and "Main advances before a no-op" and "Release fails after a confirmed push" are untouched
+- [x] 1.3 Search `openspec/specs/`, `README.md`, `AGENTS.md`, `docs/`, `tests/`, `scripts/` and `src/` for the three retired requirement names and verify nothing outside `openspec/changes/` cites them
 
 ## 2. Documentation
 
-- [ ] 2.1 Extend the device-acceptance note in `docs/curation.md` to say that acceptance also covers both stable JSON downloads and that controlled tests are not device or live publication acceptance, and verify the guide cites no change artifact
+- [x] 2.1 Extend the device-acceptance note in `docs/curation.md` to say that acceptance also covers both stable JSON downloads and that controlled tests are not device or live publication acceptance, and verify the guide cites no change artifact
 
 ## 3. No-behavior-change evidence
 
