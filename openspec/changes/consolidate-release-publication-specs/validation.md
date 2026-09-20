@@ -79,3 +79,29 @@ validation failure or changed behavior.
 The documentation group review approved commit `c9b3d59`, confirming both
 acceptance statements, the authorized link removal and targeted checks, with
 no findings.
+
+## Independent sentence-map review
+
+An independent reviewer checked all 11 rows against the synchronized main specs,
+`scripts/nightly_write.py` and `.github/workflows/nightly.yml`. Result: pass,
+with no findings. The review used local source inspection without running
+publication, accessing the network or touching a device.
+
+| Removed text or scenario | Retained governing text and implementation evidence |
+| --- | --- |
+| Establish the pushed commit as the local revision | Release-write requirement and its first scenario; `nightly_write.py:122-134` requires successful push and checkout of the candidate before workflow release. |
+| Rejected or erroring push prohibits release | Release-write requirement and uncertain-outcome scenario; `nightly_write.py:122-124` fails the push, and workflow step success gating prevents release. |
+| Main must still be at the pair's commit | Release-write requirement; `nightly_write.py:154-167` compares local HEAD with remote main before any release operation. |
+| Later landed output synchronizes as a no-op | Main-push requirement defines the no-op, release-write requirement authorizes it, nightly synchronization requires it; `nightly.yml:97-110` skips only the push on an unchanged pair. |
+| Six bootstrap states | "Bootstrap is explicit" owns the list; `nightly_write.py:178-207` checks missing, unowned, malformed, draft, non-prerelease and immutable states, with guidance at lines 235-237. |
+| Release readiness does not block valid main | Nightly synchronization requirement; `nightly.yml:97-110` pushes before checking the release. |
+| Synchronize after successful push or verified no-op | Nightly synchronization and release-write requirements; the workflow's conditional push is followed by release for either successful path. |
+| Release failure does not undo or prevent main | Nightly synchronization requirement and retained scenario; release follows push, and `run_release` has no main rollback path. |
+| Maintainer acceptance paragraph | `docs/curation.md:42-49` retains the device-acceptance note and adds stable downloads and the controlled-test limitation. |
+| Missing release seed | "First normal run has no seed" and "Unowned release conflicts with synchronization" retain valid main outcomes; missing/unowned checks fail before release writes. |
+| Later main no-op repairs the release | The retained interrupted-upload, missing/unverifiable-asset and explicit-seed scenarios cover repair and first publication; `nightly_write.py:220-234` implements unchanged, repair and advance paths. |
+
+The reviewer also confirmed all three moved scenarios remain under the
+release-write requirement. The no-install restatement matches the write job's
+use of preinstalled Python without dependency installation or build/test/verify
+steps. The unchanged import-guard test enforces the recursive module boundary.
