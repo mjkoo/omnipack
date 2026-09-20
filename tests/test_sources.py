@@ -380,6 +380,97 @@ def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
     assert "dualScreen" not in rendered["app.extra"]
 
 
+@pytest.mark.parametrize("source", ["extras", "codm2000"])
+def test_non_rjny_catalog_metadata_is_dropped_but_unmodeled_fields_render(
+    source: str, tmp_path: Path
+) -> None:
+    record: dict[str, object] = {
+        "id": f"app.{source}",
+        "name": source,
+        "url": f"https://github.com/owner/{source}",
+        "meta": {"presentation": "catalog-only"},
+        "unmodeled": {"retained": True},
+    }
+    if source == "extras":
+        [app] = extras.fetch([record])
+    else:
+        [app] = _fetch_codm(tmp_path, [record], [])
+
+    [rendered] = json.loads(
+        render([ComposedApp(f"package:{app.id}", _import_data(app))])
+    )["apps"]
+    assert "meta" not in rendered
+    assert rendered["unmodeled"] == {"retained": True}
+
+
+def test_codm_declared_source_type_wins_and_omitted_type_is_derived(
+    tmp_path: Path,
+) -> None:
+    declared = _record_with("ordinary", True)
+    declared["overrideSource"] = "HTML"
+    inferred = {**declared, "id": "app.inferred", "name": "Inferred"}
+    del inferred["overrideSource"]
+
+    apps = _fetch_codm(tmp_path, [declared, inferred], [])
+
+    assert [(app.id, app.source_type) for app in apps] == [
+        ("app.entry", SourceType.HTML),
+        ("app.inferred", SourceType.GITHUB),
+    ]
+
+
+@pytest.mark.parametrize(
+    ("source", "fetch"),
+    [
+        pytest.param("rjny", lambda record: _fetch_rjny([record]), id="rjny"),
+        pytest.param("bboi", lambda record: _fetch_bboi([record], []), id="bboi34"),
+    ],
+)
+def test_upstream_record_without_declared_source_type_is_rejected(
+    source: str, fetch: Callable[[dict[str, object]], list[App]]
+) -> None:
+    record = _record_with("ordinary", True)
+    del record["overrideSource"]
+
+    with pytest.raises(SourceError) as excinfo:
+        fetch(record)
+
+    assert str(excinfo.value) == (
+        f"{source}: entry 'Entry' has unsupported source type None"
+    )
+
+
+@pytest.mark.parametrize(
+    ("source", "fetch"),
+    [
+        pytest.param(
+            "bboi",
+            lambda tmp_path: bboi.fetch(
+                FakeHttp({}),
+                {
+                    "codeberg_repo": "",
+                    "single_asset_pattern": "single.json",
+                    "dual_asset_pattern": "dual.json",
+                },
+            ),
+            id="bboi34",
+        ),
+        pytest.param(
+            "codm",
+            lambda tmp_path: codm.fetch(tmp_path, {"catalog": ""}, []),
+            id="codm2000",
+        ),
+    ],
+)
+def test_empty_configured_location_names_source(
+    source: str, fetch: Callable[[Path], list[App]], tmp_path: Path
+) -> None:
+    with pytest.raises(SourceError) as excinfo:
+        fetch(tmp_path)
+
+    assert str(excinfo.value) == f"{source}: configured location is empty"
+
+
 def test_bboi_latest_release_retains_both_asset_origins() -> None:
     api = "https://codeberg.org/api/v1/repos/BBoi34/Obtainium-Recomp-Decomp/releases/latest"
     release = json.loads(fixture("codeberg-release.json"))
@@ -567,6 +658,62 @@ def test_codm_reports_committed_apk_and_tracker_identities(tmp_path: Path) -> No
         ("apk", "app.apk"),
         ("track-only", "123"),
     ]
+
+
+def test_build_keeps_tracking_resource_beside_the_app_it_extends(
+    tmp_path: Path,
+) -> None:
+    [app] = extras.fetch(
+        [
+            {
+                "id": "app.host",
+                "url": "https://github.com/owner/host",
+                "name": "Host",
+            }
+        ]
+    )
+    description = "Install this resource manually through Host."
+    [tracker] = _fetch_codm(
+        tmp_path,
+        [
+            {
+                "id": "resource.release-feed",
+                "url": "https://github.com/owner/resource",
+                "name": "Resource",
+                "additionalSettings": {
+                    "trackOnly": True,
+                    "about": description,
+                },
+            }
+        ],
+        [app],
+    )
+    result = compose(
+        [app, tracker],
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
+    )
+
+    rendered = {
+        variant: {
+            entry["id"]: entry
+            for entry in json.loads(render(result.apps[variant]))["apps"]
+        }
+        for variant in Variant
+    }
+    assert set(rendered[Variant.SINGLE]) == {"app.host"}
+    assert set(rendered[Variant.DUAL]) == {
+        "app.host",
+        "resource.release-feed",
+    }
+    resource_settings = json.loads(
+        rendered[Variant.DUAL]["resource.release-feed"]["additionalSettings"]
+    )
+    assert resource_settings["trackOnly"] is True
+    assert resource_settings["about"] == description
 
 
 def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
