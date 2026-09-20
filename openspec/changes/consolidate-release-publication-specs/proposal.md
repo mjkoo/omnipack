@@ -89,7 +89,7 @@ Each rule gets one owner, chosen by what the rule is about:
 | "A later run whose verified output is already on main SHALL synchronize the release as a verified no-op." | nightly completion | Follows from three retained rules: landed output is a verified no-op (main push requirement), a verified no-op authorizes a release write, and the run synchronizes after a verified no-op |
 | The six bootstrap states | summary requirement | "An absent, unowned, malformed, draft, non-prerelease or immutable release SHALL fail that stage with bootstrap guidance" in "Bootstrap is explicit" |
 | "or blocking otherwise valid main publication" | one owned release | "Release readiness SHALL NOT be a prerequisite for otherwise valid main output." |
-| "after a successful main push or a verified main no-op" | bootstrap | First sentence of the write-preconditions requirement |
+| "after a successful main push or a verified main no-op" | bootstrap | "After a successful main push or a verified main no-op, the publisher SHALL synchronize..." in nightly-publishing, which fixes when the release stage runs, and the first sentence of the write-preconditions requirement |
 | "without undoing or preventing main publication" | bootstrap | "Release failure SHALL fail the workflow without undoing a successful main push", reached by a pointer sentence |
 | Maintainer-acceptance paragraph | bootstrap | Curation guide retains both stable JSON downloads, import, unchanged polling, revision-change notification, acknowledgement, re-import and the controlled-test limitation; no longer normative |
 | Scenario "Missing release seed" | nightly completion | "First normal run has no seed" and "Unowned release conflicts with synchronization", both of which keep their main-outcome clause |
@@ -133,7 +133,9 @@ None.
 - `openspec/specs/rolling-pack-release/spec.md` and
   `openspec/specs/nightly-publishing/spec.md`.
 - `docs/curation.md`: unchanged polling, both stable JSON downloads and the
-  controlled-test limitation added to its existing device-acceptance note.
+  controlled-test limitation added to its existing device-acceptance note. The
+  guide's closing link to an archived change's validation record is removed;
+  the development guide still links that record.
 - No change to `src/`, `scripts/`, `tests/`, `.github/workflows/`, `config/` or
   `dist/`. No other spec, doc or test cites a requirement this change renames;
   `pack-curation` cites "One owned rolling release publishes both variants",

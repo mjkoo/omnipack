@@ -159,3 +159,34 @@ advisories remained. The working tree was clean for that run.
 Implementation is complete. The change remains active; the separate verification
 and archive workflows have not run. No device or live publication acceptance is
 claimed.
+
+## Post-implementation review
+
+A separate reviewer examined the whole branch at `9d45c06` for correctness,
+completeness and house idiom, and found no blocking issue. It confirmed by
+script that every ADDED and MODIFIED block in both deltas is byte-identical to
+the synchronized main spec, that scenario counts moved from 36 to 32 in
+`nightly-publishing` and from 12 to 14 in `rolling-pack-release`, and that each
+sentence-map row has surviving governing text matching
+`scripts/nightly_write.py` and the step order of `.github/workflows/nightly.yml`.
+
+Three wording revisions followed:
+
+- `docs/curation.md`: the controlled-test limitation now reads "Passing
+  controlled tests does not complete device or live publication acceptance."
+  The content is unchanged.
+- `nightly-publishing`, main spec and delta together: the two cross-reference
+  sentences this change authored gained "that" so they parse on first reading,
+  and the referenced requirement name stays on one line so a literal search
+  finds it. No carried sentence was touched.
+- `proposal.md`: the impact note now records the removed link to an archived
+  validation record, which the development guide still links, and the
+  sentence-map row for the bootstrap timing clause names the
+  `nightly-publishing` sentence that fixes when the release stage runs.
+
+Checks after the revisions: the block-by-block delta comparison reported all
+seven blocks identical; `openspec validate --specs --strict` passed 10 of 10 and
+the change validated strictly; `git diff --check` passed; `just check-all`
+exited 0 with 758 Python tests, 105 CPython 3.12 write-side tests and offline
+links at 0 errors. The change remains active. No device or live publication
+acceptance is claimed.
