@@ -49,8 +49,9 @@ same revision in a write job, and make one refresh attempt.
 
 After a successful main push or a verified main no-op, the publisher SHALL
 synchronize the owned rolling release from that run's verified JSON pair,
-subject to the conditions "Release writes require an established main outcome"
-in rolling-pack-release places on every release write.
+subject to the conditions that
+"Release writes require an established main outcome" in rolling-pack-release
+places on every release write.
 Release readiness SHALL NOT be a prerequisite for otherwise valid main output.
 Release failure SHALL fail the workflow without undoing a successful main push,
 and the run summary SHALL report the main outcome separately from the release
@@ -103,7 +104,7 @@ candidate prepared for publication, a no-op, or the failing stage) and, when the
 release stage runs, the release outcome (a new revision, a repair of the served
 assets at the same revision, unchanged, or failure). A rejected or erroring push SHALL appear as
 the failing main stage, and a release failure SHALL state its reason, with
-the bootstrap guidance "Bootstrap is explicit" in rolling-pack-release
+the bootstrap guidance that "Bootstrap is explicit" in rolling-pack-release
 requires for the release states it names. The build report and structural verification report
 produced by the run SHALL be uploaded as artifacts with 14-day retention on
 success and failure when they exist. Missing reports after an early failure
