@@ -39,8 +39,10 @@ The scenario comparison and strict spec validation directly check the edits.
 
 ## Curation guide
 
-The acceptance note now covers both stable JSON downloads and distinguishes
-controlled tests from completed device or live publication acceptance. The user
+The initial acceptance edit added both stable JSON downloads and distinguished
+controlled tests from completed device or live publication acceptance, but omitted
+unchanged polling from the removed paragraph. The later review correction below
+restores it and makes revision-change notification explicit. The user
 authorized removing the existing final sentence linking to an archived change's
 validation record. A search for `openspec/changes`, `proposal.md`, `design.md`
 and `tasks.md` in the guide found no matches. Offline documentation-link
@@ -76,15 +78,18 @@ only minor note was the informational long-requirement output. The wording was
 retained to preserve the planned scope; this advisory does not indicate a
 validation failure or changed behavior.
 
-The documentation group review approved commit `c9b3d59`, confirming both
-acceptance statements, the authorized link removal and targeted checks, with
-no findings.
+The documentation group review approved commit `c9b3d59`, confirming the two
+planned acceptance additions, the authorized link removal and targeted checks,
+with no findings. That review missed the omitted unchanged-polling check; both
+later whole-diff reviewers caught it.
 
 ## Independent sentence-map review
 
 An independent reviewer checked all 11 rows against the synchronized main specs,
-`scripts/nightly_write.py` and `.github/workflows/nightly.yml`. Result: pass,
-with no findings. The review used local source inspection without running
+`scripts/nightly_write.py` and `.github/workflows/nightly.yml`. Its original
+result was pass with no findings, but the acceptance-row verdict was incomplete:
+it missed unchanged polling, as both later whole-diff reviewers identified. The
+original review used local source inspection without running
 publication, accessing the network or touching a device.
 
 | Removed text or scenario | Retained governing text and implementation evidence |
@@ -97,7 +102,7 @@ publication, accessing the network or touching a device.
 | Release readiness does not block valid main | Nightly synchronization requirement; `nightly.yml:97-110` pushes before checking the release. |
 | Synchronize after successful push or verified no-op | Nightly synchronization and release-write requirements; the workflow's conditional push is followed by release for either successful path. |
 | Release failure does not undo or prevent main | Nightly synchronization requirement and retained scenario; release follows push, and `run_release` has no main rollback path. |
-| Maintainer acceptance paragraph | `docs/curation.md:42-49` retains the device-acceptance note and adds stable downloads and the controlled-test limitation. |
+| Maintainer acceptance paragraph | Original verdict: the guide retained the device-acceptance note and added stable downloads and the controlled-test limitation. Correction: unchanged polling was missing, so that verdict did not establish complete relocation. The corrected guide includes both stable JSON downloads, import, unchanged polling, revision-change notification, acknowledgement, re-import and the controlled-test limitation. |
 | Missing release seed | "First normal run has no seed" and "Unowned release conflicts with synchronization" retain valid main outcomes; missing/unowned checks fail before release writes. |
 | Later main no-op repairs the release | The retained interrupted-upload, missing/unverifiable-asset and explicit-seed scenarios cover repair and first publication; `nightly_write.py:220-234` implements unchanged, repair and advance paths. |
 
@@ -105,3 +110,31 @@ The reviewer also confirmed all three moved scenarios remain under the
 release-write requirement. The no-install restatement matches the write job's
 use of preinstalled Python without dependency installation or build/test/verify
 steps. The unchanged import-guard test enforces the recursive module boundary.
+
+## Acceptance preservation correction
+
+Both whole-diff reviewers independently found the same Important omission:
+unchanged polling appeared in the removed acceptance paragraph but not in the
+curation guide. They reported no other findings. The user approved restoring
+that check and reconciling the artifacts. The guide now retains all six checks:
+both stable JSON downloads, import, unchanged polling, revision-change
+notification, acknowledgement and re-import. It also retains the limitation on
+calling controlled tests completed device or live publication acceptance.
+The proposal and design now name all three additions to the former guide note,
+and the documentation task explicitly requires checking every retained item.
+The earlier review results above remain recorded with their missed omission.
+
+Targeted checks after the correction:
+
+- `just check-links`: offline links passed, 552 total, 53 OK, 0 errors,
+  499 excluded.
+- A wording-completeness assertion compared the removed paragraph at the
+  starting implementation revision against the corrected guide: all six checks
+  and the controlled-test limitation are present. It also confirmed the guide
+  cites no change artifact and the documentation and independent-review tasks
+  remain unchecked pending re-review.
+- `git diff --check`: passed.
+
+No code or spec behavior changed, and no device or live publication was
+accessed. The full suite was not rerun for this focused correction; a final
+coordinator check and independent re-review remain pending.

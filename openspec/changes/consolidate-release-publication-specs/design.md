@@ -83,8 +83,10 @@ against the main spec shows only the named edits.
 
 **Relocate the acceptance paragraph to the curation guide.** That guide
 already says device import, notification, acknowledgement and re-import need
-separate device acceptance. It gains that the stable JSON downloads are part of
-acceptance and that controlled tests are not acceptance.
+separate device acceptance. It gains unchanged polling and both stable JSON
+downloads as acceptance checks, preserves the revision-change notification
+wording, and states that controlled tests are not completed device or live
+publication acceptance.
 
 ## Risks / Trade-offs
 

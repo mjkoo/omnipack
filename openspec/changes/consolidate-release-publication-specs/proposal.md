@@ -52,7 +52,9 @@ Each rule gets one owner, chosen by what the rule is about:
   requirement is renamed "Bootstrap is explicit". The paragraph has no scenario
   and nothing in the repository can implement it; it is a process note. The
   curation guide already lists import, notification, acknowledgement and
-  re-import as needing device acceptance, and gains the two facts it lacks.
+  re-import as needing device acceptance. It gains unchanged polling and both
+  stable JSON downloads as acceptance checks, plus the limitation that controlled
+  tests are not completed device or live publication acceptance.
 - Separate line item, same capability: the credential requirement obliges the
   write job to run "scripts that import nothing outside the standard library,
   on the runner's preinstalled Python". That names how the boundary is met. It
@@ -89,7 +91,7 @@ Each rule gets one owner, chosen by what the rule is about:
 | "or blocking otherwise valid main publication" | one owned release | "Release readiness SHALL NOT be a prerequisite for otherwise valid main output." |
 | "after a successful main push or a verified main no-op" | bootstrap | First sentence of the write-preconditions requirement |
 | "without undoing or preventing main publication" | bootstrap | "Release failure SHALL fail the workflow without undoing a successful main push", reached by a pointer sentence |
-| Maintainer-acceptance paragraph | bootstrap | Curation guide; no longer normative |
+| Maintainer-acceptance paragraph | bootstrap | Curation guide retains both stable JSON downloads, import, unchanged polling, revision-change notification, acknowledgement, re-import and the controlled-test limitation; no longer normative |
 | Scenario "Missing release seed" | nightly completion | "First normal run has no seed" and "Unowned release conflicts with synchronization", both of which keep their main-outcome clause |
 | Scenario "Later main no-op repairs the release" | nightly completion | "Served asset is missing or unverifiable", "Interrupted upload, then the recorded pair returns", "Explicit seed creation enables a later run" |
 
@@ -130,7 +132,8 @@ None.
 
 - `openspec/specs/rolling-pack-release/spec.md` and
   `openspec/specs/nightly-publishing/spec.md`.
-- `docs/curation.md`: two facts added to its existing device-acceptance note.
+- `docs/curation.md`: unchanged polling, both stable JSON downloads and the
+  controlled-test limitation added to its existing device-acceptance note.
 - No change to `src/`, `scripts/`, `tests/`, `.github/workflows/`, `config/` or
   `dist/`. No other spec, doc or test cites a requirement this change renames;
   `pack-curation` cites "One owned rolling release publishes both variants",
