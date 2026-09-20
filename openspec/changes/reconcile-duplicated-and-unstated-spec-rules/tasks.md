@@ -33,12 +33,12 @@ the only group that changes code and runs red then green.
 
 - [ ] 4.1 Write failing tests: a verification report carrying `complete` or the `running` status is rejected as an unsupported shape, a report written before this change draws the `pack verify` regeneration diagnostic, and `pack report` output has no `Complete:` line; verify they fail for the expected reason
 - [ ] 4.2 Remove the `complete` field from the written report, the `running` status, the `startedAt` fallback and the `Complete:` line from the reader, advance the verification schema version, and delete the test that keeps the incomplete state alive; verify 4.1 passes and `just test` is green
-- [ ] 4.3 Write a failing test that an unreadable verification input is reported as unreadable and not also as missing, then fix it; verify with `just test`
+- [ ] 4.3 Write two failing tests, one per path that double-reports an unreadable verification input, then fix both. First, the five offline inputs (single, dual, deny, overlay, composition): an unreadable one yields exactly one `input_unreadable` error naming it and no `input_missing` error; test at least one pack file and one configuration file. Second, the README, which takes a separate path: an unreadable README yields exactly one `input_unreadable` error naming it and no `catalog_invalid` error saying it is missing or unreadable. A genuinely missing input of either kind is still reported as missing. Verify each test fails for the expected reason first, then with `just test`
 - [ ] 4.4 Add tests for "Absent losing candidate cannot be assessed offline" (an unpinned policy candidate absent from the outputs leaves findings empty) and for an interrupted verification exiting nonzero through the command; verify with `just test`
 - [ ] 4.5 Correct `pack report`'s help text to describe both reports; verify with `pack --help`
-- [ ] 4.6 Update `docs/verification.md` so its description of the verification report no longer lists completion; verify `just check-links` passes
+- [ ] 4.6 Update `docs/verification.md` so its description of the verification report no longer lists completion, and so the sentence stating which schema standalone verification writes to `.build/verify.json` gives the advanced verification schema version from 4.2; leave the statement that build reports must use schema 3 unchanged, since the build report's schema does not move; verify `just check-links` passes
 - [ ] 4.7 Rerun `pack verify` then `pack report` locally and verify the evidence displays as current with no regeneration diagnostic
-- [ ] 4.8 Independent evidencing review of group 4: no reader, writer, test or doc still mentions the removed state, and no spec described it
+- [ ] 4.8 Independent evidencing review of group 4: no reader, writer, test or doc still mentions the removed state, and no spec described it; every mention of the verification schema version in `docs/` and `README.md` equals the writer's constant, and every mention of the build report schema is unchanged at 3
 
 ## 5. Bring the main specs into agreement
 

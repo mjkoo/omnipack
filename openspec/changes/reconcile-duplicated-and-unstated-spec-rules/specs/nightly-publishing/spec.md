@@ -10,9 +10,13 @@ reports an error, the run SHALL fail visibly. It SHALL NOT rebase, cherry-pick
 generated output, retry the push, rebuild, or inspect remote history to
 reinterpret the push outcome. A later invocation SHALL build and verify its own
 checkout, and output that already landed SHALL then be a verified no-op. A rerun
-of a write job whose own push already landed SHALL fail the same way, because
-main is then the pushed commit rather than the revision the run checked out;
-recovery SHALL be a new run, not a rerun.
+of a write job whose own push already landed SHALL fail before any push or
+release write, and recovery SHALL be a new run, not a rerun. While the run's
+candidate hand-off is still retained, the rerun SHALL fail the same way as a run
+that finds main advanced, because main is then the pushed commit rather than the
+revision the run checked out, and the summary SHALL report that main advanced.
+Once the hand-off is no longer retained, the rerun SHALL fail for want of it,
+and no particular reason is required of its summary.
 
 #### Scenario: Main advances during the run
 
@@ -39,7 +43,8 @@ recovery SHALL be a new run, not a rerun.
 #### Scenario: Write job is rerun after its own push landed
 
 - **WHEN** a write job is rerun after its push reached main, for example to retry a failed release stage
-- **THEN** the rerun fails before any push or release write, and the summary reports that main advanced
+- **THEN** the rerun fails before any push or release write, whether or not the run's candidate hand-off is still retained
+- **AND** while the hand-off is still retained, the summary reports that main advanced
 - **AND** a new run finds a verified no-op and synchronizes the release
 
 ### Requirement: Actions summarizes and uploads each publication run's outcome

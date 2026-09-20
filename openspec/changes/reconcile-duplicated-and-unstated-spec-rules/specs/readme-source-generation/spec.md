@@ -17,17 +17,19 @@ Numeric version-extraction group selectors and `$N` references SHALL name
 existing groups in the configured regex, with group zero denoting the full
 match. Leading and trailing selector whitespace SHALL be ignored for validation.
 
-Reviewed regexes SHALL be limited to constructs that mean the same to the engine
-that validates them here and to the supported Obtainium client that applies
-them. They SHALL therefore reject `\d`, `\D`, `\s`, `\S`, `\w`, `\W`, `\b` and
+Reviewed regexes SHALL reject the following constructs, whose meaning differs or
+may differ between the engine that validates them here and the supported
+Obtainium client that applies them: `\d`, `\D`, `\s`, `\S`, `\w`, `\W`, `\b` and
 `\B`, whose character or boundary semantics differ between the two; every other
 alphanumeric escape except the control-character escapes `\n`, `\r`, `\t`, `\f`
 and `\v`, which excludes anchors such as `\A` and `\Z`, backreferences and octal
 escapes; every group opening with `(?` other than the non-capturing `(?:`, the
 lookahead `(?=` and the negative lookahead `(?!`, which excludes inline flags,
-named groups, lookbehind and comments; and possessive quantifiers. Authors SHALL
-use explicit character classes for the intended matching set. Escaped literal
-backslashes SHALL be supported.
+named groups, lookbehind and comments; and possessive quantifiers. These
+rejections are the whole portability check: a regex that passes them is not
+thereby shown to mean the same to both engines. Authors SHALL use explicit
+character classes for the intended matching set. Escaped literal backslashes
+SHALL be supported.
 
 Only an explicit reviewed rule SHALL enable prereleases or classify a resource
 as track-only. A 404, missing APK, download failure or package-ID conflict SHALL
@@ -102,7 +104,7 @@ generator resolves.
 - **WHEN** the README removes a project with a committed rule
 - **THEN** generation reports the inactive rule and proposes removal of the catalog entry without rewriting the rule
 
-#### Scenario: A regex uses a construct outside the shared subset
+#### Scenario: A regex uses a rejected construct
 
 - **WHEN** a reviewed regex uses an inline flag, a named group, a lookbehind, a backreference, an anchor escape or a possessive quantifier
 - **THEN** policy validation fails with the project identified, before any network request

@@ -31,16 +31,20 @@ Spec text brought up to the shipped behavior, with no behavior change:
   dual-screen build.
 - `readme-source-generation`: the scenario "Exported title filter and consumer
   fallback reach the client" no longer sets up a state in which generation
-  fails; the reviewed-regex rule states the whole accepted subset instead of
-  eight of the rejected escapes; a track-only rule's required `rationale` and
-  the shape of its installation text are stated; the base revision is required
-  in the run summary of a run whose staging succeeds, not unconditionally.
+  fails; the reviewed-regex rule lists every construct validation rejects
+  instead of eight of the rejected escapes, gives cross-engine difference as
+  the reason for the list, and claims no equivalence for what passes it; a
+  track-only rule's required `rationale` and the shape of its installation
+  text are stated; the base revision is required in the run summary of a run
+  whose staging succeeds, not unconditionally.
 - `nightly-publishing`: a failure in the job that prepares the candidate,
   including a summary or upload failure there, means the run publishes nothing
   and a later run makes its own attempt; a completed push is never undone. The
   phrase "without undoing a prepared candidate" goes. A rerun of a write job
-  whose own push already landed fails as "main advanced", and recovery is a new
-  run; this was already the decided behavior and is now written down.
+  whose own push already landed fails before any push or release write, and
+  recovery is a new run. It reports "main advanced" while the run's candidate
+  hand-off is still retained, and fails for want of the hand-off after that.
+  This was already the decided behavior and is now written down.
 - `pack-curation`: the requirement protecting curated decisions states guarded
   outcomes and what may block a source proposal, without legislating "the test
   suite". The two catalog validity rules no pipeline stage checks stay owned
@@ -94,9 +98,13 @@ Retired by this change:
 Code and tests:
 
 - Delete the unreachable incomplete-verification state from the report reader,
-  its display line and its test; update `docs/verification.md`.
-- An unreadable verification input is reported as unreadable, not also as
-  missing. `pack report`'s help text describes both reports.
+  its display line and its test. `docs/verification.md` stops listing
+  completion and states the advanced verification schema version; its statement
+  that build reports use schema 3 stays, since that schema does not move.
+- An unreadable verification input is reported as unreadable once, not also as
+  missing. Two paths double-report today and both are fixed: the five offline
+  inputs, and the README, whose unreadable case is also recorded as an invalid
+  catalog. `pack report`'s help text describes both reports.
 - Tests for scenarios that have none: an empty configured location for BBoi34
   and codm2000, `meta` on a non-RJNY record, a codm2000 record declaring a
   source type that differs from its URL, an upstream record declaring no source
@@ -139,9 +147,9 @@ None.
 - `pack-curation`: curated-decision protection restated as outcomes; the
   tracker requirement loses a restatement and its two scenarios describe their
   own WHEN.
-- `readme-source-generation`: the fallback-export scenario; the accepted regex
-  subset; track-only rule fields; change-era sentences; the base-revision
-  summary condition.
+- `readme-source-generation`: the fallback-export scenario; the full list of
+  rejected regex constructs; track-only rule fields; change-era sentences; the
+  base-revision summary condition.
 - `nightly-publishing`: what a preparing-job failure means; rerun after a
   landed push; one retired twin scenario.
 - `pack-cli`: the report-command requirement states each rule once and points
@@ -153,7 +161,8 @@ None.
 - Code: `src/omnipack/report.py`, `src/omnipack/verify.py`,
   `src/omnipack/offline.py`, `src/omnipack/cli.py`. No change to pack bytes,
   composition, ingestion, generation or the workflows.
-- Docs: `docs/verification.md`.
+- Docs: `docs/verification.md`, for the removed completion field and the
+  verification schema version.
 - A stored `.build/verify.json` from before this change needs `pack verify`
   rerun. The file is gitignored and the nightly regenerates it every run.
 
