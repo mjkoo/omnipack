@@ -146,3 +146,17 @@ catalog tests pass.
 
 The corrected full run passed 796 tests in 25.72 seconds with 94% total coverage;
 `verify.py` has 100% coverage. No production build-schema change was made.
+
+Commit `cb42f10` implements tasks 5.1-5.7. A further isolated mutation check
+removed only the unconditional completion-timestamp guard from a temporary copy
+of the current package. The malformed-record suite then failed exactly its
+invalid-string, null and timezone-naive `completedAt` cases (3 failed, 11 passed),
+proving that the preserved tests detect the parked regression. The checkout was
+not mutated. The absent-field case remains protected by exact report-shape
+validation.
+
+Task 5.8: independent evidencing review approved `cb42f10` with no findings.
+It confirmed all task-to-code/test mappings, completion-timestamp enforcement,
+the preserved derived findings, verification schema 4, unchanged build schema 3
+throughout the documentation, and only intentional rejection tests referencing
+the retired report state.
