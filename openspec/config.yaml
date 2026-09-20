@@ -21,6 +21,9 @@ rules:
     - Keep per-app data out of normative requirements; it belongs in
       configuration and tests.
     - Keep validation records in the change directory, not in docs/.
+    - Development tooling (CI workflows, lint and format configuration, the
+      justfile) is out of scope for the specs. A product guarantee that CI
+      happens to check stays in its product capability.
   tasks:
     - Keep tasks scoped to implementation and its tests and reviews.
     - Do not include running the separate verify or archive workflows
