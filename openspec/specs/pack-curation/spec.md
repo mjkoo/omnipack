@@ -57,17 +57,20 @@ with its attribution and provenance.
 
 Each export SHALL contain exactly one identical GitHub track-only entry for this project's own rolling release, whose synthetic id, name, repository and categorization come from reviewed configuration rather than from this requirement. It SHALL select release titles by a pattern matching the rolling release title format fixed by "One owned rolling release publishes both variants" in rolling-pack-release and no other release of that repository, so the pattern and that format SHALL change together. It SHALL extract the revision from the matched release title, allow prereleases and scanning past unrelated releases, disable latest-endpoint prioritization and asset-date versioning, and retain background notifications. The rendered tracker SHALL NOT embed the observed revision, installed version or asset URLs. Source revision changes SHALL NOT require an APK.
 
-Consumer documentation SHALL explain that either variant changing can notify everyone, that acknowledgement is not synchronization, and that updating the pack requires downloading the appropriate JSON and re-importing. Existing raw-main links and the exclusion of upstream pack trackers SHALL remain in force.
+Consumer documentation SHALL explain that either variant changing can notify everyone, that acknowledgement is not synchronization, and that updating the pack requires downloading the appropriate JSON and re-importing.
 
 #### Scenario: Only one variant changes
 
-- **WHEN** a complete release publication increments the shared revision
+- **WHEN** only one variant's content changes and a complete release publication
+  increments the shared revision
 - **THEN** either variant's tracker can report that revision as an update
 
 #### Scenario: Rebuild observes a newer release revision
 
-- **WHEN** the curated configuration and other build inputs are unchanged
-- **THEN** observing the tracker revision alone does not change either generated pack
+- **WHEN** the rolling release advances to a newer revision while the curated
+  configuration and other build inputs are unchanged
+- **THEN** a rebuild produces the same packs, because the rendered tracker embeds
+  no observed revision
 
 ### Requirement: Curated decisions are protected by outcome checks over reviewed configuration
 
@@ -97,42 +100,38 @@ check fails when single stops serving it. That coverage SHALL follow from the
 reviewed configuration itself, so that curating a new extra covers it with no
 further edit.
 
-An automation-maintained codm2000 catalog SHALL fail the test suite only where
-the catalog is not valid, or where composition with the committed configuration,
-a build or a verification would fail. Composition here means composition over
-the suite's captured upstream records while the source workflow builds from live
+The automation-maintained codm2000 catalog SHALL be held to two things only:
+that it is valid, and that it composes with the committed configuration, builds
+and verifies. Which projects the catalog contains and how they resolved SHALL
+NOT be grounds for blocking a source proposal, so a proposal whose catalog is
+valid and which composes, builds and verifies SHALL need no other edit to the
+repository to be accepted. Composition here means composition over upstream
+records captured in the repository, while the source workflow builds from live
 ones, so a catalog whose composition depends on upstream records newer than
-those captures is outside this guarantee. Which projects the catalog contains
-and how they resolved SHALL NOT decide whether the suite passes, so a source
-proposal whose catalog is valid and which composes, builds and verifies SHALL
-NOT fail the suite.
+those captures is outside this guarantee.
 
-Validity is wider than what the pipeline rejects, so the suite MAY assert a
-validity rule no pipeline stage enforces, and doing so SHALL NOT be read as
-failing the catalog over which projects it contains or how they resolved. A rule
-the pipeline does enforce is stated where it is enforced rather than enumerated
-here, and none is attributed to a stage that does not check it. A build rejects
-a malformed committed catalog, by "A failed fetch aborts the build" in
-source-ingestion, and one that repeats an entry id, by "One package id may
-resolve differently per variant" there. Generation, reading the accepted catalog
-back, rejects a document whose shape is wrong or whose entries lack a string id
-and url, a catalog that repeats an entry id, and a catalog that holds one
-normalized project URL twice, by "Generation produces a deterministic Obtainium
-source catalog" in readme-source-generation. Only the last of these is checked
-by generation alone.
+Catalog validity comprises the rules the pipeline enforces, each stated where it
+is enforced, and two rules no pipeline stage checks, which this requirement
+owns. A build rejects a malformed committed catalog, by "A failed fetch aborts
+the build" in source-ingestion, and one that repeats an entry id, by "One package
+id may resolve differently per variant" there. Generation, reading the accepted
+catalog back, rejects a document whose shape is wrong or whose entries lack a
+string id and url, a catalog that repeats an entry id, and a catalog that holds
+one normalized project URL twice, by "Generation produces a deterministic
+Obtainium source catalog" in readme-source-generation. Only the last of these is
+checked by generation alone.
 
-Two further validity rules are owed by the test suite, no pipeline stage having
-ever checked them, and are owned here alongside the other outcomes this
-requirement protects. Every catalog entry SHALL carry an id and settings
-appropriate to its kind: a track-only entry a synthetic numeric id with version
-detection, zip inclusion and architecture filtering all disabled, and an APK
-entry a well-formed package id and no track-only flag. The committed catalog
+The two owned rules are these. Every catalog entry SHALL carry an id and
+settings appropriate to its kind: a track-only entry a synthetic numeric id with
+version detection, zip inclusion and architecture filtering all disabled, and an
+APK entry a well-formed package id and no track-only flag. The committed catalog
 file SHALL be byte-identical to the canonical rendering of the entries it holds,
 so that a hand edit or a stale write is visible rather than silently carried.
-Generation neither compares the committed bytes against its own rendering nor
-checks an entry's id and settings against its kind, so nothing fails when either
-drifts unless the suite asserts it. Tests SHALL NOT require maintaining another
-implementation of Obtainium source resolution or regex semantics.
+Because generation neither compares the committed bytes against its own
+rendering nor checks an entry's id and settings against its kind, each rule
+SHALL be guarded by a check that fails when it drifts. Guarding any outcome in
+this requirement SHALL NOT require maintaining another implementation of
+Obtainium source resolution or regex semantics.
 
 #### Scenario: Upstream refresh changes a curated setting
 
@@ -146,5 +145,10 @@ implementation of Obtainium source resolution or regex semantics.
 
 #### Scenario: A source proposal adds, removes or re-resolves projects
 
-- **WHEN** a candidate codm2000 catalog is valid and composes with the committed configuration over the suite's captured upstream records, builds and verifies
-- **THEN** no test fails because of which projects the catalog contains or how they resolved
+- **WHEN** a candidate codm2000 catalog is valid and composes with the committed configuration over the captured upstream records, builds and verifies
+- **THEN** no check blocks the proposal because of which projects the catalog contains or how they resolved
+
+#### Scenario: The committed catalog drifts from its canonical form
+
+- **WHEN** the committed codm2000 catalog's bytes differ from the canonical rendering of its entries, or an entry's id or settings stop fitting its kind
+- **THEN** a regression check fails and identifies the catalog

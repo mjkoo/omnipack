@@ -71,7 +71,7 @@ wrong-family or target-ineligible pinned candidate SHALL fail the build. A pin
 SHALL NOT implicitly override an exclusion or eligibility restriction. Multiple
 pins for one family and target SHALL fail.
 
-#### Scenario: Maintainer selects a standard build for dual
+#### Scenario: A dual pin selects a baseline build over a dual-screen build
 
 - **WHEN** a valid dual pin names a baseline build eligible for dual and the
   family has an available dual-screen build
@@ -97,9 +97,10 @@ Policy candidate selectors SHALL match this original identity exactly once.
 Every policy selector, including the selector a pin matches with, SHALL name one
 of the sources the pipeline ingests and an origin belonging to that source, and
 SHALL fail with the selector and the offending value identified otherwise.
-A selector's `url` SHALL be one a host can be read from and SHALL contain no
-whitespace, failing with that field and the offending value identified
-otherwise. Corrections SHALL NOT recursively match other rules. Unmatched or ambiguous selectors,
+A selector's `url` SHALL be one the pipeline can normalize for comparison: a
+host SHALL be readable from it, any port SHALL be numeric and in the valid
+range, and it SHALL contain no whitespace. Failure SHALL identify that field
+and the offending value. Corrections SHALL NOT recursively match other rules. Unmatched or ambiguous selectors,
 duplicate selectors, invalid targets, unknown fields and inconsistent rules SHALL
 fail with the affected selector identified.
 
@@ -208,7 +209,8 @@ Obtainium app records.
 #### Scenario: A selector's URL has no host
 
 - **WHEN** a candidate rule or a pin selects with a `url` no host can be read
-  from, or one containing whitespace
+  from, one with a non-numeric or out-of-range port, or one containing
+  whitespace
 - **THEN** configuration fails with that field and the offending value
   identified, before any candidate is matched
 

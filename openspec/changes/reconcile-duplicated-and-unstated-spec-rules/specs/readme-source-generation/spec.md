@@ -234,7 +234,7 @@ follow its separate metadata-only contract.
 - **WHEN** the newest permitted release has an unreadable eligible APK but an older release is usable
 - **THEN** resolution fails without treating the older release as a new successful resolution, and the project's committed entry is kept as a retained failure only if its effective policy is unchanged
 
-#### Scenario: Release scan reaches its bound
+#### Scenario: No permitted release occurs within the bounded list
 
 - **WHEN** no permitted release occurs within the bounded list
 - **THEN** the diagnostic identifies that limitation and no unbounded scan or broader release policy is attempted

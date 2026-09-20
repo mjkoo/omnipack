@@ -240,7 +240,7 @@ pack-composition.
 - **WHEN** the higher-precedence candidate for that URL is eligible for single only, as an RJNY entry left out of the dual-screen export is
 - **THEN** the committed entry remains a dual-screen codm2000 candidate, preferred in dual
 
-#### Scenario: Existing generated family selector remains valid
+#### Scenario: Retained generated selectors keep matching
 
 - **WHEN** a retained committed entry has a generated-origin rule or overlay selector
 - **THEN** its source identity is preserved and the same family and override behavior applies
@@ -250,7 +250,7 @@ pack-composition.
 - **WHEN** an accepted source update removes a candidate required by an active rule or pin
 - **THEN** pack composition fails explicitly rather than silently ignoring the stale selector
 
-#### Scenario: Newly resolved prerelease apps are admitted
+#### Scenario: Committed prerelease entries retain their settings
 
 - **WHEN** the committed catalog includes manifest-verified APK entries with explicit prerelease settings and no higher-source coverage
 - **THEN** they enter dual as installable APK entries, retaining those settings and their original identities without entering single

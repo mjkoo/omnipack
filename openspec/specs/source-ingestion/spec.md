@@ -2,11 +2,10 @@
 
 ## Purpose
 
-Turns each upstream catalog and the hand-written extras into a normalized set
-of candidate app entries per pack variant, so that the rest of the pipeline
-never has to know how any individual upstream encodes its data. It also owns
-how an entry's source identity is determined and kept, and the host-scoped
-credential rules that govern the requests made to reach those upstreams.
+Turns upstream catalogs and hand-written extras into normalized candidate app
+entries per pack variant. It owns each source's admission, kind, eligibility
+and source identity, the URL comparison identity shared by the pipeline, and
+the host-scoped credential rules used by source-generation requests.
 
 ## Requirements
 
@@ -75,7 +74,7 @@ request hostname, without wildcard matching, subdomain inference or the
 project-URL normalization rules. The configuration SHALL store variable names,
 not token values.
 
-The helper SHALL attach `Authorization: Bearer <token>` only when the request
+The shared HTTP request helper SHALL attach `Authorization: Bearer <token>` only when the request
 host has a registered variable with a nonempty value. An unset or empty
 variable SHALL leave the request unauthenticated. Unregistered hosts SHALL
 receive no Authorization header even when tokens for other hosts are set.
@@ -231,8 +230,10 @@ build. An entry only in the dual-screen export SHALL be a dual-screen build,
 preferred in dual. An entry only in the standard export SHALL be a baseline
 build that upstream keeps out of dual. An entry marked out of both packs SHALL
 contribute to neither. These flags SHALL alone decide an entry's kind and
-eligibility: composition policy SHALL NOT change them, restore an entry to a
-pack its flags leave it out of, or revive an entry excluded from export.
+eligibility. "Each build is a baseline build or a dual-screen build" in
+pack-composition states, once for every source, that no composition setting
+changes either, which is also why none restores an entry to a pack its flags
+leave it out of or revives an entry excluded from export.
 
 #### Scenario: Entry excluded from export
 
@@ -310,18 +311,19 @@ The system SHALL retain each standard-asset record as a baseline build eligible
 for both targets, and each dual-asset record as a dual-screen build eligible
 only for dual and therefore preferred there. It SHALL preserve asset origin and
 retain both records when a package id appears in both assets. Selection SHALL
-occur during composition, where, absent a pin, a dual-screen build replaces the
-baseline build in dual ahead of source ranking. The asset a record comes from
-SHALL alone decide its kind; composition policy SHALL NOT change its
-eligibility or dual preference. A package denial SHALL remove a dual-asset
-build together with any standard-asset build carrying the same package id. A
-dual pin naming the standard-asset build keeps it in dual in place of the
-dual-asset build without removing either.
+occur during composition: what a pin, a dual-screen build and a package denial
+each do to a package id present in both assets is defined by "Each build is a
+baseline build or a dual-screen build", "Explicit selections identify an
+eligible candidate" and "Package denials exclude candidates from both
+variants" in pack-composition. The asset a record comes from SHALL alone decide
+its kind.
 
 #### Scenario: Id present in both BBoi34 assets
 
-- **WHEN** both assets contain different builds of an id, and no pin applies
-- **THEN** ingestion retains both and composition selects the standard build for single and the dual build for dual, absent a higher-precedence build of the same kind
+- **WHEN** both assets contain different builds of an id
+- **THEN** ingestion retains both as separate candidates, a baseline build from
+  the standard asset and a dual-screen build from the dual asset, and leaves
+  the choice between them to composition
 
 #### Scenario: Standard alternative remains available
 
@@ -341,8 +343,7 @@ entry SHALL be a baseline build, a candidate for both variants, unless it
 carries an optional boolean `dualScreen` set to true, which makes it a
 dual-screen build: a candidate for the dual-screen variant only, preferred
 there. `dualScreen` SHALL default to false, and a non-boolean value SHALL fail
-the build with an error naming the entry. Composition policy SHALL NOT change
-an extra's eligibility or dual preference. Ingestion SHALL consume an extras
+the build with an error naming the entry. Ingestion SHALL consume an extras
 entry's `dualScreen` field so it does not reach that entry's Obtainium app
 record.
 
@@ -380,22 +381,23 @@ record.
 
 - **WHEN** a baseline extra and a dual-screen lower-source candidate share a
   family and no pin applies
-- **THEN** the dual-screen candidate wins dual selection, and the extra does
-  not win it solely through source precedence
+- **THEN** ingestion offers the extra as a baseline build, eligible for both
+  variants and not preferred in dual, so composition rather than source
+  precedence alone decides dual selection
 
 ### Requirement: Every entry carries a supported source type
 
 Obtainium reads a per-app source type that decides which settings keys an app
 has, so every entry must carry one before it can be rendered. An entry ingested
-from an upstream catalog SHALL take the source type that upstream's record
-declares for it. An extras entry with an explicit `overrideSource` SHALL use
-that declared source type before URL-based inference. Only when an extras entry
-omits `overrideSource`, or for a generated entry, SHALL the system derive the
-source type from the URL: a github.com repository takes GitHub and any other
-URL takes HTML. The pack SHALL support GitHub, HTML and GitLab, and SHALL fail
-the build with an error naming the entry and offending value for any other
-source type, including a malformed explicit declaration rather than silently
-falling back to URL inference.
+from the RJNY or BBoi34 catalog SHALL take the source type its record declares,
+and a record declaring none SHALL fail as an unsupported source type. An extras
+entry or a committed codm2000 entry with an explicit `overrideSource` SHALL use
+that declared source type before URL-based inference. Only when such an entry
+omits `overrideSource` SHALL the system derive the source type from the URL: a
+github.com repository takes GitHub and any other URL takes HTML. The pack SHALL
+support GitHub, HTML and GitLab, and SHALL fail the build with an error naming
+the entry and offending value for any other source type, including a malformed
+explicit declaration rather than silently falling back to URL inference.
 
 Native GitLab entries SHALL follow the URL, identity and discovery boundary in
 "Public GitLab entries keep native source identity". Explicit per-app settings
@@ -409,8 +411,8 @@ the defaults defined for GitLab, never those defined for HTML.
 
 #### Scenario: An entry with no upstream record derives its source type
 
-- **WHEN** a generated entry or an extras entry without `overrideSource` addresses a github.com
-  repository
+- **WHEN** an extras entry or a committed codm2000 entry that omits
+  `overrideSource` addresses a github.com repository
 - **THEN** it carries the GitHub source type, while an entry addressing any
   other URL carries the HTML source type
 
@@ -428,6 +430,19 @@ the defaults defined for GitLab, never those defined for HTML.
 
 - **WHEN** an entry declares GitLab with a non-HTTPS URL, a host other than gitlab.com or no namespace/project path
 - **THEN** the build fails with the entry and invalid URL identified
+
+#### Scenario: A committed codm2000 entry declares its source type
+
+- **WHEN** a committed codm2000 entry addressing a github.com repository declares
+  the HTML source type
+- **THEN** the ingested entry carries the HTML source type rather than the type
+  its URL would derive
+
+#### Scenario: An upstream record declares no source type
+
+- **WHEN** an RJNY or BBoi34 record carries no `overrideSource`
+- **THEN** the build fails naming that entry as having an unsupported source
+  type, rather than deriving one from its URL
 
 ### Requirement: Per-app settings are normalized to a common form
 
@@ -448,7 +463,7 @@ compares and patches them uniformly.
 
 ### Requirement: Public GitLab entries keep native source identity
 
-The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when its scheme is `https` and its host is `gitlab.com`, each compared without regard to case, with no `www.` prefix and no port, carrying no credentials, and whose path holds between two and twenty-one nonempty components naming a project and its namespaces, each read with its case and encoding exactly as written while empty components and a trailing slash are ignored, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project. Existing non-GitHub URL comparison semantics SHALL remain unchanged.
+The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when its scheme is `https` and its host is `gitlab.com`, each compared without regard to case, with no `www.` prefix and no port, carrying no credentials, and whose path holds between two and twenty-one nonempty components naming a project and its namespaces, each read with its case and encoding exactly as written while empty components and a trailing slash are ignored, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project.
 
 This acceptance boundary is an earlier and separate stage from normalized
 comparison: the native adapter reads the project path out of the URL as the
@@ -460,7 +475,7 @@ rejected here and, being retained in the normalized form, also makes a different
 project under comparison. Acceptance SHALL therefore be decided on the URL as
 written rather than on its comparison identity.
 
-Package ids for these explicit extras SHALL be supplied by the maintainer who adds the entry, from recorded primary APK manifest evidence as any other identity decision is; the pipeline SHALL NOT verify them, because adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
+Package ids for these explicit extras SHALL be supplied by the maintainer who adds the entry, from recorded primary APK manifest evidence as any other identity decision is; the pipeline SHALL NOT verify them, because generated package discovery covers GitHub projects only.
 
 #### Scenario: A GitLab extra reaches both exports
 
@@ -483,8 +498,7 @@ prerelease enablement and filename filters, and SHALL NOT reinterpret a
 track-only resource ID as an Android package ID.
 
 During routine ingestion, codm2000 entries SHALL be dual-screen builds,
-eligible for dual only and preferred there; composition policy SHALL NOT change
-that. A normalized project URL already supplied by a higher-precedence
+eligible for dual only and preferred there. A normalized project URL already supplied by a higher-precedence
 candidate that its source makes eligible for dual SHALL suppress the
 corresponding codm2000 candidate before exclusions and selection. Single-only
 coverage SHALL NOT suppress it. Suppression SHALL use source eligibility alone,
@@ -492,10 +506,12 @@ and ingestion SHALL NOT read or apply the composition policy. Merely appearing
 in codm2000 SHALL NOT promote an ordinary higher-source build.
 
 Retained entries SHALL preserve codm2000 provenance, generated origin, original
-package identity and source settings so existing family rules and fork-specific
-overlays continue matching. Active candidate selectors SHALL be validated
-against the complete admitted candidate set. Missing rules or pinned candidates
-SHALL fail explicitly.
+package identity and source settings, so family rules and fork-specific overlays
+that select a generated entry match it. How a policy selector is validated
+against the admitted candidates, and what a missing rule target or pinned
+candidate does, is defined by "Composition policy separates app families from
+package identities" and "Explicit selections identify an eligible candidate" in
+pack-composition.
 
 #### Scenario: Dual coverage suppresses a local catalog candidate
 
@@ -507,9 +523,9 @@ SHALL fail explicitly.
 - **WHEN** the higher-precedence candidate for that URL is eligible for single only, as an RJNY entry left out of the dual-screen export is
 - **THEN** the committed entry remains a dual-screen codm2000 candidate, preferred in dual
 
-#### Scenario: Existing generated family selector remains valid
+#### Scenario: Retained generated selectors keep matching
 
-- **WHEN** a retained committed entry has an existing generated-origin rule or overlay selector
+- **WHEN** a retained committed entry has a generated-origin rule or overlay selector
 - **THEN** its source identity is preserved and the same family and override behavior applies
 
 #### Scenario: A selected project is removed
@@ -517,7 +533,7 @@ SHALL fail explicitly.
 - **WHEN** an accepted source update removes a candidate required by an active rule or pin
 - **THEN** pack composition fails explicitly rather than silently ignoring the stale selector
 
-#### Scenario: Newly resolved prerelease apps are admitted
+#### Scenario: Committed prerelease entries retain their settings
 
 - **WHEN** the committed catalog includes manifest-verified APK entries with explicit prerelease settings and no higher-source coverage
 - **THEN** they enter dual as installable APK entries, retaining those settings and their original identities without entering single
@@ -547,9 +563,12 @@ direct or imply that the failure can be corrected by editing composition
 policy. The failure SHALL persist while the configured source location serves
 a record carrying the field, and the system SHALL provide no override for an
 individual record or field; an extras entry or a committed codm2000 record is
-corrected by editing it. Ingestion SHALL reserve no other field name: every
-field it does not model SHALL be retained unchanged for rendering, from every
-source.
+corrected by editing it. The one other field name
+ingestion reserves is `meta`, which the RJNY catalog uses for its export flags
+and presentation overrides and which is not part of an Obtainium app object:
+ingestion SHALL drop a top-level `meta` from a record of any source, so it never
+reaches a pack. Every other field ingestion does not model SHALL be retained
+unchanged for rendering, from every source.
 
 #### Scenario: Upstream entry carries a package identity field
 
@@ -583,7 +602,13 @@ source.
 #### Scenario: Unrelated unmodeled field passes through
 
 - **WHEN** an otherwise valid entry from any source carries a top-level field
-  that ingestion does not model and that is not `family`, `packageId` or
-  `variant`
+  that ingestion does not model and that is not `family`, `packageId`,
+  `variant` or `meta`
 - **THEN** ingestion retains the field unchanged for rendering rather than
   rejecting or removing it
+
+#### Scenario: A record outside RJNY carries catalog metadata
+
+- **WHEN** an otherwise valid extras or committed codm2000 record carries a
+  top-level `meta`
+- **THEN** ingestion accepts the record and the rendered entry carries no `meta`
