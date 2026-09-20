@@ -536,6 +536,9 @@ def test_retained_failure_reproducing_main_closes_open_proposal(
         tmp_path / "pr-body.md",
     )
     assert stage.status == "unchanged"
+    assert stage.changed is False
+    assert stage.sha == base
+    assert stage.base_sha == base
     assert stage.retained_failures == (
         ("https://example.test/project", "release lookup failed"),
     )
@@ -543,7 +546,15 @@ def test_retained_failure_reproducing_main_closes_open_proposal(
     bare = _bare_from(seed, tmp_path)
     write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(7)])
-    published = run_publish(write_side, "false", base, base, None, None, gh=gh)
+    published = run_publish(
+        write_side,
+        str(stage.changed).lower(),
+        stage.sha,
+        stage.base_sha,
+        None,
+        None,
+        gh=gh,
+    )
 
     assert published.status == "closed"
     assert published.summary == "publish closed PR #7"
