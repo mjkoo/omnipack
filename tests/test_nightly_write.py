@@ -99,7 +99,7 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
     result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
-    assert "main advanced" in result.summary
+    assert result.summary == f"push failed for {sha}: main advanced"
     assert _git(bare, "rev-parse", "main") == advanced
 
 
@@ -119,7 +119,7 @@ def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
     result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
 
     assert result.status == "failed"
-    assert result.summary == f"push failed for {sha}: main advanced"
+    assert "main advanced" in result.summary
     assert _git(bare, "rev-parse", "main") == sha
 
     summary_path = tmp_path / "summary.md"
