@@ -233,3 +233,28 @@ passed. Nix's cache required execution outside the filesystem sandbox, and the
 approved rerun completed all remaining checks without modifying project files.
 
 Whole-diff review and the final checkbox audit remain pending.
+
+## Whole-diff review fix
+
+The review found two redundant GitHub query and fragment cases in
+`test_project_identity_retains_non_github_query_fragment_and_every_port`.
+Those cases were removed; the matrix retains all seven distinct non-GitHub
+query/fragment and all-host port cases and asserts that each changes identity.
+The existing exact-output assertions in `test_normalize_project_url` remain
+unchanged and continue to cover GitHub query and fragment removal.
+
+To verify that coverage after the removal, a temporary mutation made
+`normalize_project_url` retain GitHub queries and fragments. Running the existing
+`test_normalize_project_url` produced **3 assertion failures and 7 passes**:
+the query-only, fragment-only, and combined query/fragment inputs each failed
+their expected canonical output. There were no collection or setup errors.
+The source file was restored in a `finally` block and checked byte-for-byte
+against its original contents. No production source change remains.
+
+The focused URL suite passed all **20 tests**. After source restoration, the
+full suite passed **754 tests** without test warnings; the earlier **756-test**
+coverage run above is historical evidence from before the two duplicate cases
+were removed. The new full-suite invocation did not collect coverage.
+Repository-wide Ruff lint, Ruff formatting, and ty checks passed.
+The fix changes only URL tests and this validation record; the final scoped
+review and completion audit remain pending.

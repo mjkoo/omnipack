@@ -43,8 +43,18 @@ def test_normalized_urls_identify_the_same_project(
     assert (normalize_project_url(left) == normalize_project_url(right)) is same
 
 
-@pytest.mark.parametrize("host", ["github.com", "gitlab.com", "example.com"])
-@pytest.mark.parametrize("suffix", ["?view=1", "#section", ":443"])
+@pytest.mark.parametrize(
+    ("host", "suffix"),
+    [
+        ("gitlab.com", "?view=1"),
+        ("example.com", "?view=1"),
+        ("gitlab.com", "#section"),
+        ("example.com", "#section"),
+        ("github.com", ":443"),
+        ("gitlab.com", ":443"),
+        ("example.com", ":443"),
+    ],
+)
 def test_project_identity_retains_non_github_query_fragment_and_every_port(
     host: str, suffix: str
 ) -> None:
@@ -52,5 +62,4 @@ def test_project_identity_retains_non_github_query_fragment_and_every_port(
     changed = (
         f"https://{host}:443/Owner/Repo" if suffix == ":443" else original + suffix
     )
-    same = host == "github.com" and suffix != ":443"
-    assert (normalize_project_url(original) == normalize_project_url(changed)) is same
+    assert normalize_project_url(original) != normalize_project_url(changed)
