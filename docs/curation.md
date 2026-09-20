@@ -46,8 +46,8 @@ stage with bootstrap guidance while preserving the successful main outcome.
 Omitting the tracker is not a valid way to satisfy either contract. Device import,
 unchanged polling, revision-change notification, acknowledgement, and re-import
 behavior still require separate device acceptance. Acceptance also covers both
-stable JSON downloads. Controlled tests are not completed device or live
-publication acceptance.
+stable JSON downloads. Passing controlled tests does not complete device or
+live publication acceptance.
 
 ## Port setup
 
