@@ -45,24 +45,39 @@ reviewed configuration itself, so that curating a new extra covers it with no
 further edit.
 
 An automation-maintained codm2000 catalog SHALL fail the test suite only where
-the pipeline itself would reject it: where the catalog is not valid, or where
-composition with the committed configuration, a build or a verification would
-fail. Composition here means composition over the suite's captured upstream
-records while the source workflow builds from live ones, so a catalog whose
-composition depends on upstream records newer than those captures is outside
-this guarantee. Which projects the catalog contains and how they resolved SHALL
-NOT decide whether the suite passes, so a source proposal whose catalog is
-valid and which composes, builds and verifies SHALL NOT fail the suite. What
-makes a catalog valid SHALL be stated where it is enforced rather than
-enumerated here, and no rule SHALL be attributed to a stage that does not
-check it: a build rejects a catalog that repeats an entry id, by "One package
-id may resolve differently per variant" in source-ingestion, while generation
-rejects a catalog holding one project twice or whose shape, identities or
-canonical rendering are wrong, by "Generation produces a deterministic
-Obtainium source catalog" in readme-source-generation, which produces the
-catalog and validates it again when it reads it back. Tests SHALL
-NOT require maintaining another implementation of Obtainium source resolution
-or regex semantics.
+the catalog is not valid, or where composition with the committed configuration,
+a build or a verification would fail. Composition here means composition over
+the suite's captured upstream records while the source workflow builds from live
+ones, so a catalog whose composition depends on upstream records newer than
+those captures is outside this guarantee. Which projects the catalog contains
+and how they resolved SHALL NOT decide whether the suite passes, so a source
+proposal whose catalog is valid and which composes, builds and verifies SHALL
+NOT fail the suite.
+
+Validity is wider than what the pipeline rejects, so the suite MAY assert a
+validity rule no pipeline stage enforces, and doing so SHALL NOT be read as
+failing the catalog over which projects it contains or how they resolved. A rule
+the pipeline does enforce SHALL be stated where it is enforced rather than
+enumerated here, and no rule SHALL be attributed to a stage that does not check
+it: a build rejects a catalog that repeats an entry id, by "One package id may
+resolve differently per variant" in source-ingestion, while generation, reading
+the accepted catalog back, rejects a document whose shape is wrong or whose
+entries lack a string id and url, a catalog that repeats an entry id, and a
+catalog that holds one normalized project URL twice, by "Generation produces a
+deterministic Obtainium source catalog" in readme-source-generation.
+
+Two further validity rules are owed by the test suite, no pipeline stage having
+ever checked them, and are owned here alongside the other outcomes this
+requirement protects. Every catalog entry SHALL carry an id and settings
+appropriate to its kind: a track-only entry a synthetic numeric id with version
+detection, zip inclusion and architecture filtering all disabled, and an APK
+entry a well-formed package id and no track-only flag. The committed catalog
+file SHALL be byte-identical to the canonical rendering of the entries it holds,
+so that a hand edit or a stale write is visible rather than silently carried.
+Generation neither compares the committed bytes against its own rendering nor
+checks an entry's id and settings against its kind, so nothing fails when either
+drifts unless the suite asserts it. Tests SHALL NOT require maintaining another
+implementation of Obtainium source resolution or regex semantics.
 
 #### Scenario: Upstream refresh changes a curated setting
 

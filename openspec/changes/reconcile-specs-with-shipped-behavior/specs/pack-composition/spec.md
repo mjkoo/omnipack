@@ -187,9 +187,11 @@ The overlay file SHALL contain an array of records with effective package `id`,
 project `url` and object `patch`. An overlay document that is not an array
 SHALL fail with the overlay identified. A record SHALL carry no field other than
 `id`, `url` and `patch`, and SHALL fail with the record and the unknown field
-identified otherwise. A record's `id` SHALL be a nonempty string, and its `url`
-SHALL be a nonempty string that identifies a project, each failing with the
-record and the offending value identified. Each record SHALL apply to the matching
+identified otherwise. A record's `id` and its `url` SHALL each be a nonempty
+string, failing with the record and the offending field identified. A nonempty
+`url` SHALL additionally identify a project, and one that does not SHALL fail
+with the record, the field and the offending value identified, because there the
+value is what the maintainer has to look at. Each record SHALL apply to the matching
 selected entry in every variant that selects it. Matching SHALL use both
 effective id and normalized project URL. Duplicate selectors SHALL fail. A
 non-object patch, including null, SHALL fail.

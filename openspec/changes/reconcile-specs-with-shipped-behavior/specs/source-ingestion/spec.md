@@ -63,9 +63,19 @@ different projects. On any other host the normalized form SHALL also retain a
 query and a fragment, so two links to one host and path that differ in any of
 them SHALL be different projects: the system cannot know which parts of another
 host's link identify the project. The pipeline SHALL use this form wherever it
-compares URLs: deciding whether another source already contributes a link, and
+compares URLs: deciding whether another source already contributes a link,
 matching a generated project to its reviewed rule and to its entry in the
-committed source catalog.
+committed source catalog, matching an overlay record's key to the selected
+entries it patches, and matching a composition policy selector to the candidates
+it governs.
+
+This normalized form is the system's comparison identity, and it SHALL decide
+only whether two spellings mean one project. It SHALL NOT decide whether a URL
+is acceptable to a source adapter: an adapter that reads a URL as written does
+so at an earlier stage, before normalization, so a URL that compares equal to
+an acceptable one MAY still be rejected there. The two notions of "the same
+host" are therefore distinct stages, and a reader SHALL NOT infer either from
+the other.
 
 #### Scenario: Two spellings of one project
 
@@ -143,7 +153,17 @@ composition.
 
 ### Requirement: Public GitLab entries keep native source identity
 
-The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when it is an HTTPS URL on `gitlab.com` carrying no credentials and no port, whose path is between two and twenty-one components naming a project and its namespaces, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project. Existing non-GitHub URL comparison semantics SHALL remain unchanged.
+The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when it is an HTTPS URL whose host is exactly `gitlab.com`, with no `www.` prefix and no port, carrying no credentials, whose path is between two and twenty-one components naming a project and its namespaces, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project. Existing non-GitHub URL comparison semantics SHALL remain unchanged.
+
+This acceptance boundary is an earlier and separate stage from normalized
+comparison: the native adapter reads the project path out of the URL as the
+entry spells it, before any normalization is applied, so a URL that compares
+equal to an acceptable one MAY still be rejected here. A `www.gitlab.com`
+spelling compares equal to the canonical one, because comparison drops a leading
+`www.`, and is nonetheless not a native GitLab project URL; an explicit port is
+rejected here and, being retained in the normalized form, also makes a different
+project under comparison. Acceptance SHALL therefore be decided on the URL as
+written rather than on its comparison identity.
 
 Package ids for these explicit extras SHALL be supplied by the maintainer who adds the entry, from recorded primary APK manifest evidence as any other identity decision is; the pipeline SHALL NOT verify them, because adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
 
@@ -154,7 +174,7 @@ Package ids for these explicit extras SHALL be supplied by the maintainer who ad
 
 #### Scenario: A GitLab URL carries more than a project path
 
-- **WHEN** an entry declares GitLab with a gitlab.com URL that carries a query, a fragment, credentials, a port, a reserved `-` path component or more path components than a project and its namespaces
+- **WHEN** an entry declares GitLab with a gitlab.com URL whose host is spelled with a `www.` prefix, or that carries a query, a fragment, credentials, an explicit port, a reserved `-` path component or more path components than a project and its namespaces
 - **THEN** the build fails with the entry and the invalid URL identified, rather than reading a project path out of it
 
 ## RENAMED Requirements

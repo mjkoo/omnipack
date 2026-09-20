@@ -123,7 +123,9 @@ as proposed deletions only after otherwise complete successful generation.
 
 Generation SHALL apply the entry-ID check both to the candidate catalog it
 emits and to the accepted catalog it reads back before generating. Reading the
-accepted catalog SHALL additionally fail when two of its entries carry project
+accepted catalog SHALL fail when it is not an object holding a list of entries
+that each carry a string id and a string project URL, identifying the catalog as
+malformed. Reading it SHALL additionally fail when two of its entries carry project
 URLs that normalize to the same form, naming that normalized project, because
 one project holding two entries in a reviewed catalog is an error in the
 catalog rather than a choice for composition. The candidate catalog cannot
@@ -169,19 +171,17 @@ required to repeat it.
 Generation SHALL resolve APK package IDs automatically, and its requests SHALL
 be subject to the same host-scoped credential rules as every other
 source-discovery request. Default APK policy SHALL use the GitHub latest stable
-release endpoint. Explicit prerelease or release-title policy SHALL use a bounded list
-of at most 100 releases, ignore drafts and disallowed prereleases, filter titles
+release endpoint. Explicit prerelease or release-title policy SHALL request a
+single page of at most 100 releases, ignore drafts and disallowed prereleases, filter titles
 (using the tag when the title is empty), and choose the newest matching release
 by publication time with release ID as a deterministic tie-breaker.
 
 Invalid selection metadata SHALL fail visibly. Two further outcomes SHALL fail
 visibly and SHALL be distinguishable from each other, because they call for
-different corrections. A releases response holding more entries than the bound
-SHALL fail identifying the bound, rather than being filtered as though it were
-the project's whole history, since the project's history is larger than the
-supported scan. A response within the bound holding no release the rule permits
-SHALL fail identifying that limitation, since the project's history is within
-the scan and its policy matches nothing in it. Neither SHALL be answered by an
+different corrections. A releases response holding more entries than that bound
+SHALL fail identifying the bound, because the host answered outside the page
+that was requested. A response within the bound in which the rule permits no
+release SHALL fail identifying that limitation. Neither SHALL be answered by an
 unbounded scan or a broader release policy.
 
 Every direct asset in that selected release whose filename ends in `.apk`,
@@ -238,5 +238,5 @@ follow its separate metadata-only contract.
 
 #### Scenario: The releases response exceeds the bound
 
-- **WHEN** the releases response holds more entries than the bound allows
-- **THEN** resolution fails identifying the bound, distinguishably from a bounded response holding no permitted release, and no release is selected from the truncated view
+- **WHEN** the releases response holds more entries than the single requested page of at most 100 releases allows
+- **THEN** resolution fails identifying the bound, distinguishably from a response within the bound in which the rule permits no release, and no release is selected from that response

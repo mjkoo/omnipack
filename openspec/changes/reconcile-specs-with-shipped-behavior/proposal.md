@@ -103,7 +103,9 @@ None.
   identify a non-GitHub project and that an explicit port identifies a project
   on every host, while a GitHub link reduces to owner and repository; state that a committed catalog repeating an id fails ingestion
   while upstream duplicates reach composition; state the native GitLab URL
-  boundary and restate the package-id clause as a maintainer obligation; rename
+  boundary, including that its host must be exactly `gitlab.com`, and that it is
+  an earlier stage than normalized comparison rather than the same rule; restate
+  the package-id clause as a maintainer obligation; rename
   the committed-catalog requirement.
 - `readme-source-generation`: correct the prerelease resolution scenario, scope
   the consumer settings a track-only rule may carry, separate the over-bound
@@ -111,9 +113,10 @@ None.
   generation rejects an accepted catalog holding one normalized project twice,
   which is where that uniqueness rule is enforced.
 - `pack-curation`: restate the curated-decision protections as outcomes rather
-  than a description of the test suite, attribute each catalog validity rule to
-  the stage that actually enforces it, and remove one tracker's per-app data
-  from normative text.
+  than a description of the test suite, cross-reference each catalog validity
+  rule the pipeline enforces to the stage that actually enforces it while owning
+  the two no stage checks as suite obligations, and remove one tracker's per-app
+  data from normative text.
 
 ## Impact
 

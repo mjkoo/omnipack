@@ -56,12 +56,15 @@ violations of rules this project already agreed to.
 
 Alongside these, the same reading found shipped rules that change what a
 maintainer writes in reviewed configuration and that no requirement covers: the
-native GitLab adapter rejects a URL with credentials, a port, a query, a
-fragment, a path component that is exactly `-`, or more than twenty-one path
-components, beyond the three rejections the current scenario names; URL
+native GitLab adapter rejects a URL with a `www.` host prefix, credentials, a
+port, a query, a fragment, a path component that is exactly `-`, or more than
+twenty-one path components, beyond the three rejections the current scenario
+names; URL
 normalization keeps an explicit port on every host and keeps query and fragment
 for a non-GitHub link, while reducing a GitHub link to owner and repository and
-discarding the rest of its path, its query and its fragment; a policy selector must name one of the supported sources and an
+discarding the rest of its path, its query and its fragment, and drops a leading
+`www.` on every host, so the adapter's boundary and the comparison identity are
+two stages that disagree about `www.gitlab.com`; a policy selector must name one of the supported sources and an
 origin belonging to that source; and an overlay record carrying any field other
 than `id`, `url` and `patch`, or a `url` that is not a project URL, fails with
 the record identified.
@@ -155,6 +158,22 @@ around a selector and similar internal defenses are not stated. They make the
 implementation robust, they change no decision, and each one added to the specs
 would have to be maintained against the code forever.
 
+### URL identity is stated as two stages, not one
+
+`source-ingestion` carried two incompatible notions of "the same host" without
+saying they were different stages. Comparison drops a leading `www.` on every
+host, so `www.gitlab.com/group/project` and `gitlab.com/group/project` are one
+project; the native GitLab adapter reads the project path out of the URL as
+written, before any normalization, and rejects the `www.` spelling. Both are
+correct, and neither is a bug to be fixed in code.
+
+They are therefore stated as what they are. The normalization requirement says
+it defines comparison identity, names what is matched by it, and says it does
+not decide acceptance. The GitLab requirement says it reads the raw URL at an
+earlier stage and that a URL comparing equal to an acceptable one may still be
+rejected. The alternative, aligning the two so that one host rule serves both,
+would change shipped behavior, which this change does not do.
+
 ### The committed catalog's build-time rule moves, its test rules do not
 
 The curation capability's inline catalog check list mixes two different things.
@@ -167,17 +186,27 @@ requirement is narrowed to the upstream catalogs it is true of.
 The rest of the list is not a build-time rule, and moving any of it into
 `source-ingestion` would state a requirement no ingestion adapter implements,
 exactly the defect this change exists to remove. It splits by where it is
-really enforced. Unique normalized project URLs, kind-appropriate ids and
-flags, and canonical byte rendering all belong to generation, which produces
-the catalog and validates it again when it reads the accepted one back: a
-catalog holding one project twice fails there, naming the normalized project,
-and nothing in a pack build ever checks it. Those rules are stated in
-`readme-source-generation`, and `pack-curation` cross-references them by the
-stage that enforces each, so no reader infers a build-time protection that does
-not exist. What is left for `pack-curation` is the outcome the suite owes: a
-candidate catalog the pipeline accepts and that composes, builds and verifies
-over the suite's captured records does not fail the suite because of which
-projects it contains or how they resolved.
+really enforced, and the split is finer than it first looked. Generation reads
+the accepted catalog back and checks exactly three things there: that the
+document has the expected shape, that no entry id repeats, and that no
+normalized project URL repeats. Those are stated in `readme-source-generation`,
+and `pack-curation` cross-references them by the stage that enforces each, so no
+reader infers a build-time protection that does not exist.
+
+The remaining two, kind-appropriate ids and settings and canonical byte
+rendering, are checked by no pipeline stage at all. Generation never compares
+the committed file's bytes against its own rendering and never checks an entry's
+id against its kind; only the suite does. Attributing them to generation would
+repeat the defect this change removes, so `pack-curation` owns them as suite
+obligations, stated as what must be true of the catalog rather than as the
+assertions that check it. That ownership requires the surrounding constraint to
+allow it: a rule that the catalog fails the suite only where the pipeline would
+reject it would forbid these two checks outright. The constraint is therefore
+about validity rather than about pipeline agreement, and says plainly that the
+suite may assert validity the pipeline does not enforce, while keeping the
+guarantee that matters: a valid catalog that composes, builds and verifies over
+the suite's captured records does not fail the suite because of which projects
+it contains or how they resolved.
 
 ### Delta operations are chosen to keep every scenario name
 
