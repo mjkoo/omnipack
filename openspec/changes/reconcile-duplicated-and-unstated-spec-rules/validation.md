@@ -91,7 +91,7 @@ files passed 143 tests, the strengthened test passed its focused rerun, and
 | 3.1 | `test_generated_apk_entry_preserves_consumer_fallback_setting` | Both configured fallback values survive rendering when the newest matching release resolves |
 | 3.2 | `test_generated_tracking_entry_preserves_release_title_filter` | A track-only entry accepts and exports its title filter |
 | 3.3 | `test_reject_nonportable_regex`; `test_unicode_sensitive_regex_escapes_fail_before_discovery`; `test_track_only_rule_requires_a_nonempty_rationale`; `test_tracker_instruction_requires_named_canonical_host` | Rejected regex classes, rationale and installation-path requirements |
-| 3.4 | `test_stage_summary_reports_failure_reason_or_successful_base_revision` | Failed staging reports failure and reason; successful staging reports its base revision |
+| 3.4 | `test_head_other_than_github_sha_fails_with_no_commit_or_bundle`; `test_successful_stage_summary_reports_base_revision` | Existing failed-staging coverage reports failure and reason; the added successful-staging test reports its base revision |
 | 3.5 | `test_retained_failure_reproducing_main_closes_open_proposal` | Retained baseline scenario "A retained failure reverts a proposed update"; actual staging output drives publication |
 | 3.6 | Independent review and scoped re-review | Initial Important finding: a hard-coded publish input failed to establish the stage-to-publish path. The test now passes `StageOutcome.changed`, `sha` and `base_sha`; re-review approved without new findings |
 
@@ -160,6 +160,15 @@ It confirmed all task-to-code/test mappings, completion-timestamp enforcement,
 the preserved derived findings, verification schema 4, unchanged build schema 3
 throughout the documentation, and only intentional rejection tests referencing
 the retired report state.
+
+The whole-branch review removed redundant coverage from the added tests. The
+staging-summary test now covers only the successful base revision, relying on
+the existing failed-staging test for the failure reason. The removed-state test
+keeps the `complete: true` rejection and drops the combined malformed record;
+`test_malformed_verification_records_are_rejected` independently covers
+`complete: false`, `status: running` and `completedAt: null`. The earlier runs
+above remain historical evidence. Removing one redundant parameterized case
+reduces the expected final suite count from 796 to 795.
 
 ## Main-spec synchronization
 

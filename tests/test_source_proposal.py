@@ -106,20 +106,9 @@ def test_head_other_than_github_sha_fails_with_no_commit_or_bundle(
     assert not body_path.exists()
 
 
-def test_stage_summary_reports_failure_reason_or_successful_base_revision(
+def test_successful_stage_summary_reports_base_revision(
     tmp_path: Path,
 ) -> None:
-    failed_root = _repo(tmp_path, "failed")
-    _write_candidate(failed_root, '{"apps": [1]}\n', _report())
-    failure = run_stage(
-        failed_root,
-        "0" * 40,
-        "https://github.example/runs/1",
-        tmp_path / "failed.bundle",
-        tmp_path / "failed-body.md",
-    )
-    assert failure.summary == "stage failed: HEAD is not GITHUB_SHA"
-
     success_root = _repo(tmp_path, "success")
     base = _git(success_root, "rev-parse", "HEAD")
     _write_candidate(

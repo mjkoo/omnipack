@@ -495,12 +495,8 @@ def test_malformed_diagnostic_elements_raise_report_format_error(
         format_reports(tmp_path)
 
 
-@pytest.mark.parametrize(
-    "mutation",
-    [{"complete": True}, {"complete": False, "status": "running", "completedAt": None}],
-)
-def test_removed_verification_state_is_rejected(tmp_path: Path, mutation: dict) -> None:
-    write_verification_report(tmp_path, **mutation)
+def test_removed_verification_state_is_rejected(tmp_path: Path) -> None:
+    write_verification_report(tmp_path, complete=True)
     with pytest.raises(ValueError, match="malformed verification report"):
         format_reports(tmp_path)
 
