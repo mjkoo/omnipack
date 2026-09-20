@@ -290,3 +290,39 @@ existing exact-output assertions discriminate the same GitHub behavior more
 strongly. The cost if that judgment were wrong would be reduced regression
 coverage; a new mutation check confirmed that the retained assertions fail for
 both query and fragment preservation.
+
+## Completion audit
+
+A fresh independent read-only auditor reviewed the final branch through
+`bef89cf`, after the wave fix and scoped re-review. It searched the current tests,
+source, specs, full diff and commit history as well as this validation record.
+It confirmed all **14 completed task boxes**, with **0 unevidenced boxes** and
+**0 critical findings**, naming the implementation commits and executable or
+recorded-check evidence for each:
+
+- Ingestion: `ab55847`, source/URL characterization and mutation evidence.
+- Composition: `079dd59`, selector/overlay tests, fallback/fetch checks and
+  retirement evidence.
+- Generation: `75eaa74`, endpoint/retry, policy and accepted-catalog tests and
+  mutation evidence.
+- Curation and spec synchronization: `cda98ba`, retained tracker guards,
+  configuration probes, maintained-override test, family diagnostic, catalog
+  validity assertions and strict spec checks.
+- Whole-change validation: `4ea6725`, base/current byte comparison and repository
+  checks, followed by `d61a402`'s affected checks and `bef89cf`'s review record.
+
+The final workflow box was intentionally pending this audit. The auditor
+confirmed that its wave, fix, rerun and scoped-review obligations were already
+satisfied and concluded that it could be marked complete once this clean audit
+was recorded. No implementation fix followed the audit.
+
+
+After the audit, the full suite passed again: **754 passed**, **94% source
+coverage**, no test warnings. Offline pack verification and strict validation of
+the active change and all ten main specs passed again; whitespace checks were
+clean, and source, scripts, configuration, exports and README remained unchanged
+against the branch base.
+
+Implementation is complete: **15 of 15 tasks**. The change remains active on
+`reconcile-specs-with-shipped-behavior`. The separate OpenSpec verification and
+archive workflows were not invoked. No push or merge was performed.
