@@ -1,6 +1,6 @@
 # Implementation validation
 
-Implementation is in progress. This record covers local implementation checks;
+Implementation is complete. This record covers local implementation checks;
 the separate OpenSpec verification and archive workflows have not run.
 
 ## Baseline
@@ -259,3 +259,25 @@ independent malformed-field cases instead of the combined case. If this reading
 were wrong, an intended distinction could be lost; scoped re-review explicitly
 confirmed each preserved assertion. No production code or spec changed during
 this fix round.
+
+## Completion audit and final checks
+
+Task 7.4: a fresh independent completion audit of `2aee3bd..299bf92`
+confirmed all 36 previously checked tasks, with zero unevidenced items. Every
+proposal finding is fixed or accounted for under "Deliberately left alone."
+Recording this audit completes the final implementation task.
+
+After the audit, `just check-all` exited zero:
+
+- CPython 3.14.7: 795 tests passed in 24.93 seconds, total coverage 94%.
+- CPython 3.12.14 write-side checks: 108 tests passed in 19.06 seconds.
+- Lock, formatting, lint, types, offline verification, actionlint and zizmor
+  passed; zizmor reported no findings.
+- Documentation links: 552 total, 332 unique, 53 checked, zero errors.
+- Nix formatting changed zero files; local `aarch64-darwin` flake checks passed.
+- Strict change validation and strict main-spec validation passed, with all
+  10 main specs valid.
+
+Only this evidence record and the completion checkbox changed after the audit.
+The change remains active on `reconcile-duplicated-and-unstated-spec-rules`;
+the separately requested verification and archive workflows remain pending.

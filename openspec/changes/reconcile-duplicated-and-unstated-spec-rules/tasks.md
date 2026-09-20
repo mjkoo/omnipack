@@ -61,4 +61,4 @@ and changes no code.
 - [x] 7.1 Run `just check-all`; verify it is green and record the test counts in `validation.md`
 - [x] 7.2 Verify captured-input pack bytes are unchanged by this change and record the comparison in `validation.md`
 - [x] 7.3 Parallel review wave over the whole branch: spec accuracy against code, test quality, and dead-code removal completeness; resolve or record every finding in `validation.md`
-- [ ] 7.4 Completion audit: every checkbox above has evidence in `validation.md`, and every finding the proposal lists is either fixed or named under "Deliberately left alone"
+- [x] 7.4 Completion audit: every checkbox above has evidence in `validation.md`, and every finding the proposal lists is either fixed or named under "Deliberately left alone"
