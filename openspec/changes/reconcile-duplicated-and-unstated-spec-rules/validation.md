@@ -32,6 +32,12 @@ only false missing-input reports for unreadable inputs and the README's duplicat
 unreadable report; it does not suppress independent or dependent composition
 findings.
 
+Convergence also scoped the pre-existing assertion that regex semantics are
+client-compatible outside this change. That baseline statement still overstates
+what validation proves. The newly introduced reject-list wording accurately
+states the validator's checks and explicitly does not claim engine equivalence.
+The spec review confirmed this distinction without requesting new behavior.
+
 ## Ingestion characterization
 
 Commit `c3ac383` adds the ingestion coverage below. The focused source suite
@@ -221,3 +227,35 @@ remains 100927 bytes with SHA-256
 `e367488d7c67ad6eb3d07395f5b60b111147859d292e0050c4d1eab61d0534a5`;
 dual remains 128017 bytes with SHA-256
 `bdc5a9645d42d81ce3256f971af342a75120622d1c3414914c4cd9c50ea9df47`.
+
+
+## Whole-branch review and fix round
+
+Task 7.3: four independent reviewers examined
+`2aee3bd..cced9f6`, with separate spec accuracy, report correctness/failure,
+test quality/proportionality, and idiomatic-patterns lanes.
+
+- Spec accuracy: no introduced findings; the selector-port warning and
+  staging-summary correction are closed. The baseline regex compatibility
+  overclaim is recorded under "Deliberately left alone."
+- Report correctness/failure: no findings; the completion-timestamp warning
+  and unreadable-README duplicate concern are closed.
+- Idiomatic patterns: no findings. Exact `Finding` filtering fits the existing
+  immutable record contract and keeps filesystem distinctions in verification.
+- Test proportionality: two Important findings, both fixed. The staging test
+  repeated an existing failure case; the report test combined three malformed
+  fields already covered independently. No functional coverage gap was found.
+
+The single fix round committed `a550cdc` and `4523955`. It removed only redundant
+assertions/fixtures, retained successful staging-base coverage and explicit
+`complete: true` rejection, and aligned review-task wording with accepted
+baseline-scenario and rejection-test evidence. The two affected files passed
+116 tests in 11.77 seconds; formatting, lint, types and commit hooks passed.
+The single scoped re-review of `cced9f6..4523955` approved every fix without new
+findings or reduced behavioral coverage.
+
+Ruling: reuse existing failure coverage instead of adding a duplicate, and keep
+independent malformed-field cases instead of the combined case. If this reading
+were wrong, an intended distinction could be lost; scoped re-review explicitly
+confirmed each preserved assertion. No production code or spec changed during
+this fix round.
