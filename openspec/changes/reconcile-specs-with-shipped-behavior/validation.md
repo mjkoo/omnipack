@@ -50,7 +50,9 @@ Temporary source mutations were run independently and restored byte-for-byte:
 | Drop latest-release ingestion results | Current-latest test fails |
 
 All original scenario names in surviving ingestion requirements are retained;
-the committed-catalog rename changes only the title. Independent review is pending.
+the committed-catalog rename changes only the title. Independent review approved
+commit `ab55847`: all three ingestion tasks evidenced, no findings. The reviewer
+checked implementing modules, existing coverage and scenario-name preservation.
 
 ## Composition
 
@@ -85,4 +87,44 @@ no post-composition app release lookup. `docs/verification.md` describes the
 separate nightly publication boundary and remains true. The carried fallback
 scenario occurs once in the composition delta, under union and precedence, with
 its original name and text. Main specs still hold the pre-sync version at this
-point. Independent review is pending.
+point. Independent review approved commit `079dd59`, all three tasks evidenced,
+no findings. A mistaken pair of module filenames in the initial review report
+was corrected by a focused reread of `merge.py`, `cli.py`, `build.py`, `verify.py`
+and `offline.py`; the no-lookup conclusion was confirmed.
+
+## Generation
+
+The generation contract, source-generation and boundary test modules passed:
+**127 passed** on unchanged source. No delta correction was needed. The corrected
+prerelease scenario describes list resolution with no stable-latest request and
+contains no 404 claim.
+
+| Restated behavior | Evidence |
+| --- | --- |
+| Exactly one selected-endpoint lookup, including transport retry | `test_generation_looks_up_only_the_rule_selected_release_endpoint`: stable, prerelease and title-filter modes, each with and without an incomplete-body retry; real HTTP client and APK manifest parsing, exact release-request lists |
+| Distinct bounded-list failures | `test_release_scan_bound_is_visible`: 100 drafts vs 101 otherwise permitted releases, exact distinct diagnostics and one bounded-list request |
+| Track-only APK-only settings rejected before HTTP | `test_track_only_apk_settings_fail_before_network_with_project_and_setting`: all three prohibited keys, including empty settings that would otherwise be defaults |
+| Track-only prerelease and fallback settings exported | `test_track_only_release_settings_are_accepted_and_exported`: both settings accepted, endpoint selected correctly and generated entry retains the enabled value |
+| Accepted catalog shape, id uniqueness and normalized project uniqueness | `test_accepted_catalog_malformed_shape_fails_generation`, `test_accepted_catalog_repeated_id_names_both_projects`, `test_accepted_catalog_duplicate_normalized_project_fails_generation` |
+| Policy schema, unsupported/invalid settings, normalization and duplicate keys | Existing `test_policy_rejects_invalid_documents`, `test_policy_normalizes_keys_and_field_order`, `test_invalid_rule_fields_and_combinations`, `test_duplicate_json_policy_keys_fail_before_discovery`, `test_duplicate_policy_keys_and_inactive_rules` |
+| Portable regex and group selectors | Existing `test_version_capture_references_fail_before_discovery`, `test_version_capture_references_preserve_supported_selectors`, `test_unicode_sensitive_regex_escapes_fail_before_discovery`, `test_explicit_regex_classes_and_literal_backslashes_remain_supported` |
+| Project-table boundary, normalized deduplication, malformed/empty rejection | Existing parser tests plus `test_duplicate_order_and_nested_paths` and `test_malformed_second_table_cannot_propose_removal` |
+| Deterministic catalog, identities, defaults and source changes | Existing `test_unchanged_inputs_reproduce_the_committed_catalog_byte_for_byte`, `test_every_invocation_resolves_every_project_afresh`, `test_readme_additions_and_removals_are_reported`, `test_cross_project_collisions`, fixture catalog-composition tests |
+| Inputs and policy never rewritten | Existing `test_failed_invocation_rejects_stale_candidates_and_preserves_tracked_inputs`, `test_cli_real_generation_preserves_inputs_and_cleans_failed_candidates` |
+| Strict release selection, publication metadata, drafts, title/tag matching and ID tie break | Existing `test_release_list_excludes_drafts_and_selects_newest_matching_title`, `test_latest_requires_published_stable_release`, `test_equal_publication_time_uses_numeric_id`, `test_title_filter_uses_search_and_trimmed_tag_fallback`, `test_invalid_host_release_identifier` |
+| All eligible APKs, filters, agreement, bounded extraction, no execution and no older-release retry | Existing package-ID tests, `test_apk_filter_and_all_eligible_agreement`, `test_heimdall_newest_matching_release_never_searches_older_apk`, `test_failed_apk_resolution_membership_and_fallback` |
+| Host-scoped credentials | Existing `test_fresh_resolution_sends_the_api_credential_only_to_the_api_host` and source HTTP credential/redirect tests |
+
+Temporary mutations, all restored: choosing the opposite endpoint fails all six
+endpoint cases; adding another release lookup fails all six; disabling transport
+retries fails the three retry cases; replacing the no-permitted diagnostic fails
+that bounded case; bypassing the page-size bound fails the oversized case;
+allowing APK-only tracker settings fails all three cases; dropping configured
+settings fails the prerelease-export case, while forcing fallback off separately
+fails the fallback-export case; bypassing normalized-project uniqueness fails
+its accepted-catalog case; changing the malformed diagnostic fails all four shape
+cases; bypassing accepted-ID uniqueness fails the repeated-ID case.
+
+The first draft of one mutation used a source substring that was absent and made
+no edit; it was replaced with the actual settings-copy statement before running.
+Surviving generation scenario names are unchanged. Independent review is pending.

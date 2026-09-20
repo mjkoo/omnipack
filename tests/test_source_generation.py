@@ -144,12 +144,30 @@ def test_release_list_excludes_drafts_and_selects_newest_matching_title() -> Non
     ]
 
 
-def test_release_scan_bound_is_visible() -> None:
+@pytest.mark.parametrize(
+    ("count", "draft", "message"),
+    [
+        (100, True, "no permitted release in the bounded 100-release scan"),
+        (101, False, "release scan exceeded the 100-release bound"),
+    ],
+)
+def test_release_scan_bound_is_visible(count: int, draft: bool, message: str) -> None:
     rule = parse_project_policy(
         b'{"schemaVersion":1,"projects":{"github.com/a/b":{"kind":"apk","additionalSettings":{"includePrereleases":true}}}}'
     ).projects["github.com/a/b"]
-    with pytest.raises(ValueError, match="100-release bound"):
-        select_release(JsonHttp([{}] * 101), "github.com/a/b", rule)
+    release = {
+        "id": 1,
+        "name": "v1",
+        "published_at": "2026-09-10T00:00:00Z",
+        "draft": draft,
+    }
+    http = JsonHttp([release] * count)
+    with pytest.raises(ValueError) as error:
+        select_release(http, "github.com/a/b", rule)
+    assert str(error.value) == message
+    assert http.urls == [
+        "https://api.github.com/repos/a/b/releases?per_page=100&page=1"
+    ]
 
 
 class MappingHttp:
