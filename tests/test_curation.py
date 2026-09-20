@@ -2,13 +2,16 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import parse_composition_policy
+from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
+from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
     current_configuration_fixture,  # noqa: F401
@@ -147,3 +150,39 @@ def test_cinderbox_retains_release_selection_settings(
         assert not settings["versionExtractionRegEx"]
         assert not settings["releaseTitleAsVersion"]
         assert settings["fallbackToOlderReleases"] is True
+
+
+def test_maintained_version_override_survives_refreshed_source_settings(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    overlay = read(ROOT / "config/overlay.json")
+    protected = {
+        (record["id"], normalize_project_url(record["url"]))
+        for record in overlay
+        if record["patch"].get("additionalSettings", {}).get("versionDetection")
+        is False
+    }
+    assert protected
+    refreshed = [
+        replace(
+            app,
+            additional_settings={**app.additional_settings, "versionDetection": True},
+        )
+        for app in current_configuration.candidates
+    ]
+    result = compose(
+        refreshed,
+        read(ROOT / "config/deny.json"),
+        overlay,
+        policy=parse_composition_policy(current_configuration.policy),
+    )
+    observed = set()
+    for variant in Variant:
+        for entry in json.loads(render(result.apps[variant]))["apps"]:
+            key = (entry["id"], normalize_project_url(entry["url"]))
+            if key in protected:
+                assert (
+                    json.loads(entry["additionalSettings"])["versionDetection"] is False
+                )
+                observed.add(key)
+    assert observed == protected

@@ -9,36 +9,6 @@ layered on top.
 
 ## Requirements
 
-### Requirement: Selected build verification does not change composition
-
-A selected build failing structural verification SHALL prevent publication
-without causing composition to select another project or family alternative.
-After successful source ingestion and building, publication eligibility SHALL NOT
-depend on a separate lookup of the selected project's release metadata.
-Unavailable release metadata SHALL NOT trigger reselection or block an otherwise
-eligible candidate. Standard fallback SHALL occur when no eligible preferred
-dual candidate remains after successful ingestion and deliberate exclusions,
-unless a pin requires one. An entire source fetch failure SHALL still abort the
-build. Existing configured release fallback within one selected project SHALL
-remain separate and unchanged.
-
-#### Scenario: Preferred dual project fails metadata verification
-
-- **WHEN** a selected dual build fails structural verification and a standard candidate exists
-- **THEN** publication fails and the previously published pair remains intact
-- **AND** the pipeline does not replace the selected project with the standard candidate
-
-#### Scenario: Selected project release metadata is unavailable after a successful build
-
-- **WHEN** source ingestion, building, checks and fresh structural verification succeed but the selected project's release metadata is unavailable
-- **THEN** the otherwise eligible candidate remains eligible for publication without a separate release metadata lookup
-- **AND** the pipeline does not replace the selected project with a standard candidate or another family alternative
-
-#### Scenario: Preferred build is absent from a valid source snapshot
-
-- **WHEN** all source acquisition succeeds, no preferred candidate exists, and no pin requires one
-- **THEN** dual selection uses an eligible ordinary candidate if available
-
 ### Requirement: Each build is a baseline build or a dual-screen build
 
 Every candidate build SHALL be either a baseline build or a dual-screen build.
@@ -138,6 +108,9 @@ SHALL retain original source, source origin, package id and normalized project
 URL. These fields SHALL identify a candidate after identical duplicates collapse;
 different records sharing that identity SHALL fail rather than be chosen by order.
 Policy candidate selectors SHALL match this original identity exactly once.
+Every policy selector, including the selector a pin matches with, SHALL name one
+of the sources the pipeline ingests and an origin belonging to that source, and
+SHALL fail with the selector and the offending value identified otherwise.
 Corrections SHALL NOT recursively match other rules. Unmatched or ambiguous selectors,
 duplicate selectors, invalid targets, unknown fields and inconsistent rules SHALL
 fail with the affected selector identified.
@@ -205,6 +178,13 @@ Obtainium app records.
 - **WHEN** a candidate rule carries a field other than `match`, `rationale`,
   `packageId` and `family`
 - **THEN** configuration fails with the rule and the unknown field identified
+
+#### Scenario: A selector pairs a source with another source's origin
+
+- **WHEN** a candidate rule or a pin selects with a selector naming one source
+  and an origin that belongs to a different source
+- **THEN** configuration fails with the selector and the invalid origin
+  identified, before any candidate is matched
 
 #### Scenario: Track-only resource is assigned to an app family
 
@@ -278,6 +258,14 @@ eligible candidates when any exist, or all dual-eligible candidates otherwise.
 Within that tier, precedence SHALL be extras, RJNY, BBoi34, then generated.
 The winning candidate SHALL be retained whole, not merged with losing entries.
 
+A family having no dual-preferred candidate left after successful ingestion and
+deliberate exclusions SHALL be an ordinary outcome: dual SHALL select among that
+family's remaining dual-eligible candidates and the build SHALL NOT fail for the
+absence, unless a pin names a candidate that is absent. A source that cannot be
+fetched SHALL abort the build instead, as "A failed fetch aborts the build" in
+source-ingestion defines, so a missing preferred candidate and a missing source
+are never confused.
+
 Identical duplicates SHALL collapse. Different candidates tied at the winning
 rank SHALL fail with the family, variant and selectors identified, requiring an
 explicit selection. Ties among nonwinning candidates SHALL NOT displace a unique
@@ -300,6 +288,11 @@ in each output, including when family rules separate candidates sharing an id.
 
 - **WHEN** an ordinary extra and a dual-preferred generated build compete without a pin
 - **THEN** dual selects the preferred build and single selects the extra if eligible
+
+#### Scenario: Preferred build is absent from a valid source snapshot
+
+- **WHEN** all source acquisition succeeds, no preferred candidate exists, and no pin requires one
+- **THEN** dual selection uses an eligible ordinary candidate if available
 
 #### Scenario: One source contributes the same id with different content
 
@@ -377,10 +370,17 @@ explicitly with the entry identified.
 
 The overlay file SHALL contain an array of records with effective package `id`,
 project `url` and object `patch`. An overlay document that is not an array
-SHALL fail with the overlay identified. Each record SHALL apply to the matching
-selected entry in every variant that selects it. Matching SHALL use both
-effective id and normalized project URL. Duplicate selectors SHALL fail. A
-non-object patch, including null, SHALL fail.
+SHALL fail with the overlay identified. A record SHALL carry no field other
+than `id`, `url` and `patch`, and SHALL fail with the record and the unknown
+field identified otherwise. A record's `id` and its `url` SHALL each be a
+nonempty string, failing with the record and the offending field identified. A
+nonempty `url` SHALL additionally be one a host can be read from, and one no
+host can be read from SHALL fail with the record, the field and the offending
+value identified, because there the value is what the maintainer has to look
+at. Each record SHALL apply to the matching selected entry in every variant
+that selects it. Matching SHALL use both effective id and normalized project
+URL. Duplicate selectors SHALL fail. A non-object patch, including null,
+SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
 The protected patch fields SHALL be exactly `id`, `url`, `overrideSource`,
@@ -411,6 +411,24 @@ denylist's responsibility.
 - **WHEN** a patch contains `id`, `url`, `overrideSource`, `family`,
   `packageId` or `variant`, with any value including null
 - **THEN** the build fails naming the selector and forbidden field
+
+#### Scenario: Overlay record carries an unknown field
+
+- **WHEN** an overlay record carries a field other than `id`, `url` and `patch`
+- **THEN** the build fails with that record and the unknown field identified,
+  rather than ignoring the field or treating the record as matching nothing
+
+#### Scenario: Overlay record has a blank or non-string key
+
+- **WHEN** an overlay record's `id` or `url` is blank or is not a string
+- **THEN** the build fails with that record and the offending field identified
+
+#### Scenario: Overlay record's URL has no host
+
+- **WHEN** an overlay record's `url` is a nonempty string no host can be read
+  from, such as `/owner/repo`
+- **THEN** the build fails with that record, the field and the offending value
+  identified
 
 #### Scenario: Overlay document is not an array
 

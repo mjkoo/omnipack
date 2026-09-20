@@ -8,7 +8,10 @@ from typing import Any
 import pytest
 
 from omnipack.catalog import generate_catalog
-from omnipack.composition_policy import parse_composition_policy
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    parse_composition_policy,
+)
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, Variant
 from omnipack.render import render
@@ -194,7 +197,20 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
         for item in current_configuration.result.report.selections
         if item.variant is Variant.SINGLE
     }
-    assert expected <= selected
+    families = {
+        (
+            app.provenance.source,
+            app.origin,
+            app.original_id,
+            normalize_project_url(app.url),
+        ): app.family or f"package:{app.id}"
+        for app in apply_composition_policy(
+            parse_composition_policy(current_configuration.policy),
+            current_configuration.candidates,
+        )
+    }
+    missing = sorted(families[selector] for selector in expected - selected)
+    assert not missing, f"curated extras not selected in single: {missing}"
 
 
 def test_hollow_knight_source_composition_preserves_dual_only_catalog(

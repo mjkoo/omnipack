@@ -127,4 +127,66 @@ cases; bypassing accepted-ID uniqueness fails the repeated-ID case.
 
 The first draft of one mutation used a source substring that was absent and made
 no edit; it was replaced with the actual settings-copy statement before running.
-Surviving generation scenario names are unchanged. Independent review is pending.
+Surviving generation scenario names are unchanged. Independent review approved
+commit `75eaa74`, all three tasks evidenced, no findings.
+
+## Curation and main-spec synchronization
+
+The curation, port-curation, tracker and source-generation fixture modules pass:
+**20 passed**. Existing tracker tests already assert identity, release-title
+pattern, version extraction, release selection and background notifications,
+and the exact rendered key set. No tracker assertion was missing.
+
+Before removing tracker data from main normative text, each of these independent
+configuration mutations made the tracker suite fail at its assertion, with no
+setup errors: id, name, repository URL, categories, release-title regex,
+prerelease admission, fallback, extraction regex, match group, release-title
+versioning, latest-tag verification, sort method, asset-date versioning,
+release-date versioning, version detection, track-only mode, background-update
+exemption, notification suppression, and adding `installedVersion`. The original
+`config/extras.json` bytes were restored after each of the nineteen runs.
+
+`test_committed_configuration_selects_each_baseline_extra_in_single` already
+computed coverage from reviewed extras and single-pin exemptions. Its diagnostic
+now names the missing families using the real composition policy projection.
+A probe composed the current candidates with an additional denial of the
+unpinned tracker, successfully produced both variants, and ran that check: it
+failed naming `package:809443320`, proving the regression check catches an
+omission that composition accepts. No configuration mutation remains.
+
+`test_maintained_version_override_survives_refreshed_source_settings` now changes
+all ingested candidates' version-detection setting, composes and renders them,
+and asserts every reviewed disabling override still wins. Temporarily bypassing
+overlay application makes this test fail; source bytes were restored.
+
+The existing `test_committed_catalog_is_valid_canonical_and_composable` guards
+both suite-owned validity rules. Direct probes against the same assertion block
+confirmed failure for a track-only nonnumeric id, enabled version detection,
+enabled ZIP inclusion, enabled architecture filtering, an invalid APK package
+id, and an APK entry switched to track-only. Appending a newline to the catalog
+also fails canonical byte equality; its original bytes were restored. These are
+suite obligations, not additional pipeline guarantees.
+
+The catalog-stage audit confirms `codm.fetch` rejects malformed documents and
+repeated ids, whereas generation's `_load_catalog` rejects malformed documents,
+repeated ids and repeated normalized projects. No ingestion adapter checks
+normalized-project uniqueness. The direct accepted-catalog tests added with the
+generation coverage evidence the distinction. No pipeline stage checks the
+committed catalog's kind-specific ids/settings or its canonical file bytes.
+
+The four main specs were synchronized through the separate sync workflow:
+12 modified requirements, 1 retired requirement and 1 title-only rename.
+The deltas add 13 new scenarios, relocate 1 unchanged scenario, and rewrite 5
+in place. All surviving scenario names and all untouched requirement blocks
+are preserved. Both main-spec and change strict validation pass. The initial
+merge helper rejected its overly broad heading regex before writing any spec;
+a line-bounded heading parser completed the merge.
+
+Searches across other main specs, README and `docs/` found no contradictory
+restatement requiring an edit. Consumer-facing names and tracker instructions
+in README and `docs/curation.md` correctly describe current configuration;
+removing per-app values from normative requirements does not remove consumer
+instructions. The nightly verification/publication boundary remains valid.
+The synchronized curation text names no test file, fixture or assertion recipe.
+The retired requirement is absent from main composition, and the fallback
+scenario now occurs once under union and precedence. Independent review is pending.

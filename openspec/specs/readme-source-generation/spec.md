@@ -37,10 +37,27 @@ an otherwise eligible project. Effective discovery settings SHALL be retained
 in generated Obtainium entries so a resolved prerelease remains discoverable
 after import. Final-pack overlays SHALL NOT substitute for discovery policy.
 
-An APK rule SHALL be able to set the supported consumer setting
-`fallbackToOlderReleases` explicitly, and the generated entry SHALL carry the
-configured value. Unconfigured projects SHALL preserve their existing default
-for that setting. Consumer fallback SHALL NOT change which release the
+A rule SHALL choose which release to resolve before making any request, from
+its own settings alone, and generation SHALL perform exactly one release lookup
+per project, against the endpoint that choice names: a rule enabling
+prereleases or filtering release titles SHALL resolve from the bounded releases
+list, and every other rule SHALL resolve from the stable latest release.
+Neither endpoint SHALL be attempted as a fallback for the other, so a project
+whose chosen endpoint fails SHALL fail resolution rather than be retried
+against the other endpoint. A transport-level retry of that one lookup SHALL
+reissue the same request to the same endpoint and SHALL NOT be a second lookup:
+this requirement governs which endpoint is asked and how many times a release
+is looked up, not how many HTTP attempts the shared transport makes.
+
+The settings that select a release, namely prerelease admission, release-title
+filtering and the consumer setting `fallbackToOlderReleases`, SHALL be
+available to a rule of either kind, and the generated entry SHALL carry each
+configured value. The settings that act on a release's APK assets, namely APK
+filename filtering, version extraction and its group selector, SHALL be
+available to an APK rule only, and a track-only rule carrying one SHALL fail
+validation with the project and the setting identified, because a track-only
+resource has no APK for them to act on. Unconfigured projects SHALL preserve
+their existing defaults. Consumer fallback SHALL NOT change which release the
 generator resolves.
 
 #### Scenario: Version extraction references an absent capture group
@@ -56,7 +73,20 @@ generator resolves.
 #### Scenario: Only prereleases exist
 
 - **WHEN** a project explicitly enables prereleases and publishes a matching prerelease APK
-- **THEN** generation can resolve it through the releases list despite a 404 from the stable latest endpoint, and its exported settings permit Obtainium to find that release
+- **THEN** generation resolves it from the bounded releases list, which its rule
+  selected before any request was made, without requesting the stable latest
+  release at all, and its exported settings permit Obtainium to find that
+  release
+
+#### Scenario: A track-only rule carries an APK-only setting
+
+- **WHEN** a track-only rule carries APK filename filtering, version extraction or its group selector
+- **THEN** policy validation fails with the project and that setting identified, before any network request
+
+#### Scenario: A track-only rule carries a release-selection setting
+
+- **WHEN** a track-only rule enables prereleases or consumer fallback
+- **THEN** policy validation accepts it and the generated tracking entry carries the configured value
 
 #### Scenario: Exported title filter and consumer fallback reach the client
 
@@ -98,6 +128,18 @@ SHALL fail catalog validation with both URLs identified rather than silently
 choose a project or emit an invalid import. Source removals SHALL be reflected
 as proposed deletions only after otherwise complete successful generation.
 
+Generation SHALL apply the entry-ID check both to the candidate catalog it
+emits and to the accepted catalog it reads back before generating. Reading the
+accepted catalog SHALL fail when it is not an object holding a list of entries
+that each carry a string id and a string project URL, identifying the catalog as
+malformed. Reading it SHALL additionally fail when two of its entries carry project
+URLs that normalize to the same form, naming that normalized project, because
+one project holding two entries in a reviewed catalog is an error in the
+catalog rather than a choice for composition. The candidate catalog cannot
+repeat a normalized project URL, because the README links it is built from are
+deduplicated in that same normalized form. Generation is the only stage that
+enforces this uniqueness, and no build-time ingestion check repeats it.
+
 #### Scenario: Duplicate URL spellings
 
 - **WHEN** two eligible links normalize to the same project
@@ -123,16 +165,31 @@ as proposed deletions only after otherwise complete successful generation.
 - **WHEN** a README contains a valid Project table and another Project header with a missing or invalid delimiter
 - **THEN** generation fails without proposing removals from the malformed table or emitting a candidate catalog
 
+#### Scenario: The accepted catalog holds one project twice
+
+- **WHEN** the accepted catalog carries two entries with different ids whose
+  project URLs normalize to the same form
+- **THEN** generation fails naming that normalized project, rather than reading
+  the catalog with one of the two entries silently shadowing the other
+
 ### Requirement: Release APKs determine package IDs automatically
 
 Generation SHALL resolve APK package IDs automatically, and its requests SHALL
 be subject to the same host-scoped credential rules as every other
 source-discovery request. Default APK policy SHALL use the GitHub latest stable
-release endpoint. Explicit prerelease or release-title policy SHALL use a bounded list
-of at most 100 releases, ignore drafts and disallowed prereleases, filter titles
+release endpoint. Explicit prerelease or release-title policy SHALL request a
+single page of at most 100 releases, ignore drafts and disallowed prereleases, filter titles
 (using the tag when the title is empty), and choose the newest matching release
-by publication time with release ID as a deterministic tie-breaker. Invalid
-selection metadata or no matching release within the bound SHALL fail visibly.
+by publication time with release ID as a deterministic tie-breaker.
+
+Invalid selection metadata SHALL fail visibly. Two further outcomes SHALL fail
+visibly and SHALL be distinguishable from each other, because they call for
+different corrections. A releases response holding more entries than that bound
+SHALL fail identifying the bound, because the host answered outside the page
+that was requested. A response within the bound in which the rule permits no
+release SHALL fail identifying that limitation. Neither SHALL be answered by an
+unbounded scan or a broader release policy.
+
 Every direct asset in that selected release whose filename ends in `.apk`,
 case-insensitively, and matches the configured APK filename regex SHALL be
 inspected on every run. No filename filter means all direct APKs. Filtered-out
@@ -184,6 +241,11 @@ follow its separate metadata-only contract.
 
 - **WHEN** no permitted release occurs within the bounded list
 - **THEN** the diagnostic identifies that limitation and no unbounded scan or broader release policy is attempted
+
+#### Scenario: The releases response exceeds the bound
+
+- **WHEN** the releases response holds more entries than the single requested page of at most 100 releases allows
+- **THEN** resolution fails identifying the bound, distinguishably from a response within the bound in which the rule permits no release, and no release is selected from that response
 
 ### Requirement: Explicit track-only resources remain honest tracking entries
 

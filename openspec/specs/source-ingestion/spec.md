@@ -16,15 +16,29 @@ The system SHALL read each upstream from the location recorded in the source
 configuration: the RJNY catalog from the configured path on the configured
 branch, the BBoi34 catalog from the single-screen and dual-screen JSON assets
 of the latest release of the configured repository, and the codm2000 catalog
-from its configured committed Obtainium JSON file. Routine ingestion SHALL NOT
-fetch the source README, inspect APKs or resolve package IDs.
+from its configured committed Obtainium JSON file. The latest release SHALL be
+the one the upstream itself publishes as latest, so ingestion SHALL NOT rank
+releases by a version read from an asset name, and SHALL NOT reuse a release it
+read on an earlier run. Each configured asset pattern SHALL match exactly one
+asset of that release; any other number of matching assets SHALL fail the build
+naming BBoi34 and the pattern that matched wrongly, rather than choosing one of
+them. Routine ingestion SHALL NOT fetch the source README, inspect APKs or
+resolve package IDs.
 
 #### Scenario: BBoi34 assets come from the newest release
 
-- **WHEN** ingestion runs and the newest BBoi34 release publishes assets named
-  for a version later than any seen before
-- **THEN** the entries are read from that release's assets rather than from a
-  pinned or previously cached version
+- **WHEN** ingestion runs and BBoi34 has published a release since the previous
+  run, so that the release the upstream reports as latest is not the one the
+  previous run read
+- **THEN** the entries are read from the assets of the release the upstream
+  reports as latest, without pinning a release or reusing the previous run's
+
+#### Scenario: A configured asset pattern matches the wrong number of assets
+
+- **WHEN** the latest release contains no asset matching a configured pattern,
+  or more than one
+- **THEN** the build fails naming BBoi34 and that pattern, without selecting
+  one of the matching assets or continuing with the other pattern's entries
 
 #### Scenario: Configured location is empty
 
@@ -117,10 +131,28 @@ without regard to case. The scheme SHALL NOT participate in the comparison, so
 that `http` and `https` spellings of one project compare equal. Case SHALL be
 folded only in the host and in a GitHub link's owner and repository; the case
 of any other path SHALL be preserved, so that two URLs on another host
-differing only in path case remain different projects. The pipeline SHALL use
-this form wherever it compares URLs: deciding whether another source already
-contributes a link, and matching a generated project to its reviewed rule and
-to its entry in the committed source catalog.
+differing only in path case remain different projects.
+
+Reducing a GitHub link to its owner and repository SHALL discard the rest of
+its path, its query and its fragment, because a GitHub project is identified by
+owner and repository alone. An explicit port SHALL be retained on every host,
+github.com included, so two links that differ only in an explicit port SHALL be
+different projects. On any other host the normalized form SHALL also retain a
+query and a fragment, so two links to one host and path that differ in any of
+them SHALL be different projects: the system cannot know which parts of another
+host's link identify the project. The pipeline SHALL use this form wherever it
+compares URLs: deciding whether another source already contributes a link,
+matching a generated project to its reviewed rule and to its entry in the
+committed source catalog, matching an overlay record's key to the selected
+entries it patches, and matching a composition policy selector to the candidates
+it governs.
+
+This normalized form is the system's comparison identity, and it SHALL decide
+only whether two spellings mean one project. It SHALL NOT decide whether a URL
+is acceptable to a source adapter: an adapter that reads a URL as written does
+so at an earlier stage, before normalization, so a URL that compares equal to
+an acceptable one MAY still be rejected there. The two notions of "the same
+host" are therefore distinct stages, and neither follows from the other.
 
 #### Scenario: Two spellings of one project
 
@@ -143,6 +175,21 @@ to its entry in the committed source catalog.
   case of their path
 - **THEN** they are treated as different projects, because case is folded only
   in the host and in a GitHub link's owner and repository
+
+#### Scenario: Links differ only in a query or fragment
+
+- **WHEN** two URLs address the same host and path and differ only in a query
+  or a fragment
+- **THEN** they are the same project on github.com, whose links reduce to owner
+  and repository, and different projects on any other host, whose query and
+  fragment are retained
+
+#### Scenario: Links differ only in an explicit port
+
+- **WHEN** two URLs address the same host and path and one of them carries an
+  explicit port
+- **THEN** they are different projects on every host, github.com included,
+  because the normalized form retains an explicit port wherever it appears
 
 ### Requirement: A failed fetch aborts the build
 
@@ -227,6 +274,14 @@ settings per variant, so that a dual-screen fork replaces its single-screen
 counterpart. The system SHALL resolve each variant's candidates independently
 and SHALL NOT require that a package id map to the same entry across variants.
 
+An upstream catalog contributing two entries that share a package id SHALL have
+both retained for composition to resolve, because ingestion cannot know which
+of them a family rule, a pin or a denial will select. The committed codm2000
+catalog SHALL instead fail ingestion when it repeats an entry id, naming the id
+and both project URLs, because it is reviewed before it is committed and a
+repeated id there is an error in the catalog rather than a choice for
+composition.
+
 #### Scenario: Same id, different project per variant
 
 - **WHEN** an upstream contains two entries sharing a package id, one opted
@@ -237,10 +292,17 @@ and SHALL NOT require that a package id map to the same entry across variants.
 
 #### Scenario: Duplicate ids remain within a variant
 
-- **WHEN** ingesting one source leaves two candidate entries sharing a package
-  id within the same variant
+- **WHEN** ingesting one upstream catalog leaves two candidate entries sharing
+  a package id within the same variant
 - **THEN** the duplicate is resolved during composition, not silently dropped
   during ingestion
+
+#### Scenario: The committed catalog repeats an entry id
+
+- **WHEN** the committed codm2000 catalog contains two entries carrying the
+  same id
+- **THEN** ingestion fails naming that id and both entries' project URLs,
+  rather than retaining both or keeping whichever appears first
 
 ### Requirement: BBoi34 entries map to variants by source file
 
@@ -386,14 +448,31 @@ compares and patches them uniformly.
 
 ### Requirement: Public GitLab entries keep native source identity
 
-The system SHALL accept explicit extras with source type `GitLab` and public HTTPS gitlab.com project URLs, preserve the full case-sensitive project path including subgroups (at most 21 path components in total), hydrate supported GitLab defaults, and render `overrideSource: GitLab`. Existing non-GitHub URL comparison semantics SHALL remain unchanged. Package ids for these explicit extras SHALL be supplied and backed by manifest evidence; adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
+The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when its scheme is `https` and its host is `gitlab.com`, each compared without regard to case, with no `www.` prefix and no port, carrying no credentials, and whose path holds between two and twenty-one nonempty components naming a project and its namespaces, each read with its case and encoding exactly as written while empty components and a trailing slash are ignored, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project. Existing non-GitHub URL comparison semantics SHALL remain unchanged.
+
+This acceptance boundary is an earlier and separate stage from normalized
+comparison: the native adapter reads the project path out of the URL as the
+entry spells it, before any normalization is applied, so a URL that compares
+equal to an acceptable one MAY still be rejected here. A `www.gitlab.com`
+spelling compares equal to the canonical one, because comparison drops a leading
+`www.`, and is nonetheless not a native GitLab project URL; an explicit port is
+rejected here and, being retained in the normalized form, also makes a different
+project under comparison. Acceptance SHALL therefore be decided on the URL as
+written rather than on its comparison identity.
+
+Package ids for these explicit extras SHALL be supplied by the maintainer who adds the entry, from recorded primary APK manifest evidence as any other identity decision is; the pipeline SHALL NOT verify them, because adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
 
 #### Scenario: A GitLab extra reaches both exports
 
 - **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is selected in both variants
 - **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
 
-### Requirement: Committed codm2000 entries keep device-aware source semantics
+#### Scenario: A GitLab URL carries more than a project path
+
+- **WHEN** an entry declares GitLab with a gitlab.com URL whose host is spelled with a `www.` prefix, or that carries a query, a fragment, credentials, an explicit port, a reserved `-` path component or more path components than a project and its namespaces
+- **THEN** the build fails with the entry and the invalid URL identified, rather than reading a project path out of it
+
+### Requirement: Committed codm2000 entries are dual-screen builds that keep their generated identity
 
 The system SHALL ingest accepted codm2000 entries from committed Obtainium JSON.
 README parsing and package-ID resolution SHALL occur only in the separate
