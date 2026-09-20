@@ -384,3 +384,23 @@ def test_ordinary_identity_can_be_corrected_away_from_reserved_id() -> None:
     parsed = parse_composition_policy(policy(candidates=[rule(packageId="corrected")]))
     results = apply_composition_policy(parsed, [candidate(), tracker])
     assert [app.id for app in results] == ["corrected", tracker.id]
+
+
+@pytest.mark.parametrize("kind", ["candidates", "pins"])
+def test_selector_origin_must_belong_to_its_source_before_matching(kind: str) -> None:
+    record = rule(
+        match={
+            "source": "rjny",
+            "origin": "bboi-standard-asset",
+            "id": "org.example.old",
+            "url": "https://github.com/example/app",
+        }
+    )
+    if kind == "pins":
+        record.update(family="package:org.example.old", variant="dual")
+    with pytest.raises(CompositionPolicyError) as error:
+        parse_composition_policy(policy(**{kind: [record]}))
+    assert (
+        str(error.value)
+        == f"{kind}[0].match.origin 'bboi-standard-asset' is invalid for source 'rjny'"
+    )

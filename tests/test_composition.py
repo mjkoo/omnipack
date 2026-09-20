@@ -741,3 +741,33 @@ def test_denial_cannot_hide_ordinary_collision_with_track_only_id() -> None:
     ordinary = app("tracker", "extras")
     with pytest.raises(CompositionError, match="reserved track-only.*extras"):
         compose([ordinary, tracker], [{"id": "tracker", "reason": "hidden"}], [])
+
+
+def test_overlay_unknown_field_identifies_record_and_field() -> None:
+    candidate = app("app.id")
+    record = {"id": candidate.id, "url": candidate.url, "patch": {}, "unexpected": True}
+    with pytest.raises(CompositionError) as error:
+        compose([candidate], [], [record])
+    assert str(error.value) == "overlay[0] has unknown field 'unexpected'"
+
+
+@pytest.mark.parametrize("field", ["id", "url"])
+@pytest.mark.parametrize("value", ["", "  ", 731, None])
+def test_overlay_blank_or_nonstring_key_identifies_field_without_value(
+    field: str, value: object
+) -> None:
+    candidate = app("app.id")
+    record = {"id": candidate.id, "url": candidate.url, "patch": {}, field: value}
+    with pytest.raises(CompositionError) as error:
+        compose([candidate], [], [record])
+    expected = "string" if field == "id" else "project URL"
+    assert str(error.value) == f"overlay[0].{field} must be a nonempty {expected}"
+
+
+def test_overlay_hostless_url_identifies_record_field_and_value() -> None:
+    candidate = app("app.id")
+    with pytest.raises(CompositionError) as error:
+        compose(
+            [candidate], [], [{"id": candidate.id, "url": "/owner/repo", "patch": {}}]
+        )
+    assert str(error.value) == "overlay[0].url is not a project URL: '/owner/repo'"

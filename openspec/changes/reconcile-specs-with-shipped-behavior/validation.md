@@ -51,3 +51,38 @@ Temporary source mutations were run independently and restored byte-for-byte:
 
 All original scenario names in surviving ingestion requirements are retained;
 the committed-catalog rename changes only the title. Independent review is pending.
+
+## Composition
+
+`tests/test_composition.py` and `tests/test_composition_policy.py`: **91 passed**.
+The first test draft assumed an extra `composition.` diagnostic prefix; inspecting
+the real diagnostic corrected that test expectation. The delta requires the
+selector and invalid origin, which the existing diagnostic supplies, so no delta
+or source correction was needed.
+
+- `test_selector_origin_must_belong_to_its_source_before_matching` checks both
+  candidate rules and pins directly at policy parsing, before candidate matching.
+- `test_overlay_unknown_field_identifies_record_and_field` checks record position
+  and field. `test_overlay_blank_or_nonstring_key_identifies_field_without_value`
+  checks empty, whitespace, numeric and null values in each key. Exact expected
+  messages also prove the invalid value is omitted.
+- `test_overlay_hostless_url_identifies_record_field_and_value` checks that the
+  nonempty invalid URL is included in this diagnostic.
+- Existing `test_dual_falls_back_to_source_precedence_among_several_baseline_builds`
+  covers the carried fallback rule, and
+  `test_build_ingestion_failure_leaves_existing_outputs_untouched` covers the
+  distinct failed-source outcome.
+
+Temporary mutations and results: removing source/origin membership checking fails
+both selector cases; allowing unknown overlay fields fails its case; bypassing
+id validation fails all four id cases; bypassing URL validation fails all four
+URL cases; removing the hostless URL value from its diagnostic fails that case.
+Every mutation was restored before the next one.
+
+A search of `src/`, tests, README and `docs/` found no dependency on the retired
+composition requirement. Inspection of composition, build and verification found
+no post-composition app release lookup. `docs/verification.md` describes the
+separate nightly publication boundary and remains true. The carried fallback
+scenario occurs once in the composition delta, under union and precedence, with
+its original name and text. Main specs still hold the pre-sync version at this
+point. Independent review is pending.
