@@ -172,7 +172,8 @@ identity findings, and [curation validation](../openspec/changes/archive/2026-09
 fixture, metadata and device acceptance results.
 
 See [nightly publishing](publishing.md) for scheduled refreshes, permissions,
-failure recovery, diagnostics, and post-landing acceptance.
+the one-time release bootstrap, failure and rerun behavior, diagnostics, and
+rollback.
 
 See [onboarding validation](../openspec/changes/archive/2026-09-10-simplify-pack-onboarding/onboarding-validation.md) for the latest README,
 schedule, tracker-exclusion, and pack verification evidence.
