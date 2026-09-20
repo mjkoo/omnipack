@@ -45,7 +45,8 @@ synchronization requires an owned release seed. A missing seed fails that releas
 stage with bootstrap guidance while preserving the successful main outcome.
 Omitting the tracker is not a valid way to satisfy either contract. Device import,
 notification, acknowledgement, and re-import behavior still require separate
-device acceptance.
+device acceptance. Acceptance also covers both stable JSON downloads. Controlled
+tests are not completed device or live publication acceptance.
 
 ## Port setup
 
@@ -180,5 +181,3 @@ with their dates and provenance.
 
 Policies take effect on the next import. Rollback restores the previous extras
 and overlay and rebuilds both files.
-See [validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md) for exact generated hashes, command
-outcomes, upstream drift and outstanding device acceptance.

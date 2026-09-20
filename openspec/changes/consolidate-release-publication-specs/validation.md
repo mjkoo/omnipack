@@ -36,3 +36,12 @@ message represents live publication or device acceptance.
 
 No application tests were added: this change modifies only specs and prose.
 The scenario comparison and strict spec validation directly check the edits.
+
+## Curation guide
+
+The acceptance note now covers both stable JSON downloads and distinguishes
+controlled tests from completed device or live publication acceptance. The user
+authorized removing the existing final sentence linking to an archived change's
+validation record. A search for `openspec/changes`, `proposal.md`, `design.md`
+and `tasks.md` in the guide found no matches. Offline documentation-link
+validation passed with zero errors. No device was accessed.
