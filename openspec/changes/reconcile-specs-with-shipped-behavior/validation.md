@@ -189,4 +189,47 @@ removing per-app values from normative requirements does not remove consumer
 instructions. The nightly verification/publication boundary remains valid.
 The synchronized curation text names no test file, fixture or assertion recipe.
 The retired requirement is absent from main composition, and the fallback
-scenario now occurs once under union and precedence. Independent review is pending.
+scenario now occurs once under union and precedence. Independent review approved
+commit `cda98ba`, all three tasks evidenced, no findings. A separate block-by-block
+comparison confirmed every untouched requirement is unchanged and every modified
+requirement matches its delta.
+
+## Whole-change checks
+
+Captured upstream records were composed with committed configuration in two
+separate Python processes, one importing source extracted from the branch base
+`ce8f09ca9e32ca78bbc4b0af2b5cf93c8101bc24`, the other importing the implementation
+checkout. Both used the existing current-configuration fixture and real renderer.
+Import paths were checked to ensure each process used its own source tree.
+The resulting bytes were compared directly, not merely by digest:
+
+| Variant | Bytes | SHA-256, identical before and after |
+| --- | ---: | --- |
+| single | 100927 | `e367488d7c67ad6eb3d07395f5b60b111147859d292e0050c4d1eab61d0534a5` |
+| dual | 128017 | `bdc5a9645d42d81ce3256f971af342a75120622d1c3414914c4cd9c50ea9df47` |
+
+The branch diff leaves `src/`, `scripts/`, `config/`, committed exports, and
+README unchanged. These captured-input renders are deliberately distinct from
+the committed exports, which reflect a different upstream snapshot.
+
+Checks after implementation:
+
+- Full suite with coverage: **756 passed**, 94% source coverage, no test warnings.
+- Python 3.12 publication-script suite: **105 passed**.
+- Locked dependency check, Ruff formatting and lint, and ty: passed.
+- Offline `pack verify`: complete, success, no errors for the committed pair.
+- Actionlint and Zizmor: no findings. Zizmor reports its default offline mode;
+  network-dependent audits are outside that invocation.
+- Offline documentation links: 553 links, 332 unique, 54 checked successfully,
+  499 excluded, zero errors.
+- Nix formatting: no changes. Flake checks: passed on aarch64-darwin; the command
+  reports incompatible platforms omitted, as expected on this host.
+- Strict OpenSpec validation: the active change and all 10 main specs passed.
+  Main-spec length notices are informational, not validation failures.
+
+The initial combined invocation of the optional-argument Python 3.12 recipe
+mistook the following recipe name for an interpreter; separate invocations
+passed. Nix's cache required execution outside the filesystem sandbox, and the
+approved rerun completed all remaining checks without modifying project files.
+
+Whole-diff review and the final checkbox audit remain pending.
