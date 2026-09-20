@@ -66,10 +66,13 @@ require an established main outcome" in `rolling-pack-release`, which already
 holds the scenario "Write job rerun after main advanced" and already says why a
 rerun must not move the release back. It states the rule once for every cause,
 a later run's change and the run's own landed push alike, and says when the
-"main advanced" summary is owed: whenever the rerun reaches its push or release
-step, which a run that prepared a candidate does only while that candidate's
-hand-off is still retained. After that the rerun fails at the workflow's
-download step, before any push or release write, with no summary reason. "Main
+"main advanced" summary is owed: when the rerun's push or release step finds
+main off the revision it expects. Each step makes that comparison only after
+its own earlier checks, and a step that stops at one of those reports that
+reason instead. A run that prepared a candidate reaches those steps only while
+that candidate's hand-off is still retained. After that the rerun fails at the
+workflow's download step, before any push or release write, with no summary
+reason. "Main
 publication is one normal push" in `nightly-publishing` keeps its own rule, the
 check before the push, and points at the owner for reruns. Alternative: state
 the retained-versus-expired rule in `nightly-publishing` beside the push.
@@ -104,18 +107,19 @@ requirement this change modifies is edited in the main spec and the delta in one
 commit, so the names agree and validation passes. A title elsewhere is a plain
 direct edit.
 
-**The regex rule is the reject list.** The normative statement is the enumerated
-set of constructs validation rejects today: alphanumeric escapes other than
-`\n`, `\r`, `\t`, `\f` and `\v`, `(?` groups other than `(?:`, `(?=` and `(?!`,
-and possessive quantifiers. That their meaning differs or may differ between the
+**The regex rule is the reject list.** The normative statement is a list of
+constructs, each of which validation rejects today: alphanumeric escapes other
+than `\n`, `\r`, `\t`, `\f` and `\v`, `(?` groups other than `(?:`, `(?=` and
+`(?!`, and possessive quantifiers. It does not claim to be everything validation
+rejects. That their meaning differs or may differ between the
 validating engine and the Obtainium client is the stated reason for the list,
 not a rule of its own. Alternative: state the outcome, "only constructs that
 mean the same to both engines are accepted". Rejected: it is false of the
 shipped validator, which checks the list and then compiles the pattern, so it
 accepts constructs such as `{,3}` or a class opening with `]` whose meaning may
 differ. Making the outcome true would need new rejections, which is a behavior
-change this change does not make. The delta says outright that passing the list
-does not establish equivalence.
+change this change does not make. The delta says outright that passing
+validation does not establish equivalence.
 
 **The installation-path rule is stated at the level a policy author needs:**
 words plus an acceptable `https` URL. The list of filler words validation

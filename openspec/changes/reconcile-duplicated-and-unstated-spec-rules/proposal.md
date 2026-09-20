@@ -31,9 +31,10 @@ Spec text brought up to the shipped behavior, with no behavior change:
   dual-screen build.
 - `readme-source-generation`: the scenario "Exported title filter and consumer
   fallback reach the client" no longer sets up a state in which generation
-  fails; the reviewed-regex rule lists every construct validation rejects
-  instead of eight of the rejected escapes, gives cross-engine difference as
-  the reason for the list, and claims no equivalence for what passes it; a
+  fails; the reviewed-regex rule lists the rejected alphanumeric escapes, `(?`
+  groups and possessive quantifiers instead of eight of the rejected escapes,
+  gives cross-engine difference as the reason for the list, and claims no
+  equivalence for what passes validation; a
   track-only rule's required `rationale` and the shape of its installation
   text are stated; the base revision is required in the run summary of a run
   whose staging succeeds, not unconditionally.
@@ -47,10 +48,12 @@ Spec text brought up to the shipped behavior, with no behavior change:
   owns the rerun rule and states it once. A rerun of an earlier run's write job
   after main moved off the revision that run checked out, the run's own landed
   push included, fails without a push or release write, and recovery is a new
-  run. The summary reports "main advanced" whenever the rerun reaches its push
-  or release step, which a run that prepared a candidate does only while that
-  candidate's hand-off is still retained; after that the rerun fails before
-  either step, with no particular summary reason. The existing scenario
+  run. The summary reports "main advanced" when the rerun's push or release
+  step finds main off the revision it expects, and a step that stops earlier
+  for another reason reports that reason. A run that prepared a candidate
+  reaches those steps only while that candidate's hand-off is still retained;
+  after that the rerun fails before either step, with no particular summary
+  reason. The existing scenario
   promised the "main advanced" summary unconditionally and is qualified. This
   was already the shipped behavior and is now written down.
 - `pack-curation`: the requirement protecting curated decisions states guarded
@@ -110,9 +113,12 @@ Code and tests:
   completion and states the advanced verification schema version; its statement
   that build reports use schema 3 stays, since that schema does not move.
 - An unreadable verification input is reported as unreadable once, not also as
-  missing. Two paths double-report today and both are fixed: the five offline
-  inputs, and the README, whose unreadable case is also recorded as an invalid
-  catalog. `pack report`'s help text describes both reports.
+  missing. Three paths double-report today and all three are fixed: the five
+  offline inputs' missing finding, the README's catalog finding, which records
+  its unreadable case as an invalid catalog, and the composition-configuration
+  finding for a deny or overlay that did not decode. An unreadable deny or
+  overlay, like a missing one, is reported once. `pack report`'s help text
+  describes both reports.
 - Tests for scenarios that have none: an empty configured location for BBoi34
   and codm2000, `meta` on a non-RJNY record, a codm2000 record declaring a
   source type that differs from its URL, an upstream record declaring no source
@@ -161,7 +167,7 @@ None.
 - `pack-curation`: curated-decision protection restated as outcomes; the
   tracker requirement loses a restatement and its two scenarios describe their
   own WHEN.
-- `readme-source-generation`: the fallback-export scenario; the full list of
+- `readme-source-generation`: the fallback-export scenario; the list of
   rejected regex constructs; track-only rule fields; change-era sentences; the
   base-revision summary condition.
 - `nightly-publishing`: what a preparing-job failure means; a pointer to the

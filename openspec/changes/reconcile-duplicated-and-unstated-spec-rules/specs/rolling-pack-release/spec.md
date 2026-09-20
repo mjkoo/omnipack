@@ -16,11 +16,12 @@ hold under a commit it did not establish.
 A rerun of an earlier run's write job after main moved off the revision that
 run checked out, including when the run's own push is what moved it, SHALL fail
 without a push or release write, and recovery SHALL be a new run, not a rerun.
-The summary SHALL report that main advanced whenever the rerun reaches its push
-or release step. A run that prepared a candidate reaches them only while the
-hand-off of that candidate from the job that prepared it is still retained;
-once it is not, the rerun SHALL fail before either step, and no particular
-reason is required of its summary.
+When the rerun's push or release step finds main off the revision it expects,
+the summary SHALL report that main advanced; a step that stops earlier for
+another reason reports that reason. A run that prepared a candidate reaches
+those steps only while the hand-off of that candidate from the job that
+prepared it is still retained; once it is not, the rerun SHALL fail before
+either step, and no particular reason is required of its summary.
 
 #### Scenario: The push lands but its commit cannot be established
 

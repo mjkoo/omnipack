@@ -25,11 +25,10 @@ alphanumeric escape except the control-character escapes `\n`, `\r`, `\t`, `\f`
 and `\v`, which excludes anchors such as `\A` and `\Z`, backreferences and octal
 escapes; every group opening with `(?` other than the non-capturing `(?:`, the
 lookahead `(?=` and the negative lookahead `(?!`, which excludes inline flags,
-named groups, lookbehind and comments; and possessive quantifiers. These
-rejections are the whole portability check: a regex that passes them is not
-thereby shown to mean the same to both engines. Authors SHALL use explicit
-character classes for the intended matching set. Escaped literal backslashes
-SHALL be supported.
+named groups, lookbehind and comments; and possessive quantifiers. A regex that
+passes validation is not thereby shown to mean the same to both engines.
+Authors SHALL use explicit character classes for the intended matching set.
+Escaped literal backslashes SHALL be supported.
 
 Only an explicit reviewed rule SHALL enable prereleases or classify a resource
 as track-only. A 404, missing APK, download failure or package-ID conflict SHALL
