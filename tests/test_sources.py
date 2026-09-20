@@ -27,6 +27,7 @@ from omnipack.sources import (
     ingest_all,
     rjny,
 )
+from omnipack.urls import gitlab_project_path, normalize_project_url
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -163,12 +164,18 @@ def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
         "https://example.com/a/b",
         "https://gitlab.com/one",
         "https://user@gitlab.com/a/b",
+        "https://user:password@gitlab.com/a/b",
+        "https://www.gitlab.com/a/b",
+        "https://gitlab.com:443/a/b",
+        "https://gitlab.com/a/b?query=1",
+        "https://gitlab.com/a/b#fragment",
+        "https://gitlab.com/a/-/b",
         "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22)),
         "https://gitlab.com:invalid/a/b",
     ],
 )
 def test_explicit_gitlab_extra_rejects_urls_outside_public_boundary(url: str) -> None:
-    with pytest.raises(SourceError, match="GitLab.*URL|URL.*GitLab"):
+    with pytest.raises(SourceError) as error:
         extras.fetch(
             [
                 {
@@ -179,6 +186,9 @@ def test_explicit_gitlab_extra_rejects_urls_outside_public_boundary(url: str) ->
                 }
             ]
         )
+    assert "entry 'Bad'" in str(error.value)
+    assert "invalid GitLab URL" in str(error.value)
+    assert repr(url) in str(error.value)
 
 
 def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
@@ -570,7 +580,7 @@ def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
         for i in range(2)
     ]
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
-    with pytest.raises(SourceError, match="duplicate id.*repo0.*repo1"):
+    with pytest.raises(SourceError, match="duplicate id.*same.*repo0.*repo1"):
         codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
 
 
@@ -893,3 +903,105 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
         "com.example.companion",
         "dual-preferred",
     )
+
+
+@pytest.mark.parametrize("prefix", ["https://gitlab.com", "HTTPS://GitLab.com"])
+@pytest.mark.parametrize("path", ["Group/Project", "/Group//Sub%47roup/Project/"])
+def test_gitlab_acceptance_preserves_path_case_and_encoding(
+    prefix: str, path: str
+) -> None:
+    url = f"{prefix}/{path}"
+    [app] = extras.fetch(
+        [
+            {
+                "id": "com.example.app",
+                "name": "Example",
+                "url": url,
+                "overrideSource": "GitLab",
+            }
+        ]
+    )
+    assert app.url == url
+    assert app.source_type is SourceType.GITLAB
+    assert gitlab_project_path(url) == "/".join(
+        part for part in path.split("/") if part
+    )
+    assert normalize_project_url(
+        "https://www.gitlab.com/Group/Project"
+    ) == normalize_project_url("https://gitlab.com/Group/Project")
+
+
+@pytest.mark.parametrize("pattern", ["single*.json", "dual*.json"])
+@pytest.mark.parametrize("count", [0, 2])
+def test_bboi_requires_exactly_one_asset_per_configured_pattern(
+    pattern: str, count: int
+) -> None:
+    api = "https://codeberg.org/api/v1/repos/a/b/releases/latest"
+    assets = [
+        {
+            "name": f"{kind}{i}.json",
+            "browser_download_url": f"https://asset/{kind}{i}.json",
+        }
+        for kind in ("single", "dual")
+        for i in range(count if pattern.startswith(kind) else 1)
+    ]
+    http = FakeHttp({api: json.dumps({"assets": assets})})
+    with pytest.raises(SourceError) as error:
+        bboi.fetch(
+            http,
+            {
+                "codeberg_repo": "a/b",
+                "single_asset_pattern": "single*.json",
+                "dual_asset_pattern": "dual*.json",
+            },
+        )
+    assert (
+        str(error.value)
+        == f"bboi: expected exactly one release asset matching {pattern!r}"
+    )
+    assert http.urls == [api]
+
+
+@pytest.mark.parametrize("source", ["rjny", "bboi"])
+def test_upstream_duplicate_package_ids_survive_ingestion(source: str) -> None:
+    records = [
+        _record_with("url", f"https://github.com/owner/repo{i}") for i in range(2)
+    ]
+    apps = _fetch_rjny(records) if source == "rjny" else _fetch_bboi(records, [])
+    assert [(app.id, app.url) for app in apps] == [
+        (record["id"], record["url"]) for record in records
+    ]
+
+
+def test_bboi_reads_the_current_latest_release_on_every_run() -> None:
+    api = "https://codeberg.org/api/v1/repos/a/b/releases/latest"
+    http = FakeHttp({})
+    config = {
+        "codeberg_repo": "a/b",
+        "single_asset_pattern": "single*.json",
+        "dual_asset_pattern": "dual*.json",
+    }
+    for version in (9, 1):
+        assets = [
+            {
+                "name": f"{kind}{version}.json",
+                "browser_download_url": f"https://asset/{kind}{version}.json",
+            }
+            for kind in ("single", "dual")
+        ]
+        http.responses[api] = json.dumps({"assets": assets})
+        for asset in assets:
+            http.responses[asset["browser_download_url"]] = json.dumps(
+                {"apps": [_record_with("name", f"Release {version}")]}
+            )
+        assert [app.name for app in bboi.fetch(http, config)] == [
+            f"Release {version}"
+        ] * 2
+    assert http.urls == [
+        api,
+        "https://asset/single9.json",
+        "https://asset/dual9.json",
+        api,
+        "https://asset/single1.json",
+        "https://asset/dual1.json",
+    ]
