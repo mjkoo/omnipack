@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+from email.message import Message
 from http.client import IncompleteRead
 from pathlib import Path
+from urllib.error import HTTPError
 from urllib.request import Request
 
 import pytest
@@ -24,27 +26,32 @@ from tests.test_source_generation_boundaries import (
 LIST_API = "https://api.github.com/repos/example/tracker/releases?per_page=100&page=1"
 
 
-@pytest.mark.parametrize("mode", ["stable", "prerelease", "title"])
+RELEASE_RULES = [
+    pytest.param({}, API, False, id="stable"),
+    pytest.param({"includePrereleases": True}, LIST_API, True, id="prerelease"),
+    pytest.param({"filterReleaseTitlesByRegEx": "^v7$"}, LIST_API, False, id="title"),
+]
+
+
+def _release_body(endpoint: str, selected: dict[str, object]) -> bytes:
+    return json.dumps(selected if endpoint == API else [selected]).encode()
+
+
+@pytest.mark.parametrize(("settings", "endpoint", "prerelease"), RELEASE_RULES)
 @pytest.mark.parametrize("retry", [False, True])
 def test_generation_looks_up_only_the_rule_selected_release_endpoint(
     tmp_path: Path,
-    mode: str,
+    settings: dict[str, object],
+    endpoint: str,
+    prerelease: bool,
     retry: bool,
 ) -> None:
-    settings = (
-        {"includePrereleases": True}
-        if mode == "prerelease"
-        else {"filterReleaseTitlesByRegEx": "^v7$"}
-        if mode == "title"
-        else {}
-    )
     source = setup(tmp_path, {"kind": "apk", "additionalSettings": settings})
-    endpoint = API if mode == "stable" else LIST_API
-    selected = release(name="v7", prerelease=mode == "prerelease")
+    selected = release(name="v7", prerelease=prerelease)
     transport = AssetTransport(
         {
             source: README,
-            endpoint: json.dumps(selected if mode == "stable" else [selected]).encode(),
+            endpoint: _release_body(endpoint, selected),
             ASSET: apk("org.example.app"),
         }
     )
@@ -70,6 +77,32 @@ def test_generation_looks_up_only_the_rule_selected_release_endpoint(
     rendered_settings = json.loads(entry["additionalSettings"])
     for key, value in settings.items():
         assert rendered_settings[key] == value
+
+
+@pytest.mark.parametrize(("settings", "endpoint", "prerelease"), RELEASE_RULES)
+def test_failed_release_lookup_never_asks_the_other_endpoint(
+    tmp_path: Path, settings: dict[str, object], endpoint: str, prerelease: bool
+) -> None:
+    source = setup(tmp_path, {"kind": "apk", "additionalSettings": settings})
+    other = LIST_API if endpoint == API else API
+    transport = AssetTransport(
+        {
+            source: README,
+            endpoint: HTTPError(endpoint, 404, "Not Found", Message(), None),
+            other: _release_body(other, release(name="v7", prerelease=prerelease)),
+            ASSET: apk("org.example.app"),
+        }
+    )
+    http = SourceHttpClient(
+        HttpConfig({}), transport=transport, retries=1, sleep=lambda _: None
+    )
+    result = generate_codm(tmp_path, http=http)
+    assert result["status"] == "failed"
+    assert [item["url"] for item in result["unresolved"]] == [PROJECT]
+    assert [request.full_url for request, _ in transport.requests] == [
+        source,
+        endpoint,
+    ]
 
 
 @pytest.mark.parametrize(
