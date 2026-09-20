@@ -7,12 +7,12 @@ and changes no code.
 
 ## 1. Characterize ingestion behavior the specs now state
 
-- [ ] 1.1 Add tests that an extras record and a committed codm2000 record carrying a top-level `meta` ingest successfully and render no `meta`, while another unmodeled field on the same record is retained; verify with `just test`
-- [ ] 1.2 Add a test that a committed codm2000 record at a github.com URL declaring the HTML source type ingests as HTML, and one that a codm2000 record omitting `overrideSource` derives GitHub; verify with `just test`
-- [ ] 1.3 Add tests that an RJNY record and a BBoi34 record carrying no `overrideSource` fail the build naming the entry as an unsupported source type; verify with `just test`
-- [ ] 1.4 Add tests that an empty configured location fails naming the source for BBoi34 and for codm2000, beside the existing RJNY case; verify with `just test`
-- [ ] 1.5 Add a build-level test that a committed track-only resource keeps its resource id, track-only flag and manual-installation description in dual while the app it extends keeps its own entry in both packs; verify with `just test`
-- [ ] 1.6 Independent evidencing review of group 1: each new test maps to a named scenario in the `source-ingestion` delta, and none asserts behavior the delta does not state
+- [x] 1.1 Add tests that an extras record and a committed codm2000 record carrying a top-level `meta` ingest successfully and render no `meta`, while another unmodeled field on the same record is retained; verify with `just test`
+- [x] 1.2 Add a test that a committed codm2000 record at a github.com URL declaring the HTML source type ingests as HTML, and one that a codm2000 record omitting `overrideSource` derives GitHub; verify with `just test`
+- [x] 1.3 Add tests that an RJNY record and a BBoi34 record carrying no `overrideSource` fail the build naming the entry as an unsupported source type; verify with `just test`
+- [x] 1.4 Add tests that an empty configured location fails naming the source for BBoi34 and for codm2000, beside the existing RJNY case; verify with `just test`
+- [x] 1.5 Add a build-level test that a committed track-only resource keeps its resource id, track-only flag and manual-installation description in dual while the app it extends keeps its own entry in both packs; verify with `just test`
+- [x] 1.6 Independent evidencing review of group 1: each new test maps to a named scenario in the `source-ingestion` delta, and none asserts behavior the delta does not state
 
 ## 2. Characterize composition behavior the specs now state
 
