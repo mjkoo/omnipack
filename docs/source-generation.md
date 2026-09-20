@@ -283,11 +283,15 @@ and validates the newer `main` and proposes or closes against it.
 
 ### PR checks and the PR-creation setting
 
-A PR that this workflow opens is created with the job's own token, so it
-does not trigger the project's `pull_request` CI. The PR body links the
+A PR that this workflow opens is created with the job's own token, so the
+project's `pull_request` CI does not run on it by itself: GitHub creates those
+runs but holds them until a maintainer approves them. The PR body links the
 workflow run whose test, build and verification steps validated its
 content. If repository rules require `pull_request` checks before merging, a
-maintainer can close and reopen the PR by hand to start them.
+maintainer with write access can start them with **Approve workflows to run**
+in the PR's merge box. A `pull_request` run that the Actions list shows as
+failed with no jobs was never started and is not a verdict on the PR's
+content.
 
 Creating or editing a PR through the job token also requires the
 repository's **Allow GitHub Actions to create and approve pull requests**
