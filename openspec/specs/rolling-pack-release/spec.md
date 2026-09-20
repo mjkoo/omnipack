@@ -17,8 +17,7 @@ pack-curation requires, so the two SHALL change together. The release SHALL
 carry the exact ownership marker `<!-- omnipack:rolling-pack -->`. The publisher
 SHALL NOT create per-run or per-variant releases, or delete and recreate the
 established release or tag. A pre-existing unowned or malformed release SHALL
-block release synchronization without authorizing overwrite or blocking
-otherwise valid main publication. The release tag SHALL remain a stable locator;
+block release synchronization without authorizing overwrite. The release tag SHALL remain a stable locator;
 recorded published commit metadata SHALL identify asset provenance rather than
 implying that the tag advances with every asset upload.
 
@@ -33,7 +32,38 @@ implying that the tag advances with every asset upload.
 - **THEN** release synchronization fails without altering that release
 - **AND** the independently confirmed main outcome remains intact
 
-### Requirement: Revision changes follow completed content publication
+### Requirement: Release writes require an established main outcome
+
+Release assets SHALL only come from a verified pair associated with a
+successful main push or a verified main no-op; a failed or erroring main push
+SHALL prohibit release mutation. Release mutation SHALL also require main to
+still be at the commit that pair came from; otherwise the release stage SHALL
+fail without writes, so a rerun of an earlier run's publisher cannot move the
+release back to an older pair. A push that lands SHALL
+authorize release mutation only while the publisher can establish that pushed
+commit as its own local revision; a run that cannot SHALL fail with the push
+reported and without release writes, so no run publishes the pair it happens to
+hold under a commit it did not establish.
+
+#### Scenario: The push lands but its commit cannot be established
+
+- **WHEN** the push of the verified commit succeeds and the publisher then cannot make that commit its own local revision
+- **THEN** the run fails with the published commit reported and performs no release write
+- **AND** a later verified run whose output is already on main synchronizes the release as a verified no-op
+
+#### Scenario: Main outcome is uncertain
+
+- **WHEN** the main push reports an error, whether or not the commit actually landed
+- **THEN** the run fails and performs no release writes
+- **AND** a later run that finds the commit on main treats it as a verified no-op and synchronizes the release
+
+#### Scenario: Write job rerun after main advanced
+
+- **WHEN** the write job of an earlier run is rerun after a later run changed main
+- **THEN** it fails without a push or release write, and the summary reports that main advanced
+- **AND** the release keeps the later run's pair and revision
+
+### Requirement: The revision advances only when the published pair changes
 
 The release SHALL record the SHA-256 digests of its published JSON pair and the
 main commit they came from. On each synchronization the publisher SHALL compare
@@ -50,15 +80,7 @@ the new digests and commit. That edit SHALL replace the whole release body with
 fixed text carrying the ownership marker, the stable download locations and the
 digest record, so no seed statement or earlier body text survives it.
 Documentation-only, cache-only and unchanged nightly runs SHALL NOT advance the
-revision. Release assets SHALL only come from a verified pair associated with a
-successful main push or a verified main no-op; a failed or erroring main push
-SHALL prohibit release mutation. Release mutation SHALL also require main to
-still be at the commit that pair came from, so a rerun of an earlier run's
-publisher cannot move the release back to an older pair. A push that lands SHALL
-authorize release mutation only while the publisher can establish that pushed
-commit as its own local revision; a run that cannot SHALL fail with the push
-reported and without release writes, so no run publishes the pair it happens to
-hold under a commit it did not establish.
+revision.
 
 GitHub asset replacement is not atomic across the pair. The publisher SHALL NOT
 claim atomic download visibility during uploads. If synchronization stops before
@@ -99,12 +121,7 @@ visibly without changing repository settings or touching other releases.
 - **WHEN** a verified run's pair matches the recorded digests and both served-asset digests
 - **THEN** no asset or revision changes, even if main received a cache or catalog commit
 
-#### Scenario: The push lands but its commit cannot be established
-
-- **WHEN** the push of the verified commit succeeds and the publisher then cannot make that commit its own local revision
-- **THEN** the run fails with the published commit reported and performs no release write
-- **AND** a later verified run whose output is already on main synchronizes the release as a verified no-op
-### Requirement: Bootstrap and device acceptance are explicit
+### Requirement: Bootstrap is explicit
 
 Initial activation SHALL establish an owned revision-zero prerelease as a
 tracking seed before routine rolling-release synchronization, created by a
@@ -112,18 +129,14 @@ documented one-time maintainer command. The seed SHALL carry the ownership
 marker, no recorded digests, and a statement that JSON assets are not yet
 published. Structural pack verification SHALL NOT query the seed. Routine
 publishers SHALL check the release's existence, ownership marker, title and
-published-prerelease state at the release stage after a successful main push or
-a verified main no-op: the release SHALL be a prerelease that is neither a draft
+published-prerelease state at the release stage: the release SHALL be a prerelease that is neither a draft
 nor immutable. An absent, unowned, malformed, draft, non-prerelease or immutable
 release SHALL fail that stage with bootstrap guidance and without release
-writes, without undoing or preventing main publication. Routine publishing
+writes. What that failure means for main and for the workflow is stated by
+"Release synchronization follows main publication without gating it"
+in nightly-publishing. Routine publishing
 SHALL NOT create the seed. The first verified asset publication SHALL advance
 revision zero to one.
-
-Maintainer acceptance SHALL check both stable JSON downloads and Obtainium import,
-unchanged polling, revision-change notification, acknowledgement and re-import.
-Controlled tests SHALL NOT be described as completed device or live publication
-acceptance.
 
 #### Scenario: First normal run has no seed
 
