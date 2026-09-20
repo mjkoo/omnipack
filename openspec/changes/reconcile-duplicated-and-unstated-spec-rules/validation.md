@@ -160,3 +160,55 @@ It confirmed all task-to-code/test mappings, completion-timestamp enforcement,
 the preserved derived findings, verification schema 4, unchanged build schema 3
 throughout the documentation, and only intentional rejection tests referencing
 the retired report state.
+
+## Main-spec synchronization
+
+Commit `edd890f` implements tasks 6.1-6.5. Commit `5ca19e6` records task 6.6's
+independent evidencing review, approved with no findings.
+
+| Task | Evidence |
+| --- | --- |
+| 6.1 | Seven selected deltas synchronized without archiving; `openspec validate --specs --strict` passes 10/10; `openspec list --specs --json` totals 70 requirements |
+| 6.2 | Purposes updated for family composition, source identity and request credentials, publication/catalog/release handling, and source-generation CLI coverage |
+| 6.3 | Shared HTTP helper has an antecedent; stale-exclusion vocabulary is consistent; the overlay scenario names the patch field; heading separation and the three specified prose rewraps are applied |
+| 6.4 | Eight scenario titles now describe their bodies; modified requirements use identical titles in delta and main spec; both strict validations pass |
+| 6.5 | Grep over main specs, the active change, README, docs, source and tests found old names only in required rename metadata and the task edit list, with no stale normative reference |
+| 6.6 | Independent comparison: all 24 modified blocks match after trimming boundary whitespace, and all 15 quoted cross-capability pointers resolve to exact requirement titles |
+
+The parked selector-URL concern is resolved by stating normalization, a readable
+host, a valid numeric port when present and no whitespace in both delta and main
+spec. The existing scenario now includes invalid ports, supported by the earlier
+candidate-rule and pin tests. No selector acceptance behavior changed.
+
+The proposal's spec findings are covered by the synchronized requirements:
+source metadata/type handling and composition pointers; single owners for
+selection, exclusion and eligibility; curation outcome guards; generation
+regex/settings/tracking/summary wording; publication-attempt and rerun outcomes;
+and report freshness/display ownership. Retired change-era sentences,
+duplicated statements, stale titles, purposes and formatting are corrected in
+the same spec commit. The report-state and diagnostic findings are covered by
+the implementation evidence above. The intentionally untested diagnostic and
+workflow values remain listed under "Deliberately left alone."
+
+## Final validation before the whole-branch review
+
+Task 7.1: `just check-all` exited zero. The first sandboxed attempt passed the
+796-test suite and offline verification but could not access the Nix daemon for
+the Python 3.12 check. Re-running with daemon access completed all checks:
+
+- Locked dependency check, formatting, lint and types passed.
+- CPython 3.14.7: 796 tests passed in 25.41 seconds, total coverage 94%.
+- Offline `pack verify` passed.
+- CPython 3.12.14 write-side checks: 108 tests passed in 18.45 seconds.
+- Actionlint and zizmor passed; zizmor reported no findings.
+- Offline documentation links: 552 total, 332 unique, 53 checked, zero errors.
+- Nix formatting changed zero files; flake evaluation passed for the local
+  `aarch64-darwin` system. Nix emitted its expected notice that incompatible
+  systems were omitted; no cross-platform flake build is claimed.
+
+Task 7.2: rendering the same captured-input configuration after implementation
+produced bytes identical to the baseline, not merely equivalent JSON. Single
+remains 100927 bytes with SHA-256
+`e367488d7c67ad6eb3d07395f5b60b111147859d292e0050c4d1eab61d0534a5`;
+dual remains 128017 bytes with SHA-256
+`bdc5a9645d42d81ce3256f971af342a75120622d1c3414914c4cd9c50ea9df47`.
