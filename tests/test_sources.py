@@ -27,7 +27,7 @@ from omnipack.sources import (
     ingest_all,
     rjny,
 )
-from omnipack.urls import gitlab_project_path, normalize_project_url
+from omnipack.urls import gitlab_project_path
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -906,9 +906,15 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
 
 
 @pytest.mark.parametrize("prefix", ["https://gitlab.com", "HTTPS://GitLab.com"])
-@pytest.mark.parametrize("path", ["Group/Project", "/Group//Sub%47roup/Project/"])
+@pytest.mark.parametrize(
+    ("path", "project_path"),
+    [
+        ("Group/Project", "Group/Project"),
+        ("/Group//Sub%47roup/Project/", "Group/Sub%47roup/Project"),
+    ],
+)
 def test_gitlab_acceptance_preserves_path_case_and_encoding(
-    prefix: str, path: str
+    prefix: str, path: str, project_path: str
 ) -> None:
     url = f"{prefix}/{path}"
     [app] = extras.fetch(
@@ -923,12 +929,7 @@ def test_gitlab_acceptance_preserves_path_case_and_encoding(
     )
     assert app.url == url
     assert app.source_type is SourceType.GITLAB
-    assert gitlab_project_path(url) == "/".join(
-        part for part in path.split("/") if part
-    )
-    assert normalize_project_url(
-        "https://www.gitlab.com/Group/Project"
-    ) == normalize_project_url("https://gitlab.com/Group/Project")
+    assert gitlab_project_path(url) == project_path
 
 
 @pytest.mark.parametrize("pattern", ["single*.json", "dual*.json"])

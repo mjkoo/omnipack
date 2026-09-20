@@ -10,6 +10,7 @@ import pytest
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import (
     apply_composition_policy,
+    candidate_selector,
     parse_composition_policy,
 )
 from omnipack.merge import compose
@@ -198,12 +199,7 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
         if item.variant is Variant.SINGLE
     }
     families = {
-        (
-            app.provenance.source,
-            app.origin,
-            app.original_id,
-            normalize_project_url(app.url),
-        ): app.family or f"package:{app.id}"
+        candidate_selector(app).key: app.family or f"package:{app.id}"
         for app in apply_composition_policy(
             parse_composition_policy(current_configuration.policy),
             current_configuration.candidates,

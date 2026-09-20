@@ -35,31 +35,37 @@ def test_normalize_project_url(url: str, normalized: str) -> None:
         ),
         ("https://codeberg.org/Owner/Repo", "https://codeberg.org/owner/repo", False),
         ("https://github.com/owner/one", "https://github.com/owner/two", False),
+        (
+            "https://www.gitlab.com/Group/Project",
+            "https://gitlab.com/Group/Project",
+            True,
+        ),
+        (
+            "https://gitlab.com/Owner/Repo",
+            "https://gitlab.com/Owner/Repo?view=1",
+            False,
+        ),
+        (
+            "https://example.com/Owner/Repo",
+            "https://example.com/Owner/Repo?view=1",
+            False,
+        ),
+        (
+            "https://gitlab.com/Owner/Repo",
+            "https://gitlab.com/Owner/Repo#section",
+            False,
+        ),
+        (
+            "https://example.com/Owner/Repo",
+            "https://example.com/Owner/Repo#section",
+            False,
+        ),
+        ("https://github.com/Owner/Repo", "https://github.com:443/Owner/Repo", False),
+        ("https://gitlab.com/Owner/Repo", "https://gitlab.com:443/Owner/Repo", False),
+        ("https://example.com/Owner/Repo", "https://example.com:443/Owner/Repo", False),
     ],
 )
 def test_normalized_urls_identify_the_same_project(
     left: str, right: str, same: bool
 ) -> None:
     assert (normalize_project_url(left) == normalize_project_url(right)) is same
-
-
-@pytest.mark.parametrize(
-    ("host", "suffix"),
-    [
-        ("gitlab.com", "?view=1"),
-        ("example.com", "?view=1"),
-        ("gitlab.com", "#section"),
-        ("example.com", "#section"),
-        ("github.com", ":443"),
-        ("gitlab.com", ":443"),
-        ("example.com", ":443"),
-    ],
-)
-def test_project_identity_retains_non_github_query_fragment_and_every_port(
-    host: str, suffix: str
-) -> None:
-    original = f"https://{host}/Owner/Repo"
-    changed = (
-        f"https://{host}:443/Owner/Repo" if suffix == ":443" else original + suffix
-    )
-    assert normalize_project_url(original) != normalize_project_url(changed)
