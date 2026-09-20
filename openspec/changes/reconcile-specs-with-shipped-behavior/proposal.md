@@ -97,14 +97,15 @@ None.
   release metadata lookup, carrying its live fallback rule and scenario into
   the union and precedence requirement; state that a policy selector names a
   supported source and an origin belonging to that source; state the fields an
-  overlay record may carry and the project URL it must name.
+  overlay record may carry and the form its `url` must take.
 - `source-ingestion`: state upstream asset reading as an outcome with the
   required asset count per configured pattern; state that query and fragment
   identify a non-GitHub project and that an explicit port identifies a project
   on every host, while a GitHub link reduces to owner and repository; state that a committed catalog repeating an id fails ingestion
   while upstream duplicates reach composition; state the native GitLab URL
-  boundary, including that its host must be exactly `gitlab.com`, and that it is
-  an earlier stage than normalized comparison rather than the same rule; restate
+  boundary, including that its host must be `gitlab.com` without a `www.`
+  prefix, and that it is an earlier stage than normalized comparison rather than
+  the same rule; restate
   the package-id clause as a maintainer obligation; rename
   the committed-catalog requirement.
 - `readme-source-generation`: correct the prerelease resolution scenario, scope

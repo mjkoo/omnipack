@@ -185,16 +185,19 @@ in each output, including when family rules separate candidates sharing an id.
 
 The overlay file SHALL contain an array of records with effective package `id`,
 project `url` and object `patch`. An overlay document that is not an array
-SHALL fail with the overlay identified. A record SHALL carry no field other than
-`id`, `url` and `patch`, and SHALL fail with the record and the unknown field
-identified otherwise. A record's `id` and its `url` SHALL each be a nonempty
-string, failing with the record and the offending field identified. A nonempty
-`url` SHALL additionally identify a project, and one that does not SHALL fail
-with the record, the field and the offending value identified, because there the
-value is what the maintainer has to look at. Each record SHALL apply to the matching
-selected entry in every variant that selects it. Matching SHALL use both
-effective id and normalized project URL. Duplicate selectors SHALL fail. A
-non-object patch, including null, SHALL fail.
+SHALL fail with the overlay identified. A record SHALL carry no field other
+than `id`, `url` and `patch`, and SHALL fail with the record and the unknown
+field identified otherwise. A record's `id` and its `url` SHALL each be a
+nonempty string, failing with the record and the offending field identified. A
+nonempty `url` SHALL additionally be one a host can be read from, and one no
+host can be read from SHALL fail with the record, the field and the offending
+value identified, because there the value is what the maintainer has to look
+at. Each record SHALL apply to the matching selected entry in every variant
+that selects it. Matching SHALL use both effective id and normalized project
+URL. A record whose selector matches no selected entry SHALL fail with that
+selector identified, which is where a mistyped `url` that still carries a host
+is caught. Duplicate selectors SHALL fail. A non-object patch, including null,
+SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
 The protected patch fields SHALL be exactly `id`, `url`, `overrideSource`,

@@ -66,7 +66,7 @@ discarding the rest of its path, its query and its fragment, and drops a leading
 `www.` on every host, so the adapter's boundary and the comparison identity are
 two stages that disagree about `www.gitlab.com`; a policy selector must name one of the supported sources and an
 origin belonging to that source; and an overlay record carrying any field other
-than `id`, `url` and `patch`, or a `url` that is not a project URL, fails with
+than `id`, `url` and `patch`, or a `url` no host can be read from, fails with
 the record identified.
 
 ## Goals / Non-Goals
@@ -163,16 +163,19 @@ would have to be maintained against the code forever.
 `source-ingestion` carried two incompatible notions of "the same host" without
 saying they were different stages. Comparison drops a leading `www.` on every
 host, so `www.gitlab.com/group/project` and `gitlab.com/group/project` are one
-project; the native GitLab adapter reads the project path out of the URL as
-written, before any normalization, and rejects the `www.` spelling. Both are
-correct, and neither is a bug to be fixed in code.
+project; the native GitLab adapter decides on the URL's own scheme, host and
+path, before any normalization, and rejects the `www.` spelling. Scheme and host
+are compared without regard to case at both stages, so the disagreement is about
+the `www.` prefix and the rest of the URL, not about spelling in capitals. Both
+are correct, and neither is a bug to be fixed in code.
 
 They are therefore stated as what they are. The normalization requirement says
 it defines comparison identity, names what is matched by it, and says it does
-not decide acceptance. The GitLab requirement says it reads the raw URL at an
-earlier stage and that a URL comparing equal to an acceptable one may still be
-rejected. The alternative, aligning the two so that one host rule serves both,
-would change shipped behavior, which this change does not do.
+not decide acceptance. The GitLab requirement says it decides on the raw URL at
+an earlier stage, reading the project path exactly as written, and that a URL
+comparing equal to an acceptable one may still be rejected. The alternative,
+aligning the two so that one host rule serves both, would change shipped
+behavior, which this change does not do.
 
 ### The committed catalog's build-time rule moves, its test rules do not
 

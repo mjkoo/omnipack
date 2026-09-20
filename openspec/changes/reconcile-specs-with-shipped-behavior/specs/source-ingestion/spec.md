@@ -153,7 +153,7 @@ composition.
 
 ### Requirement: Public GitLab entries keep native source identity
 
-The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when it is an HTTPS URL whose host is exactly `gitlab.com`, with no `www.` prefix and no port, carrying no credentials, whose path is between two and twenty-one components naming a project and its namespaces, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project. Existing non-GitHub URL comparison semantics SHALL remain unchanged.
+The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when its scheme is `https` and its host is `gitlab.com`, each compared without regard to case, with no `www.` prefix and no port, carrying no credentials, and whose path, read exactly as written, is between two and twenty-one components naming a project and its namespaces, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project. Existing non-GitHub URL comparison semantics SHALL remain unchanged.
 
 This acceptance boundary is an earlier and separate stage from normalized
 comparison: the native adapter reads the project path out of the URL as the
@@ -162,8 +162,9 @@ equal to an acceptable one MAY still be rejected here. A `www.gitlab.com`
 spelling compares equal to the canonical one, because comparison drops a leading
 `www.`, and is nonetheless not a native GitLab project URL; an explicit port is
 rejected here and, being retained in the normalized form, also makes a different
-project under comparison. Acceptance SHALL therefore be decided on the URL as
-written rather than on its comparison identity.
+project under comparison. Acceptance SHALL therefore be decided on the URL's own
+scheme, host and path rather than on its comparison identity, which additionally
+drops a leading `www.` and folds a GitHub link to owner and repository.
 
 Package ids for these explicit extras SHALL be supplied by the maintainer who adds the entry, from recorded primary APK manifest evidence as any other identity decision is; the pipeline SHALL NOT verify them, because adding GitLab SHALL NOT extend generated GitHub package discovery to arbitrary hosts.
 
