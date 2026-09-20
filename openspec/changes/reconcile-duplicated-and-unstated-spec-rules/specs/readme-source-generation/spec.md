@@ -268,8 +268,8 @@ modified or staged. Diagnostics SHALL
 identify the base revision, catalog changes, skipped links, resolution results,
 tracking outcomes, effective policy, retained failures and pack validation
 outcome. The base revision SHALL appear in the PR body and in the run summary
-of a run whose staging succeeds; a run whose staging fails SHALL summarize the
-failing stage and its reason instead. The pack validation outcome SHALL be the reported results of the run's test,
+of a run whose staging succeeds; a run whose staging fails SHALL summarize
+that staging failed and its reason instead. The pack validation outcome SHALL be the reported results of the run's test,
 build and verification steps.
 
 #### Scenario: Candidate changes a pinned identity

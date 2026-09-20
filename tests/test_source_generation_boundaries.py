@@ -182,9 +182,11 @@ def test_duplicate_order_and_nested_paths():
     [
         r"\Aapp",
         r"app\Z",
+        r"app\q",
         "(?i)app",
         "(?s:app)",
         "(?P<x>app)",
+        "(?<=a)b",
         "a++",
         r"\123",
         "(?#comment)app",
@@ -261,6 +263,76 @@ def test_tracker_instruction_requires_named_canonical_host(instruction):
                 },
             }
         )
+
+
+def test_track_only_rule_requires_a_nonempty_rationale():
+    with pytest.raises(PolicyError, match=f"{PROJECT}: rationale"):
+        parse_project_policy(
+            {
+                "schemaVersion": 1,
+                "projects": {
+                    PROJECT: {
+                        "kind": "track-only",
+                        "trackerId": "123",
+                        "installation": (
+                            "Install Host from https://github.com/example/host"
+                        ),
+                    }
+                },
+            }
+        )
+
+
+@pytest.mark.parametrize("fallback", [True, False], ids=["enabled", "disabled"])
+def test_generated_apk_entry_preserves_consumer_fallback_setting(
+    tmp_path: Path, fallback: bool
+) -> None:
+    source = setup(
+        tmp_path,
+        {
+            "kind": "apk",
+            "additionalSettings": {"fallbackToOlderReleases": fallback},
+        },
+    )
+
+    result, _ = run(tmp_path, source)
+
+    assert result["status"] == "success"
+    [entry] = json.loads(
+        (tmp_path / ".build/source-generation/codm/catalog.json").read_bytes()
+    )["apps"]
+    settings = json.loads(entry["additionalSettings"])
+    assert settings["fallbackToOlderReleases"] is fallback
+
+
+def test_generated_tracking_entry_preserves_release_title_filter(
+    tmp_path: Path,
+) -> None:
+    pattern = r"^Resource v[0-9]+$"
+    source = setup(
+        tmp_path,
+        {
+            "kind": "track-only",
+            "trackerId": "123",
+            "rationale": "A resource installed by Host.",
+            "installation": "Install Host from https://github.com/example/host",
+            "additionalSettings": {"filterReleaseTitlesByRegEx": pattern},
+        },
+    )
+    listed = API.replace("/latest", "?per_page=100&page=1")
+    http = MappingHttp(
+        {source: README, listed: [release(name="Resource v7", assets=[])]}
+    )
+
+    result = generate_codm(tmp_path, http=http)
+
+    assert result["status"] == "success"
+    [entry] = json.loads(
+        (tmp_path / ".build/source-generation/codm/catalog.json").read_bytes()
+    )["apps"]
+    settings = json.loads(entry["additionalSettings"])
+    assert settings["trackOnly"] is True
+    assert settings["filterReleaseTitlesByRegEx"] == pattern
 
 
 @pytest.mark.parametrize(
