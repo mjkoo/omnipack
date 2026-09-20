@@ -143,3 +143,19 @@ The scoped independent re-review approved `f862740`, confirmed all six
 acceptance checks plus the controlled-test limitation, and closed the sole
 Important finding with no remaining findings. It confirmed the corrected
 documentation task and the sentence-map acceptance row are complete.
+
+## Completion
+
+A fresh completion auditor confirmed all 8 checked tasks at `a8073a1`, each
+with an implementing commit and concrete validation evidence. No task was
+unevidenced, and no blocking finding remained.
+
+The final `just check-all` after that audit passed with exit 0: 758 Python tests,
+105 CPython 3.12 write-side tests, lock/format/lint/type checks, offline pack
+verification, workflow linting, documentation links, Nix formatting and the host
+flake check. Only the previously disclosed offline-linter and incompatible-system
+advisories remained. The working tree was clean for that run.
+
+Implementation is complete. The change remains active; the separate verification
+and archive workflows have not run. No device or live publication acceptance is
+claimed.
