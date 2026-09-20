@@ -194,9 +194,7 @@ host can be read from SHALL fail with the record, the field and the offending
 value identified, because there the value is what the maintainer has to look
 at. Each record SHALL apply to the matching selected entry in every variant
 that selects it. Matching SHALL use both effective id and normalized project
-URL. A record whose selector matches no selected entry SHALL fail with that
-selector identified, which is where a mistyped `url` that still carries a host
-is caught. Duplicate selectors SHALL fail. A non-object patch, including null,
+URL. Duplicate selectors SHALL fail. A non-object patch, including null,
 SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
@@ -234,6 +232,18 @@ denylist's responsibility.
 - **WHEN** an overlay record carries a field other than `id`, `url` and `patch`
 - **THEN** the build fails with that record and the unknown field identified,
   rather than ignoring the field or treating the record as matching nothing
+
+#### Scenario: Overlay record has a blank or non-string key
+
+- **WHEN** an overlay record's `id` or `url` is blank or is not a string
+- **THEN** the build fails with that record and the offending field identified
+
+#### Scenario: Overlay record's URL has no host
+
+- **WHEN** an overlay record's `url` is a nonempty string no host can be read
+  from, such as `/owner/repo`
+- **THEN** the build fails with that record, the field and the offending value
+  identified
 
 #### Scenario: Overlay document is not an array
 

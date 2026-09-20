@@ -164,15 +164,14 @@ would have to be maintained against the code forever.
 saying they were different stages. Comparison drops a leading `www.` on every
 host, so `www.gitlab.com/group/project` and `gitlab.com/group/project` are one
 project; the native GitLab adapter decides on the URL's own scheme, host and
-path, before any normalization, and rejects the `www.` spelling. Scheme and host
-are compared without regard to case at both stages, so the disagreement is about
-the `www.` prefix and the rest of the URL, not about spelling in capitals. Both
+path, before any normalization, and rejects the `www.` spelling. Both
 are correct, and neither is a bug to be fixed in code.
 
 They are therefore stated as what they are. The normalization requirement says
 it defines comparison identity, names what is matched by it, and says it does
 not decide acceptance. The GitLab requirement says it decides on the raw URL at
-an earlier stage, reading the project path exactly as written, and that a URL
+an earlier stage, reading the project path's components with their case and
+encoding as written, and that a URL
 comparing equal to an acceptable one may still be rejected. The alternative,
 aligning the two so that one host rule serves both, would change shipped
 behavior, which this change does not do.
@@ -184,7 +183,10 @@ One of them, that a catalog repeating an entry id fails, is a build-time rule
 the ingestion adapter enforces on every build, and it contradicts an ingestion
 requirement that promises duplicates survive to composition. That rule is
 stated in `source-ingestion`, where the contradiction is, and the ingestion
-requirement is narrowed to the upstream catalogs it is true of.
+requirement is narrowed to the upstream catalogs it is true of. Document shape
+is checked on every build too, and `source-ingestion` already says so: a
+malformed committed catalog aborts the build as a failed fetch does, so nothing
+about it moves.
 
 The rest of the list is not a build-time rule, and moving any of it into
 `source-ingestion` would state a requirement no ingestion adapter implements,
@@ -217,8 +219,11 @@ A modified requirement restates its whole text and may gain scenarios, but
 dropping one forces removal and re-addition under a new name. Every rewrite
 here therefore keeps its scenario names and edits the WHEN and THEN in place,
 including the prerelease resolution scenario, the newest-release scenario, the
-duplicate-id scenario and the catalog check scenario. No scenario moves between
-requirements. The one requirement whose title carries retired vocabulary is
+duplicate-id scenario, the curated-setting scenario and the catalog check
+scenario. No scenario moves between surviving requirements. The one scenario
+that changes home, the dual fallback scenario, does so because its requirement
+is retired, and it is re-added unchanged under its original name. The one
+requirement whose title carries retired vocabulary is
 renamed through a rename section carrying no other edit, which is a normal
 change operation rather than a restructure, since the capability boundary does
 not move.
@@ -229,14 +234,14 @@ Removing the tracker's id, name, repository URL and release-title regex from
 normative text is only safe while something else fails when they change. The
 values live in reviewed configuration, and a regression check asserts the
 rendered tracker's identity, notification settings and exact rendered key set
-against it. That check is written but sits on a separate test branch that has
-not merged. Implementation confirms it is present in the working branch before
-the data is removed, so there is no window in which neither the requirement nor
-a check protects the tracker.
+against it. That check is on the default branch and this branch carries it.
+Implementation confirms it asserts all of that, and fails when the configured
+values change, before the data is removed, so there is no window in which
+neither the requirement nor a check protects the tracker.
 
 ## Risks / Trade-offs
 
-- The change is large for a review round: four capabilities, thirteen
+- The change is large for a review round: four capabilities, fourteen
   requirement operations and roughly a dozen scenarios touched. The mitigation is that no
   delta changes behavior, so each one can be checked against a named module
   rather than argued about.
@@ -246,25 +251,27 @@ a check protects the tracker.
   for a maintainer.
 - Retiring a requirement loses its text from the living specs. The rule worth
   keeping is carried forward explicitly, and the removal records where it went.
-- The tracker data removal depends on a check that has not landed on the
-  default branch. If that branch is abandoned, the removal has to be held back
-  or the check rewritten in this change.
+- Once the tracker's values leave normative text, the regression check is the
+  only thing that fails when they change. Weakening that check later leaves the
+  tracker unguarded with no requirement to fall back on.
 
 ## Migration Plan
 
 No configuration, workflow or data migration. No published artifact changes,
 because no shipped behavior changes.
 
-Implementation adds each new guard as a failing test first, confirms it fails
-for the stated reason against the current code, and confirms the code already
-satisfies it without modification. Any guard that does not pass against
-unmodified code means the delta misread the code, and the delta is corrected
-rather than the code.
+Every new guard is a characterization test: the code already satisfies it, so
+it passes on first run and cannot be watched failing the usual way.
+Implementation confirms each guard passes against unmodified code, then shows
+it is able to fail by breaking the guarded rule in a scratch edit, seeing the
+test fail for the stated reason, and reverting the edit, so no mutation reaches
+the diff. Any guard that does not pass against unmodified code means the delta
+misread the code, and the delta is corrected rather than the code.
 
 Before the tracker's per-app data is removed, implementation confirms the
-regression check over the rendered tracker is present in the working branch and
-fails when the reviewed configuration's tracker values change, rebasing onto
-the branch that carries that check if it has not merged.
+regression check over the rendered tracker covers its identity, release-title
+pattern, notification settings and exact key set, and fails when the reviewed
+configuration's tracker values change.
 
 Rollback reverts the deltas and the tests together; there is nothing else to
 undo.

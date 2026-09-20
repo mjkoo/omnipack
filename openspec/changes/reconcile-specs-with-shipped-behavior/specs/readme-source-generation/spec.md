@@ -130,9 +130,8 @@ URLs that normalize to the same form, naming that normalized project, because
 one project holding two entries in a reviewed catalog is an error in the
 catalog rather than a choice for composition. The candidate catalog cannot
 repeat a normalized project URL, because the README links it is built from are
-deduplicated in that same normalized form. This uniqueness SHALL be owned here,
-where generation enforces it, and no build-time ingestion check SHALL be
-required to repeat it.
+deduplicated in that same normalized form. Generation is the only stage that
+enforces this uniqueness, and no build-time ingestion check repeats it.
 
 #### Scenario: Duplicate URL spellings
 

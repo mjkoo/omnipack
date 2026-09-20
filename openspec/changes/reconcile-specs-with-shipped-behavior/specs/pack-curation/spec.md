@@ -57,14 +57,16 @@ NOT fail the suite.
 Validity is wider than what the pipeline rejects, so the suite MAY assert a
 validity rule no pipeline stage enforces, and doing so SHALL NOT be read as
 failing the catalog over which projects it contains or how they resolved. A rule
-the pipeline does enforce SHALL be stated where it is enforced rather than
-enumerated here, and no rule SHALL be attributed to a stage that does not check
-it: a build rejects a catalog that repeats an entry id, by "One package id may
-resolve differently per variant" in source-ingestion, while generation, reading
-the accepted catalog back, rejects a document whose shape is wrong or whose
-entries lack a string id and url, a catalog that repeats an entry id, and a
-catalog that holds one normalized project URL twice, by "Generation produces a
-deterministic Obtainium source catalog" in readme-source-generation.
+the pipeline does enforce is stated where it is enforced rather than enumerated
+here, and none is attributed to a stage that does not check it. A build rejects
+a malformed committed catalog, by "A failed fetch aborts the build" in
+source-ingestion, and one that repeats an entry id, by "One package id may
+resolve differently per variant" there. Generation, reading the accepted catalog
+back, rejects a document whose shape is wrong or whose entries lack a string id
+and url, a catalog that repeats an entry id, and a catalog that holds one
+normalized project URL twice, by "Generation produces a deterministic Obtainium
+source catalog" in readme-source-generation. Only the last of these is checked
+by generation alone.
 
 Two further validity rules are owed by the test suite, no pipeline stage having
 ever checked them, and are owned here alongside the other outcomes this
@@ -81,7 +83,7 @@ implementation of Obtainium source resolution or regex semantics.
 
 #### Scenario: Upstream refresh changes a curated setting
 
-- **WHEN** fixture source records change a setting covered by a maintained override
+- **WHEN** a source refresh changes a setting covered by a maintained override
 - **THEN** composed and rendered output retains the intended curated value
 
 #### Scenario: A designated curated extra stops winning single

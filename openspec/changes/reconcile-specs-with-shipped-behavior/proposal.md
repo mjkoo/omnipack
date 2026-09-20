@@ -132,18 +132,20 @@ One dependency reaches outside this change. Removing the tracker's id, name,
 repository URL and release-title regex from normative text is safe only while a
 regression check asserts the tracker's rendered identity, its notification
 settings and its exact rendered key set against reviewed configuration. That
-check exists on a separate test branch that has not landed on the default
-branch. Implementation therefore confirms the check is present before removing
-the data, and rebases onto the branch that carries it if it has not merged by
-then, so the requirement is never left without a regression net.
+check is on the default branch, among the tracker regression tests.
+Implementation confirms it covers all of that, and fails when the configured
+values change, before removing the data, so the requirement is never left
+without a regression net.
 
 Estimate: this change retires one requirement, "Selected build verification
 does not change composition", and adds none. It modifies twelve: three in
 `pack-composition`, four in `source-ingestion`, three in
 `readme-source-generation` and two in `pack-curation`, and renames one more in
 `source-ingestion` through a rename section carrying no other edit. It adds
-twelve scenarios and rewrites four in place, keeping every existing scenario
-name so no requirement has to be removed and re-added. It
+thirteen scenarios, carries one more unchanged from the retired requirement
+into the requirement that inherits its rule, and rewrites five in place,
+keeping every existing scenario name so no surviving requirement has to be
+removed and re-added. It
 adds no implementation lines, because no shipped behavior changes, and roughly
 140 to 210 test lines across ten new guards. No new requirement about
 retries, ownership, races, diagnostic formats or evidence is introduced: every
