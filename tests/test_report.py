@@ -35,7 +35,7 @@ def build_report(
 
 def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
-    assert run_verification(tmp_path)["schemaVersion"] == 3
+    assert run_verification(tmp_path)["schemaVersion"] == 4
     output = format_reports(tmp_path)
     assert "No build report recorded" in output
     assert "Evidence: current" in output
@@ -96,16 +96,6 @@ def test_missing_both_fails(tmp_path: Path) -> None:
         format_reports(tmp_path)
 
 
-def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
-    write_verification_report(
-        tmp_path, completedAt=None, complete=False, status="running"
-    )
-    output = format_reports(tmp_path)
-    assert "Status: running" in output
-    assert "Complete: no" in output
-    assert "Observed: 2026-09-01T00:00:00+00:00" in output
-
-
 @pytest.mark.parametrize(
     "mutation",
     [
@@ -122,6 +112,8 @@ def test_incomplete_verification_is_shown(tmp_path: Path) -> None:
         },
         {"inputs": {name: {"state": "unreadable"} for name in INPUT_PATHS}},
         {"completedAt": "yesterday"},
+        {"completedAt": None},
+        {"completedAt": "2026-09-01T00:00:01"},
         {"startedAt": "then"},
         {"complete": False},
         {"status": "running"},
@@ -143,7 +135,7 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    assert report["schemaVersion"] == 3
+    assert report["schemaVersion"] == 4
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
@@ -500,4 +492,39 @@ def test_malformed_diagnostic_elements_raise_report_format_error(
     fields: dict[str, Any] = {field: [record]}
     build_report(tmp_path, **fields)
     with pytest.raises(ReportFormatError, match="malformed build"):
+        format_reports(tmp_path)
+
+
+@pytest.mark.parametrize(
+    "mutation",
+    [{"complete": True}, {"complete": False, "status": "running", "completedAt": None}],
+)
+def test_removed_verification_state_is_rejected(tmp_path: Path, mutation: dict) -> None:
+    write_verification_report(tmp_path, **mutation)
+    with pytest.raises(ValueError, match="malformed verification report"):
+        format_reports(tmp_path)
+
+
+def test_previous_verification_schema_requires_regeneration(tmp_path: Path) -> None:
+    write_verification_report(tmp_path, schemaVersion=3, complete=True)
+    with pytest.raises(
+        ValueError,
+        match=r"unsupported verification report schema 3; regenerate with `pack verify`",
+    ):
+        format_reports(tmp_path)
+
+
+def test_verification_display_has_no_completion_flag(tmp_path: Path) -> None:
+    copy_inputs(tmp_path)
+    run_verification(tmp_path)
+    output = format_reports(tmp_path)
+    assert "Evidence: current" in output
+    assert "Complete:" not in output
+
+
+def test_verification_report_requires_completion_timestamp(tmp_path: Path) -> None:
+    report = write_verification_report(tmp_path)
+    del report["completedAt"]
+    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
+    with pytest.raises(ValueError, match="malformed verification report"):
         format_reports(tmp_path)

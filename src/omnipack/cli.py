@@ -136,7 +136,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     verify_parser.set_defaults(func=verify)
 
-    report_parser = subparsers.add_parser("report", help="print the last build report")
+    report_parser = subparsers.add_parser(
+        "report", help="print available build and verification reports"
+    )
     report_parser.set_defaults(func=report)
 
     generate_parser = subparsers.add_parser(

@@ -14,9 +14,9 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     result = verify.run_verification(tmp_path)
     assert result["status"] == "success"
-    assert result["complete"] is True
+    assert "complete" not in result
     assert result["mode"] == "offline"
-    assert result["schemaVersion"] == 3
+    assert result["schemaVersion"] == 4
     assert result["verifier"] == {"version": "2.0.0", "scope": "structural"}
     assert set(result["inputs"]) == {
         "single",
@@ -35,7 +35,7 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
 def test_missing_inputs_complete_as_failed_evidence(tmp_path: Path) -> None:
     result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"
-    assert result["complete"] is True
+    assert "complete" not in result
     assert all(value["state"] == "missing" for value in result["inputs"].values())
 
 
@@ -44,17 +44,22 @@ def test_interrupted_verification_does_not_replace_evidence(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, existing: bool
 ) -> None:
     copy_inputs(tmp_path)
-    completed = verify.run_verification(tmp_path) if existing else None
+    from omnipack.cli import main
+
+    path = tmp_path / verify.VERIFY_PATH
+    if existing:
+        verify.run_verification(tmp_path)
+    before = path.read_bytes() if existing else None
 
     def interrupted(_inputs: object) -> object:
         raise KeyboardInterrupt
 
     monkeypatch.setattr(verify, "validate_offline", interrupted)
+    monkeypatch.chdir(tmp_path)
     with pytest.raises(KeyboardInterrupt):
-        verify.run_verification(tmp_path)
-    path = tmp_path / verify.VERIFY_PATH
+        main(["verify"])
     if existing:
-        assert json.loads(path.read_text()) == completed
+        assert path.read_bytes() == before
     else:
         assert not path.exists()
 
@@ -127,10 +132,57 @@ def test_nonobject_exclusion_completes_failed_evidence(tmp_path: Path) -> None:
     (tmp_path / "config/deny.json").write_text("[null]")
     result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"
-    assert result["complete"] is True
+    assert "complete" not in result
     assert any(
         error["code"] == "invalid_composition_config"
         and "denylist[0] must be an object" in error["message"]
         for error in result["errors"]
     )
     assert json.loads((tmp_path / verify.VERIFY_PATH).read_text()) == result
+
+
+@pytest.mark.parametrize("name", ["single", "deny", "readme"])
+def test_unreadable_input_is_reported_once_without_being_called_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, name: str
+) -> None:
+    copy_inputs(tmp_path)
+    target = tmp_path / verify.INPUT_PATHS[name]
+    read_bytes = Path.read_bytes
+
+    def unreadable(path: Path) -> bytes:
+        if path == target:
+            raise PermissionError("fixture input is unreadable")
+        return read_bytes(path)
+
+    monkeypatch.setattr(Path, "read_bytes", unreadable)
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "failed"
+    assert result["inputs"][name] == {"state": "unreadable", "error": "PermissionError"}
+    input_errors = [
+        error
+        for error in result["errors"]
+        if error["message"].lower().startswith(f"{name} input")
+    ]
+    assert input_errors == [
+        {
+            "stage": "input",
+            "code": "input_unreadable",
+            "message": f"{name} input is unreadable",
+        }
+    ]
+
+
+@pytest.mark.parametrize("name", ["single", "deny", "readme"])
+def test_genuinely_missing_input_remains_reported_as_missing(
+    tmp_path: Path, name: str
+) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / verify.INPUT_PATHS[name]).unlink()
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "failed"
+    assert result["inputs"][name] == {"state": "missing"}
+    assert any(
+        error["message"].lower().startswith(f"{name} input is missing")
+        for error in result["errors"]
+    )
+    assert not any(error["code"] == "input_unreadable" for error in result["errors"])

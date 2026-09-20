@@ -21,12 +21,12 @@ untouched. The separate `pack generate-source codm` operation resolves only the
 explicitly configured codm source candidate; it does not extend structural
 verification or change committed files.
 
-Standalone verification writes schema 3 evidence to `.build/verify.json`, separately
+Standalone verification writes schema 4 evidence to `.build/verify.json`, separately
 from the build report. It reads every input once, checks and fingerprints exactly
 those captured bytes, and writes the report a single time, when the run completes;
 an interrupted run leaves no new report, so any report already on disk still
 describes only the inputs an earlier completed run checked. Reports contain offline
-mode, verifier identity, observation times, completion, status, contextual errors and
+mode, verifier identity, observation times, status, contextual errors and
 SHA-256 fingerprints of both distribution files, the denylist, the overlay,
 composition policy and README. Missing and unreadable inputs are explicit. HTTP
 configuration and environment credentials are not consulted or fingerprinted.

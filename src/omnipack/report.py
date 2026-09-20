@@ -144,14 +144,13 @@ def format_reports(root: Path) -> str:
             if verify["inputs"] == current and verify["verifier"] == verifier_identity()
             else "stale"
         )
-        observed = verify.get("completedAt") or verify["startedAt"]
+        observed = verify["completedAt"]
         lines = [
             "Verification report",
             f"Status: {verify['status']}",
             f"Evidence: {freshness}",
             _format_verification_mode(verify),
             f"Observed: {observed}",
-            f"Complete: {'yes' if verify['complete'] else 'no'}",
         ]
         lines.extend(_format_findings(verify.get("errors", []), "Error"))
         sections.append("\n".join(lines))
@@ -309,8 +308,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
     verifier = value.get("verifier")
     inputs = value.get("inputs")
     if (
-        value.get("status") not in ("running", "success", "failed")
-        or not isinstance(value.get("complete"), bool)
+        value.get("status") not in ("success", "failed")
         or value.get("mode") != "offline"
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
@@ -326,7 +324,6 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
             "mode",
             "startedAt",
             "completedAt",
-            "complete",
             "status",
             "inputs",
             "errors",
@@ -336,11 +333,8 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
         raise ReportFormatError("malformed verification report")
 
     if (
-        "completedAt" not in value
-        or not _timestamp(value["startedAt"])
-        or (value["complete"] and not _timestamp(value.get("completedAt")))
-        or (not value["complete"] and value.get("completedAt") is not None)
-        or (value["status"] == "running") == value["complete"]
+        not _timestamp(value["startedAt"])
+        or not _timestamp(value["completedAt"])
         or (value["status"] == "success" and bool(value["errors"]))
         or (value["status"] == "failed" and not value["errors"])
         or not all(_fingerprint(item) for item in inputs.values())
