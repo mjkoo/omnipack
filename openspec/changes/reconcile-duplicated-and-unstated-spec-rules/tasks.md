@@ -12,7 +12,7 @@ and changes no code.
 - [x] 1.3 Add tests that an RJNY record and a BBoi34 record carrying no `overrideSource` fail the build naming the entry as an unsupported source type; verify with `just test`
 - [x] 1.4 Add tests that an empty configured location fails naming the source for BBoi34 and for codm2000, beside the existing RJNY case; verify with `just test`
 - [x] 1.5 Add a build-level test that a committed track-only resource keeps its resource id, track-only flag and manual-installation description in dual while the app it extends keeps its own entry in both packs; verify with `just test`
-- [x] 1.6 Independent evidencing review of group 1: each new test maps to a named scenario in the `source-ingestion` delta, and none asserts behavior the delta does not state
+- [x] 1.6 Independent evidencing review of group 1: each new test maps to modified or retained scenarios in the `source-ingestion` spec, and none asserts behavior the spec does not state
 
 ## 2. Characterize composition behavior the specs now state
 
@@ -29,7 +29,7 @@ and changes no code.
 - [x] 3.3 Confirm existing tests cover every construct the regex delta names (other alphanumeric escapes, non-permitted `(?` groups, possessive quantifiers) and a missing rationale and unusable installation text for a track-only rule; add any case that is absent; verify with `just test`
 - [x] 3.4 Confirm the existing failed-staging test asserts that the summary reports staging failed and its reason, and add a test that a run whose staging succeeds carries the base revision in its summary; verify with `just test`
 - [x] 3.5 Add an end-to-end test that a retained failure which reproduces main's catalog closes an open proposal rather than updating it; verify with `just test`
-- [x] 3.6 Independent evidencing review of group 3: each test maps to a scenario or sentence in the `readme-source-generation` delta
+- [x] 3.6 Independent evidencing review of group 3: each test maps to a scenario or sentence in the `readme-source-generation` main spec or delta
 
 ## 4. Characterize publication behavior the specs now state
 
@@ -45,7 +45,7 @@ and changes no code.
 - [x] 5.5 Correct `pack report`'s help text to describe both reports; verify with `pack --help`
 - [x] 5.6 Update `docs/verification.md` so its description of the verification report no longer lists completion, and so the sentence stating which schema standalone verification writes to `.build/verify.json` gives the advanced verification schema version from 5.2; leave the statement that build reports must use schema 3 unchanged, since the build report's schema does not move; verify `just check-links` passes
 - [x] 5.7 Rerun `pack verify` then `pack report` locally and verify the evidence displays as current with no regeneration diagnostic
-- [x] 5.8 Independent evidencing review of group 5: no reader, writer, test or doc still mentions the removed state, and no spec described it; every mention of the verification schema version in `docs/` and `README.md` equals the writer's constant, and every mention of the build report schema is unchanged at 3
+- [x] 5.8 Independent evidencing review of group 5: no reader, writer, test or doc retains support for the removed state; rejection tests for that state remain, and no spec described it; every mention of the verification schema version in `docs/` and `README.md` equals the writer's constant, and every mention of the build report schema is unchanged at 3
 
 ## 6. Bring the main specs into agreement
 
