@@ -24,12 +24,12 @@ and changes no code.
 
 ## 3. Characterize generation behavior the specs now state
 
-- [ ] 3.1 Add a test that an APK rule enabling `fallbackToOlderReleases` exports it enabled in the generated entry when the newest matching release resolves, and that a rule disabling it exports it disabled; verify with `just test`
-- [ ] 3.2 Add a test that a track-only rule with a release-title filter is accepted and the generated tracking entry carries the filter; verify with `just test`
-- [ ] 3.3 Confirm existing tests cover every construct the regex delta names (other alphanumeric escapes, non-permitted `(?` groups, possessive quantifiers) and a missing rationale and unusable installation text for a track-only rule; add any case that is absent; verify with `just test`
-- [ ] 3.4 Add a test that a run whose staging fails summarizes that staging failed and its reason, and that a run whose staging succeeds carries the base revision in its summary; verify with `just test`
-- [ ] 3.5 Add an end-to-end test that a retained failure which reproduces main's catalog closes an open proposal rather than updating it; verify with `just test`
-- [ ] 3.6 Independent evidencing review of group 3: each test maps to a scenario or sentence in the `readme-source-generation` delta
+- [x] 3.1 Add a test that an APK rule enabling `fallbackToOlderReleases` exports it enabled in the generated entry when the newest matching release resolves, and that a rule disabling it exports it disabled; verify with `just test`
+- [x] 3.2 Add a test that a track-only rule with a release-title filter is accepted and the generated tracking entry carries the filter; verify with `just test`
+- [x] 3.3 Confirm existing tests cover every construct the regex delta names (other alphanumeric escapes, non-permitted `(?` groups, possessive quantifiers) and a missing rationale and unusable installation text for a track-only rule; add any case that is absent; verify with `just test`
+- [x] 3.4 Add a test that a run whose staging fails summarizes that staging failed and its reason, and that a run whose staging succeeds carries the base revision in its summary; verify with `just test`
+- [x] 3.5 Add an end-to-end test that a retained failure which reproduces main's catalog closes an open proposal rather than updating it; verify with `just test`
+- [x] 3.6 Independent evidencing review of group 3: each test maps to a scenario or sentence in the `readme-source-generation` delta
 
 ## 4. Characterize publication behavior the specs now state
 
