@@ -18,6 +18,9 @@ from omnipack.merge import (
     CompositionResult,
     ConsideredCandidate,
     StaleExclusion,
+    _exclude,
+    _families,
+    parse_exclusions,
 )
 from omnipack.merge import (
     compose as compose_apps,
@@ -228,7 +231,18 @@ def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) 
 
 def test_denial_of_a_build_eligible_for_neither_pack_is_not_stale() -> None:
     unexported = app("unexported", eligibility=frozenset())
-    result = compose([unexported], [{"id": "unexported", "reason": "retired"}], [])
+    exclusion = {"id": "unexported", "reason": "retired"}
+    families = _families([unexported])
+    report = CompositionReport()
+
+    denied = _exclude(families, parse_exclusions([exclusion]), report)
+
+    assert families == {"package:unexported": [unexported]}
+    assert denied == {}
+    assert report.removals == []
+    assert report.stale_exclusions == []
+
+    result = compose([unexported], [exclusion], [])
     assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
     assert result.report.removals == []
     assert result.report.stale_exclusions == []
