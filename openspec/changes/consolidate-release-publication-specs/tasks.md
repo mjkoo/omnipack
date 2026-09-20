@@ -6,7 +6,7 @@
 
 ## 2. Documentation
 
-- [ ] 2.1 Extend the device-acceptance note in `docs/curation.md` to preserve both stable JSON downloads, import, unchanged polling, revision-change notification, acknowledgement, re-import and the limitation that controlled tests are not completed device or live publication acceptance; verify every item from the removed paragraph survives and the guide cites no change artifact
+- [x] 2.1 Extend the device-acceptance note in `docs/curation.md` to preserve both stable JSON downloads, import, unchanged polling, revision-change notification, acknowledgement, re-import and the limitation that controlled tests are not completed device or live publication acceptance; verify every item from the removed paragraph survives and the guide cites no change artifact
 
 ## 3. No-behavior-change evidence
 
@@ -16,4 +16,4 @@
 
 ## 4. Review
 
-- [ ] 4.1 Have an independent reviewer check every row of the proposal's sentence map against the synchronized main specs and the publisher's release step, confirming each removed sentence is governed by the text named and no rule lost its only statement; resolve or record each finding
+- [x] 4.1 Have an independent reviewer check every row of the proposal's sentence map against the synchronized main specs and the publisher's release step, confirming each removed sentence is governed by the text named and no rule lost its only statement; resolve or record each finding

@@ -138,3 +138,8 @@ Targeted checks after the correction:
 No code or spec behavior changed, and no device or live publication was
 accessed. The full suite was not rerun for this focused correction; a final
 coordinator check and independent re-review remain pending.
+
+The scoped independent re-review approved `f862740`, confirmed all six
+acceptance checks plus the controlled-test limitation, and closed the sole
+Important finding with no remaining findings. It confirmed the corrected
+documentation task and the sentence-map acceptance row are complete.
