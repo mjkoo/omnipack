@@ -53,8 +53,9 @@ Verification reports SHALL be identified as structural/offline without
 live-health claims. The workflow SHALL NOT maintain failure issues or request
 issue-write permission. Summary or upload failure SHALL remain a visible failed
 step and SHALL NOT undo a completed push. A failure in the job that prepares the
-candidate, a summary or upload failure there included, SHALL leave that run
-publishing nothing, and a later run SHALL make its own attempt.
+candidate, a summary or upload failure there included, SHALL keep that
+attempt's write job from running, so the attempt publishes nothing, and a rerun
+or a later run SHALL make its own attempt.
 
 Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
 downloads, and source text SHALL be treated as data rather than executable
@@ -78,7 +79,7 @@ input.
 #### Scenario: Diagnostics fail around publication
 
 - **WHEN** summary generation fails after a successful push, or an artifact upload fails in the job that produced the diagnostics, before any push exists
-- **THEN** the failing step remains visible, a completed push is not undone, and a failure before any push leaves the run publishing nothing for a later run to retry
+- **THEN** the failing step remains visible, a completed push is not undone, and a failure before any push keeps that attempt's write job from running, so the attempt publishes nothing and a rerun or a later run makes its own attempt
 
 #### Scenario: Push outcome is summarized
 

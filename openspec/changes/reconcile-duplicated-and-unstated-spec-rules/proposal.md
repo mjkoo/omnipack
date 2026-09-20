@@ -39,8 +39,9 @@ Spec text brought up to the shipped behavior, with no behavior change:
   text are stated; the base revision is required in the run summary of a run
   whose staging succeeds, not unconditionally.
 - `nightly-publishing`: a failure in the job that prepares the candidate,
-  including a summary or upload failure there, means the run publishes nothing
-  and a later run makes its own attempt; a completed push is never undone. The
+  including a summary or upload failure there, keeps that attempt's write job
+  from running, so the attempt publishes nothing and a rerun or a later run
+  makes its own attempt; a completed push is never undone. The
   phrase "without undoing a prepared candidate" goes. The requirement for the
   one normal push points at `rolling-pack-release` for what a rerun of a write
   job does, instead of stating it.
@@ -49,8 +50,7 @@ Spec text brought up to the shipped behavior, with no behavior change:
   after main moved off the revision that run checked out, the run's own landed
   push included, fails without a push or release write, and recovery is a new
   run. The summary reports "main advanced" when the rerun's push or release
-  step finds main off the revision it expects, and a step that stops earlier
-  for another reason reports that reason. A run that prepared a candidate
+  step finds main off the revision it expects. A run that prepared a candidate
   reaches those steps only while that candidate's hand-off is still retained;
   after that the rerun fails before either step, with no particular summary
   reason. The existing scenario
@@ -113,11 +113,9 @@ Code and tests:
   completion and states the advanced verification schema version; its statement
   that build reports use schema 3 stays, since that schema does not move.
 - An unreadable verification input is reported as unreadable once, not also as
-  missing. Three paths double-report today and all three are fixed: the five
-  offline inputs' missing finding, the README's catalog finding, which records
-  its unreadable case as an invalid catalog, and the composition-configuration
-  finding for a deny or overlay that did not decode. An unreadable deny or
-  overlay, like a missing one, is reported once. `pack report`'s help text
+  missing. Two paths double-report today and both are fixed: the five offline
+  inputs' missing finding, and the README's catalog finding, which describes
+  its unreadable case as missing or unreadable. `pack report`'s help text
   describes both reports.
 - Tests for scenarios that have none: an empty configured location for BBoi34
   and codm2000, `meta` on a non-RJNY record, a codm2000 record declaring a
@@ -146,7 +144,11 @@ and the PR-body edit on an unchanged tree are diagnostic formats, and a visible
 failure plus a rerun covers both. The 60-minute, 14-day and one-day workflow
 values stay untested, as already decided, and so does the rerun of a write job
 whose candidate hand-off is no longer retained, which fails in the workflow
-before any script runs. `pack-verification` needs no delta.
+before any script runs. Findings that later checks derive from an unavailable
+input, such as a composition-configuration finding for a deny or overlay that
+did not decode, are left as they are for every input, missing or unreadable,
+since the run already fails naming the cause and a rerun clears them.
+`pack-verification` needs no delta.
 
 ## Capabilities
 

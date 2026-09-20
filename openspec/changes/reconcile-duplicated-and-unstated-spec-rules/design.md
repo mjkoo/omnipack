@@ -68,9 +68,8 @@ rerun must not move the release back. It states the rule once for every cause,
 a later run's change and the run's own landed push alike, and says when the
 "main advanced" summary is owed: when the rerun's push or release step finds
 main off the revision it expects. Each step makes that comparison only after
-its own earlier checks, and a step that stops at one of those reports that
-reason instead. A run that prepared a candidate reaches those steps only while
-that candidate's hand-off is still retained. After that the rerun fails at the
+its own earlier checks. A run that prepared a candidate reaches those steps
+only while that candidate's hand-off is still retained. After that the rerun fails at the
 workflow's download step, before any push or release write, with no summary
 reason. "Main
 publication is one normal push" in `nightly-publishing` keeps its own rule, the

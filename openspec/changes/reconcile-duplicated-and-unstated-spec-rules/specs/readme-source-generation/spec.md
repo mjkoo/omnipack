@@ -115,8 +115,9 @@ numeric-string resource ID, a nonempty rationale and a documented manual
 installation path. The installation path SHALL say in words where the resource
 is installed from and SHALL name that place by an `https` URL carrying no
 credentials, port, query or fragment, a github.com URL naming a repository and
-nothing deeper; a rule lacking any of these SHALL fail policy validation with
-the project identified. It SHALL
+nothing deeper; a rule with no rationale, or whose installation text holds no
+acceptable `https` URL or nothing beyond one such URL, SHALL fail policy
+validation with the project identified. It SHALL
 validate a published release under the selected channel policy without APK or
 archive downloads or package-ID discovery. It SHALL emit `trackOnly: true`,
 `versionDetection: false`, `includeZips: false` and disabled APK architecture
