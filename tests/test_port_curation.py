@@ -177,8 +177,8 @@ def _single_pin_exemptions(
     return exemptions
 
 
-def test_committed_configuration_selects_each_baseline_extra_in_single(
-    current_configuration: CurrentConfiguration,
+def _assert_baseline_extras_win_single(
+    current_configuration: CurrentConfiguration, denials: list[dict[str, str]]
 ) -> None:
     expected = {
         _extra_selector(entry)
@@ -188,6 +188,12 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
     expected -= _single_pin_exemptions(
         current_configuration.extras, current_configuration.policy
     )
+    result = compose(
+        current_configuration.candidates,
+        denials,
+        read(ROOT / "config/overlay.json"),
+        policy=parse_composition_policy(current_configuration.policy),
+    )
     selected = {
         (
             item.source,
@@ -195,7 +201,7 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
             item.original_id,
             normalize_project_url(item.url),
         )
-        for item in current_configuration.result.report.selections
+        for item in result.report.selections
         if item.variant is Variant.SINGLE
     }
     families = {
@@ -207,6 +213,46 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
     }
     missing = sorted(families[selector] for selector in expected - selected)
     assert not missing, f"curated extras not selected in single: {missing}"
+
+
+def test_committed_configuration_selects_each_baseline_extra_in_single(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    _assert_baseline_extras_win_single(
+        current_configuration, read(ROOT / "config/deny.json")
+    )
+
+
+def test_denied_designated_extra_fails_single_winner_guard_with_family(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    single_pin_exemptions = _single_pin_exemptions(
+        current_configuration.extras, current_configuration.policy
+    )
+    entry = next(
+        item
+        for item in current_configuration.extras
+        if not item.get("dualScreen", False)
+        and _extra_selector(item) not in single_pin_exemptions
+    )
+    rules = {
+        (
+            rule["match"]["source"],
+            rule["match"]["origin"],
+            rule["match"]["id"],
+            normalize_project_url(rule["match"]["url"]),
+        ): rule
+        for rule in current_configuration.policy["candidates"]
+    }
+    rule = rules.get(_extra_selector(entry), {})
+    family = rule.get("family") or f"package:{rule.get('packageId', entry['id'])}"
+    denials = [
+        *read(ROOT / "config/deny.json"),
+        {"id": rule.get("packageId", entry["id"]), "reason": "test denial"},
+    ]
+
+    with pytest.raises(AssertionError, match=family):
+        _assert_baseline_extras_win_single(current_configuration, denials)
 
 
 def test_hollow_knight_source_composition_preserves_dual_only_catalog(

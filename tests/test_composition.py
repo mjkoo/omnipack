@@ -653,6 +653,26 @@ def test_dual_falls_back_to_source_precedence_among_several_baseline_builds() ->
     ]
 
 
+def test_pin_reason_is_reported_when_pin_selects_among_baseline_builds() -> None:
+    builds = [
+        app(f"{source}.pkg", source, family="app:x")
+        for source in ("bboi", "rjny", "extras")
+    ]
+    pinned = builds[0]
+    result = compose(
+        builds,
+        [],
+        [],
+        policy=pin_policy(pinned, "app:x", Variant.DUAL, *builds[1:]),
+    )
+
+    selection = next(
+        item for item in result.report.selections if item.variant is Variant.DUAL
+    )
+    assert selection.effective_id == "bboi.pkg"
+    assert selection.reason == "pin"
+
+
 def test_considered_lists_only_other_available_candidates() -> None:
     winner = app("winner", "extras", family="app:x")
     loser = app("loser", "rjny", family="app:x")
