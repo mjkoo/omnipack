@@ -326,3 +326,38 @@ against the branch base.
 Implementation is complete: **15 of 15 tasks**. The change remains active on
 `reconcile-specs-with-shipped-behavior`. The separate OpenSpec verification and
 archive workflows were not invoked. No push or merge was performed.
+
+## Post-implementation review
+
+A later read of the whole branch against the deltas confirmed the main specs
+match every delta block, `src/`, `scripts/` and `config/` are unchanged against
+the branch base, and the suite passed at **754**. It found one coverage gap and
+four test-shape issues. Nothing above this section was edited.
+
+The gap: the generation requirement says a project whose chosen release endpoint
+fails is not retried against the other endpoint, and every endpoint case was a
+success path, so a generator falling back after a 404 would have passed.
+`test_failed_release_lookup_never_asks_the_other_endpoint` now covers the
+stable, prerelease and title-filter rules: the chosen endpoint answers 404, the
+other endpoint holds a release that would resolve, and the test asserts a failed
+status, the project listed as unresolved, and requests to the README and the
+chosen endpoint only. A temporary mutation made `select_release` retry against
+the other endpoint on any failure: **3 failed**, each on the status assertion
+with `'success' == 'failed'`. The source file was restored byte-for-byte in a
+`finally` block and `git diff -- src` is empty.
+
+Test-shape changes, behavior-neutral:
+
+- The endpoint tests parametrize rule settings, endpoint and prerelease flag
+  directly instead of deriving them from a mode string.
+- The query, fragment and port identity cases moved into the existing
+  same-project table in `tests/test_urls.py`, replacing a test that branched on
+  its own parameter. The `www.gitlab.com` comparison case moved there too, out of
+  the GitLab acceptance test where it ran once per unrelated parameter.
+- The GitLab acceptance test states its expected project paths rather than
+  recomputing them with the adapter's own expression.
+- The curated-extra family lookup reuses `candidate_selector`.
+
+After these changes: **758 passed**; Ruff formatting and lint, ty, and strict
+validation of the change pass. The change remains active on
+`reconcile-specs-with-shipped-behavior`; no push, merge, verify or archive.
