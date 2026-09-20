@@ -45,49 +45,23 @@ same revision in a write job, and make one refresh attempt.
 - **WHEN** tracked changes already exist before the refresh starts
 - **THEN** publication is rejected without treating those changes as generated output
 
-### Requirement: Nightly completion includes rolling release synchronization
+### Requirement: Release synchronization follows main publication without gating it
 
-After a successful main push whose pushed commit the publisher can establish as
-its own local revision, or after a verified main no-op, the publisher SHALL
-synchronize the owned rolling release from that run's verified JSON pair.
+After a successful main push or a verified main no-op, the publisher SHALL
+synchronize the owned rolling release from that run's verified JSON pair,
+subject to the conditions that
+"Release writes require an established main outcome" in rolling-pack-release
+places on every release write.
 Release readiness SHALL NOT be a prerequisite for otherwise valid main output.
 Release failure SHALL fail the workflow without undoing a successful main push,
 and the run summary SHALL report the main outcome separately from the release
-outcome. A main push that is rejected or reports an error SHALL prohibit release
-writes in that run. Release writes SHALL also require main to still be at the
-run's pushed commit or, after a verified no-op, at the run's base revision;
-otherwise the release stage SHALL fail without writes, so no run publishes an
-older pair after main has moved on. A later run whose verified output is
-already on main SHALL synchronize the release as a verified no-op.
+outcome.
 
 #### Scenario: Main push succeeds and release write fails
 
 - **WHEN** main publication succeeds but release synchronization fails
 - **THEN** the workflow fails with the pushed commit and the release failure reported separately
 - **AND** no rollback or issue maintenance occurs
-
-#### Scenario: Missing release seed
-
-- **WHEN** main output is eligible but the release seed is missing or unowned
-- **THEN** main publication or the verified no-op proceeds independently
-- **AND** the release stage fails without release writes
-
-#### Scenario: Main outcome is uncertain
-
-- **WHEN** the main push reports an error, whether or not the commit actually landed
-- **THEN** the run fails and performs no release writes
-- **AND** a later run that finds the commit on main treats it as a verified no-op and synchronizes the release
-
-#### Scenario: Later main no-op repairs the release
-
-- **WHEN** a later verified run needs no main commit but the release does not match its verified pair
-- **THEN** it synchronizes the release from that run's verified pair
-
-#### Scenario: Write job rerun after main advanced
-
-- **WHEN** the write job of an earlier run is rerun after a later run changed main
-- **THEN** it fails without a push or release write, and the summary reports that main advanced
-- **AND** the release keeps the later run's pair and revision
 
 ### Requirement: Main publication is one normal push
 
@@ -130,8 +104,8 @@ candidate prepared for publication, a no-op, or the failing stage) and, when the
 release stage runs, the release outcome (a new revision, a repair of the served
 assets at the same revision, unchanged, or failure). A rejected or erroring push SHALL appear as
 the failing main stage, and a release failure SHALL state its reason, with
-bootstrap guidance when the release is absent, unowned, malformed, a draft, not
-a prerelease, or immutable. The build report and structural verification report
+the bootstrap guidance that "Bootstrap is explicit" in rolling-pack-release
+requires for the release states it names. The build report and structural verification report
 produced by the run SHALL be uploaded as artifacts with 14-day retention on
 success and failure when they exist. Missing reports after an early failure
 SHALL NOT imply verification success. Verification reports SHALL be identified
@@ -189,8 +163,9 @@ contents, and none SHALL receive the publication credential. The write job SHALL
 install no project dependencies and run no build or verification: it SHALL
 check out afresh the main revision that triggered the run, receive the verified
 commit only as git objects handed off by the read-only job with one-day
-retention, and run only publication scripts that import nothing outside the
-standard library, on the runner's preinstalled Python. The triggering event
+retention, and run only publication code that needs nothing installed in order
+to run, so the job that holds the credential executes none of the project's
+dependencies. The triggering event
 SHALL fix the revision whose code the write job runs: no output of the
 read-only job SHALL select it, and the write job SHALL fail before any write
 unless the base revision the read-only job reports is that triggering revision.

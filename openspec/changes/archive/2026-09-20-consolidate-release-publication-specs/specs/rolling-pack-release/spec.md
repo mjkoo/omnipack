@@ -1,36 +1,4 @@
-# rolling-pack-release Specification
-
-## Purpose
-
-Provide stable JSON downloads and a native Obtainium notification source through one persistent GitHub release, without retaining nightly release history.
-
-## Requirements
-
-### Requirement: One owned rolling release publishes both variants
-
-The publisher SHALL maintain one mutable prerelease at tag `continuous` in
-`mjkoo/omnipack`, with title `omnipack revision N` for a nonnegative integer N
-and assets named `single-screen.json` and `dual-screen.json`. This title format
-is a wire format: the pack's own notification tracker selects releases by
-matching it, as "Both packs include one shared omnipack notification tracker" in
-pack-curation requires, so the two SHALL change together. The release SHALL
-carry the exact ownership marker `<!-- omnipack:rolling-pack -->`. The publisher
-SHALL NOT create per-run or per-variant releases, or delete and recreate the
-established release or tag. A pre-existing unowned or malformed release SHALL
-block release synchronization without authorizing overwrite. The release tag SHALL remain a stable locator;
-recorded published commit metadata SHALL identify asset provenance rather than
-implying that the tag advances with every asset upload.
-
-#### Scenario: Another successful nightly changes the pack
-
-- **WHEN** the owned release exists and verified JSON content changes
-- **THEN** the same release id and tag remain while assets and revision are updated
-
-#### Scenario: Unowned release conflicts with synchronization
-
-- **WHEN** a valid main publication or verified no-op is followed by discovery of an unowned release
-- **THEN** release synchronization fails without altering that release
-- **AND** the independently confirmed main outcome remains intact
+## ADDED Requirements
 
 ### Requirement: Release writes require an established main outcome
 
@@ -121,6 +89,34 @@ visibly without changing repository settings or touching other releases.
 - **WHEN** a verified run's pair matches the recorded digests and both served-asset digests
 - **THEN** no asset or revision changes, even if main received a cache or catalog commit
 
+## MODIFIED Requirements
+
+### Requirement: One owned rolling release publishes both variants
+
+The publisher SHALL maintain one mutable prerelease at tag `continuous` in
+`mjkoo/omnipack`, with title `omnipack revision N` for a nonnegative integer N
+and assets named `single-screen.json` and `dual-screen.json`. This title format
+is a wire format: the pack's own notification tracker selects releases by
+matching it, as "Both packs include one shared omnipack notification tracker" in
+pack-curation requires, so the two SHALL change together. The release SHALL
+carry the exact ownership marker `<!-- omnipack:rolling-pack -->`. The publisher
+SHALL NOT create per-run or per-variant releases, or delete and recreate the
+established release or tag. A pre-existing unowned or malformed release SHALL
+block release synchronization without authorizing overwrite. The release tag SHALL remain a stable locator;
+recorded published commit metadata SHALL identify asset provenance rather than
+implying that the tag advances with every asset upload.
+
+#### Scenario: Another successful nightly changes the pack
+
+- **WHEN** the owned release exists and verified JSON content changes
+- **THEN** the same release id and tag remain while assets and revision are updated
+
+#### Scenario: Unowned release conflicts with synchronization
+
+- **WHEN** a valid main publication or verified no-op is followed by discovery of an unowned release
+- **THEN** release synchronization fails without altering that release
+- **AND** the independently confirmed main outcome remains intact
+
 ### Requirement: Bootstrap is explicit
 
 Initial activation SHALL establish an owned revision-zero prerelease as a
@@ -160,3 +156,24 @@ revision zero to one.
 
 - **WHEN** a maintainer creates the owned seed and a later run verifies an unchanged main pair
 - **THEN** the no-op main result publishes the first verified release assets at revision one
+
+## REMOVED Requirements
+
+### Requirement: Revision changes follow completed content publication
+
+**Reason**: One requirement covered two subjects: when a release write is
+permitted at all, and how the recorded and served digests decide between
+leaving, repairing and advancing the release. nightly-publishing restated the
+first subject in its own words, and giving that subject one owner needs a
+requirement whose name says what it governs. Every sentence and scenario is
+carried forward; none is dropped.
+
+**Migration**: The write preconditions are "Release writes require an established main outcome",
+which also receives the two scenarios nightly-publishing held for them. The
+digest comparison, revision and repair rules are "The revision advances only when the published pair changes",
+with the remaining five scenarios unchanged.
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Bootstrap and device acceptance are explicit`
+- TO: `### Requirement: Bootstrap is explicit`
