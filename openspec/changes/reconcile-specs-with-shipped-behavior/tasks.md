@@ -24,6 +24,6 @@
 
 ## 5. Complete implementation validation and reviews
 
-- [ ] 5.1 Confirm this change altered no shipped behavior: compose the committed configuration over the suite's captured upstream records at the branch base and after implementation and confirm both variants render identical bytes, and confirm `src/` and `scripts/` are unchanged by the diff.
-- [ ] 5.2 Run the full suite and the applicable repository checks, including offline pack verification and strict artifact validation over both the change and the main specs; record the results in the change directory.
+- [x] 5.1 Confirm this change altered no shipped behavior: compose the committed configuration over the suite's captured upstream records at the branch base and after implementation and confirm both variants render identical bytes, and confirm `src/` and `scripts/` are unchanged by the diff.
+- [x] 5.2 Run the full suite and the applicable repository checks, including offline pack verification and strict artifact validation over both the change and the main specs; record the results in the change directory.
 - [ ] 5.3 Complete the implementation workflow's independent whole-diff review wave and the checkbox and evidence audit, resolve findings, rerun affected checks after fixes, and retain a self-contained validation record. Leave the change active and report the implementation branch.

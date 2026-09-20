@@ -232,7 +232,9 @@ mistook the following recipe name for an interpreter; separate invocations
 passed. Nix's cache required execution outside the filesystem sandbox, and the
 approved rerun completed all remaining checks without modifying project files.
 
-Whole-diff review and the final checkbox audit remain pending.
+Independent group review approved the byte-preservation and repository-check
+evidence in commit `4ea6725`. The whole-diff wave and its fix are recorded below;
+the final checkbox audit is the remaining gate.
 
 ## Whole-diff review fix
 
@@ -256,5 +258,35 @@ full suite passed **754 tests** without test warnings; the earlier **756-test**
 coverage run above is historical evidence from before the two duplicate cases
 were removed. The new full-suite invocation did not collect coverage.
 Repository-wide Ruff lint, Ruff formatting, and ty checks passed.
-The fix changes only URL tests and this validation record; the final scoped
-review and completion audit remain pending.
+The fix changes only URL tests and this validation record. Independent scoped
+review of `4ea6725..d61a402` approved the fix with no findings. The completion
+audit is the remaining gate.
+
+
+## Independent whole-diff review
+
+Four reviewers examined `ce8f09c..4ea6725` with separate lenses:
+
+- Specification correctness: approved, no findings. All four main-spec merges
+  preserve surviving scenario names and stage ownership.
+- Public failure boundaries and meaningful tests: approved, no findings. Tests
+  exercise real pipeline code and distinguish the documented failure modes.
+- Idiomatic patterns: approved, no findings. Tests reuse established fixtures,
+  keep session inputs immutable, and contain no planning-identifier leakage.
+- Proportionality: found only the two redundant GitHub matrix cases. The single
+  fix commit `d61a402` removed them, and its scoped re-review approved the fix.
+
+Every residual convergence note was closed explicitly: the tracker guard is on
+the branch base; scenario accounting is 13 new, 1 relocated and 5 rewritten;
+characterization tasks use temporary mutations; the maintainer's manifest-evidence
+obligation is not a runtime check; GitLab empty components are documented; HTTP
+and too-short paths are covered. Previously accepted findings about ports,
+transport retries, catalog validity, GitLab host spelling and overlay diagnostic
+contents now agree with the shipped behavior. Later explanatory-clause errors
+about scheme comparison and duplicate overlay-target ownership are absent.
+
+The one review ruling was to accept removal of two redundant assertions because
+existing exact-output assertions discriminate the same GitHub behavior more
+strongly. The cost if that judgment were wrong would be reduced regression
+coverage; a new mutation check confirmed that the retained assertions fail for
+both query and fragment preservation.
