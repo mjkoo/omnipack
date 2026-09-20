@@ -9,14 +9,10 @@ otherwise fail without a push or release write. If the push is rejected or
 reports an error, the run SHALL fail visibly. It SHALL NOT rebase, cherry-pick
 generated output, retry the push, rebuild, or inspect remote history to
 reinterpret the push outcome. A later invocation SHALL build and verify its own
-checkout, and output that already landed SHALL then be a verified no-op. A rerun
-of a write job whose own push already landed SHALL fail before any push or
-release write, and recovery SHALL be a new run, not a rerun. While the run's
-candidate hand-off is still retained, the rerun SHALL fail the same way as a run
-that finds main advanced, because main is then the pushed commit rather than the
-revision the run checked out, and the summary SHALL report that main advanced.
-Once the hand-off is no longer retained, the rerun SHALL fail for want of it,
-and no particular reason is required of its summary.
+checkout, and output that already landed SHALL then be a verified no-op.
+What a rerun of an earlier run's write job does once main has moved off the
+revision that run checked out, that run's own landed push included, is defined
+by "Release writes require an established main outcome" in rolling-pack-release.
 
 #### Scenario: Main advances during the run
 
@@ -40,32 +36,25 @@ and no particular reason is required of its summary.
 - **WHEN** repository protection rejects the push
 - **THEN** the run fails without changing repository protections or synchronizing the release
 
-#### Scenario: Write job is rerun after its own push landed
-
-- **WHEN** a write job is rerun after its push reached main, for example to retry a failed release stage
-- **THEN** the rerun fails before any push or release write, whether or not the run's candidate hand-off is still retained
-- **AND** while the hand-off is still retained, the summary reports that main advanced
-- **AND** a new run finds a verified no-op and synchronizes the release
-
 ### Requirement: Actions summarizes and uploads each publication run's outcome
 
 Actions step results and logs SHALL be the failure record. The publisher SHALL
 write a short step summary identifying the main outcome (the published commit, a
 candidate prepared for publication, a no-op, or the failing stage) and, when the
 release stage runs, the release outcome (a new revision, a repair of the served
-assets at the same revision, unchanged, or failure). A rejected or erroring push SHALL appear as
-the failing main stage, and a release failure SHALL state its reason, with
-the bootstrap guidance that "Bootstrap is explicit" in rolling-pack-release
-requires for the release states it names. The build report and structural verification report
-produced by the run SHALL be uploaded as artifacts with 14-day retention on
-success and failure when they exist. Missing reports after an early failure
-SHALL NOT imply verification success. Verification reports SHALL be identified
-as structural/offline without live-health claims. The workflow SHALL NOT
-maintain failure issues or request issue-write permission. Summary or upload
-failure SHALL remain a visible failed step and SHALL NOT undo a completed push.
-A failure in the job that prepares the candidate, a summary or upload failure
-there included, SHALL leave that run publishing nothing, and a later run SHALL
-make its own attempt.
+assets at the same revision, unchanged, or failure). A rejected or erroring push
+SHALL appear as the failing main stage, and a release failure SHALL state its
+reason, with the bootstrap guidance that "Bootstrap is explicit" in
+rolling-pack-release requires for the release states it names. The build report
+and structural verification report produced by the run SHALL be uploaded as
+artifacts with 14-day retention on success and failure when they exist. Missing
+reports after an early failure SHALL NOT imply verification success.
+Verification reports SHALL be identified as structural/offline without
+live-health claims. The workflow SHALL NOT maintain failure issues or request
+issue-write permission. Summary or upload failure SHALL remain a visible failed
+step and SHALL NOT undo a completed push. A failure in the job that prepares the
+candidate, a summary or upload failure there included, SHALL leave that run
+publishing nothing, and a later run SHALL make its own attempt.
 
 Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
 downloads, and source text SHALL be treated as data rather than executable

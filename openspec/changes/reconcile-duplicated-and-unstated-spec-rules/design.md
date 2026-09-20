@@ -7,7 +7,7 @@ See proposal.md for why. The constraints that shape how:
   scenario cannot be dropped, moved to another requirement or retitled by a
   delta alone.
 - A capability's Purpose is not a delta operation; it is edited in the main spec.
-- 23 requirements are restated in full, several of them over 60 lines. Hand
+- 24 requirements are restated in full, several of them over 60 lines. Hand
   copying that much converged text invites silent loss.
 - Two rulings already stand and are not reopened: only decision-changing
   behavior becomes spec text, and development tooling is out of scope.
@@ -20,7 +20,7 @@ See proposal.md for why. The constraints that shape how:
 
 **Goals:**
 
-- Every sentence in the six touched specs is true of the shipped system.
+- Every sentence in the seven touched specs is true of the shipped system.
 - Each duplicated rule has one normative statement; other sites point at it by
   exact requirement name.
 - No pack byte, composition result, workflow step or exit code changes.
@@ -39,7 +39,10 @@ See proposal.md for why. The constraints that shape how:
 the requirement out of the main spec and applying exact-match replacements, each
 asserted to match once. Everything outside a replacement is byte-identical to
 the main spec, so a reviewer can diff a delta block against its source and see
-only intended edits. Alternative: write blocks by hand. Rejected for the
+only intended edits. The one exception is a paragraph holding an over-long line:
+it is rewrapped in the delta with its words unchanged, because a rewrap made
+only in the main spec would be reverted when the block is replaced at archive.
+Alternative: write blocks by hand. Rejected for the
 transcription risk across roughly 1,300 lines.
 
 **Scenarios stay where they are.** The owning requirement takes the normative
@@ -58,9 +61,32 @@ half, that the source alone decides kind and eligibility. Stage order keeps
 "honoring a valid explicit pin first" because the order of pin and tier is that
 requirement's own rule; it gains the pointer.
 
+What a rerun of a write job does after main moved belongs to "Release writes
+require an established main outcome" in `rolling-pack-release`, which already
+holds the scenario "Write job rerun after main advanced" and already says why a
+rerun must not move the release back. It states the rule once for every cause,
+a later run's change and the run's own landed push alike, and says when the
+"main advanced" summary is owed: whenever the rerun reaches its push or release
+step, which a run that prepared a candidate does only while that candidate's
+hand-off is still retained. After that the rerun fails at the workflow's
+download step, before any push or release write, with no summary reason. "Main
+publication is one normal push" in `nightly-publishing` keeps its own rule, the
+check before the push, and points at the owner for reruns. Alternative: state
+the retained-versus-expired rule in `nightly-publishing` beside the push.
+Rejected: the `rolling-pack-release` scenario would go on promising the summary
+unconditionally, and the two specs would disagree. The retention period is a
+workflow value and is not stated.
+
 **`pack-verification` gets no delta.** It already owns the fingerprint set, the
 stored-report content rule and the regeneration rule. The duplication is removed
 from the `pack-cli` side only, which keeps the display obligations.
+
+**An interrupted verification is characterized, not handled.** The `verify`
+command catches only its report error, so an interruption propagates out of the
+command's entry point and the interpreter supplies the nonzero exit. The test
+asserts that propagation and that no report is written. Alternative: catch the
+interruption and return nonzero. Rejected: it is an exit-path change, which the
+goals exclude.
 
 **The dead verification state is deleted with a schema bump.** Dropping the
 `complete` field changes the stored report's shape, and the reader validates an

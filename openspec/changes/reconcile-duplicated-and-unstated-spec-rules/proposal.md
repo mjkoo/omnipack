@@ -40,11 +40,19 @@ Spec text brought up to the shipped behavior, with no behavior change:
 - `nightly-publishing`: a failure in the job that prepares the candidate,
   including a summary or upload failure there, means the run publishes nothing
   and a later run makes its own attempt; a completed push is never undone. The
-  phrase "without undoing a prepared candidate" goes. A rerun of a write job
-  whose own push already landed fails before any push or release write, and
-  recovery is a new run. It reports "main advanced" while the run's candidate
-  hand-off is still retained, and fails for want of the hand-off after that.
-  This was already the decided behavior and is now written down.
+  phrase "without undoing a prepared candidate" goes. The requirement for the
+  one normal push points at `rolling-pack-release` for what a rerun of a write
+  job does, instead of stating it.
+- `rolling-pack-release`: "Release writes require an established main outcome"
+  owns the rerun rule and states it once. A rerun of an earlier run's write job
+  after main moved off the revision that run checked out, the run's own landed
+  push included, fails without a push or release write, and recovery is a new
+  run. The summary reports "main advanced" whenever the rerun reaches its push
+  or release step, which a run that prepared a candidate does only while that
+  candidate's hand-off is still retained; after that the rerun fails before
+  either step, with no particular summary reason. The existing scenario
+  promised the "main advanced" summary unconditionally and is qualified. This
+  was already the shipped behavior and is now written down.
 - `pack-curation`: the requirement protecting curated decisions states guarded
   outcomes and what may block a source proposal, without legislating "the test
   suite". The two catalog validity rules no pipeline stage checks stay owned
@@ -111,22 +119,28 @@ Code and tests:
   type, a policy selector URL with no host, a denial matching only
   never-eligible candidates, an APK rule's exported `fallbackToOlderReleases`,
   a track-only title filter, a designated curated extra shown to fail its guard
-  when denied, an absent losing candidate leaving offline verification clean,
-  and an interrupted verification through the command.
+  when denied, a push attempted when remote main already equals the candidate
+  commit, as on a rerun after the run's own push landed, an absent losing
+  candidate leaving offline verification clean, and an interrupted verification
+  propagating out of the command without writing a report. The command gains no
+  new exception handling.
 
 Wording-only edits to text no delta touches, made directly in the main specs:
 the Purposes of `pack-composition`, `source-ingestion`, `nightly-publishing`
 and `pack-cli`; "the helper" with no antecedent; one name for stale exclusions
 in `pack-cli`; an overlay scenario whose WHEN reads as the wrong failure;
-formatting. Scenario titles whose bodies moved on are retitled the same way. A
+formatting. Over-long lines inside a requirement this change modifies are
+rewrapped in its delta block, wording unchanged, so the whole-block replacement
+at archive does not revert them. Scenario titles whose bodies moved on are retitled the same way. A
 title inside a requirement this change modifies is edited in the main spec and
 in the delta together, since the two must agree for the change to validate.
 
 Deliberately left alone: the 65536-character cap on rendered retained failures
 and the PR-body edit on an unchanged tree are diagnostic formats, and a visible
 failure plus a rerun covers both. The 60-minute, 14-day and one-day workflow
-values stay untested, as already decided. `rolling-pack-release` and
-`pack-verification` need no delta.
+values stay untested, as already decided, and so does the rerun of a write job
+whose candidate hand-off is no longer retained, which fails in the workflow
+before any script runs. `pack-verification` needs no delta.
 
 ## Capabilities
 
@@ -150,22 +164,26 @@ None.
 - `readme-source-generation`: the fallback-export scenario; the full list of
   rejected regex constructs; track-only rule fields; change-era sentences; the
   base-revision summary condition.
-- `nightly-publishing`: what a preparing-job failure means; rerun after a
-  landed push; one retired twin scenario.
+- `nightly-publishing`: what a preparing-job failure means; a pointer to the
+  owner of the rerun rule; one narrowed twin scenario.
+- `rolling-pack-release`: "Release writes require an established main outcome"
+  owns what a rerun of a write job does after main moved, including after the
+  run's own push and after the candidate hand-off is no longer retained.
 - `pack-cli`: the report-command requirement states each rule once and points
   at `pack-verification` for the fingerprint set and stored-report content.
 
 ## Impact
 
-- Specs: six capabilities, 23 modified requirements, one of them also renamed.
+- Specs: seven capabilities, 24 modified requirements, one of them also renamed.
 - Code: `src/omnipack/report.py`, `src/omnipack/verify.py`,
   `src/omnipack/offline.py`, `src/omnipack/cli.py`. No change to pack bytes,
-  composition, ingestion, generation or the workflows.
+  composition, ingestion, generation, the workflows or
+  `scripts/nightly_write.py`, which gains a test only.
 - Docs: `docs/verification.md`, for the removed completion field and the
   verification schema version.
 - A stored `.build/verify.json` from before this change needs `pack verify`
   rerun. The file is gitignored and the nightly regenerates it every run.
 
-Estimate: 0 requirements added, 0 removed, 1 renamed, 23 modified. 13 scenarios
-added, none retired or moved, 3 narrowed. Implementation: about 40 lines removed
-and 15 added. Tests: about 220 lines added and 25 removed.
+Estimate: 0 requirements added, 0 removed, 1 renamed, 24 modified. 14 scenarios
+added, none retired or moved, 3 narrowed, 1 qualified. Implementation: about 40
+lines removed and 15 added. Tests: about 260 lines added and 25 removed.
