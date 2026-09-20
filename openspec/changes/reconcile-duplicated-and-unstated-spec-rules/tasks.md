@@ -16,18 +16,18 @@ and changes no code.
 
 ## 2. Characterize composition behavior the specs now state
 
-- [ ] 2.1 Add tests that a candidate rule and a pin whose selector `url` has no readable host, or contains whitespace, fail configuration identifying the field and the value before any candidate is matched; verify with `just test`
-- [ ] 2.2 Confirm the existing test of a denial matching only never-eligible candidates asserts all three outcomes the delta states (nothing removed, no exclusion reported, not stale) and extend it where one is missing; verify with `just test`
-- [ ] 2.3 Confirm the existing test of dual falling back among several baseline builds asserts `ordinary-fallback` for dual and `source` for single, and add a pin case asserting `pin`; verify with `just test`
-- [ ] 2.4 Add a test that denying a designated curated extra's package id, with no pin naming it, makes the single-winner guard fail and name the family; verify the guard is shown failing, then passing on the committed configuration
-- [ ] 2.5 Independent evidencing review of group 2: each test maps to a scenario in the `pack-composition` or `pack-curation` delta
+- [x] 2.1 Add tests that a candidate rule and a pin whose selector `url` has no readable host, or contains whitespace, fail configuration identifying the field and the value before any candidate is matched; verify with `just test`
+- [x] 2.2 Confirm the existing test of a denial matching only never-eligible candidates asserts all three outcomes the delta states (nothing removed, no exclusion reported, not stale) and extend it where one is missing; verify with `just test`
+- [x] 2.3 Confirm the existing test of dual falling back among several baseline builds asserts `ordinary-fallback` for dual and `source` for single, and add a pin case asserting `pin`; verify with `just test`
+- [x] 2.4 Add a test that denying a designated curated extra's package id, with no pin naming it, makes the single-winner guard fail and name the family; verify the guard is shown failing, then passing on the committed configuration
+- [x] 2.5 Independent evidencing review of group 2: each test maps to a scenario in the `pack-composition` or `pack-curation` delta
 
 ## 3. Characterize generation behavior the specs now state
 
 - [ ] 3.1 Add a test that an APK rule enabling `fallbackToOlderReleases` exports it enabled in the generated entry when the newest matching release resolves, and that a rule disabling it exports it disabled; verify with `just test`
 - [ ] 3.2 Add a test that a track-only rule with a release-title filter is accepted and the generated tracking entry carries the filter; verify with `just test`
 - [ ] 3.3 Confirm existing tests cover every construct the regex delta names (other alphanumeric escapes, non-permitted `(?` groups, possessive quantifiers) and a missing rationale and unusable installation text for a track-only rule; add any case that is absent; verify with `just test`
-- [ ] 3.4 Add a test that a run whose staging fails summarizes the failing stage and reason, and that a run whose staging succeeds carries the base revision in its summary; verify with `just test`
+- [ ] 3.4 Add a test that a run whose staging fails summarizes that staging failed and its reason, and that a run whose staging succeeds carries the base revision in its summary; verify with `just test`
 - [ ] 3.5 Add an end-to-end test that a retained failure which reproduces main's catalog closes an open proposal rather than updating it; verify with `just test`
 - [ ] 3.6 Independent evidencing review of group 3: each test maps to a scenario or sentence in the `readme-source-generation` delta
 
