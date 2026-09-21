@@ -9,7 +9,12 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from omnipack.offline import Finding, OfflineInputs, validate_offline
+from omnipack.offline import (
+    Finding,
+    OfflineInputs,
+    missing_input,
+    validate_offline,
+)
 
 SCHEMA_VERSION = 4
 VERIFIER_VERSION = "2.0.0"
@@ -81,7 +86,7 @@ def run_verification(root: Path) -> dict[str, Any]:
     # Offline checks see an absent snapshot for both missing and unreadable files.
     # Capture knows which it was, so replace only those false missing findings.
     unreadable_missing = {
-        Finding("input", "input_missing", f"{name} input is missing")
+        missing_input(name)
         for name, fingerprint in fingerprints.items()
         if fingerprint["state"] == "unreadable"
     }
@@ -91,9 +96,10 @@ def run_verification(root: Path) -> dict[str, Any]:
 
     try:
         readme = snapshots["readme"]
-        if readme is None and fingerprints["readme"]["state"] == "missing":
-            raise ValueError("README input is missing")
-        if readme is not None:
+        if readme is None:
+            if fingerprints["readme"]["state"] == "missing":
+                raise ValueError("README input is missing")
+        else:
             _, interior, _ = split_catalog(readme)
             single, dual, policy = (
                 snapshots[name] for name in ("single", "dual", "composition")
