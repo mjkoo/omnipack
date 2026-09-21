@@ -10,7 +10,7 @@ from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Protocol
+from typing import Literal, Protocol
 
 from omnipack.catalog import CatalogError, split_catalog
 from scripts.nightly_write import ALLOWED_PATHS
@@ -33,7 +33,7 @@ BUILD_COMMAND = ("uv", "run", "--no-sync", "pack", "build")
 STRUCTURAL_VERIFY_COMMAND = ("uv", "run", "--no-sync", "pack", "verify")
 
 
-def main(argv: list[str] | None = None) -> int:
+def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser()
     commands = parser.add_subparsers(dest="command", required=True)
     commands.add_parser("prepare")
@@ -60,6 +60,9 @@ class PrepareSubprocess:
         return CommandResult(completed.returncode, "", "")
 
 
+PrepareStatus = Literal["no-op", "prepared", "failed"]
+
+
 @dataclass(frozen=True)
 class PrepareOutcome:
     """The outcome of one guarded `prepare` run.
@@ -67,14 +70,14 @@ class PrepareOutcome:
     `stage` names the failing stage on failure, or `"complete"` otherwise.
     """
 
-    status: str  # "no-op", "prepared" or "failed"
+    status: PrepareStatus
     stage: str
     base_sha: str | None
     sha: str | None
     changed: bool
 
     @property
-    def summary_line(self) -> str:
+    def summary(self) -> str:
         if self.status == "no-op":
             return f"no-op at {self.sha}"
         if self.status == "prepared":
@@ -235,7 +238,7 @@ def _run_prepare_command(
                 "base": outcome.base_sha or "",
             },
         )
-    append_summary(environ, outcome.summary_line + "\n")
+    append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 
 

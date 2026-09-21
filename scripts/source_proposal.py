@@ -17,6 +17,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Literal
 
 from scripts.workflow_support import (
     FULL_SHA,
@@ -45,6 +46,7 @@ BRANCH_NAME = "automation/codm-catalog"
 CATALOG_PATH = "config/catalogs/codm.json"
 CANDIDATE_PATH = ".build/source-generation/codm/catalog.json"
 REPORT_PATH = ".build/source-generation/codm/report.json"
+GENERATION_SUCCESS_STATUS = "success"
 HANDOFF_DIRECTORY = "source-handoff"
 BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
@@ -57,6 +59,9 @@ PR_BODY_LIMIT = 65536
 # --- stage (read-only check job) -----------------------------------------
 
 
+StageStatus = Literal["unchanged", "changed", "failed"]
+
+
 @dataclass(frozen=True)
 class StageOutcome:
     """The outcome of one guarded `stage` run.
@@ -65,7 +70,7 @@ class StageOutcome:
     `reason` says what failed in fixed text that holds no upstream data.
     """
 
-    status: str  # "unchanged", "changed" or "failed"
+    status: StageStatus
     stage: str
     base_sha: str | None
     sha: str | None
@@ -130,7 +135,10 @@ def run_stage(
         return _stage_failure(
             "report", "could not read the generation report or candidate", base_sha
         )
-    if not isinstance(report, dict) or report.get("status") != "success":
+    if (
+        not isinstance(report, dict)
+        or report.get("status") != GENERATION_SUCCESS_STATUS
+    ):
         return _stage_failure("report", "generation did not succeed", base_sha)
 
     added, removed, changed_urls = _report_changes(report)
@@ -176,7 +184,7 @@ def run_stage(
                 "bundle", "could not write the bundle or PR body", base_sha
             )
 
-    status = "changed" if changed else "unchanged"
+    status: StageStatus = "changed" if changed else "unchanged"
     return StageOutcome(
         status,
         "complete",
@@ -294,9 +302,12 @@ class PublishFailure(RuntimeError):
         self.summary = summary
 
 
+PublishStatus = Literal["closed", "unchanged", "published", "failed"]
+
+
 @dataclass(frozen=True)
 class PublishOutcome:
-    status: str  # "closed", "unchanged", "published" or "failed"
+    status: PublishStatus
     summary: str
 
 
