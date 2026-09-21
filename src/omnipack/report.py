@@ -253,7 +253,7 @@ def _validate_build_report(value: dict[str, Any]) -> None:
             f"unsupported build report schema {schema!r}; regenerate with `pack build`"
         )
     status = value.get("status")
-    if status not in tuple(Status):
+    if status not in Status:
         raise ReportFormatError("malformed build report: status is required")
     expected = (
         _BUILD_FIELDS | _BUILD_FAILURE_FIELDS
@@ -291,7 +291,7 @@ def _validate_build_report(value: dict[str, Any]) -> None:
     offline = value["offlineVerification"]
     if (
         not isinstance(offline, dict)
-        or offline.get("status") not in tuple(OfflineStatus)
+        or offline.get("status") not in OfflineStatus
         or not isinstance(offline.get("findings"), list)
         or not all(_valid_finding(item) for item in offline["findings"])
     ):
@@ -309,7 +309,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
     verifier = value.get("verifier")
     inputs = value.get("inputs")
     if (
-        value.get("status") not in tuple(Status)
+        value.get("status") not in Status
         or value.get("mode") != "offline"
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
