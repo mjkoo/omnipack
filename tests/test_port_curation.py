@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -251,7 +252,7 @@ def test_denied_designated_extra_fails_single_winner_guard_with_family(
         {"id": rule.get("packageId", entry["id"]), "reason": "test denial"},
     ]
 
-    with pytest.raises(AssertionError, match=family):
+    with pytest.raises(AssertionError, match=re.escape(family)):
         _assert_baseline_extras_win_single(current_configuration, denials)
 
 

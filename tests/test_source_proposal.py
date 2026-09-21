@@ -109,22 +109,22 @@ def test_head_other_than_github_sha_fails_with_no_commit_or_bundle(
 def test_successful_stage_summary_reports_base_revision(
     tmp_path: Path,
 ) -> None:
-    success_root = _repo(tmp_path, "success")
-    base = _git(success_root, "rev-parse", "HEAD")
+    root = _repo(tmp_path, "success")
+    base = _git(root, "rev-parse", "HEAD")
     _write_candidate(
-        success_root,
+        root,
         '{"apps": [{"id": "a"}]}\n',
         _report(added=("https://example.test/a",)),
     )
-    success = run_stage(
-        success_root,
+    outcome = run_stage(
+        root,
         base,
         "https://github.example/runs/2",
         tmp_path / "success.bundle",
         tmp_path / "success-body.md",
     )
-    assert success.status == "changed"
-    assert f"Base SHA: {base}" in success.summary
+    assert outcome.status == "changed"
+    assert f"Base SHA: {base}" in outcome.summary
 
 
 def _pre_block(text: str) -> str:
