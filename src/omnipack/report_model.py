@@ -1,7 +1,10 @@
 """Writer-side report records and their shared wire vocabularies."""
 
 from enum import StrEnum
-from typing import Literal, NotRequired, TypedDict
+from typing import Final, Literal, NotRequired, TypedDict
+
+VERIFICATION_MODE: Final = "offline"
+VERIFIER_SCOPE: Final = "structural"
 
 
 class Status(StrEnum):

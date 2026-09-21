@@ -16,6 +16,8 @@ from omnipack.merge import (
 )
 from omnipack.model import Variant
 from omnipack.report_model import (
+    VERIFICATION_MODE,
+    VERIFIER_SCOPE,
     BuildStage,
     InputState,
     OfflineStatus,
@@ -310,12 +312,12 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
     inputs = value.get("inputs")
     if (
         value.get("status") not in Status
-        or value.get("mode") != "offline"
+        or value.get("mode") != VERIFICATION_MODE
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
         or not all(isinstance(verifier.get(key), str) for key in ("version", "scope"))
         or set(verifier) != {"version", "scope"}
-        or verifier.get("scope") != "structural"
+        or verifier.get("scope") != VERIFIER_SCOPE
         or not isinstance(inputs, dict)
         or set(inputs) != set(INPUT_PATHS)
         or set(value)

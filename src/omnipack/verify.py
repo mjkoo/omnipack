@@ -15,6 +15,8 @@ from omnipack.offline import (
     validate_offline,
 )
 from omnipack.report_model import (
+    VERIFICATION_MODE,
+    VERIFIER_SCOPE,
     FindingRecord,
     Fingerprint,
     InputState,
@@ -40,7 +42,7 @@ class VerificationReportError(RuntimeError):
 
 
 def verifier_identity() -> dict[str, str]:
-    return {"version": VERIFIER_VERSION, "scope": "structural"}
+    return {"version": VERIFIER_VERSION, "scope": VERIFIER_SCOPE}
 
 
 def capture_inputs(
@@ -139,7 +141,7 @@ def run_verification(root: Path) -> VerificationReport:
     report: VerificationReport = {
         "schemaVersion": SCHEMA_VERSION,
         "verifier": verifier_identity(),
-        "mode": "offline",
+        "mode": VERIFICATION_MODE,
         "startedAt": started,
         "completedAt": _now(),
         "status": Status.FAILED if errors else Status.SUCCESS,
