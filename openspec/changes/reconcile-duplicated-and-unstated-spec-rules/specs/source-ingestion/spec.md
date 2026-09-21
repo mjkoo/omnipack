@@ -214,13 +214,13 @@ explicit track-only resources. It SHALL retain discovery settings such as
 prerelease enablement and filename filters, and SHALL NOT reinterpret a
 track-only resource ID as an Android package ID.
 
-During routine ingestion, codm2000 entries SHALL be dual-screen builds,
-eligible for dual only and preferred there. A normalized project URL already supplied by a higher-precedence
-candidate that its source makes eligible for dual SHALL suppress the
-corresponding codm2000 candidate before exclusions and selection. Single-only
-coverage SHALL NOT suppress it. Suppression SHALL use source eligibility alone,
-and ingestion SHALL NOT read or apply the composition policy. Merely appearing
-in codm2000 SHALL NOT promote an ordinary higher-source build.
+During routine ingestion, codm2000 entries SHALL be dual-screen builds, eligible
+for dual only and preferred there. A normalized project URL already supplied by
+a higher-precedence candidate that its source makes eligible for dual SHALL
+suppress the corresponding codm2000 candidate before exclusions and selection.
+Single-only coverage SHALL NOT suppress it. Suppression SHALL use source
+eligibility alone, and ingestion SHALL NOT read or apply the composition policy.
+Merely appearing in codm2000 SHALL NOT promote an ordinary higher-source build.
 
 Retained entries SHALL preserve codm2000 provenance, generated origin, original
 package identity and source settings, so family rules and fork-specific overlays

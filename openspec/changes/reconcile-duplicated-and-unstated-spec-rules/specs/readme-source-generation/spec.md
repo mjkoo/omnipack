@@ -50,14 +50,14 @@ this requirement governs which endpoint is asked and how many times a release
 is looked up, not how many HTTP attempts the shared transport makes.
 
 The settings that select a release, namely prerelease admission, release-title
-filtering and the consumer setting `fallbackToOlderReleases`, SHALL be
-available to a rule of either kind, and the generated entry SHALL carry each
-configured value. The settings that act on a release's APK assets, namely APK
-filename filtering, version extraction and its group selector, SHALL be
-available to an APK rule only, and a track-only rule carrying one SHALL fail
-validation with the project and the setting identified, because a track-only
-resource has no APK for them to act on. Consumer fallback SHALL NOT change which release the
-generator resolves.
+filtering and the consumer setting `fallbackToOlderReleases`, SHALL be available
+to a rule of either kind, and the generated entry SHALL carry each configured
+value. The settings that act on a release's APK assets, namely APK filename
+filtering, version extraction and its group selector, SHALL be available to an
+APK rule only, and a track-only rule carrying one SHALL fail validation with the
+project and the setting identified, because a track-only resource has no APK for
+them to act on. Consumer fallback SHALL NOT change which release the generator
+resolves.
 
 #### Scenario: Version extraction references an absent capture group
 
@@ -126,14 +126,13 @@ fixed download URL or claim of an Android package identity. Tracking outcomes
 SHALL be separate from APK resolution in diagnostics.
 
 A track-only resource SHALL appear under its own synthetic identity and SHALL
-NOT replace the entry of the app it extends in either pack. Its description SHALL carry
-the rule's rationale and installation path, and with consumer guidance SHALL
-explain that path, and that Obtainium
-notifications and acknowledgement neither install it nor detect its installed
-version. Enabling ZIP extraction SHALL NOT be presented as a way to install a
-non-APK archive. The pack's own notification tracker is not one of these
-resources; "Both packs include one shared omnipack notification tracker" in
-pack-curation owns it.
+NOT replace the entry of the app it extends in either pack. Its description
+SHALL carry the rule's rationale and installation path, and with consumer
+guidance SHALL explain that path, and that Obtainium notifications and
+acknowledgement neither install it nor detect its installed version. Enabling
+ZIP extraction SHALL NOT be presented as a way to install a non-APK archive. The
+pack's own notification tracker is not one of these resources; "Both packs
+include one shared omnipack notification tracker" in pack-curation owns it.
 
 A new tracker whose selected release cannot be verified SHALL block the
 complete proposal. A tracker with a committed entry SHALL keep that entry on a
@@ -250,27 +249,27 @@ Before pushing the source-update branch, creating a PR or editing a PR's body,
 the source-maintenance workflow's read-only job SHALL validate the candidate
 catalog's shape, IDs and deterministic rendering, run the project's full test
 suite with the candidate catalog in place, and build and structurally verify
-both pack variants with the candidate catalog and main's configuration. Any failure, including
-stale selectors and package collisions, SHALL block those writes. When a
-successful generation reproduces main's committed catalog, closing an open PR
-from the source-update branch SHALL be the only permitted write, and it SHALL
-require no tests, build or verification. Generated pack outputs and the pack README SHALL be diagnostics for this
-run, not part of the proposal. The proposed catalog SHALL be byte-identical to
-the checked candidate: the read-only job SHALL commit the candidate before the
-checks and confirm afterwards that the workspace catalog still matches that
-commit, and the write job SHALL push only that exact commit, identified by its
-SHA, after confirming that its parent is the checked-out main revision and that
-it changes only the committed source catalog, which SHALL be a regular file of
-mode 100644 in both the base revision and the commit. The read-only job SHALL
-likewise reject a generated candidate or a workspace catalog that is not a
-regular file. The reviewed policy SHALL NOT be
-modified or staged. Diagnostics SHALL
-identify the base revision, catalog changes, skipped links, resolution results,
-tracking outcomes, effective policy, retained failures and pack validation
-outcome. The base revision SHALL appear in the PR body and in the run summary
-of a run whose staging succeeds; a run whose staging fails SHALL summarize
-that staging failed and its reason instead. The pack validation outcome SHALL be the reported results of the run's test,
-build and verification steps.
+both pack variants with the candidate catalog and main's configuration. Any
+failure, including stale selectors and package collisions, SHALL block those
+writes. When a successful generation reproduces main's committed catalog,
+closing an open PR from the source-update branch SHALL be the only permitted
+write, and it SHALL require no tests, build or verification. Generated pack
+outputs and the pack README SHALL be diagnostics for this run, not part of the
+proposal. The proposed catalog SHALL be byte-identical to the checked candidate:
+the read-only job SHALL commit the candidate before the checks and confirm
+afterwards that the workspace catalog still matches that commit, and the write
+job SHALL push only that exact commit, identified by its SHA, after confirming
+that its parent is the checked-out main revision and that it changes only the
+committed source catalog, which SHALL be a regular file of mode 100644 in both
+the base revision and the commit. The read-only job SHALL likewise reject a
+generated candidate or a workspace catalog that is not a regular file. The
+reviewed policy SHALL NOT be modified or staged. Diagnostics SHALL identify the
+base revision, catalog changes, skipped links, resolution results, tracking
+outcomes, effective policy, retained failures and pack validation outcome. The
+base revision SHALL appear in the PR body and in the run summary of a run whose
+staging succeeds; a run whose staging fails SHALL summarize that staging failed
+and its reason instead. The pack validation outcome SHALL be the reported
+results of the run's test, build and verification steps.
 
 #### Scenario: Candidate changes a pinned identity
 

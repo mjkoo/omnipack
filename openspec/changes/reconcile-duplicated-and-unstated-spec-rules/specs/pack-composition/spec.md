@@ -91,18 +91,19 @@ pins for one family and target SHALL fail.
 
 The system SHALL load a versioned committed composition policy. A candidate
 SHALL retain original source, source origin, package id and normalized project
-URL. These fields SHALL identify a candidate after identical duplicates collapse;
-different records sharing that identity SHALL fail rather than be chosen by order.
-Policy candidate selectors SHALL match this original identity exactly once.
-Every policy selector, including the selector a pin matches with, SHALL name one
-of the sources the pipeline ingests and an origin belonging to that source, and
-SHALL fail with the selector and the offending value identified otherwise.
-A selector's `url` SHALL be one the pipeline can normalize for comparison: a
-host SHALL be readable from it, any port SHALL be numeric and in the valid
-range, and it SHALL contain no whitespace. Failure SHALL identify that field
-and the offending value. Corrections SHALL NOT recursively match other rules. Unmatched or ambiguous selectors,
-duplicate selectors, invalid targets, unknown fields and inconsistent rules SHALL
-fail with the affected selector identified.
+URL. These fields SHALL identify a candidate after identical duplicates
+collapse; different records sharing that identity SHALL fail rather than be
+chosen by order. Policy candidate selectors SHALL match this original identity
+exactly once. Every policy selector, including the selector a pin matches with,
+SHALL name one of the sources the pipeline ingests and an origin belonging to
+that source, and SHALL fail with the selector and the offending value identified
+otherwise. A selector's `url` SHALL be one the pipeline can normalize for
+comparison: a host SHALL be readable from it, any port SHALL be numeric and in
+the valid range, and it SHALL contain no whitespace. Failure SHALL identify that
+field and the offending value. Corrections SHALL NOT recursively match other
+rules. Unmatched or ambiguous selectors, duplicate selectors, invalid targets,
+unknown fields and inconsistent rules SHALL fail with the affected selector
+identified.
 
 A candidate SHALL default to family `package:<effective-package-id>`. Explicit
 family assignments SHALL use the separate `app:` namespace and SHALL NOT be
@@ -124,20 +125,19 @@ identified. This restriction SHALL apply whether or not the candidate has a
 rule, and SHALL likewise apply before exclusions and selection, regardless of
 whether either candidate would win or be denied.
 
-A candidate-rule field other than `match`, `rationale`,
-`packageId` and `family` SHALL fail as an unknown candidate-rule field with the
-rule and field identified. An identity correction SHALL be the
-maintainer's decision, made from recorded primary APK manifest evidence as
-"Curation evidence states its limits" in pack-curation requires of identity
-decisions; the pipeline SHALL NOT verify it. Rules projecting to the same effective id and normalized URL
-SHALL agree on family, so rendered-family interpretation is unambiguous, and a
-projection SHALL carry the family only. Build SHALL reject any candidate
-sharing that rendered key whose family contradicts the projection, including
-candidates without their own rule. Projections SHALL impose no offline
-eligibility restriction, because source-derived eligibility cannot be
-reconstructed from rendered entries. Composition SHALL NOT serialize the
-family, original identity, eligibility or selection reason it computes into
-Obtainium app records.
+A candidate-rule field other than `match`, `rationale`, `packageId` and `family`
+SHALL fail as an unknown candidate-rule field with the rule and field
+identified. An identity correction SHALL be the maintainer's decision, made from
+recorded primary APK manifest evidence as "Curation evidence states its limits"
+in pack-curation requires of identity decisions; the pipeline SHALL NOT verify
+it. Rules projecting to the same effective id and normalized URL SHALL agree on
+family, so rendered-family interpretation is unambiguous, and a projection SHALL
+carry the family only. Build SHALL reject any candidate sharing that rendered
+key whose family contradicts the projection, including candidates without their
+own rule. Projections SHALL impose no offline eligibility restriction, because
+source-derived eligibility cannot be reconstructed from rendered entries.
+Composition SHALL NOT serialize the family, original identity, eligibility or
+selection reason it computes into Obtainium app records.
 
 #### Scenario: Different package ids represent replacement builds
 
@@ -319,14 +319,14 @@ effective package id from both variants before selection and report the
 exclusion. Package denials SHALL match effective package identities across
 sources. A package denial SHALL NOT remove different-package alternatives merely
 because they share a family, so a family SHALL be absent from a variant after
-denials only when none of its remaining candidates is eligible there. Where a family's baseline and dual-screen builds share a package id,
-a denial of that id SHALL remove both builds from both packs, and a family whose
-only builds share the denied package id is therefore absent from both packs. An
-entry matching no candidate SHALL be reported as a stale exclusion and SHALL NOT
-fail the build. An entry whose only matching candidates are eligible for neither
-variant SHALL count as matched: it removes nothing, reports no exclusion and
-SHALL NOT be reported stale. Any other field SHALL fail
-explicitly with the entry identified.
+denials only when none of its remaining candidates is eligible there. Where a
+family's baseline and dual-screen builds share a package id, a denial of that id
+SHALL remove both builds from both packs, and a family whose only builds share
+the denied package id is therefore absent from both packs. An entry matching no
+candidate SHALL be reported as a stale exclusion and SHALL NOT fail the build.
+An entry whose only matching candidates are eligible for neither variant SHALL
+count as matched: it removes nothing, reports no exclusion and SHALL NOT be
+reported stale. Any other field SHALL fail explicitly with the entry identified.
 
 #### Scenario: Denied by package id
 
