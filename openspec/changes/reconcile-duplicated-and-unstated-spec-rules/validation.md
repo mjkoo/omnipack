@@ -281,3 +281,36 @@ After the audit, `just check-all` exited zero:
 Only this evidence record and the completion checkbox changed after the audit.
 The change remains active on `reconcile-duplicated-and-unstated-spec-rules`;
 the separately requested verification and archive workflows remain pending.
+
+## Post-implementation review
+
+A later review of the whole branch found no behavior defect and made four
+revisions, none of which changes behavior or a requirement's wording:
+
+- `612f099`: offline validation exposes the constructor of its missing-input
+  finding and verification reuses it, where verification had rebuilt the finding
+  from a copy of its message format. Replacing that constructor with a
+  non-matching one makes
+  `test_unreadable_input_is_reported_once_without_being_called_missing` fail for
+  its pack and configuration cases, so the filter stays under test.
+- `ee2a7bd`: `docs/publishing.md` says a write job re-run after its own push
+  landed also finds main advanced, as the rerun requirement and its test state.
+- `e7131e3`: the never-eligible denial test returns to public `compose`
+  assertions. This supersedes the strengthening recorded for task 2.2: empty
+  removals and empty stale exclusions together already separate a removal from a
+  non-match, and the private helpers asserted internal state the scenario does
+  not state. The single-winner guard test escapes the family it matches, and the
+  staging summary test drops names left from its removed failure half.
+- `8a38f8c`: eight prose lines the rewording pushed past the wrap width are
+  rewrapped in main specs and deltas together. A word-level diff is empty, and
+  all 24 modified blocks still match their main-spec blocks.
+
+The question of whether archive accepts a rename already synchronized into the
+main spec is settled by the CLI: OpenSpec 1.13.0 treats a rename whose source is
+gone and whose target exists as already applied and skips it.
+
+After these commits `just check-all` exited zero: 795 tests passed on CPython
+3.14 with 94% coverage, 108 write-side tests passed on CPython 3.12, and lock,
+formatting, lint, types, offline verification, actionlint, zizmor, links and Nix
+checks passed. Strict change validation and strict main-spec validation pass,
+with all 10 main specs valid.
