@@ -103,6 +103,37 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
     assert _git(bare, "rev-parse", "main") == advanced
 
 
+def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = bare_remote(seed, tmp_path)
+    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    _git(seed, "push", "-q", str(bare), "HEAD:main")
+    assert _git(bare, "rev-parse", "main") == sha
+    write_side = shallow_checkout(tmp_path, bare, base)
+
+    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
+
+    assert result.status == "failed"
+    assert "main advanced" in result.summary
+    assert _git(bare, "rev-parse", "main") == sha
+
+    summary_path = tmp_path / "summary.md"
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    monkeypatch.chdir(write_side)
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+
+    assert write_module.main(["push", "--bundle", str(bundle_path)]) == 1
+    assert "main advanced" in summary_path.read_text()
+    assert _git(bare, "rev-parse", "main") == sha
+
+
 def test_push_propagates_handoff_rejection_before_remote_write(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

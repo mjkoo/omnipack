@@ -32,7 +32,8 @@ def test_catalog_errors_fail_without_live_calls_or_input_writes(
     before = {path: path.read_bytes() for path in tmp_path.rglob("*") if path.is_file()}
     result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"
-    assert any(error["stage"] == "catalog" for error in result["errors"])
+    expected_code = "input_unreadable" if defect == "unreadable" else "catalog_invalid"
+    assert [error["code"] for error in result["errors"]] == [expected_code]
     assert all(path.read_bytes() == value for path, value in before.items())
 
 

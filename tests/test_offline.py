@@ -451,3 +451,23 @@ def test_native_gitlab_setting_types_rejected_without_repair(
         for variant in ("single", "dual")
     }
     assert snapshots == before
+
+
+def test_absent_unpinned_losing_candidate_cannot_be_assessed_offline() -> None:
+    policy = {
+        "schemaVersion": 1,
+        "candidates": [
+            {
+                "match": {
+                    "source": "extras",
+                    "origin": "extras",
+                    "id": "absent.pkg",
+                    "url": "https://example.com/loser",
+                },
+                "family": "app:shared",
+                "rationale": "An unselected alternative",
+            }
+        ],
+        "pins": [],
+    }
+    assert validate_offline(inputs(composition=policy)) == ()

@@ -2,9 +2,9 @@
 
 ## Purpose
 
-The command-line surface through which the pack is built and inspected, both
-by a person working on the configuration and by the automation that rebuilds
-the pack on a schedule.
+Defines the command-line surface for building and inspecting the pack, running
+offline verification, reporting saved evidence and generating the reviewed
+README source catalog, for both maintainers and scheduled automation.
 
 ## Requirements
 
@@ -15,7 +15,8 @@ and renders both variants, generates the README catalog, verifies the rendered
 pair and catalog offline, and publishes all three files only after verification
 succeeds. Handwritten README content SHALL be preserved byte-for-byte. Missing
 or malformed catalog markers SHALL fail the build. The
-build SHALL NOT perform live verification. Network requests for upstream JSON catalogs SHALL remain part of building.
+build SHALL NOT perform live verification. Network requests for upstream JSON
+catalogs SHALL remain part of building.
 The codm2000 source SHALL be read from committed JSON; README scraping, APK
 discovery and package-ID resolution SHALL NOT occur during building.
 
@@ -52,8 +53,9 @@ diff. Building SHALL NOT replace `.build/verify.json` or claim live health.
 
 ### Requirement: The verify command runs offline structural checks only
 
-The system SHALL implement `pack verify` to check both current distribution files,
-local configuration and generated catalog offline without network requests.
+The system SHALL implement `pack verify` to check both current distribution
+files, local configuration and generated catalog offline without network
+requests.
 An unsupported argument SHALL fail argument parsing with nonzero exit before
 verification runs. The command SHALL record
 structural evidence and exit zero only on a complete, error-free run, as
@@ -84,36 +86,41 @@ configuration files, or overwrite the build report.
 The system SHALL implement `pack report` to display the available build and
 verification reports as separate human-readable sections without network access
 or file changes. It SHALL show recorded failures, verification mode and
-observation time. It SHALL compare verification input
-fingerprints and verifier identity against the current files/configuration and
-label nonmatching evidence stale. A current local fingerprint SHALL NOT be
-described as proof of current upstream health.
+observation time. One missing report SHALL be acceptable if the other can be
+displayed. When both are missing, or an existing report is unreadable, malformed
+or has an unsupported schema, the command SHALL exit nonzero with a useful
+diagnostic. Successfully displaying a recorded failed operation SHALL exit zero.
 
-One missing report SHALL be acceptable if the other can be displayed. When both
-are missing, or an existing report is unreadable, malformed or has an unsupported
-schema, the command SHALL exit nonzero with a useful diagnostic. Successfully
-displaying a recorded failed operation SHALL exit zero. Build reports SHALL also
-display family selections with their reasons, and every non-blocking outcome the
-build report records: the apps added and removed since the previous output, the
-denylist entries that excluded a candidate, the denylist entries that matched no
-candidate, and the admitted codm2000 candidates with their committed identities.
-A non-blocking outcome the build report records SHALL NOT be withheld from
-display, and a category the run recorded nothing in SHALL contribute nothing to
-the output. The recorded candidate comparison, exclusions, stale denials and
-admissions SHALL be listed in full on each run rather than summarized, sampled
-or elided, so a long diagnostics section is the expected steady state. A null candidate comparison SHALL be displayed as
-unavailable, never as a build that added and removed nothing, and a comparison
-recorded by a build whose status is failed SHALL be displayed as candidates that
-were not published rather than as apps added and removed since the previous
-output. The composition policy SHALL
-participate in freshness checks. An unsupported build report schema, including a
-report without a schema field, SHALL produce a regeneration diagnostic directing
-the user to `pack build`. An unsupported verification report schema SHALL
-produce a regeneration diagnostic directing the user to `pack verify`, rather
-than being interpreted as current structural evidence, which is the reporting
-surface of the regeneration rule pack-verification states. Reports SHALL describe
-structural scope without resolved versions or live-health claims. A supported
-schema with a different verifier identity SHALL be stale.
+Recorded verification evidence SHALL be labelled current or stale. It SHALL be
+current only when every input fingerprint it records equals the current bytes of
+that input, over the input set that "Structural verification evidence belongs to
+an exact input snapshot" in pack-verification defines, composition policy
+included, and its verifier identity equals the running verifier's; otherwise it
+SHALL be labelled stale, including a supported schema with a different verifier
+identity. A current local fingerprint SHALL NOT be described as proof of current
+upstream health. What a stored report may contain is pack-verification's rule;
+the display SHALL add no resolved version or live-health claim to it.
+
+An unsupported build report schema, including a report without a schema field,
+SHALL produce a regeneration diagnostic directing the user to `pack build`. An
+unsupported verification report schema SHALL produce a regeneration diagnostic
+directing the user to `pack verify`, rather than being interpreted as current
+structural evidence, which is the reporting surface of the regeneration rule
+pack-verification states.
+
+Build reports SHALL also display family selections with their reasons, and every
+non-blocking outcome the build report records: the apps added and removed since
+the previous output, the denylist entries that excluded a candidate, the
+denylist entries that matched no candidate, and the admitted codm2000 candidates
+with their committed identities. A non-blocking outcome the build report records
+SHALL NOT be withheld from display, a category the run recorded nothing in SHALL
+contribute nothing to the output, and every recorded entry SHALL be listed in
+full on each run rather than summarized, sampled or elided, so a long
+diagnostics section is the expected steady state. A null candidate comparison
+SHALL be displayed as unavailable, never as a build that added and removed
+nothing, and a comparison recorded by a build whose status is failed SHALL be
+displayed as candidates that were not published rather than as apps added and
+removed since the previous output.
 
 #### Scenario: Configuration changed after successful structural verification
 
@@ -154,7 +161,7 @@ schema with a different verifier identity SHALL be stale.
 #### Scenario: A build recorded no non-blocking diagnostics
 
 - **WHEN** a valid build report records no candidate change, exclusion, stale
-  denial or admission
+  exclusion or admission
 - **THEN** `pack report` displays the build section without diagnostic output
   and exits zero
 
@@ -164,6 +171,24 @@ schema with a different verifier identity SHALL be stale.
   composition did not complete
 - **THEN** `pack report` displays the comparison as unavailable rather than as a
   build that added and removed nothing
+
+#### Scenario: Neither report exists
+
+- **WHEN** neither a build report nor a verification report exists
+- **THEN** `pack report` exits nonzero with a diagnostic saying so
+
+#### Scenario: The verifier changed after verification
+
+- **WHEN** a verification report with the current schema records a verifier
+  identity other than the running verifier's
+- **THEN** `pack report` displays the recorded results as stale
+
+#### Scenario: A failed build recorded a candidate comparison
+
+- **WHEN** a build report whose status is failed records a candidate comparison
+- **THEN** `pack report` displays it as candidates that were not published, not
+  as apps added and removed since the previous output
+
 ### Requirement: A failed build leaves published outputs unchanged
 
 Automation commits whatever the distribution directory holds, so a partially

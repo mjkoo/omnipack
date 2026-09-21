@@ -68,9 +68,14 @@ def validate_offline(inputs: OfflineInputs) -> tuple[Finding, ...]:
     return tuple(findings)
 
 
+def missing_input(name: str) -> Finding:
+    """Return the finding reported for an input whose snapshot is absent."""
+    return Finding("input", "input_missing", f"{name} input is missing")
+
+
 def _decode_snapshot(value: bytes | None, name: str, findings: list[Finding]) -> object:
     if value is None:
-        findings.append(Finding("input", "input_missing", f"{name} input is missing"))
+        findings.append(missing_input(name))
         return _INVALID
     if not isinstance(value, bytes):
         findings.append(

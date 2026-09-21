@@ -404,3 +404,32 @@ def test_selector_origin_must_belong_to_its_source_before_matching(kind: str) ->
         str(error.value)
         == f"{kind}[0].match.origin 'bboi-standard-asset' is invalid for source 'rjny'"
     )
+
+
+@pytest.mark.parametrize("kind", ["candidates", "pins"])
+@pytest.mark.parametrize(
+    "url",
+    [
+        pytest.param("/owner/repo", id="no-host"),
+        pytest.param("https://example.com/owner /repo", id="whitespace"),
+        pytest.param("https://example.com:abc/owner/repo", id="bad-port"),
+    ],
+)
+def test_selector_url_must_be_normalizable_before_candidate_matching(
+    kind: str, url: str
+) -> None:
+    record = rule(
+        match={
+            "source": "rjny",
+            "origin": "rjny-catalog",
+            "id": "org.example.old",
+            "url": url,
+        }
+    )
+    if kind == "pins":
+        record.update(family="package:org.example.old", variant="dual")
+
+    with pytest.raises(CompositionPolicyError) as error:
+        parse_composition_policy(policy(**{kind: [record]}))
+
+    assert str(error.value) == f"{kind}[0].match.url is not a project URL: {url!r}"

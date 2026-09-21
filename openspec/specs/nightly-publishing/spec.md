@@ -2,9 +2,10 @@
 
 ## Purpose
 
-Keep the raw Obtainium import files on main current through scheduled,
-verified refreshes, with explicit publication outcomes and recoverable failure
-reporting for maintainers.
+Keeps the raw Obtainium import files and generated README catalog on main
+current through scheduled, verified refreshes. It owns publication credential
+isolation, main-publication outcomes, release synchronization and recoverable
+failure reporting for maintainers.
 
 ## Requirements
 
@@ -73,6 +74,9 @@ reports an error, the run SHALL fail visibly. It SHALL NOT rebase, cherry-pick
 generated output, retry the push, rebuild, or inspect remote history to
 reinterpret the push outcome. A later invocation SHALL build and verify its own
 checkout, and output that already landed SHALL then be a verified no-op.
+What a rerun of an earlier run's write job does once main has moved off the
+revision that run checked out, that run's own landed push included, is defined
+by "Release writes require an established main outcome" in rolling-pack-release.
 
 #### Scenario: Main advances during the run
 
@@ -102,17 +106,20 @@ Actions step results and logs SHALL be the failure record. The publisher SHALL
 write a short step summary identifying the main outcome (the published commit, a
 candidate prepared for publication, a no-op, or the failing stage) and, when the
 release stage runs, the release outcome (a new revision, a repair of the served
-assets at the same revision, unchanged, or failure). A rejected or erroring push SHALL appear as
-the failing main stage, and a release failure SHALL state its reason, with
-the bootstrap guidance that "Bootstrap is explicit" in rolling-pack-release
-requires for the release states it names. The build report and structural verification report
-produced by the run SHALL be uploaded as artifacts with 14-day retention on
-success and failure when they exist. Missing reports after an early failure
-SHALL NOT imply verification success. Verification reports SHALL be identified
-as structural/offline without live-health claims. The workflow SHALL NOT
-maintain failure issues or request issue-write permission. Summary or upload
-failure SHALL remain a visible failed step without undoing a prepared candidate
-or a completed push.
+assets at the same revision, unchanged, or failure). A rejected or erroring push
+SHALL appear as the failing main stage, and a release failure SHALL state its
+reason, with the bootstrap guidance that "Bootstrap is explicit" in
+rolling-pack-release requires for the release states it names. The build report
+and structural verification report produced by the run SHALL be uploaded as
+artifacts with 14-day retention on success and failure when they exist. Missing
+reports after an early failure SHALL NOT imply verification success.
+Verification reports SHALL be identified as structural/offline without
+live-health claims. The workflow SHALL NOT maintain failure issues or request
+issue-write permission. Summary or upload failure SHALL remain a visible failed
+step and SHALL NOT undo a completed push. A failure in the job that prepares the
+candidate, a summary or upload failure there included, SHALL keep that
+attempt's write job from running, so the attempt publishes nothing, and a rerun
+or a later run SHALL make its own attempt.
 
 Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
 downloads, and source text SHALL be treated as data rather than executable
@@ -131,12 +138,12 @@ input.
 #### Scenario: Release fails after a confirmed push
 
 - **WHEN** release synchronization fails after a successful main push
-- **THEN** the workflow fails and its summary shows the pushed commit separately from the release failure
+- **THEN** the summary names the pushed commit as the main outcome and, separately, the release failure with its reason as the release outcome
 
 #### Scenario: Diagnostics fail around publication
 
 - **WHEN** summary generation fails after a successful push, or an artifact upload fails in the job that produced the diagnostics, before any push exists
-- **THEN** the failing step remains visible and neither the prepared candidate nor a completed push is undone
+- **THEN** the failing step remains visible, a completed push is not undone, and a failure before any push keeps that attempt's write job from running, so the attempt publishes nothing and a rerun or a later run makes its own attempt
 
 #### Scenario: Push outcome is summarized
 
@@ -208,7 +215,8 @@ the pushed commit contains exactly the allowed-file bytes that verification
 checked. The write job SHALL reject a handed-off commit that is not the verified
 SHA, or whose parent is not the checked-out main revision, before any push or
 release write. A failed verification SHALL prevent publication of every
-candidate file and SHALL keep the write job from running. Nightly SHALL NOT repeat development CI formatting, lint, type or
+candidate file and SHALL keep the write job from running. Nightly SHALL NOT
+repeat development CI formatting, lint, type or
 test-suite checks, verify old committed outputs before building, poll CI status,
 or accept a verification report from another run as authorization. Non-blocking
 composition diagnostics SHALL retain their policy: they SHALL NOT block
@@ -219,7 +227,7 @@ Verification SHALL use `pack verify` and SHALL make no network requests.
 Building SHALL retain upstream JSON network ingestion and read the committed
 codm2000 catalog locally, without README fetches or APK package-ID discovery.
 
-#### Scenario: Candidate verifies with warnings
+#### Scenario: Candidate verifies with non-blocking diagnostics
 
 - **WHEN** the build and structural verification succeed with non-blocking composition diagnostics
 - **THEN** the candidate is eligible and those diagnostics stay recorded in the run's uploaded build report, without running development CI checks
@@ -244,7 +252,7 @@ codm2000 catalog locally, without README fetches or APK package-ID discovery.
 - **WHEN** the commit the write job receives differs from the verified SHA, or its parent is not the checked-out main revision
 - **THEN** the run fails before any push or release write
 
-#### Scenario: App metadata is unavailable after a successful build
+#### Scenario: Publication needs no separate app metadata lookup
 
 - **WHEN** building and structural verification succeed
 - **THEN** eligibility requires no separate app-release metadata lookup
@@ -272,7 +280,7 @@ Publication SHALL use a conventional commit identifying the UTC date, run and
 base revision, and a normal fast-forward push to main. It SHALL NOT force-push
 or alter repository protection settings to bypass a rejection.
 
-#### Scenario: Resolver state or source catalog changes
+#### Scenario: Candidate changes an out-of-scope tracked input
 
 - **WHEN** a nightly candidate changes a committed source catalog, the reviewed project policy or other configuration
 - **THEN** publication is rejected as an out-of-scope tracked mutation

@@ -9,9 +9,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
-from omnipack.offline import Finding, OfflineInputs, validate_offline
+from omnipack.offline import (
+    Finding,
+    OfflineInputs,
+    missing_input,
+    validate_offline,
+)
 
-SCHEMA_VERSION = 3
+SCHEMA_VERSION = 4
 VERIFIER_VERSION = "2.0.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
@@ -78,24 +83,35 @@ def run_verification(root: Path) -> dict[str, Any]:
             snapshots["composition"],
         )
     )
-    errors.extend(_finding(item) for item in findings)
+    # Offline checks see an absent snapshot for both missing and unreadable files.
+    # Capture knows which it was, so replace only those false missing findings.
+    unreadable_missing = {
+        missing_input(name)
+        for name, fingerprint in fingerprints.items()
+        if fingerprint["state"] == "unreadable"
+    }
+    errors.extend(_finding(item) for item in findings if item not in unreadable_missing)
     from omnipack.catalog import generate_catalog, split_catalog
     from omnipack.composition_policy import load_composition_policy
 
     try:
         readme = snapshots["readme"]
         if readme is None:
-            raise ValueError("README input is missing or unreadable")
-        _, interior, _ = split_catalog(readme)
-        single, dual, policy = (
-            snapshots[name] for name in ("single", "dual", "composition")
-        )
-        if single is not None and dual is not None and policy is not None:
-            expected = generate_catalog(single, dual, load_composition_policy(policy))
-            if interior != expected:
-                raise ValueError(
-                    "README catalog differs from the captured packs and policy"
+            if fingerprints["readme"]["state"] == "missing":
+                raise ValueError("README input is missing")
+        else:
+            _, interior, _ = split_catalog(readme)
+            single, dual, policy = (
+                snapshots[name] for name in ("single", "dual", "composition")
+            )
+            if single is not None and dual is not None and policy is not None:
+                expected = generate_catalog(
+                    single, dual, load_composition_policy(policy)
                 )
+                if interior != expected:
+                    raise ValueError(
+                        "README catalog differs from the captured packs and policy"
+                    )
     except ValueError as error:
         errors.append(
             {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
@@ -115,7 +131,6 @@ def run_verification(root: Path) -> dict[str, Any]:
         "mode": "offline",
         "startedAt": started,
         "completedAt": _now(),
-        "complete": True,
         "status": "failed" if errors else "success",
         "inputs": fingerprints,
         "errors": errors,

@@ -106,6 +106,27 @@ def test_head_other_than_github_sha_fails_with_no_commit_or_bundle(
     assert not body_path.exists()
 
 
+def test_successful_stage_summary_reports_base_revision(
+    tmp_path: Path,
+) -> None:
+    root = _repo(tmp_path, "success")
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(
+        root,
+        '{"apps": [{"id": "a"}]}\n',
+        _report(added=("https://example.test/a",)),
+    )
+    outcome = run_stage(
+        root,
+        base,
+        "https://github.example/runs/2",
+        tmp_path / "success.bundle",
+        tmp_path / "success-body.md",
+    )
+    assert outcome.status == "changed"
+    assert f"Base SHA: {base}" in outcome.summary
+
+
 def _pre_block(text: str) -> str:
     return text[text.index("<pre>") : text.index("</pre>")]
 
@@ -480,6 +501,56 @@ def test_unchanged_closes_an_open_pr_and_makes_no_push_or_pr_write(
     assert not any(call[:2] == ("pr", "create") for call in gh.calls)
     assert not any(call[:2] == ("pr", "edit") for call in gh.calls)
     assert _bare_branch_sha(bare) == ""
+
+
+def test_retained_failure_reproducing_main_closes_open_proposal(
+    tmp_path: Path,
+) -> None:
+    seed = _repo(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    _write_candidate(
+        seed,
+        '{"apps": []}\n',
+        _report(
+            retained_failures=(
+                ("https://example.test/project", "release lookup failed"),
+            )
+        ),
+    )
+    stage = run_stage(
+        seed,
+        base,
+        "https://github.example/runs/1",
+        tmp_path / "candidate.bundle",
+        tmp_path / "pr-body.md",
+    )
+    assert stage.status == "unchanged"
+    assert stage.changed is False
+    assert stage.sha == base
+    assert stage.base_sha == base
+    assert stage.retained_failures == (
+        ("https://example.test/project", "release lookup failed"),
+    )
+
+    bare = _bare_from(seed, tmp_path)
+    write_side = shallow_checkout(tmp_path, bare, base)
+    gh = _proposal_gh(pr_list=[_pr(7)])
+    published = run_publish(
+        write_side,
+        str(stage.changed).lower(),
+        stage.sha,
+        stage.base_sha,
+        None,
+        None,
+        gh=gh,
+    )
+
+    assert published.status == "closed"
+    assert published.summary == "publish closed PR #7"
+    assert [call for call in gh.calls if call[:2] == ("pr", "close")] == [
+        ("pr", "close", "7", "--repo", "mjkoo/omnipack")
+    ]
+    assert not any(call[:2] in (("pr", "create"), ("pr", "edit")) for call in gh.calls)
 
 
 def test_unchanged_with_no_open_pr_makes_no_write(tmp_path: Path) -> None:

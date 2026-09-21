@@ -24,11 +24,18 @@ Numeric version-extraction group selectors and `$N` references SHALL name
 existing groups in the configured regex, with group zero denoting the full
 match. Leading and trailing selector whitespace SHALL be ignored for validation.
 
-Reviewed regexes SHALL reject `\d`, `\D`, `\s`, `\S`, `\w`, `\W`, `\b`, and
-`\B`, whose character or boundary semantics differ between the engine that
-validates them here and the supported Obtainium client that applies them.
+Reviewed regexes SHALL reject the following constructs, whose meaning differs or
+may differ between the engine that validates them here and the supported
+Obtainium client that applies them: `\d`, `\D`, `\s`, `\S`, `\w`, `\W`, `\b` and
+`\B`, whose character or boundary semantics differ between the two; every other
+alphanumeric escape except the control-character escapes `\n`, `\r`, `\t`, `\f`
+and `\v`, which excludes anchors such as `\A` and `\Z`, backreferences and octal
+escapes; every group opening with `(?` other than the non-capturing `(?:`, the
+lookahead `(?=` and the negative lookahead `(?!`, which excludes inline flags,
+named groups, lookbehind and comments; and possessive quantifiers. A regex that
+passes validation is not thereby shown to mean the same to both engines.
 Authors SHALL use explicit character classes for the intended matching set.
-Escaped literal backslashes SHALL remain supported.
+Escaped literal backslashes SHALL be supported.
 
 Only an explicit reviewed rule SHALL enable prereleases or classify a resource
 as track-only. A 404, missing APK, download failure or package-ID conflict SHALL
@@ -50,15 +57,14 @@ this requirement governs which endpoint is asked and how many times a release
 is looked up, not how many HTTP attempts the shared transport makes.
 
 The settings that select a release, namely prerelease admission, release-title
-filtering and the consumer setting `fallbackToOlderReleases`, SHALL be
-available to a rule of either kind, and the generated entry SHALL carry each
-configured value. The settings that act on a release's APK assets, namely APK
-filename filtering, version extraction and its group selector, SHALL be
-available to an APK rule only, and a track-only rule carrying one SHALL fail
-validation with the project and the setting identified, because a track-only
-resource has no APK for them to act on. Unconfigured projects SHALL preserve
-their existing defaults. Consumer fallback SHALL NOT change which release the
-generator resolves.
+filtering and the consumer setting `fallbackToOlderReleases`, SHALL be available
+to a rule of either kind, and the generated entry SHALL carry each configured
+value. The settings that act on a release's APK assets, namely APK filename
+filtering, version extraction and its group selector, SHALL be available to an
+APK rule only, and a track-only rule carrying one SHALL fail validation with the
+project and the setting identified, because a track-only resource has no APK for
+them to act on. Consumer fallback SHALL NOT change which release the generator
+resolves.
 
 #### Scenario: Version extraction references an absent capture group
 
@@ -90,8 +96,8 @@ generator resolves.
 
 #### Scenario: Exported title filter and consumer fallback reach the client
 
-- **WHEN** a rule's release-title filter excludes a mutable release channel and enables consumer fallback, and the newest matching versioned release has no eligible APK while an older matching versioned release has one
-- **THEN** the generated entry's title filter excludes the mutable channel and its enabled `fallbackToOlderReleases` setting permits Obtainium to use the older matching release
+- **WHEN** a rule's release-title filter excludes a mutable release channel and enables consumer fallback, and the newest matching versioned release resolves
+- **THEN** the generated entry's title filter excludes the mutable channel and it carries `fallbackToOlderReleases` enabled, so Obtainium may later use an older matching release when a newer one has no eligible APK
 - **AND** a rule that disables consumer fallback exports it disabled
 
 #### Scenario: An unconfigured project has no stable APK
@@ -103,6 +109,11 @@ generator resolves.
 
 - **WHEN** the README removes a project with a committed rule
 - **THEN** generation reports the inactive rule and proposes removal of the catalog entry without rewriting the rule
+
+#### Scenario: A regex uses a rejected construct
+
+- **WHEN** a reviewed regex uses an inline flag, a named group, a lookbehind, a backreference, an anchor escape or a possessive quantifier
+- **THEN** policy validation fails with the project identified, before any network request
 
 ### Requirement: Generation produces a deterministic Obtainium source catalog
 
@@ -200,9 +211,9 @@ supplied through a required manual-resolution step.
 No eligible APK, disagreement between APK package IDs, or any unreadable eligible
 APK SHALL fail that project's resolution without trying an older release.
 Reading only a successful subset of the policy-selected APKs SHALL
-NOT establish agreement. Resolution SHALL retain bounded downloads, ranged
+NOT establish agreement. Resolution SHALL use bounded downloads, ranged
 manifest extraction and manifest validation. APKs SHALL be treated as data and
-SHALL NOT be executed. Non-APK archives and non-GitHub discovery remain outside
+SHALL NOT be executed. Non-APK archives and non-GitHub discovery are outside
 the supported APK-resolution boundary. An explicit track-only resource SHALL
 follow its separate metadata-only contract.
 
@@ -237,7 +248,7 @@ follow its separate metadata-only contract.
 - **WHEN** the newest permitted release has an unreadable eligible APK but an older release is usable
 - **THEN** resolution fails without treating the older release as a new successful resolution, and the project's committed entry is kept as a retained failure only if its effective policy is unchanged
 
-#### Scenario: Release scan reaches its bound
+#### Scenario: No permitted release occurs within the bounded list
 
 - **WHEN** no permitted release occurs within the bounded list
 - **THEN** the diagnostic identifies that limitation and no unbounded scan or broader release policy is attempted
@@ -249,8 +260,14 @@ follow its separate metadata-only contract.
 
 ### Requirement: Explicit track-only resources remain honest tracking entries
 
-Track-only generation SHALL require an explicit stable numeric-string resource
-ID and a documented manual installation path in reviewed policy. It SHALL
+Track-only generation SHALL require, in reviewed policy, an explicit stable
+numeric-string resource ID, a nonempty rationale and a documented manual
+installation path. The installation path SHALL say in words where the resource
+is installed from and SHALL name that place by an `https` URL carrying no
+credentials, port, query or fragment, a github.com URL naming a repository and
+nothing deeper; a rule with no rationale, or whose installation text holds no
+acceptable `https` URL or nothing beyond one such URL, SHALL fail policy
+validation with the project identified. It SHALL
 validate a published release under the selected channel policy without APK or
 archive downloads or package-ID discovery. It SHALL emit `trackOnly: true`,
 `versionDetection: false`, `includeZips: false` and disabled APK architecture
@@ -259,12 +276,13 @@ fixed download URL or claim of an Android package identity. Tracking outcomes
 SHALL be separate from APK resolution in diagnostics.
 
 A track-only resource SHALL appear under its own synthetic identity and SHALL
-NOT replace the entry of the app it extends in either pack. Its description and
-consumer guidance SHALL explain its manual installation path, and that Obtainium
-notifications and acknowledgement neither install it nor detect its installed
-version. Enabling ZIP extraction SHALL NOT be presented as a way to install a
-non-APK archive. The existing omnipack notification tracker SHALL retain its
-distinct identity and behavior.
+NOT replace the entry of the app it extends in either pack. Its description
+SHALL carry the rule's rationale and installation path, and with consumer
+guidance SHALL explain that path, and that Obtainium notifications and
+acknowledgement neither install it nor detect its installed version. Enabling
+ZIP extraction SHALL NOT be presented as a way to install a non-APK archive. The
+pack's own notification tracker is not one of these resources; "Both packs
+include one shared omnipack notification tracker" in pack-curation owns it.
 
 A new tracker whose selected release cannot be verified SHALL block the
 complete proposal. A tracker with a committed entry SHALL keep that entry on a
@@ -294,6 +312,11 @@ NOT be reused as a tracker ID.
 
 - **WHEN** reviewed policy changes a committed tracker's resource ID and that tracker's release lookup fails
 - **THEN** generation fails with no candidate catalog, and the committed entry is not retained under its old resource ID
+
+#### Scenario: A track-only rule lacks a rationale or a usable installation path
+
+- **WHEN** a track-only rule has no rationale, or its installation text holds no acceptable `https` URL or nothing beyond one
+- **THEN** policy validation fails with the project identified, before any network request
 
 ### Requirement: Resolution failures keep only unchanged committed entries
 
@@ -341,26 +364,27 @@ Before pushing the source-update branch, creating a PR or editing a PR's body,
 the source-maintenance workflow's read-only job SHALL validate the candidate
 catalog's shape, IDs and deterministic rendering, run the project's full test
 suite with the candidate catalog in place, and build and structurally verify
-both pack variants with the candidate catalog and main's configuration. Any failure, including
-stale selectors and package collisions, SHALL block those writes. When a
-successful generation reproduces main's committed catalog, closing an open PR
-from the source-update branch SHALL be the only permitted write, and it SHALL
-require no tests, build or verification. Generated pack outputs and the pack README SHALL be diagnostics for this
-run, not part of the proposal. The proposed catalog SHALL be byte-identical to
-the checked candidate: the read-only job SHALL commit the candidate before the
-checks and confirm afterwards that the workspace catalog still matches that
-commit, and the write job SHALL push only that exact commit, identified by its
-SHA, after confirming that its parent is the checked-out main revision and that
-it changes only the committed source catalog, which SHALL be a regular file of
-mode 100644 in both the base revision and the commit. The read-only job SHALL
-likewise reject a generated candidate or a workspace catalog that is not a
-regular file. The reviewed policy SHALL NOT be
-modified or staged. Diagnostics SHALL
-identify the base revision, catalog changes, skipped links, resolution results,
-tracking outcomes, effective policy, retained failures and pack validation
-outcome. The base revision SHALL appear in the run summary and in the PR body,
-and the pack validation outcome SHALL be the reported results of the run's test,
-build and verification steps.
+both pack variants with the candidate catalog and main's configuration. Any
+failure, including stale selectors and package collisions, SHALL block those
+writes. When a successful generation reproduces main's committed catalog,
+closing an open PR from the source-update branch SHALL be the only permitted
+write, and it SHALL require no tests, build or verification. Generated pack
+outputs and the pack README SHALL be diagnostics for this run, not part of the
+proposal. The proposed catalog SHALL be byte-identical to the checked candidate:
+the read-only job SHALL commit the candidate before the checks and confirm
+afterwards that the workspace catalog still matches that commit, and the write
+job SHALL push only that exact commit, identified by its SHA, after confirming
+that its parent is the checked-out main revision and that it changes only the
+committed source catalog, which SHALL be a regular file of mode 100644 in both
+the base revision and the commit. The read-only job SHALL likewise reject a
+generated candidate or a workspace catalog that is not a regular file. The
+reviewed policy SHALL NOT be modified or staged. Diagnostics SHALL identify the
+base revision, catalog changes, skipped links, resolution results, tracking
+outcomes, effective policy, retained failures and pack validation outcome. The
+base revision SHALL appear in the PR body and in the run summary of a run whose
+staging succeeds; a run whose staging fails SHALL summarize that staging failed
+and its reason instead. The pack validation outcome SHALL be the reported
+results of the run's test, build and verification steps.
 
 #### Scenario: Candidate changes a pinned identity
 

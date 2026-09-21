@@ -1,13 +1,4 @@
-# pack-composition Specification
-
-## Purpose
-
-Selects one candidate per app family and variant from the entries supplied by
-source ingestion. It owns families, package identities, explicit pins,
-dual-screen preference, source precedence, package denials, dual coverage,
-overlays and selection reporting.
-
-## Requirements
+## MODIFIED Requirements
 
 ### Requirement: Each build is a baseline build or a dual-screen build
 
@@ -223,39 +214,6 @@ selection reason it computes into Obtainium app records.
 - **THEN** configuration fails with that field and the offending value
   identified, before any candidate is matched
 
-### Requirement: Each variant is composed independently
-
-The system SHALL compose the single-screen and dual-screen variants
-separately, so that a package id may carry different content in each.
-
-#### Scenario: Variants disagree on one id
-
-- **WHEN** a package id has different candidate entries in each variant
-- **THEN** each variant's rendered entry reflects its own candidate, and
-  neither overwrites the other
-
-### Requirement: Composition runs in a fixed stage order
-
-The system SHALL normalize candidates, apply identity and family rules, remove
-excluded candidates, validate explicit selections, select by family and target,
-validate overlay targets, apply overlays, and check unique packages and family
-coverage. Exclusions SHALL observe corrected package identities before selection
-and SHALL NOT be re-applied after overlays. Overlays SHALL NOT assign or delete
-`id`, `url`, `overrideSource`, `family`, `packageId` or `variant`, including by
-null deletion. Failures SHALL preserve the previous output pair and diagnostics
-already collected.
-
-#### Scenario: An overlay cannot move an entry onto a denylisted package id
-
-- **WHEN** an overlay record's patch contains an id field naming a denied
-  package
-- **THEN** the build fails because identity fields are forbidden in overlays
-
-#### Scenario: Denylist removes an entry an overlay names
-
-- **WHEN** candidate exclusions leave no selected entry matching an overlay selector
-- **THEN** the build fails with that stale selector identified
-
 ### Requirement: One candidate is selected per family and variant under a fixed precedence
 
 The system SHALL use effective package id as the default family key and explicit
@@ -397,119 +355,6 @@ reported stale. Any other field SHALL fail explicitly with the entry identified.
 - **THEN** nothing is removed, no exclusion is reported, and the denial is not
   reported stale
 
-### Requirement: One overlay patches composed entries
-
-The overlay file SHALL contain an array of records with effective package `id`,
-project `url` and object `patch`. An overlay document that is not an array
-SHALL fail with the overlay identified. A record SHALL carry no field other
-than `id`, `url` and `patch`, and SHALL fail with the record and the unknown
-field identified otherwise. A record's `id` and its `url` SHALL each be a
-nonempty string, failing with the record and the offending field identified. A
-nonempty `url` SHALL additionally be one a host can be read from, and one no
-host can be read from SHALL fail with the record, the field and the offending
-value identified, because there the value is what the maintainer has to look
-at. Each record SHALL apply to the matching selected entry in every variant
-that selects it. Matching SHALL use both effective id and normalized project
-URL. Duplicate selectors SHALL fail. A non-object patch, including null,
-SHALL fail.
-
-Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
-The protected patch fields SHALL be exactly `id`, `url`, `overrideSource`,
-`family`, `packageId` and `variant`: a patch SHALL NOT contain any of them with
-any value, including null. Every other key SHALL be patchable, and all other
-unpatched data SHALL remain unchanged. Shared settings for distinct project URLs
-SHALL require explicit records for each project; a common package id SHALL NOT
-make a patch transfer to another fork. Whole-app removal SHALL remain the
-denylist's responsibility.
-
-#### Scenario: Overlay changes a setting
-
-- **WHEN** both variants select the same effective id and normalized URL
-- **THEN** a matching patch applies to both
-
-#### Scenario: Shared package id uses different repositories
-
-- **WHEN** single and dual select one package id from different project URLs
-- **THEN** a patch naming the single repository does not affect the dual repository
-
-#### Scenario: Overlay deletes a key
-
-- **WHEN** a patch maps an allowed key to null
-- **THEN** the key is deleted before normal rendering hydration
-
-#### Scenario: Protected field is assigned or deleted
-
-- **WHEN** a patch contains `id`, `url`, `overrideSource`, `family`,
-  `packageId` or `variant`, with any value including null
-- **THEN** the build fails naming the selector and forbidden field
-
-#### Scenario: Overlay record carries an unknown field
-
-- **WHEN** an overlay record carries a field other than `id`, `url` and `patch`
-- **THEN** the build fails with that record and the unknown field identified,
-  rather than ignoring the field or treating the record as matching nothing
-
-#### Scenario: Overlay record has a blank or non-string key
-
-- **WHEN** an overlay record's `id` or `url` is blank or is not a string
-- **THEN** the build fails with that record and the offending field identified
-
-#### Scenario: Overlay record's URL has no host
-
-- **WHEN** an overlay record's `url` is a nonempty string no host can be read
-  from, such as `/owner/repo`
-- **THEN** the build fails with that record, the field and the offending value
-  identified
-
-#### Scenario: Overlay document is not an array
-
-- **WHEN** the overlay file holds a JSON object or another non-array value
-- **THEN** the build fails with the overlay identified as not being an array
-  of patch records
-
-#### Scenario: Overlay record has a null patch
-
-- **WHEN** an overlay record has a null patch
-- **THEN** the build fails rather than removing the app
-
-#### Scenario: Overlay patch contains the source-type field
-
-- **WHEN** an overlay record's patch contains overrideSource
-- **THEN** the build fails with the selector and protected field identified
-
-#### Scenario: Overlay patch contains the package-id field
-
-- **WHEN** an overlay record's patch contains id
-- **THEN** the build fails with the selector and protected field identified
-
-#### Scenario: Overlay patch maps the source-type or package-id field to null
-
-- **WHEN** a patch maps overrideSource or id to null
-- **THEN** the build fails because protected fields cannot be deleted
-
-### Requirement: An overlay record that patches nothing fails the build
-
-The system SHALL fail when an overlay record's id-and-URL selector matches no
-selected entry in either variant. A selector matching one variant SHALL be
-valid and apply only where matched. The presence of the package id under a
-different project URL SHALL NOT satisfy a selector. Losing or excluded
-candidates SHALL NOT satisfy overlay targets.
-
-#### Scenario: Old fork was replaced
-
-- **WHEN** the package id remains selected but under a different normalized URL
-- **THEN** the old fork's overlay fails as stale
-
-#### Scenario: Overlay names an id present in one variant only
-
-- **WHEN** a selector matches only the dual output
-- **THEN** it is valid and applies only there
-
-#### Scenario: Overlay names an id that no longer exists
-
-- **WHEN** a selector's id is absent from both selected outputs
-- **THEN** the build fails with the stale id-and-URL selector
-
 ### Requirement: Every single-screen family has a dual-screen selection
 
 Every family selected in single SHALL have a selected build in dual. Upstream
@@ -536,3 +381,8 @@ counterpart.
 
 - **WHEN** the only dual-eligible candidate of a single-selected family carries a denied package
 - **THEN** the build fails with the family coverage gap
+
+## RENAMED Requirements
+
+- FROM: `### Requirement: Entries are unioned by package id under a fixed precedence`
+- TO: `### Requirement: One candidate is selected per family and variant under a fixed precedence`
