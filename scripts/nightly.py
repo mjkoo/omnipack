@@ -61,6 +61,17 @@ class PrepareSubprocess:
 
 
 PrepareStatus = Literal["no-op", "prepared", "failed"]
+PrepareStage = Literal[
+    "checkout",
+    "build",
+    "allowlist",
+    "README boundary",
+    "commit",
+    "verify",
+    "drift after verify",
+    "bundle",
+    "complete",
+]
 
 
 @dataclass(frozen=True)
@@ -71,10 +82,13 @@ class PrepareOutcome:
     """
 
     status: PrepareStatus
-    stage: str
+    stage: PrepareStage
     base_sha: str | None
     sha: str | None
-    changed: bool
+
+    @property
+    def changed(self) -> bool:
+        return self.status == "prepared"
 
     @property
     def summary(self) -> str:
@@ -109,33 +123,33 @@ def run_prepare(
         try:
             (root / relative).unlink(missing_ok=True)
         except OSError:
-            return PrepareOutcome("failed", "build", None, None, False)
+            return PrepareOutcome("failed", "build", None, None)
 
     try:
         head = git_text(root, "rev-parse", "HEAD")
     except OSError:
-        return PrepareOutcome("failed", "checkout", None, None, False)
+        return PrepareOutcome("failed", "checkout", None, None)
     try:
         dirty = _dirty_paths(root)
     except OSError:
-        return PrepareOutcome("failed", "checkout", head, None, False)
+        return PrepareOutcome("failed", "checkout", head, None)
     if head != github_sha or dirty:
-        return PrepareOutcome("failed", "checkout", head, None, False)
+        return PrepareOutcome("failed", "checkout", head, None)
     base_sha = head
 
     build_result = selected_process.run(BUILD_COMMAND, root)
     if build_result.returncode != 0:
-        return PrepareOutcome("failed", "build", base_sha, None, False)
+        return PrepareOutcome("failed", "build", base_sha, None)
 
     try:
         out_of_scope = _dirty_paths(root) - set(ALLOWED_PATHS)
     except OSError:
-        return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+        return PrepareOutcome("failed", "allowlist", base_sha, None)
     if out_of_scope:
-        return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+        return PrepareOutcome("failed", "allowlist", base_sha, None)
     for relative in ALLOWED_PATHS:
         if regular_file_problem(root / relative, executable_ok=False) is not None:
-            return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+            return PrepareOutcome("failed", "allowlist", base_sha, None)
 
     try:
         base_readme = git_output(root, "show", f"{base_sha}:README.md")
@@ -143,9 +157,9 @@ def run_prepare(
         base_prefix, _, base_suffix = split_catalog(base_readme)
         current_prefix, _, current_suffix = split_catalog(current_readme)
     except CatalogError, OSError:
-        return PrepareOutcome("failed", "README boundary", base_sha, None, False)
+        return PrepareOutcome("failed", "README boundary", base_sha, None)
     if current_prefix != base_prefix or current_suffix != base_suffix:
-        return PrepareOutcome("failed", "README boundary", base_sha, None, False)
+        return PrepareOutcome("failed", "README boundary", base_sha, None)
 
     try:
         changed_paths = tuple(
@@ -155,7 +169,7 @@ def run_prepare(
             != (root / relative).read_bytes()
         )
     except OSError:
-        return PrepareOutcome("failed", "allowlist", base_sha, None, False)
+        return PrepareOutcome("failed", "allowlist", base_sha, None)
 
     sha = base_sha
     if changed_paths:
@@ -164,30 +178,30 @@ def run_prepare(
                 root, changed_paths, selected_now(), run_url, base_sha
             )
         except OSError:
-            return PrepareOutcome("failed", "commit", base_sha, None, False)
+            return PrepareOutcome("failed", "commit", base_sha, None)
 
     verify_result = selected_process.run(STRUCTURAL_VERIFY_COMMAND, root)
     if verify_result.returncode != 0:
-        return PrepareOutcome("failed", "verify", base_sha, None, False)
+        return PrepareOutcome("failed", "verify", base_sha, None)
 
     try:
         drifted = _dirty_paths(root)
     except OSError:
-        return PrepareOutcome("failed", "drift after verify", base_sha, None, False)
+        return PrepareOutcome("failed", "drift after verify", base_sha, None)
     if drifted:
-        return PrepareOutcome("failed", "drift after verify", base_sha, None, False)
+        return PrepareOutcome("failed", "drift after verify", base_sha, None)
 
     if not changed_paths:
-        return PrepareOutcome("no-op", "complete", base_sha, base_sha, False)
+        return PrepareOutcome("no-op", "complete", base_sha, base_sha)
 
     try:
         if git_text(root, "rev-parse", "HEAD") != sha:
-            return PrepareOutcome("failed", "bundle", base_sha, None, False)
+            return PrepareOutcome("failed", "bundle", base_sha, None)
         bundle_path.parent.mkdir(parents=True, exist_ok=True)
         git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
     except OSError:
-        return PrepareOutcome("failed", "bundle", base_sha, None, False)
-    return PrepareOutcome("prepared", "complete", base_sha, sha, True)
+        return PrepareOutcome("failed", "bundle", base_sha, None)
+    return PrepareOutcome("prepared", "complete", base_sha, sha)
 
 
 def _commit_candidate(

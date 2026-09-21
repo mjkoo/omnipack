@@ -22,6 +22,7 @@ from typing import Literal
 from scripts.workflow_support import (
     FULL_SHA,
     DiffEntry,
+    FileProblem,
     GhRunner,
     HandoffRejected,
     SubprocessGhRunner,
@@ -60,6 +61,9 @@ PR_BODY_LIMIT = 65536
 
 
 StageStatus = Literal["unchanged", "changed", "failed"]
+StageName = Literal[
+    "checkout", "base", "files", "report", "write", "commit", "bundle", "complete"
+]
 
 
 @dataclass(frozen=True)
@@ -71,15 +75,18 @@ class StageOutcome:
     """
 
     status: StageStatus
-    stage: str
+    stage: StageName
     base_sha: str | None
     sha: str | None
-    changed: bool
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
     changed_urls: tuple[str, ...] = ()
     retained_failures: tuple[tuple[str, str], ...] = ()
     reason: str = ""
+
+    @property
+    def changed(self) -> bool:
+        return self.status == "changed"
 
     @property
     def summary(self) -> str:
@@ -190,7 +197,6 @@ def run_stage(
         "complete",
         base_sha,
         sha,
-        changed,
         added,
         removed,
         changed_urls,
@@ -198,15 +204,15 @@ def run_stage(
     )
 
 
-_FILE_PROBLEMS = {
+_FILE_PROBLEMS: Mapping[FileProblem, str] = {
     "missing": "missing",
     "symlink": "a symlink",
     "irregular": "not a regular file",
 }
 
 
-def _stage_failure(stage: str, reason: str, base_sha: str | None) -> StageOutcome:
-    return StageOutcome("failed", stage, base_sha, None, False, reason=reason)
+def _stage_failure(stage: StageName, reason: str, base_sha: str | None) -> StageOutcome:
+    return StageOutcome("failed", stage, base_sha, None, reason=reason)
 
 
 def _report_changes(
