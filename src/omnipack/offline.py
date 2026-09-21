@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from omnipack.report_model import FindingRecord
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 
@@ -33,6 +34,23 @@ class Finding:
     entry_id: str | None = None
     index: int | None = None
     field: str | None = None
+
+    def to_record(self) -> FindingRecord:
+        """Serialize a finding, omitting absent location fields."""
+        record: FindingRecord = {
+            "stage": self.stage,
+            "code": self.code,
+            "message": self.message,
+        }
+        if self.variant is not None:
+            record["variant"] = self.variant
+        if self.entry_id is not None:
+            record["entry_id"] = self.entry_id
+        if self.index is not None:
+            record["index"] = self.index
+        if self.field is not None:
+            record["field"] = self.field
+        return record
 
 
 _HTML_STEP_TYPES: dict[str, type] = {

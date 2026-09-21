@@ -7,6 +7,7 @@ from typing import Any
 import pytest
 
 from omnipack.report import format_reports, write_report
+from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
 from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
 from tests.verification_support import (
@@ -312,7 +313,7 @@ def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
         None,
         IngestionReport(),
         composition_report=CompositionReport(selections=[selection]),
-        stage="composition",
+        stage=BuildStage.COMPOSITION,
         error=ValueError("later family failed"),
     )
     output = format_reports(tmp_path)

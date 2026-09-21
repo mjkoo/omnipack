@@ -22,6 +22,7 @@ from omnipack.project_policy import (
     repository_url,
 )
 from omnipack.render import render
+from omnipack.report_model import Status
 from omnipack.source_http import HttpConfig, SourceHttpClient
 from omnipack.sources import load_json
 from omnipack.urls import normalize_project_url
@@ -261,7 +262,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
         shutil.rmtree(output)
     output.mkdir(parents=True)
     report: dict[str, Any] = {
-        "status": "failed",
+        "status": Status.FAILED,
         "apk": [],
         "tracking": [],
         "retainedFailures": [],
@@ -343,7 +344,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                     )
         _validate_ids(entries)
         if failed:
-            report["status"] = "failed"
+            report["status"] = Status.FAILED
             _write_report(output, report)
             return report
         catalog_bytes = _render_catalog(entries)
@@ -361,11 +362,11 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
         (output / "catalog.json").write_bytes(catalog_bytes)
         report["changes"] = changes
         # Success is recorded last, so any exception above fails generation.
-        report["status"] = "success"
+        report["status"] = Status.SUCCESS
         _write_report(output, report)
         return report
     except Exception as error:  # noqa: BLE001 - command records all failures
-        report["status"] = "failed"
+        report["status"] = Status.FAILED
         report["error"] = str(error)
         _write_report(output, report)
         return report
