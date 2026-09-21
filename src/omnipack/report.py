@@ -8,7 +8,7 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypeGuard, assert_never
+from typing import Any, TypeIs, assert_never
 
 from omnipack.merge import (
     CompositionReport,
@@ -168,7 +168,7 @@ def format_reports(root: Path) -> str:
     return "\n\n".join(sections) + "\n"
 
 
-def _strings(item: object, keys: tuple[str, ...]) -> TypeGuard[dict[str, Any]]:
+def _strings(item: object, keys: tuple[str, ...]) -> TypeIs[dict[str, Any]]:
     return isinstance(item, dict) and all(
         isinstance(item.get(key), str) for key in keys
     )
@@ -213,14 +213,7 @@ def _format_findings(values: object, label: str = "Finding") -> list[str]:
         return []
     lines: list[str] = []
     for value in values:
-        if isinstance(value, dict):
-            message = (
-                value.get("message")
-                or value.get("error")
-                or json.dumps(value, sort_keys=True)
-            )
-        else:
-            message = str(value)
+        message = value["message"]
         location = []
         if isinstance(value, dict):
             for key in ("variant", "entry_id", "id"):
