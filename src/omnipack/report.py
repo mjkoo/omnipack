@@ -161,7 +161,7 @@ def format_reports(root: Path) -> str:
             _format_verification_mode(verify),
             f"Observed: {observed}",
         ]
-        lines.extend(_format_findings(verify.get("errors", []), "Error"))
+        lines.extend(_format_findings(verify["errors"], "Error"))
         sections.append("\n".join(lines))
     else:
         sections.append("Verification report\nNo standalone verification recorded")
@@ -208,23 +208,20 @@ def _read_document(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
-def _format_findings(values: object, label: str = "Finding") -> list[str]:
-    if not isinstance(values, list):
-        return []
+def _format_findings(values: list[dict[str, Any]], label: str = "Finding") -> list[str]:
     lines: list[str] = []
     for value in values:
-        message = value["message"]
-        location = []
-        if isinstance(value, dict):
-            for key in ("variant", "entry_id", "id"):
-                if value.get(key) is not None:
-                    location.append(str(value[key]))
-            if value.get("index") is not None:
-                location.append(f"index {value['index']}")
-            if value.get("field") is not None:
-                location.append(str(value["field"]))
+        location = [
+            str(value[key])
+            for key in ("variant", "entry_id")
+            if value.get(key) is not None
+        ]
+        if value.get("index") is not None:
+            location.append(f"index {value['index']}")
+        if value.get("field") is not None:
+            location.append(str(value["field"]))
         context = f" [{' / '.join(location)}]" if location else ""
-        lines.append(f"{label}:{context} {message}")
+        lines.append(f"{label}:{context} {value['message']}")
     return lines
 
 
