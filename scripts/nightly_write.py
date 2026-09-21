@@ -18,6 +18,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 
 from scripts.workflow_support import (
     FULL_SHA,
@@ -64,15 +65,21 @@ class ReleaseFailure(RuntimeError):
         self.bootstrap = bootstrap
 
 
+PushStatus = Literal["published", "detach-failed", "failed"]
+
+
 @dataclass(frozen=True)
 class PushOutcome:
-    status: str  # "published", "detach-failed" or "failed"
+    status: PushStatus
     summary: str
+
+
+ReleaseStatus = Literal["unchanged", "repaired", "advanced", "failed"]
 
 
 @dataclass(frozen=True)
 class ReleaseOutcome:
-    status: str  # "unchanged", "repaired", "advanced" or "failed"
+    status: ReleaseStatus
     summary: str
 
 

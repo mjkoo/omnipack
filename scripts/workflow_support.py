@@ -15,7 +15,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import NamedTuple, Protocol
+from typing import Literal, NamedTuple, Protocol
 
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 BOT_NAME = "github-actions[bot]"
@@ -215,7 +215,12 @@ def verify_handoff(
     return diff_raw_entries(root, base_sha, fetched_sha)
 
 
-def regular_file_problem(path: Path, *, executable_ok: bool = True) -> str | None:
+FileProblem = Literal["missing", "symlink", "irregular", "executable"]
+
+
+def regular_file_problem(
+    path: Path, *, executable_ok: bool = True
+) -> FileProblem | None:
     """Why `path` is not a regular file (checked with `lstat`), or None."""
     try:
         info = path.lstat()

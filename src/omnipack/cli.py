@@ -6,13 +6,13 @@ import argparse
 import sys
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Any
 
 from omnipack.build import BuildInputs, previous_ids, publish_build
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App
 from omnipack.report import format_reports, write_report
+from omnipack.report_model import BuildStage, OfflineVerdict, Status, not_run_verdict
 from omnipack.source_generation import generate_codm
 from omnipack.sources import IngestionReport, SourceError, ingest_all, parse_json
 from omnipack.verify import VerificationReportError, run_verification
@@ -23,21 +23,21 @@ def build(_args: argparse.Namespace) -> int:
     ingestion_report = IngestionReport()
     composition_report = CompositionReport()
     composition: CompositionResult | None = None
-    stage = "ingestion"
-    offline_verification: dict[str, Any] = {"status": "not-run", "findings": []}
+    stage = BuildStage.INGESTION
+    offline_verification = not_run_verdict()
 
-    def record_stage(value: str) -> None:
+    def record_stage(value: BuildStage) -> None:
         nonlocal stage
         stage = value
 
-    def record_verification(value: dict[str, Any]) -> None:
+    def record_verification(value: OfflineVerdict) -> None:
         nonlocal offline_verification
         offline_verification = value
 
     try:
         inputs = BuildInputs.read(root)
         ingested = _ingest_for_build(root, inputs, ingestion_report)
-        stage = "composition"
+        stage = BuildStage.COMPOSITION
         composition = compose(
             ingested,
             _object_list(inputs.deny, "denylist"),
@@ -45,7 +45,7 @@ def build(_args: argparse.Namespace) -> int:
             policy=inputs.policy,
             report=composition_report,
         )
-        stage = "rendering"
+        stage = BuildStage.RENDERING
         publish_build(
             root,
             composition,
@@ -100,7 +100,7 @@ def verify(_args: argparse.Namespace) -> int:
     except VerificationReportError as error:
         print(f"verify failed: {error}", file=sys.stderr)
         return 1
-    if result["status"] != "success":
+    if result["status"] != Status.SUCCESS:
         print(f"verify failed with {len(result['errors'])} error(s)", file=sys.stderr)
         return 1
     return 0
@@ -117,7 +117,7 @@ def report(_args: argparse.Namespace) -> int:
 
 def generate_source(_args: argparse.Namespace) -> int:
     result = generate_codm(Path.cwd())
-    if result["status"] == "failed":
+    if result["status"] == Status.FAILED:
         detail = result.get("error") or result.get("unresolved") or "generation failed"
         print(f"source generation failed: {detail}", file=sys.stderr)
         return 1

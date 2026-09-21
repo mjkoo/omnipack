@@ -8,13 +8,23 @@ from collections.abc import Mapping
 from dataclasses import asdict
 from datetime import datetime
 from pathlib import Path
-from typing import Any, TypeGuard
+from typing import Any, TypeIs, assert_never
 
 from omnipack.merge import (
     CompositionReport,
     CompositionResult,
 )
 from omnipack.model import Variant
+from omnipack.report_model import (
+    VERIFICATION_MODE,
+    VERIFIER_SCOPE,
+    BuildStage,
+    InputState,
+    OfflineStatus,
+    OfflineVerdict,
+    Status,
+    not_run_verdict,
+)
 from omnipack.sources import IngestionReport
 
 BUILD_SCHEMA_VERSION = 3
@@ -31,9 +41,9 @@ def write_report(
     ingestion: IngestionReport,
     *,
     composition_report: CompositionReport | None = None,
-    stage: str | None = None,
+    stage: BuildStage | None = None,
     error: Exception | None = None,
-    offline_verification: dict[str, Any] | None = None,
+    offline_verification: OfflineVerdict | None = None,
 ) -> None:
     changes = None
     if composition is not None:
@@ -49,14 +59,13 @@ def write_report(
     records = composition_report or CompositionReport()
     document: dict[str, Any] = {
         "schemaVersion": BUILD_SCHEMA_VERSION,
-        "status": "failed" if error else "success",
+        "status": Status.FAILED if error else Status.SUCCESS,
         "changes": changes,
         "sourceAdmissions": ingestion.admitted,
         "denylistRemovals": [_record(item) for item in records.removals],
         "staleExclusions": [_record(item) for item in records.stale_exclusions],
         "selections": [_record(item) for item in records.selections],
-        "offlineVerification": offline_verification
-        or {"status": "not-run", "findings": []},
+        "offlineVerification": offline_verification or not_run_verdict(),
     }
     if error is not None:
         document["stage"] = stage
@@ -97,7 +106,9 @@ def format_reports(root: Path) -> str:
             lines.append("Candidate comparison: unavailable")
         else:
             label = (
-                "Candidate (not published)" if build["status"] == "failed" else "Change"
+                "Candidate (not published)"
+                if build["status"] == Status.FAILED
+                else "Change"
             )
             for variant, comparison in changes.items():
                 for direction, ids in comparison.items():
@@ -152,14 +163,14 @@ def format_reports(root: Path) -> str:
             _format_verification_mode(verify),
             f"Observed: {observed}",
         ]
-        lines.extend(_format_findings(verify.get("errors", []), "Error"))
+        lines.extend(_format_findings(verify["errors"], "Error"))
         sections.append("\n".join(lines))
     else:
         sections.append("Verification report\nNo standalone verification recorded")
     return "\n\n".join(sections) + "\n"
 
 
-def _strings(item: object, keys: tuple[str, ...]) -> TypeGuard[dict[str, Any]]:
+def _strings(item: object, keys: tuple[str, ...]) -> TypeIs[dict[str, Any]]:
     return isinstance(item, dict) and all(
         isinstance(item.get(key), str) for key in keys
     )
@@ -199,30 +210,20 @@ def _read_document(path: Path, label: str) -> dict[str, Any]:
     return value
 
 
-def _format_findings(values: object, label: str = "Finding") -> list[str]:
-    if not isinstance(values, list):
-        return []
+def _format_findings(values: list[dict[str, Any]], label: str = "Finding") -> list[str]:
     lines: list[str] = []
     for value in values:
-        if isinstance(value, dict):
-            message = (
-                value.get("message")
-                or value.get("error")
-                or json.dumps(value, sort_keys=True)
-            )
-        else:
-            message = str(value)
-        location = []
-        if isinstance(value, dict):
-            for key in ("variant", "entry_id", "id"):
-                if value.get(key) is not None:
-                    location.append(str(value[key]))
-            if value.get("index") is not None:
-                location.append(f"index {value['index']}")
-            if value.get("field") is not None:
-                location.append(str(value["field"]))
+        location = [
+            str(value[key])
+            for key in ("variant", "entry_id")
+            if value.get(key) is not None
+        ]
+        if value.get("index") is not None:
+            location.append(f"index {value['index']}")
+        if value.get("field") is not None:
+            location.append(str(value["field"]))
         context = f" [{' / '.join(location)}]" if location else ""
-        lines.append(f"{label}:{context} {message}")
+        lines.append(f"{label}:{context} {value['message']}")
     return lines
 
 
@@ -254,10 +255,12 @@ def _validate_build_report(value: dict[str, Any]) -> None:
             f"unsupported build report schema {schema!r}; regenerate with `pack build`"
         )
     status = value.get("status")
-    if status not in ("success", "failed"):
+    if status not in Status:
         raise ReportFormatError("malformed build report: status is required")
     expected = (
-        _BUILD_FIELDS | _BUILD_FAILURE_FIELDS if status == "failed" else _BUILD_FIELDS
+        _BUILD_FIELDS | _BUILD_FAILURE_FIELDS
+        if status == Status.FAILED
+        else _BUILD_FIELDS
     )
     if set(value) != expected:
         raise ReportFormatError("malformed build report fields")
@@ -290,7 +293,7 @@ def _validate_build_report(value: dict[str, Any]) -> None:
     offline = value["offlineVerification"]
     if (
         not isinstance(offline, dict)
-        or offline.get("status") not in ("not-run", "success", "failed")
+        or offline.get("status") not in OfflineStatus
         or not isinstance(offline.get("findings"), list)
         or not all(_valid_finding(item) for item in offline["findings"])
     ):
@@ -308,13 +311,13 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
     verifier = value.get("verifier")
     inputs = value.get("inputs")
     if (
-        value.get("status") not in ("success", "failed")
-        or value.get("mode") != "offline"
+        value.get("status") not in Status
+        or value.get("mode") != VERIFICATION_MODE
         or not isinstance(value.get("startedAt"), str)
         or not isinstance(verifier, dict)
         or not all(isinstance(verifier.get(key), str) for key in ("version", "scope"))
         or set(verifier) != {"version", "scope"}
-        or verifier.get("scope") != "structural"
+        or verifier.get("scope") != VERIFIER_SCOPE
         or not isinstance(inputs, dict)
         or set(inputs) != set(INPUT_PATHS)
         or set(value)
@@ -335,8 +338,8 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
     if (
         not _timestamp(value["startedAt"])
         or not _timestamp(value["completedAt"])
-        or (value["status"] == "success" and bool(value["errors"]))
-        or (value["status"] == "failed" and not value["errors"])
+        or (value["status"] == Status.SUCCESS and bool(value["errors"]))
+        or (value["status"] == Status.FAILED and not value["errors"])
         or not all(_fingerprint(item) for item in inputs.values())
         or not all(_valid_finding(item) for item in value["errors"])
     ):
@@ -355,19 +358,26 @@ def _timestamp(value: object) -> bool:
 def _fingerprint(value: object) -> bool:
     if not isinstance(value, dict):
         return False
-    state = value.get("state")
-    if state == "present":
-        digest = value.get("sha256")
-        return (
-            set(value) == {"state", "sha256"}
-            and isinstance(digest, str)
-            and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
-        )
-    if state == "missing":
-        return set(value) == {"state"}
-    if state == "unreadable":
-        return set(value) == {"state", "error"} and isinstance(value.get("error"), str)
-    return False
+    try:
+        state = InputState(value.get("state"))
+    except ValueError:
+        return False
+    match state:
+        case InputState.PRESENT:
+            digest = value.get("sha256")
+            return (
+                set(value) == {"state", "sha256"}
+                and isinstance(digest, str)
+                and re.fullmatch(r"[0-9a-f]{64}", digest) is not None
+            )
+        case InputState.MISSING:
+            return set(value) == {"state"}
+        case InputState.UNREADABLE:
+            return set(value) == {"state", "error"} and isinstance(
+                value.get("error"), str
+            )
+        case _:
+            assert_never(state)
 
 
 def _valid_finding(value: object) -> bool:

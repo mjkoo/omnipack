@@ -13,6 +13,7 @@ from omnipack.merge import (
 )
 from omnipack.model import Provenance, Variant
 from omnipack.overlay import ComposedApp
+from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
 
 
@@ -174,7 +175,7 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
         {},
         None,
         IngestionReport(),
-        stage="rendering",
+        stage=BuildStage.RENDERING,
         error=ValueError("bad"),
     )
     failed = json.loads((tmp_path / ".build/report.json").read_text())

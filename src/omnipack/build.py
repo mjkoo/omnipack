@@ -4,10 +4,9 @@ from __future__ import annotations
 
 import json
 from collections.abc import Callable
-from dataclasses import asdict, dataclass
+from dataclasses import dataclass
 from pathlib import Path
 from stat import S_IMODE
-from typing import Any
 from uuid import uuid4
 
 from omnipack.composition_policy import (
@@ -18,6 +17,12 @@ from omnipack.composition_policy import (
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
 from omnipack.render import render
+from omnipack.report_model import (
+    BuildStage,
+    FindingRecord,
+    OfflineStatus,
+    OfflineVerdict,
+)
 from omnipack.sources import IngestionReport, SourceError, parse_json
 
 OUTPUTS = {
@@ -29,7 +34,7 @@ OUTPUTS = {
 class OfflineVerificationError(ValueError):
     """Newly rendered output failed the pure publication gate."""
 
-    def __init__(self, findings: list[dict[str, Any]]) -> None:
+    def __init__(self, findings: list[FindingRecord]) -> None:
         super().__init__(f"offline verification failed with {len(findings)} finding(s)")
         self.findings = findings
 
@@ -116,12 +121,12 @@ def publish_build(
     ingestion: IngestionReport,
     inputs: BuildInputs,
     *,
-    on_stage: Callable[[str], None] | None = None,
-    on_verification: Callable[[dict[str, Any]], None] | None = None,
+    on_stage: Callable[[BuildStage], None] | None = None,
+    on_verification: Callable[[OfflineVerdict], None] | None = None,
 ) -> None:
     """Render both variants and their catalog, gate them, and publish together."""
     if on_stage is not None:
-        on_stage("rendering")
+        on_stage(BuildStage.RENDERING)
     before = previous_ids(root)
     rendered = {
         variant: render(composition.apps[variant]).encode() for variant in Variant
@@ -130,7 +135,7 @@ def publish_build(
     from omnipack.report import write_report
 
     if on_stage is not None:
-        on_stage("offline verification")
+        on_stage(BuildStage.OFFLINE_VERIFICATION)
     offline_findings = validate_offline(
         OfflineInputs(
             rendered[Variant.SINGLE],
@@ -140,10 +145,7 @@ def publish_build(
             inputs.composition,
         )
     )
-    findings = [
-        {key: value for key, value in asdict(item).items() if value is not None}
-        for item in offline_findings
-    ]
+    findings: list[FindingRecord] = [item.to_record() for item in offline_findings]
     from omnipack.catalog import generate_catalog, replace_catalog
 
     readme_rendered = None
@@ -159,14 +161,17 @@ def publish_build(
             findings.append(
                 {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
             )
-    verdict = {"status": "failed" if findings else "success", "findings": findings}
+    verdict: OfflineVerdict = {
+        "status": OfflineStatus.FAILED if findings else OfflineStatus.SUCCESS,
+        "findings": findings,
+    }
     if on_verification is not None:
         on_verification(verdict)
     if findings:
         raise OfflineVerificationError(findings)
 
     if on_stage is not None:
-        on_stage("report writing")
+        on_stage(BuildStage.REPORT_WRITING)
     write_report(
         root,
         before,
@@ -175,7 +180,7 @@ def publish_build(
         offline_verification=verdict,
     )
     if on_stage is not None:
-        on_stage("publication")
+        on_stage(BuildStage.PUBLICATION)
     assert readme_rendered is not None
     _replace_outputs(
         {

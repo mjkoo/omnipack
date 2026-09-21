@@ -129,7 +129,7 @@ def test_readme_catalog_interior_change_is_committed(tmp_path: Path) -> None:
     )
 
     assert outcome.status == "prepared"
-    assert outcome.summary_line == f"prepared {outcome.sha}"
+    assert outcome.summary == f"prepared {outcome.sha}"
     assert (
         _git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", "HEAD")
         == "README.md"
@@ -343,7 +343,7 @@ def test_stale_reports_are_removed_even_when_the_checkout_check_fails(
 
     assert outcome.status == "failed"
     assert outcome.stage == "checkout"
-    assert outcome.summary_line == "checkout"
+    assert outcome.summary == "checkout"
     assert process.calls == []
     assert not (root / ".build/report.json").exists()
     assert not (root / ".build/verify.json").exists()
@@ -366,7 +366,7 @@ def test_git_failure_reading_the_checkout_fails_the_checkout_stage(
     )
 
     assert outcome.status == "failed"
-    assert outcome.summary_line == "checkout"
+    assert outcome.summary == "checkout"
     assert process.calls == []
 
 
@@ -381,7 +381,7 @@ def test_git_failure_after_the_build_fails_the_allowlist_stage(tmp_path: Path) -
     )
 
     assert outcome.status == "failed"
-    assert outcome.summary_line == "allowlist"
+    assert outcome.summary == "allowlist"
 
 
 def test_git_failure_committing_the_candidate_fails_the_commit_stage(
@@ -401,7 +401,7 @@ def test_git_failure_committing_the_candidate_fails_the_commit_stage(
     outcome = run_prepare(root, base, "run", bundle, process=process, now=_now)
 
     assert outcome.status == "failed"
-    assert outcome.summary_line == "commit"
+    assert outcome.summary == "commit"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle.exists()
     assert STRUCTURAL_VERIFY_COMMAND not in process.calls
@@ -418,7 +418,7 @@ def test_git_failure_after_verification_fails_the_drift_stage(tmp_path: Path) ->
     )
 
     assert outcome.status == "failed"
-    assert outcome.summary_line == "drift after verify"
+    assert outcome.summary == "drift after verify"
 
 
 def test_build_and_verify_output_passes_through_to_the_log(

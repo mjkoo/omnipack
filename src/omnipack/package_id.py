@@ -16,7 +16,7 @@ import zlib
 from typing import Any
 
 from omnipack.http import HttpError
-from omnipack.source_http import SourceHttpClient
+from omnipack.source_http import GenerationHttp
 
 MAX_APK_FULL_DOWNLOAD = 40 * 1024 * 1024
 ZIP_TAIL_SIZE = 128 * 1024
@@ -31,7 +31,7 @@ PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$
 
 
 def resolve_release_assets(
-    http: SourceHttpClient,
+    http: GenerationHttp,
     release: dict[str, Any],
     filename_pattern: str = "",
     report: dict[str, Any] | None = None,
@@ -85,7 +85,7 @@ def resolve_release_assets(
     return resolved[0]
 
 
-def extract_android_manifest_from_apk_url(http: SourceHttpClient, url: str) -> bytes:
+def extract_android_manifest_from_apk_url(http: GenerationHttp, url: str) -> bytes:
     """Read an APK manifest through byte ranges, with a bounded full fallback."""
     try:
         head = http.get(url, method="HEAD", max_bytes=0)
@@ -108,7 +108,7 @@ def extract_android_manifest_from_apk_url(http: SourceHttpClient, url: str) -> b
     return extract_android_manifest_from_apk(response.body)
 
 
-def _extract_manifest_with_ranges(http: SourceHttpClient, url: str, size: int) -> bytes:
+def _extract_manifest_with_ranges(http: GenerationHttp, url: str, size: int) -> bytes:
     tail_start = max(0, size - ZIP_TAIL_SIZE)
     tail = _range(http, url, tail_start, size - 1)
     eocd = tail.rfind(ZIP_EOCD_SIG)
@@ -125,7 +125,7 @@ def _extract_manifest_with_ranges(http: SourceHttpClient, url: str, size: int) -
     return _inflate_local_entry(local, compressed_size, method)
 
 
-def _range(http: SourceHttpClient, url: str, start: int, end: int) -> bytes:
+def _range(http: GenerationHttp, url: str, start: int, end: int) -> bytes:
     response = http.get(
         url, headers={"Range": f"bytes={start}-{end}"}, max_bytes=end - start + 1
     )

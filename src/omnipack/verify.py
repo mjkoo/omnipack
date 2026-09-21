@@ -4,16 +4,24 @@ from __future__ import annotations
 
 import hashlib
 import json
-from dataclasses import asdict
+from collections.abc import Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
 from omnipack.offline import (
-    Finding,
     OfflineInputs,
     missing_input,
     validate_offline,
+)
+from omnipack.report_model import (
+    VERIFICATION_MODE,
+    VERIFIER_SCOPE,
+    FindingRecord,
+    Fingerprint,
+    InputState,
+    Status,
+    VerificationReport,
 )
 
 SCHEMA_VERSION = 4
@@ -34,33 +42,36 @@ class VerificationReportError(RuntimeError):
 
 
 def verifier_identity() -> dict[str, str]:
-    return {"version": VERIFIER_VERSION, "scope": "structural"}
+    return {"version": VERIFIER_VERSION, "scope": VERIFIER_SCOPE}
 
 
 def capture_inputs(
     root: Path,
-) -> tuple[dict[str, bytes | None], dict[str, dict[str, str]]]:
+) -> tuple[dict[str, bytes | None], dict[str, Fingerprint]]:
     snapshots: dict[str, bytes | None] = {}
-    fingerprints: dict[str, dict[str, str]] = {}
+    fingerprints: dict[str, Fingerprint] = {}
     for name, relative in INPUT_PATHS.items():
         try:
             value = (root / relative).read_bytes()
         except FileNotFoundError:
             snapshots[name] = None
-            fingerprints[name] = {"state": "missing"}
+            fingerprints[name] = {"state": InputState.MISSING}
         except OSError as error:
             snapshots[name] = None
-            fingerprints[name] = {"state": "unreadable", "error": type(error).__name__}
+            fingerprints[name] = {
+                "state": InputState.UNREADABLE,
+                "error": type(error).__name__,
+            }
         else:
             snapshots[name] = value
             fingerprints[name] = {
-                "state": "present",
+                "state": InputState.PRESENT,
                 "sha256": hashlib.sha256(value).hexdigest(),
             }
     return snapshots, fingerprints
 
 
-def run_verification(root: Path) -> dict[str, Any]:
+def run_verification(root: Path) -> VerificationReport:
     """Check one captured snapshot of inputs and record its evidence on completion.
 
     Every input is read once. The checks below, and the fingerprints already
@@ -72,7 +83,7 @@ def run_verification(root: Path) -> dict[str, Any]:
     """
     started = _now()
     snapshots, fingerprints = capture_inputs(root)
-    errors: list[dict[str, Any]] = []
+    errors: list[FindingRecord] = []
 
     findings = validate_offline(
         OfflineInputs(
@@ -88,16 +99,18 @@ def run_verification(root: Path) -> dict[str, Any]:
     unreadable_missing = {
         missing_input(name)
         for name, fingerprint in fingerprints.items()
-        if fingerprint["state"] == "unreadable"
+        if fingerprint["state"] == InputState.UNREADABLE
     }
-    errors.extend(_finding(item) for item in findings if item not in unreadable_missing)
+    errors.extend(
+        item.to_record() for item in findings if item not in unreadable_missing
+    )
     from omnipack.catalog import generate_catalog, split_catalog
     from omnipack.composition_policy import load_composition_policy
 
     try:
         readme = snapshots["readme"]
         if readme is None:
-            if fingerprints["readme"]["state"] == "missing":
+            if fingerprints["readme"]["state"] == InputState.MISSING:
                 raise ValueError("README input is missing")
         else:
             _, interior, _ = split_catalog(readme)
@@ -117,7 +130,7 @@ def run_verification(root: Path) -> dict[str, Any]:
             {"stage": "catalog", "code": "catalog_invalid", "message": str(error)}
         )
     for name, fingerprint in fingerprints.items():
-        if fingerprint["state"] == "unreadable":
+        if fingerprint["state"] == InputState.UNREADABLE:
             errors.append(
                 {
                     "stage": "input",
@@ -125,13 +138,13 @@ def run_verification(root: Path) -> dict[str, Any]:
                     "message": f"{name} input is unreadable",
                 }
             )
-    report = {
+    report: VerificationReport = {
         "schemaVersion": SCHEMA_VERSION,
         "verifier": verifier_identity(),
-        "mode": "offline",
+        "mode": VERIFICATION_MODE,
         "startedAt": started,
         "completedAt": _now(),
-        "status": "failed" if errors else "success",
+        "status": Status.FAILED if errors else Status.SUCCESS,
         "inputs": fingerprints,
         "errors": errors,
     }
@@ -139,11 +152,7 @@ def run_verification(root: Path) -> dict[str, Any]:
     return report
 
 
-def _finding(item: Finding) -> dict[str, Any]:
-    return {key: value for key, value in asdict(item).items() if value is not None}
-
-
-def _write_atomic(path: Path, document: dict[str, Any]) -> None:
+def _write_atomic(path: Path, document: Mapping[str, Any]) -> None:
     try:
         path.parent.mkdir(parents=True, exist_ok=True)
         temporary = path.with_suffix(path.suffix + ".tmp")

@@ -68,7 +68,20 @@ class HttpConfig:
         return cls(credentials)
 
 
-class Transport(Protocol):
+class GenerationHttp(Protocol):
+    """HTTP operations needed to inspect releases and bounded APK content."""
+
+    def get(
+        self,
+        url: str,
+        *,
+        headers: dict[str, str] | None = None,
+        max_bytes: int | None = None,
+        method: str = "GET",
+    ) -> HttpResponse: ...
+
+
+class BoundedTransport(Protocol):
     def __call__(
         self, request: urllib.request.Request, timeout: float, max_bytes: int | None
     ) -> HttpResponse: ...
@@ -121,7 +134,7 @@ class SourceHttpClient(RetryingClient):
         self,
         config: HttpConfig,
         *,
-        transport: Transport | None = None,
+        transport: BoundedTransport | None = None,
         **settings: Unpack[ClientSettings],
     ) -> None:
         super().__init__(**settings)
