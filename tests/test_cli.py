@@ -677,6 +677,36 @@ def test_missing_local_input_fails_at_ingestion_before_any_fetch(
     assert not (tmp_path / "dist").exists()
 
 
+@pytest.mark.parametrize(
+    ("policy_bytes", "message"),
+    [
+        (b"{}", "schemaVersion must be integer 1"),
+        (b"not json", "Expecting value: line 1 column 1 (char 0)"),
+    ],
+)
+def test_malformed_composition_policy_error_names_its_input(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    policy_bytes: bytes,
+    message: str,
+) -> None:
+    write_fixture_pipeline(tmp_path)
+    (tmp_path / "config/composition.json").write_bytes(policy_bytes)
+
+    def fetch(*_args: object) -> HttpResponse:
+        pytest.fail("the build fetched a catalog after a malformed input")
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fetch)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "ingestion"
+    assert report["error"] == f"composition policy: {message}"
+    assert report["error"] in capsys.readouterr().err
+    assert not (tmp_path / "dist").exists()
+
+
 def test_invalid_track_only_policy_preserves_prior_outputs(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

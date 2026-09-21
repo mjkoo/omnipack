@@ -10,11 +10,15 @@ from stat import S_IMODE
 from typing import Any
 from uuid import uuid4
 
-from omnipack.composition_policy import CompositionPolicy, load_composition_policy
+from omnipack.composition_policy import (
+    CompositionPolicy,
+    CompositionPolicyError,
+    parse_composition_policy,
+)
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
 from omnipack.render import render
-from omnipack.sources import IngestionReport, SourceError
+from omnipack.sources import IngestionReport, SourceError, parse_json
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -67,13 +71,19 @@ class BuildInputs:
         deny = required("config/deny.json", "denylist")
         overlay = required("config/overlay.json", "overlay")
         composition = required("config/composition.json", "composition policy")
+        try:
+            policy = parse_composition_policy(
+                parse_json(composition, "composition policy")
+            )
+        except CompositionPolicyError as error:
+            raise SourceError("composition policy", str(error)) from error
         return cls(
             sources=sources,
             extras=extras,
             deny=deny,
             overlay=overlay,
             composition=composition,
-            policy=load_composition_policy(composition),
+            policy=policy,
             readme=readme,
         )
 
