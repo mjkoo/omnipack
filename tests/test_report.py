@@ -101,6 +101,7 @@ def test_missing_both_fails(tmp_path: Path) -> None:
     "mutation",
     [
         {"inputs": {name: {"state": "bogus"} for name in INPUT_PATHS}},
+        {"inputs": {name: {"state": []} for name in INPUT_PATHS}},
         {
             "inputs": {
                 name: {"state": "present", "sha256": "bad"} for name in INPUT_PATHS
@@ -118,6 +119,7 @@ def test_missing_both_fails(tmp_path: Path) -> None:
         {"startedAt": "then"},
         {"complete": False},
         {"status": "running"},
+        {"status": []},
         {"status": "failed"},
         {"errors": [{"stage": "probe", "code": "oops"}]},
         {"unexpected": []},

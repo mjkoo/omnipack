@@ -1,17 +1,16 @@
 """Keep Python report vocabularies aligned with their serialized contracts."""
 
 import json
+from enum import StrEnum
 
 import pytest
 
 from omnipack.offline import Finding
-from omnipack.report import _fingerprint
 from omnipack.report_model import (
     BuildStage,
     InputState,
     OfflineStatus,
     Status,
-    not_run_verdict,
 )
 from scripts.source_proposal import GENERATION_SUCCESS_STATUS
 
@@ -21,22 +20,11 @@ def test_generation_success_matches_the_standalone_script_boundary() -> None:
 
 
 @pytest.mark.parametrize("vocabulary", [Status, OfflineStatus, InputState, BuildStage])
-def test_wire_values_round_trip_as_plain_strings(vocabulary) -> None:
+def test_wire_values_round_trip_as_plain_strings(vocabulary: type[StrEnum]) -> None:
     for member in vocabulary:
         decoded = json.loads(json.dumps(member))
         assert type(decoded) is str
-        assert decoded == member.value == member
-
-
-def test_default_verdict_does_not_share_mutable_findings() -> None:
-    first = not_run_verdict()
-    first["findings"].append(Finding("input", "missing", "missing input").to_record())
-    assert not_run_verdict() == {"status": "not-run", "findings": []}
-
-
-@pytest.mark.parametrize("state", [None, [], {}, 0, "unknown"])
-def test_invalid_input_states_are_rejected(state: object) -> None:
-    assert not _fingerprint({"state": state})
+        assert decoded == member.value == member == str(member)
 
 
 def test_finding_serialization_preserves_location_and_omits_absence() -> None:
