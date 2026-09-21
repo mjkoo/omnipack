@@ -230,8 +230,10 @@ both assets without advancing the revision, as described above.
 **Main has moved past the run's base.** Before writing anything, `push`
 requires `git ls-remote origin refs/heads/main` to report the run's base SHA,
 and `release` requires it to report `HEAD` (the pushed commit, or the base
-for a no-op). Either check failing means another run's push landed on `main`
-after this run's `prepare` checked out its revision. In that case the write
+for a no-op). Either check failing means a push landed on `main` after this
+run's `prepare` checked out its revision. That push may be another run's, or
+this run's own: a write job re-run after its push landed finds `main` at its
+candidate, not its base. In either case the write
 job fails without writing anything: `push` summarizes
 `push failed for <sha>: main advanced`, and `release` summarizes
 `release failed: main advanced` with no bootstrap guidance. Re-running that
