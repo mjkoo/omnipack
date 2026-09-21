@@ -1,27 +1,35 @@
 """Writer-side report records and their shared wire vocabularies."""
 
-from enum import Enum
+from enum import StrEnum
 from typing import Literal, NotRequired, TypedDict
 
 
-class Status(str, Enum):
+class Status(StrEnum):
+    """How a build, verification or source generation run ended."""
+
     SUCCESS = "success"
     FAILED = "failed"
 
 
-class OfflineStatus(str, Enum):
+class OfflineStatus(StrEnum):
+    """The offline gate's verdict within a build, which may never reach it."""
+
     NOT_RUN = "not-run"
     SUCCESS = "success"
     FAILED = "failed"
 
 
-class InputState(str, Enum):
+class InputState(StrEnum):
+    """Whether a verification input could be read when it was captured."""
+
     PRESENT = "present"
     MISSING = "missing"
     UNREADABLE = "unreadable"
 
 
-class BuildStage(str, Enum):
+class BuildStage(StrEnum):
+    """The step of `pack build` that was running, as a failed build reports it."""
+
     INGESTION = "ingestion"
     COMPOSITION = "composition"
     RENDERING = "rendering"

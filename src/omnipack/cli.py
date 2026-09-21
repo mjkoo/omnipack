@@ -68,11 +68,11 @@ def build(_args: argparse.Namespace) -> int:
             )
         except Exception as report_error:  # noqa: BLE001 - preserve original diagnostic
             print(
-                f"build failed during {stage.value}: {error}; report failed: {report_error}",
+                f"build failed during {stage}: {error}; report failed: {report_error}",
                 file=sys.stderr,
             )
             return 1
-        print(f"build failed during {stage.value}: {error}", file=sys.stderr)
+        print(f"build failed during {stage}: {error}", file=sys.stderr)
         return 1
     return 0
 
