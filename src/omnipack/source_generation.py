@@ -9,7 +9,7 @@ import shutil
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Protocol, cast
+from typing import Any, cast
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpError
@@ -23,24 +23,13 @@ from omnipack.project_policy import (
 )
 from omnipack.render import render
 from omnipack.report_model import Status
-from omnipack.source_http import HttpConfig, SourceHttpClient
+from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
 from omnipack.sources import load_json
 from omnipack.urls import normalize_project_url
 
 LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)")
 SEPARATOR_RE = re.compile(r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
 MAX_RELEASES = 100
-
-
-class GenerationHttp(Protocol):
-    def get(
-        self,
-        url: str,
-        *,
-        headers: dict[str, str] | None = None,
-        max_bytes: int | None = None,
-        method: str = "GET",
-    ) -> Any: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -312,7 +301,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                     )
                     continue
                 package_id = resolve_release_assets(
-                    cast(SourceHttpClient, client),
+                    client,
                     release,
                     rule.additional_settings.get("apkFilterRegEx", ""),
                     report,
