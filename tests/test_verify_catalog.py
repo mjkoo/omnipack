@@ -37,6 +37,70 @@ def test_catalog_errors_fail_without_live_calls_or_input_writes(
     assert all(path.read_bytes() == value for path, value in before.items())
 
 
+STALE_README = (
+    b"<!-- omnipack:catalog:start -->\nwrong\n<!-- omnipack:catalog:end -->\n"
+)
+INVALID_POLICIES = [
+    pytest.param(b"{not json", "invalid_json", id="invalid-json"),
+    pytest.param(
+        b'{"schemaVersion":2,"candidates":[],"pins":[]}\n',
+        "invalid_composition_config",
+        id="invalid-structure",
+    ),
+]
+
+
+@pytest.mark.parametrize(("policy", "code"), INVALID_POLICIES)
+def test_invalid_policy_is_reported_once_not_again_as_a_catalog_error(
+    tmp_path: Path, policy: bytes, code: str
+) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / "config/composition.json").write_bytes(policy)
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "failed"
+    assert [error["code"] for error in result["errors"]] == [code]
+
+
+@pytest.mark.parametrize(("policy", "code"), INVALID_POLICIES)
+@pytest.mark.parametrize("defect", ["missing", "malformed"])
+def test_invalid_policy_and_readme_defect_are_reported_independently(
+    tmp_path: Path, policy: bytes, code: str, defect: str
+) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / "config/composition.json").write_bytes(policy)
+    readme = tmp_path / "README.md"
+    if defect == "missing":
+        readme.unlink()
+    else:
+        readme.write_bytes(b"bad")
+    result = verify.run_verification(tmp_path)
+    assert [error["code"] for error in result["errors"]] == [code, "catalog_invalid"]
+
+
+@pytest.mark.parametrize(
+    ("relative", "value"),
+    [
+        (
+            "config/overlay.json",
+            b'[{"id":"x","url":"https://example.com/app","patch":null}]\n',
+        ),
+        ("config/deny.json", b'[{"id":"x","reason":"x","unexpected":true}]\n'),
+    ],
+    ids=["overlay", "denylist"],
+)
+def test_other_configuration_errors_do_not_hide_a_stale_catalog(
+    tmp_path: Path, relative: str, value: bytes
+) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / relative).write_bytes(value)
+    (tmp_path / "README.md").write_bytes(STALE_README)
+    result = verify.run_verification(tmp_path)
+    assert [error["code"] for error in result["errors"]] == [
+        "invalid_composition_config",
+        "catalog_invalid",
+    ]
+
+
 def test_handwritten_edit_stales_evidence_but_allows_fresh_verification(
     tmp_path: Path,
 ) -> None:

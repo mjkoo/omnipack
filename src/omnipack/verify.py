@@ -9,6 +9,11 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
+from omnipack.composition_policy import (
+    CompositionPolicy,
+    CompositionPolicyError,
+    load_composition_policy,
+)
 from omnipack.offline import (
     OfflineInputs,
     missing_input,
@@ -105,8 +110,11 @@ def run_verification(root: Path) -> VerificationReport:
         item.to_record() for item in findings if item not in unreadable_missing
     )
     from omnipack.catalog import generate_catalog, split_catalog
-    from omnipack.composition_policy import load_composition_policy
 
+    # An invalid policy is already a finding above; without one there is no
+    # expected catalog to compare, and repeating the policy error as a catalog
+    # error would point the repair at the README.
+    policy = _usable_policy(snapshots["composition"])
     try:
         readme = snapshots["readme"]
         if readme is None:
@@ -114,13 +122,9 @@ def run_verification(root: Path) -> VerificationReport:
                 raise ValueError("README input is missing")
         else:
             _, interior, _ = split_catalog(readme)
-            single, dual, policy = (
-                snapshots[name] for name in ("single", "dual", "composition")
-            )
+            single, dual = snapshots["single"], snapshots["dual"]
             if single is not None and dual is not None and policy is not None:
-                expected = generate_catalog(
-                    single, dual, load_composition_policy(policy)
-                )
+                expected = generate_catalog(single, dual, policy)
                 if interior != expected:
                     raise ValueError(
                         "README catalog differs from the captured packs and policy"
@@ -150,6 +154,15 @@ def run_verification(root: Path) -> VerificationReport:
     }
     _write_atomic(root / VERIFY_PATH, report)
     return report
+
+
+def _usable_policy(data: bytes | None) -> CompositionPolicy | None:
+    if data is None:
+        return None
+    try:
+        return load_composition_policy(data)
+    except CompositionPolicyError:
+        return None
 
 
 def _write_atomic(path: Path, document: Mapping[str, Any]) -> None:

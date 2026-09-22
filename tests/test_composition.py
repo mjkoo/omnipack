@@ -23,6 +23,7 @@ from omnipack.merge import (
     compose as compose_apps,
 )
 from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.urls import normalize_project_url
 
 
 def app(
@@ -524,10 +525,16 @@ def test_nonarray_overlay_error_identifies_the_overlay() -> None:
 def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
     candidate = app("x")
     record = {"id": candidate.id, "url": candidate.url, "patch": {}}
-    with pytest.raises(CompositionError, match="duplicate selector"):
+    selector = repr(rendered_key(candidate.id, candidate.url))
+    with pytest.raises(CompositionError) as duplicate:
         compose([candidate], [], [record, record])
-    with pytest.raises(CompositionError, match=r"patch must be an object"):
+    assert str(duplicate.value) == f"overlay[1] has duplicate selector {selector}"
+    with pytest.raises(CompositionError) as null_patch:
         compose([candidate], [], [{**record, "patch": None}])
+    assert str(null_patch.value) == (
+        f"overlay[0].patch must be an object (id {candidate.id!r}, "
+        f"url {normalize_project_url(candidate.url)!r})"
+    )
 
 
 @pytest.mark.parametrize("value", [None, "assigned"], ids=["deleted", "assigned"])
@@ -768,7 +775,10 @@ def test_overlay_unknown_field_identifies_record_and_field() -> None:
     record = {"id": candidate.id, "url": candidate.url, "patch": {}, "unexpected": True}
     with pytest.raises(CompositionError) as error:
         compose([candidate], [], [record])
-    assert str(error.value) == "overlay[0] has unknown field 'unexpected'"
+    assert str(error.value) == (
+        "overlay[0] has unknown field 'unexpected' "
+        f"(id 'app.id', url {normalize_project_url(candidate.url)!r})"
+    )
 
 
 @pytest.mark.parametrize("field", ["id", "url"])
@@ -781,7 +791,16 @@ def test_overlay_blank_or_nonstring_key_identifies_field_without_value(
     with pytest.raises(CompositionError) as error:
         compose([candidate], [], [record])
     expected = "string" if field == "id" else "project URL"
-    assert str(error.value) == f"overlay[0].{field} must be a nonempty {expected}"
+    # The other selector component is still usable, so the error names it.
+    context = (
+        f"(url {normalize_project_url(candidate.url)!r})"
+        if field == "id"
+        else "(id 'app.id')"
+    )
+    assert (
+        str(error.value)
+        == f"overlay[0].{field} must be a nonempty {expected} {context}"
+    )
 
 
 def test_overlay_hostless_url_identifies_record_field_and_value() -> None:
@@ -790,4 +809,29 @@ def test_overlay_hostless_url_identifies_record_field_and_value() -> None:
         compose(
             [candidate], [], [{"id": candidate.id, "url": "/owner/repo", "patch": {}}]
         )
-    assert str(error.value) == "overlay[0].url is not a project URL: '/owner/repo'"
+    assert str(error.value) == (
+        "overlay[0].url is not a project URL: '/owner/repo' (id 'app.id')"
+    )
+
+
+@pytest.mark.parametrize(
+    ("record", "message"),
+    [
+        ("not a record", "overlay[0] must be an object"),
+        (
+            {"id": 731, "url": "/owner/repo", "patch": {}},
+            "overlay[0].id must be a nonempty string",
+        ),
+        (
+            {"id": "line\nbreak", "url": " ", "patch": {}},
+            "overlay[0].url must be a nonempty project URL (id 'line\\nbreak')",
+        ),
+    ],
+    ids=["non-object", "no-usable-selector", "multiline-id"],
+)
+def test_overlay_error_context_is_limited_to_usable_selector_parts(
+    record: object, message: str
+) -> None:
+    with pytest.raises(CompositionError) as error:
+        compose([app("x")], [], [record])
+    assert str(error.value) == message
