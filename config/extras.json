@@ -1,5 +1,23 @@
 [
   {
+    "id": "dev.picori.tmc",
+    "url": "https://github.com/999sian/tmc",
+    "name": "Zelda: The Minish Cap",
+    "author": "999sian",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": true,
+      "apkFilterRegEx": "^tmc-multi-android-v[0-9]+(?:\\.[0-9]+)+\\.apk$",
+      "autoApkFilterByArch": false,
+      "versionDetection": true,
+      "releaseTitleAsVersion": false,
+      "trackOnly": false,
+      "includeZips": false,
+      "about": "Project Picori baseline. Requires a user-supplied supported Minish Cap ROM. Same package as Sam's dual-screen fork but incompatible signing; not an in-place update. See the pack curation guide."
+    }
+  },
+  {
     "id": "com.metroidarch.app.aarch64",
     "url": "https://github.com/Raekwon1603/RetroArch",
     "name": "MetroidArch (Super Metroid)",

@@ -140,6 +140,60 @@ source versions and manifest values are also retained in the
 
 ## Unresolved identity and selection findings
 
+### Minish Cap publisher transition
+
+As observed on September 23, 2026, the dual-screen pack retains
+[Sam's v1.2 release](https://github.com/samyost1/tmc-android/releases/tag/v1.2)
+for `dev.picori.tmc`. The single-screen pack selects
+[Project Picori v0.9.3](https://github.com/999sian/tmc/releases/tag/v0.9.3).
+The maintained extra follows stable `tmc-multi-android-v<version>.apk`
+assets rather than pinning this observed release. It keeps version detection
+enabled and excludes archives and prereleases. The dual-screen pack retains
+Sam's second-screen map, quests and inventory panel.
+
+For a new Picori installation, supply your own supported Minish Cap ROM and
+select it through the app's ROM picker. Picori's
+[release notes](https://github.com/999sian/tmc/releases/tag/v0.9.3) describe
+multi-region support; this pack has not validated it on a device. Sam's
+[setup instructions](https://github.com/samyost1/tmc-android/blob/7dbd15b797e60c2a6d9f8517bff782b2e70c67a4/README.md#install)
+require a user-supplied ROM and describe known EU text limitations.
+
+The inspected APKs declare versionName/versionCode `0.8.3`/`80300` and
+`0.9.3`/`90300`, respectively. Sam's numerically higher release tag does not
+describe the Android version ordering.
+
+The released APKs have different signing-certificate SHA-256 fingerprints:
+
+- Sam: `3e9d065e36d575e0907aad30ea8e817a1bc1fffadb86c4edfcdd038a43eaa202`.
+- Picori: `0982f3b7135a317d7185140fe35e805ab7f070aba930662161e1679771088458`.
+
+Both verify with APK signature schemes v1/v2 and have no observed rotation
+lineage. Matching package IDs and Picori's higher version code therefore do
+not support an ordinary in-place update from Sam. A fresh installation is
+not yet documented here as a supported save-preserving migration.
+
+The unresolved step is a complete Android backup-and-restore route for
+existing Sam saves before removing its same-package installation. Both tagged
+sources prefer app-specific external storage and can fall back to private
+storage. Android [removes app-specific files on uninstall](https://developer.android.com/training/data-storage/app-specific).
+Sam's save-profile copies remain in that same app directory; they are not an
+independent backup. The single-screen selection targets new installations;
+no save-preserving uninstall and reinstall procedure for an existing Sam
+install is documented.
+
+[Picori's release source](https://github.com/999sian/tmc/blob/eebb319fa4aa55c18c93de598bc0910d0608f25b/port/port_save.c)
+contains legacy save-layout conversion. A host-only synthetic USA save-slot
+check preserved the original backup and produced valid converted checksums,
+but did not establish Android file access, restoration of real saves or
+gameplay continuity. The migration must also account for regional and named
+profiles and any sidecar data; quicksave states are not proven portable.
+[Sam's save-import report](https://github.com/samyost1/tmc-android/issues/11)
+and [autosave report](https://github.com/samyost1/tmc-android/issues/20)
+remain open. These reports describe limitations, not proof that every save
+fails. No device validation was performed.
+
+### Other unresolved findings
+
 CTR retains the manifest-backed `com.ctrnative` identity and variant-specific
 sources. The later [installed-source reconciliation](source-reconciliation.md)
 corrects Symphony and Shipwright plus the other reviewed installed identities,
