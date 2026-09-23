@@ -1,6 +1,6 @@
 ## 1. Establish the supported transition
 
-- [ ] 1.1 Refresh the GitHub/Reddit findings and compare current selected Sam/Picori release APKs; deliver validation.md with primary URLs, hashes, package/version fields, SDK/ABI, permissions and certificate/rotation observations, distinguishing source claims from inspected bytes.
+- [x] 1.1 Refresh the GitHub/Reddit findings and compare current selected Sam/Picori release APKs; deliver validation.md with primary URLs, hashes, package/version fields, SDK/ABI, permissions and certificate/rotation observations, distinguishing source claims from inspected bytes.
 - [ ] 1.2 Establish the save-preservation and installation route from upstream documentation/source and reproducible non-device checks; record whether an ordinary update or fresh installation is supported. While the save-preservation route remains unresolved, the requirement forbids moving the selection: retain the previous selection, record the unresolved migration in `docs/curation.md` under "Unresolved identity and selection findings" with the family, dated observations and unresolved save-preservation route, leave both exports unchanged and report the blocker before configuration work. Keep raw APK and route observations in this change's `validation.md`; the durable entry must stand on its own and is required even if task 2.3 is never reached.
 
 ## 2. Curated variant selection
