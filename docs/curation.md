@@ -142,9 +142,9 @@ source versions and manifest values are also retained in the
 
 ### Minish Cap publisher transition
 
-As observed on September 23, 2026, both packs retain
+As observed on September 23, 2026, the dual-screen pack retains
 [Sam's v1.2 release](https://github.com/samyost1/tmc-android/releases/tag/v1.2)
-for `dev.picori.tmc`. The proposed single-screen replacement is
+for `dev.picori.tmc`. The single-screen pack selects
 [Project Picori v0.9.3](https://github.com/999sian/tmc/releases/tag/v0.9.3).
 The inspected APKs declare versionName/versionCode `0.8.3`/`80300` and
 `0.9.3`/`90300`, respectively. Sam's numerically higher release tag does not
@@ -165,8 +165,8 @@ existing Sam saves before removing its same-package installation. Both tagged
 sources prefer app-specific external storage and can fall back to private
 storage. Android [removes app-specific files on uninstall](https://developer.android.com/training/data-storage/app-specific).
 Sam's save-profile copies remain in that same app directory; they are not an
-independent backup. Do not uninstall Sam or clear its data to follow this
-proposed switch.
+independent backup. This selection change is intended for new installations. It does not supply
+a save-preserving uninstall/reinstall procedure for an existing Sam install.
 
 [Picori's release source](https://github.com/999sian/tmc/blob/eebb319fa4aa55c18c93de598bc0910d0608f25b/port/port_save.c)
 contains legacy save-layout conversion. A host-only synthetic USA save-slot
@@ -177,8 +177,9 @@ profiles and any sidecar data; quicksave states are not proven portable.
 [Sam's save-import report](https://github.com/samyost1/tmc-android/issues/11)
 and [autosave report](https://github.com/samyost1/tmc-android/issues/20)
 remain open. These reports describe limitations, not proof that every save
-fails. No device validation was performed. Both pack exports stay unchanged
-until a supported save-preservation route is established.
+fails. No device validation was performed. The owner explicitly authorized this selection change without save migration
+because there were no existing users. That exception does not establish a
+supported migration for an existing installation.
 
 ### Other unresolved findings
 

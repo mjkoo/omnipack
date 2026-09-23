@@ -1,7 +1,8 @@
 # Minish Cap transition evidence
 
-Observed September 23, 2026. The selection gate remains blocked. Both exports
-retain Sam; configuration and README are unchanged. No ADB command, device
+Observed September 23, 2026. The owner subsequently authorized the switch
+without save migration because there are no existing users. The original
+blocked assessment below records the evidence preceding that exception. No ADB command, device
 inspection, installation, uninstall or save access was performed.
 
 ## Released APK observations
@@ -185,7 +186,7 @@ int main(void) {
 }
 ```
 
-## Gate result
+## Initial gate result (before owner exception)
 
 A complete save-preserving fresh-install route remains unresolved. The missing
 evidence is reliable extraction before uninstall and restoration of actual
@@ -195,12 +196,16 @@ The source-only probe proves one conversion property, not that end-to-end
 route. An in-place update is incompatible with the inspected signing pair.
 No migration is claimed supported, and no source selection is changed.
 
-The standalone blocked-transition entry is maintained in
+The standalone compatibility entry is maintained in
 [consumer curation guidance](../../../docs/curation.md#minish-cap-publisher-transition).
-Task 1.1 is complete; task 1.2 remains unchecked because establishing the
-supported route is unfinished, even though its blocked-path reporting is done.
-Downstream configuration and completion tasks remain unchecked. Implementation
-is paused at this gate, not complete or ready to archive.
+
+### Owner-authorized exception
+
+On September 23, 2026 the owner instructed: "disregard the save migration
+requirement for this task, we have no users so it's safe". The exception
+supersedes the selection blocker for this switch only. It does not turn the
+unresolved route into a supported migration. Configuration may now select
+Picori for single and retain Sam for dual; no device access is authorized.
 
 ## Repository checks
 
@@ -208,6 +213,6 @@ is paused at this gate, not complete or ready to archive.
 - `openspec validate select-minish-cap-variants --strict`, `git diff --check`
   and `uv run pack verify`: passed. Offline documentation link check:
   570 total links, zero errors.
-- Both exports are byte-identical to the branch base:
+- Before the exception, both exports were byte-identical to the branch base:
   - single-screen SHA-256: `6e7816f333b45123fa02f61b2ecb2da2b4743dcaf22bab729a2bb80bfcf42ccf`.
   - dual-screen SHA-256: `4c51ea78cd84439367d3c60e72e9a6ff5da80a4a4c9a07d2348c29bdda0ee24e`.

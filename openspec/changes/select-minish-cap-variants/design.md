@@ -72,22 +72,16 @@ build configurations declare dev.picori.tmc, but source declarations do not prov
 released package identity. Sam documents debug signing; Picori's build can use a
 persistent CI key or a debug fallback. The release certificates must settle it.
 
-An incompatible certificate or lower version code does not by itself disqualify
-Picori, but makes an ordinary update claim invalid. Document a fresh-install or
-other supported transition only when there is a substantiated save-preservation
-route. Verify the route from upstream documentation/source and reproducible
-non-device checks where possible; label absence of device testing explicitly.
-While the save route remains unresolved, the modified requirement forbids
-moving the pack's selection to Picori's build: the previous selection is
-retained and the unresolved migration is recorded in `docs/curation.md` under
-"Unresolved identity and selection findings", naming the family, dated
-observations and unresolved save-preservation route. Raw APK and route
-observations remain in this change's `validation.md`; the durable entry must
-stand on its own without depending on that change-local evidence. That retention
-is what the modified requirement demands; the implementation reports the blocker and
-leaves the exports unchanged while the route is unresolved. Do not mark the
-switch implemented merely because research was completed. Any device-dependent
-follow-up requires separate approval.
+The inspected release certificates differ and have no observed rotation lineage.
+Picori has the higher Android version code, but is not an ordinary update over
+Sam. On September 23, 2026, the owner explicitly waived save migration for this
+switch because there are no users. This authorizes the selection change despite
+the unresolved preservation route; it does not establish save compatibility or
+change the default retention rule for transitions affecting existing users.
+Document new-install setup, signing incompatibility and the unresolved route in
+`docs/curation.md` under "Unresolved identity and selection findings". Keep raw
+observations in `validation.md`. No uninstall, installation or device access is
+authorized. Do not claim the synthetic source probe proves Android migration.
 
 ### Keep evidence separate from consumer guidance
 
@@ -103,15 +97,17 @@ successful in-place installation or save compatibility.
 - Same-package forks may have incompatible certificates. Compare released
   artifacts and state the required transition before changing the baseline.
 - Save import/autosave has reported defects. Establish a preservation route and
-  retain current selection if that cannot be done without unsupported claims.
+  state the unresolved route without unsupported claims. The owner waived this
+  migration gate for the current no-users switch.
 - Available releases may differ from the dated survey. Refresh observations and
   use maintained selection settings, not a hard-coded release pin.
-- Upstream can remove the dual candidate later. Preserve existing composition
-  fallback semantics; do not invent an availability guarantee or unrelated pin.
+- Upstream can remove the dual candidate later. Both retained BBoi identity rules are required selectors, so removal
+  fails the build loudly. Refresh tests keep both records and change settings;
+  do not claim automatic fallback when a required selector disappears.
 
 ## Migration Plan
 
-First complete the artifact comparison and save-route evidence. Then update
+First complete the artifact comparison and record the explicit no-users exception. Then update
 configuration and outcome fixtures together, rebuild both exports and README,
 and verify only the intended per-variant selection changed. Single should choose
 Picori; dual should retain Sam. Run regression checks with refreshed source
