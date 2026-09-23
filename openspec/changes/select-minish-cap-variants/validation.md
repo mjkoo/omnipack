@@ -253,3 +253,20 @@ Live `uv run pack build` succeeded. Parsed comparison against main found only
 Settings and every other app stayed unchanged. README comparison found exactly
 one changed line, the Minish Cap catalog row. `uv run pack verify` passed again
 after the build.
+
+
+## Implementation reviews
+
+The release-evidence group was independently approved against `d9dfac0`.
+The explicit no-users exception was independently approved against `da6d3e9`;
+its stale planning statement about unperformed APK inspection was corrected.
+The selection group was independently reviewed against `7473be3`, with the
+current/refreshed regression and output comparison evidencing all three tasks.
+
+Two whole-diff reviewers examined the merge-base `fef4807` through `7473be3`:
+correctness/consumer compatibility and idioms/test proportionality. Both found
+no Critical, Important or Minor issues. The reviews confirmed the required
+Sam selectors remain, the durable unresolved-migration record survives the
+exception, and the new regression adds distinct real-composition coverage.
+Historical identity evidence remains unchanged; optional Quiver coverage is
+inapplicable because no Quiver source is configured. No fix round was needed.
