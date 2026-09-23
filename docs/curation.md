@@ -146,6 +146,18 @@ As observed on September 23, 2026, the dual-screen pack retains
 [Sam's v1.2 release](https://github.com/samyost1/tmc-android/releases/tag/v1.2)
 for `dev.picori.tmc`. The single-screen pack selects
 [Project Picori v0.9.3](https://github.com/999sian/tmc/releases/tag/v0.9.3).
+The maintained extra follows stable `tmc-multi-android-v<version>.apk`
+assets rather than pinning this observed release. It keeps version detection
+enabled and excludes archives and prereleases. The dual-screen pack retains
+Sam's second-screen map, quests and inventory panel.
+
+For a new Picori installation, supply your own supported Minish Cap ROM and
+select it through the app's ROM picker. Picori's
+[release notes](https://github.com/999sian/tmc/releases/tag/v0.9.3) describe
+multi-region support; this pack has not validated it on a device. Sam's
+[setup instructions](https://github.com/samyost1/tmc-android/blob/7dbd15b797e60c2a6d9f8517bff782b2e70c67a4/README.md#install)
+require a user-supplied ROM and describe known EU text limitations.
+
 The inspected APKs declare versionName/versionCode `0.8.3`/`80300` and
 `0.9.3`/`90300`, respectively. Sam's numerically higher release tag does not
 describe the Android version ordering.

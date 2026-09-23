@@ -1,7 +1,7 @@
 ## 1. Establish the supported transition
 
 - [x] 1.1 Refresh the GitHub/Reddit findings and compare current selected Sam/Picori release APKs; deliver validation.md with primary URLs, hashes, package/version fields, SDK/ABI, permissions and certificate/rotation observations, distinguishing source claims from inspected bytes.
-- [ ] 1.2 Record the owner's explicit no-users exception to save migration for this switch; document incompatible signing, the unresolved preservation route and fresh-install-only scope in `docs/curation.md` under "Unresolved identity and selection findings", with raw observations in `validation.md`. Do not claim an ordinary update or supported save migration; proceed with configuration under the exception without device access.
+- [x] 1.2 Record the owner's explicit no-users exception to save migration for this switch; document incompatible signing, the unresolved preservation route and fresh-install-only scope in `docs/curation.md` under "Unresolved identity and selection findings", with raw observations in `validation.md`. Do not claim an ordinary update or supported save migration; proceed with configuration under the exception without device access.
 
 ## 2. Curated variant selection
 

@@ -216,3 +216,40 @@ Picori for single and retain Sam for dual; no device access is authorized.
 - Before the exception, both exports were byte-identical to the branch base:
   - single-screen SHA-256: `6e7816f333b45123fa02f61b2ecb2da2b4743dcaf22bab729a2bb80bfcf42ccf`.
   - dual-screen SHA-256: `4c51ea78cd84439367d3c60e72e9a6ff5da80a4a4c9a07d2348c29bdda0ee24e`.
+
+
+## Selection implementation
+
+The Picori baseline extra uses the inspected `dev.picori.tmc` identity and a
+stable Android-APK name filter, with version detection enabled. Both BBoi Sam
+identity corrections remain. No explicit family, pin or overlay is needed:
+extras precedence chooses Picori in single and dual preference chooses Sam in
+dual. No existing Minish Cap overlay needed replacement. The historical
+reconciliation fixture remains valid because both released APKs share the
+corrected package identity. Quiver is not configured, so optional Quiver
+coverage does not apply.
+
+The regression initially failed in both current and refreshed cases because
+single selected Sam. After the extra was added, the focused curation set passed
+15 tests. The regression checks exactly one entry from either project per
+variant, expected URLs, identity, Sam standard in the single considered list,
+Sam dual origin, maintained Picori settings and selection under simulated Sam
+settings refresh. The future-version filter check prevents a release pin.
+
+Both BBoi identity rules remain required selectors. Removing a matched source
+record causes the existing unmatched-selector failure; this change does not
+promise a fallback to Picori after a required Sam record disappears. The
+refresh regression therefore changes settings on retained source candidates.
+
+`just check-all` passed: 818 Python tests (94% coverage), 108 Python 3.12 tests,
+lock, formatting, lint, types, pack verification, workflow lint, offline links,
+Nix formatting and native-platform flake evaluation/checks. Zizmor reported its
+default offline mode and no findings. Nix reported a dirty git tree and omitted
+incompatible systems; those are environment notices, not cross-platform test
+claims. No device validation was performed.
+
+Live `uv run pack build` succeeded. Parsed comparison against main found only
+`dev.picori.tmc` changed in single-screen; dual-screen remained byte-identical.
+Settings and every other app stayed unchanged. README comparison found exactly
+one changed line, the Minish Cap catalog row. `uv run pack verify` passed again
+after the build.

@@ -25,8 +25,8 @@ choice, not a reputation claim that one maintainer is inherently safer:
   [autosave](https://github.com/samyost1/tmc-android/issues/20) reports are relevant
   known limitations, not evidence of maliciousness.
 
-These observations are research inputs. No release APK comparison or device
-validation has yet been performed for this proposed switch.
+These observations are research inputs. The implementation's APK comparison is
+recorded in validation.md; no device validation has been performed.
 
 ## Goals / Non-Goals
 
