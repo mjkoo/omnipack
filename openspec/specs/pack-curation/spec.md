@@ -28,6 +28,19 @@ version policy repairs them. A successful structural result SHALL NOT be
 described as proof of safe identity, installation, re-import, or update
 behavior for those entries.
 
+When a pack's selection for a family moves to another publisher's build,
+curation SHALL distinguish package identity from update compatibility. An
+in-place upgrade claim SHALL be supported by dated observations of released APK
+signing identity and Android version ordering; matching package IDs or
+comparable-looking release tags SHALL NOT establish compatibility. Consumer
+guidance SHALL state any required backup, save transfer or fresh-install
+action, distinguish source inspection from tested device behavior, and identify
+unresolved compatibility. While the save-preservation route for that family
+remains unresolved, the move SHALL NOT be presented as a supported migration,
+and durable curation documentation SHALL record the family, the dated
+observations and the unresolved route. The pipeline SHALL NOT install,
+uninstall or migrate apps as part of changing a pack's source selection.
+
 #### Scenario: Resolved APK declares another package id
 
 - **WHEN** an inspected APK declares a package id other than the id its upstream catalog uses
@@ -39,6 +52,17 @@ behavior for those entries.
 - **WHEN** a curated entry cannot run until the user supplies game files or installs a separate component
 - **THEN** consumer documentation describes that step
 - **AND** it does not claim the step was validated on a device unless it was
+
+#### Scenario: Equal package IDs with incompatible signing
+
+- **WHEN** selected replacement APKs share a package ID but lack compatible signing identity
+- **THEN** guidance does not claim an in-place upgrade
+- **AND** it describes the established save-preserving route, or states that the route is unresolved without presenting the move as a supported migration
+
+#### Scenario: Release labels imply the wrong ordering
+
+- **WHEN** replacement release tags appear newer but APK version codes do not support a normal upgrade
+- **THEN** the curation record states the observed Android ordering and consumer guidance does not promise an ordinary upgrade
 
 ### Requirement: Upstream pack trackers are excluded from both packs
 
