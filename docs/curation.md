@@ -140,6 +140,48 @@ source versions and manifest values are also retained in the
 
 ## Unresolved identity and selection findings
 
+### Minish Cap publisher transition
+
+As observed on September 23, 2026, both packs retain
+[Sam's v1.2 release](https://github.com/samyost1/tmc-android/releases/tag/v1.2)
+for `dev.picori.tmc`. The proposed single-screen replacement is
+[Project Picori v0.9.3](https://github.com/999sian/tmc/releases/tag/v0.9.3).
+The inspected APKs declare versionName/versionCode `0.8.3`/`80300` and
+`0.9.3`/`90300`, respectively. Sam's numerically higher release tag does not
+describe the Android version ordering.
+
+The released APKs have different signing-certificate SHA-256 fingerprints:
+
+- Sam: `3e9d065e36d575e0907aad30ea8e817a1bc1fffadb86c4edfcdd038a43eaa202`.
+- Picori: `0982f3b7135a317d7185140fe35e805ab7f070aba930662161e1679771088458`.
+
+Both verify with APK signature schemes v1/v2 and have no observed rotation
+lineage. Matching package IDs and Picori's higher version code therefore do
+not support an ordinary in-place update from Sam. A fresh installation is
+not yet documented here as a supported save-preserving migration.
+
+The unresolved step is a complete Android backup-and-restore route for
+existing Sam saves before removing its same-package installation. Both tagged
+sources prefer app-specific external storage and can fall back to private
+storage. Android [removes app-specific files on uninstall](https://developer.android.com/training/data-storage/app-specific).
+Sam's save-profile copies remain in that same app directory; they are not an
+independent backup. Do not uninstall Sam or clear its data to follow this
+proposed switch.
+
+[Picori's release source](https://github.com/999sian/tmc/blob/eebb319fa4aa55c18c93de598bc0910d0608f25b/port/port_save.c)
+contains legacy save-layout conversion. A host-only synthetic USA save-slot
+check preserved the original backup and produced valid converted checksums,
+but did not establish Android file access, restoration of real saves or
+gameplay continuity. The migration must also account for regional and named
+profiles and any sidecar data; quicksave states are not proven portable.
+[Sam's save-import report](https://github.com/samyost1/tmc-android/issues/11)
+and [autosave report](https://github.com/samyost1/tmc-android/issues/20)
+remain open. These reports describe limitations, not proof that every save
+fails. No device validation was performed. Both pack exports stay unchanged
+until a supported save-preservation route is established.
+
+### Other unresolved findings
+
 CTR retains the manifest-backed `com.ctrnative` identity and variant-specific
 sources. The later [installed-source reconciliation](source-reconciliation.md)
 corrects Symphony and Shipwright plus the other reviewed installed identities,
