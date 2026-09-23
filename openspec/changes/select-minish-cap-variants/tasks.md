@@ -13,4 +13,4 @@
 
 - [x] 3.1 Complete required per-group evidencing reviews and the parallel implementation review wave; record findings and resolutions with no unresolved blocking issue.
 - [x] 3.2 Run repository-required checks, curation/composition regressions, pack build and pack verify; record results and confirm the APK evidence and explicit no-users exception precede the source switch.
-- [ ] 3.3 Audit checkbox completion against configuration, tests and evidence; leave the change active and report the branch without invoking the separate OpenSpec verification or archive workflows.
+- [x] 3.3 Audit checkbox completion against configuration, tests and evidence; leave the change active and report the branch without invoking the separate OpenSpec verification or archive workflows.

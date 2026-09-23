@@ -270,3 +270,14 @@ Sam selectors remain, the durable unresolved-migration record survives the
 exception, and the new regression adds distinct real-composition coverage.
 Historical identity evidence remains unchanged; optional Quiver coverage is
 inapplicable because no Quiver source is configured. No fix round was needed.
+
+
+## Completion audit
+
+A fresh read-only auditor confirmed all seven previously checked tasks against
+implementation commits and their checks, with no unevidenced boxes. The audit
+itself completes the eighth task. The final post-audit suite passed all 818
+tests (94% coverage); pack verification and strict change validation passed.
+No implementation fixes followed the review wave or audit. The change remains
+active on branch `select-minish-cap-variants`; the separate OpenSpec verification
+and archive workflows have not been invoked.
