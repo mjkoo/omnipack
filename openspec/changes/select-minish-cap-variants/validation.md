@@ -281,3 +281,14 @@ tests (94% coverage); pack verification and strict change validation passed.
 No implementation fixes followed the review wave or audit. The change remains
 active on branch `select-minish-cap-variants`; the separate OpenSpec verification
 and archive workflows have not been invoked.
+
+## Post-implementation spec revision
+
+On September 23, 2026, after implementation review, the owner ruled to drop
+the retain-previous-selection rule from the modified requirement rather than
+carry a durable no-users exception. The requirement keeps the evidence rules:
+no in-place upgrade claim without signing and ordering evidence, no supported
+migration claim while the save-preservation route is unresolved, and a durable
+record of the family, dated observations and unresolved route. The
+owner-authorized exception above remains the historical record of the
+selection decision.

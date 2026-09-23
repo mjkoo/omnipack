@@ -177,8 +177,9 @@ existing Sam saves before removing its same-package installation. Both tagged
 sources prefer app-specific external storage and can fall back to private
 storage. Android [removes app-specific files on uninstall](https://developer.android.com/training/data-storage/app-specific).
 Sam's save-profile copies remain in that same app directory; they are not an
-independent backup. This selection change is intended for new installations. It does not supply
-a save-preserving uninstall/reinstall procedure for an existing Sam install.
+independent backup. The single-screen selection targets new installations;
+no save-preserving uninstall and reinstall procedure for an existing Sam
+install is documented.
 
 [Picori's release source](https://github.com/999sian/tmc/blob/eebb319fa4aa55c18c93de598bc0910d0608f25b/port/port_save.c)
 contains legacy save-layout conversion. A host-only synthetic USA save-slot
@@ -189,9 +190,7 @@ profiles and any sidecar data; quicksave states are not proven portable.
 [Sam's save-import report](https://github.com/samyost1/tmc-android/issues/11)
 and [autosave report](https://github.com/samyost1/tmc-android/issues/20)
 remain open. These reports describe limitations, not proof that every save
-fails. No device validation was performed. The owner explicitly authorized this selection change without save migration
-because there were no existing users. That exception does not establish a
-supported migration for an existing installation.
+fails. No device validation was performed.
 
 ### Other unresolved findings
 

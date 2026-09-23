@@ -27,19 +27,11 @@ signing identity and Android version ordering; matching package IDs or
 comparable-looking release tags SHALL NOT establish compatibility. Consumer
 guidance SHALL state any required backup, save transfer or fresh-install
 action, distinguish source inspection from tested device behavior, and identify
-unresolved compatibility. A pack's selection for a family SHALL NOT move to
-another publisher's build, and the move SHALL NOT be presented as a supported
-migration, while the save-preservation route for that family remains
-unresolved, except for an explicitly authorized transition with no existing
-users. Such an exception SHALL be recorded in durable curation documentation
-and SHALL NOT be presented as a supported save migration. Otherwise, the
-previous selection SHALL be retained and the unresolved
-migration SHALL be recorded in `docs/curation.md` under "Unresolved identity and
-selection findings", naming the family, dated observations and unresolved
-save-preservation route. That durable entry SHALL stand on its own; raw APK and
-route observations SHALL be recorded in the change's `validation.md`, which
-SHALL NOT be the sole record of the unresolved migration. The pipeline SHALL NOT
-install, uninstall or migrate apps as part of changing a pack's source selection.
+unresolved compatibility. While the save-preservation route for that family
+remains unresolved, the move SHALL NOT be presented as a supported migration,
+and durable curation documentation SHALL record the family, the dated
+observations and the unresolved route. The pipeline SHALL NOT install,
+uninstall or migrate apps as part of changing a pack's source selection.
 
 #### Scenario: Resolved APK declares another package id
 
@@ -56,16 +48,10 @@ install, uninstall or migrate apps as part of changing a pack's source selection
 #### Scenario: Equal package IDs with incompatible signing
 
 - **WHEN** selected replacement APKs share a package ID but lack compatible signing identity
-- **THEN** guidance does not claim an in-place upgrade and describes the established save-preserving fresh-install route, or the previous selection is retained unless an explicit no-users exception authorizes the switch; the unresolved migration is recorded in `docs/curation.md` under "Unresolved identity and selection findings" with the family, dated observations and unresolved save-preservation route
-- **AND** on the unresolved path, raw APK and route observations are recorded in the change's `validation.md`, and the durable curation entry stands on its own
+- **THEN** guidance does not claim an in-place upgrade
+- **AND** it describes the established save-preserving route, or states that the route is unresolved without presenting the move as a supported migration
 
 #### Scenario: Release labels imply the wrong ordering
 
 - **WHEN** replacement release tags appear newer but APK version codes do not support a normal upgrade
 - **THEN** the curation record states the observed Android ordering and consumer guidance does not promise an ordinary upgrade
-
-#### Scenario: Explicitly authorized transition before user adoption
-
-- **WHEN** the owner confirms there are no existing users and explicitly authorizes a publisher switch without save migration
-- **THEN** the selection may change with the exception recorded in durable curation documentation
-- **AND** guidance still states signing incompatibility and unresolved save preservation without claiming an ordinary update or supported migration

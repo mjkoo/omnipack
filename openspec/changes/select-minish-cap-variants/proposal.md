@@ -10,12 +10,12 @@ fork retains useful second-screen behavior, so one source need not serve both.
   checks; retain `samyost1/tmc-android` for dual-screen.
 - Express the split in existing extras/composition configuration and outcome
   tests, independently of Quiver integration.
-- Record release identities and signing/version compatibility. The owner has
-  explicitly waived save migration for this switch because there are no users.
-  Proceed with fresh-install guidance without claiming a supported migration
-  from Sam. Keep unresolved compatibility in `docs/curation.md` under
-  "Unresolved identity and selection findings", and raw observations in
-  this change's `validation.md`.
+- Record release identities and signing/version compatibility. Ship
+  new-installation guidance and state that the save-preservation route from
+  an existing Sam install is unresolved, without claiming a supported
+  migration. Keep that unresolved compatibility in `docs/curation.md` under
+  "Unresolved identity and selection findings", and raw observations in this
+  change's `validation.md`.
 - No single-screen preference setting exists to retire: Sam wins single today
   only as the family's sole baseline build. Both BBoi identity rules
   correcting `com.samyost1.tmcandroid` to `dev.picori.tmc` remain; if an

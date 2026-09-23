@@ -74,44 +74,41 @@ persistent CI key or a debug fallback. The release certificates must settle it.
 
 The inspected release certificates differ and have no observed rotation lineage.
 Picori has the higher Android version code, but is not an ordinary update over
-Sam. On September 23, 2026, the owner explicitly waived save migration for this
-switch because there are no users. This authorizes the selection change despite
-the unresolved preservation route; it does not establish save compatibility or
-change the default retention rule for transitions affecting existing users.
-Document new-install setup, signing incompatibility and the unresolved route in
-`docs/curation.md` under "Unresolved identity and selection findings". Keep raw
-observations in `validation.md`. No uninstall, installation or device access is
-authorized. Do not claim the synthetic source probe proves Android migration.
+Sam. The save-preservation route from an existing Sam install is unresolved,
+so the single-screen selection targets new installations and guidance claims no
+supported migration. Document new-install setup, signing incompatibility and
+the unresolved route in `docs/curation.md` under "Unresolved identity and
+selection findings". Keep raw observations in `validation.md`. No uninstall,
+installation or device access is authorized. Do not claim the synthetic source
+probe proves Android migration.
 
 ### Keep evidence separate from consumer guidance
 
 Write actual observations to validation.md in this change directory and stable
 fixtures where required by tests. Put maintained preference, setup/migration
-instructions and known limitations into consumer documentation. The unresolved-migration entry
-in `docs/curation.md` is required even when configuration work never starts.
-Do not present community reputation, a package match or structural verification as proof of
+instructions and known limitations into consumer documentation. Do not present
+community reputation, a package match or structural verification as proof of
 successful in-place installation or save compatibility.
 
 ## Risks / Trade-offs
 
 - Same-package forks may have incompatible certificates. Compare released
   artifacts and state the required transition before changing the baseline.
-- Save import/autosave has reported defects. Establish a preservation route and
-  state the unresolved route without unsupported claims. The owner waived this
-  migration gate for the current no-users switch.
+- Save import/autosave has reported defects. State the unresolved preservation
+  route without unsupported claims.
 - Available releases may differ from the dated survey. Refresh observations and
   use maintained selection settings, not a hard-coded release pin.
-- Upstream can remove the dual candidate later. Both retained BBoi identity rules are required selectors, so removal
-  fails the build loudly. Refresh tests keep both records and change settings;
+- Upstream can remove the dual candidate later. Both retained BBoi identity
+  rules are required selectors, so removal fails the build loudly. Refresh tests keep both records and change settings;
   do not claim automatic fallback when a required selector disappears.
 
 ## Migration Plan
 
-First complete the artifact comparison and record the explicit no-users exception. Then update
-configuration and outcome fixtures together, rebuild both exports and README,
-and verify only the intended per-variant selection changed. Single should choose
-Picori; dual should retain Sam. Run regression checks with refreshed source
-settings to show the curated choice survives.
+First complete the artifact comparison and record the unresolved save route.
+Then update configuration and outcome fixtures together, rebuild both exports
+and README, and verify only the intended per-variant selection changed. Single
+should choose Picori; dual should retain Sam. Run regression checks with
+refreshed source settings to show the curated choice survives.
 
 Rollback restores previous configuration and rebuilds both exports. It cannot
 promise an installed-app downgrade or restore saves; those are separate user
