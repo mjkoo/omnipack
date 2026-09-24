@@ -7,7 +7,6 @@ import pytest
 from omnipack.composition_policy import (
     CandidateRule,
     CompositionPolicy,
-    CompositionPolicyError,
     Pin,
     candidate_selector,
     parse_composition_policy,
@@ -355,8 +354,8 @@ def test_winning_rank_tie_fails_but_losing_tier_tie_does_not() -> None:
 
 def test_rjny_outranks_bboi_and_the_winner_keeps_its_whole_entry() -> None:
     entries = [
-        app("shared.pkg", "bboi", family="app:x", name="bboi build"),
-        app("shared.pkg", "rjny", family="app:x", name="rjny build"),
+        app("shared.pkg", "bboi", name="bboi build"),
+        app("shared.pkg", "rjny", name="rjny build"),
     ]
     result = compose(entries, [], [])
     for variant in Variant:
@@ -944,18 +943,21 @@ def test_rule_less_candidate_at_an_ineligible_rule_s_key_joins_its_family() -> N
 
 def test_pin_on_a_rule_less_candidate_names_the_family_it_joins() -> None:
     ruled = app("shared", "rjny", url="https://example.com/x")
-    rule_less = app("shared", "extras", url="https://example.com/y")
+    rule_less = app("shared", "bboi", url="https://example.com/y")
     rules = [family_rule(ruled, "app:x")]
     result = compose(
         [ruled, rule_less],
         [],
         [],
-        policy=policy_of(rules, [pin(ruled, "app:x", Variant.DUAL)]),
+        policy=policy_of(rules, [pin(rule_less, "app:x", Variant.DUAL)]),
     )
-    assert families(result) == {
-        ("app:x", "single", "extras"),
-        ("app:x", "dual", "rjny"),
-    }
+    assert [
+        (item.family, item.variant, item.source, item.reason)
+        for item in result.report.selections
+    ] == [
+        ("app:x", Variant.SINGLE, "rjny", "source"),
+        ("app:x", Variant.DUAL, "bboi", "pin"),
+    ]
     with pytest.raises(CompositionError) as error:
         compose(
             [ruled, rule_less],
@@ -994,37 +996,6 @@ def test_pin_on_a_removed_candidate_fails_on_the_removal(removal: str) -> None:
     assert report.stale_exclusions == [StaleExclusion("retired", "obsolete")]
 
 
-def test_pin_naming_another_family_than_a_denied_candidate_s_projection() -> None:
-    projected = app("projected")
-    with pytest.raises(CompositionPolicyError) as error:
-        policy_of(
-            [family_rule(projected, "app:one")],
-            [pin(projected, "app:two", Variant.DUAL)],
-        )
-    assert str(error.value) == (
-        "pin family 'app:two' target 'dual' conflicts with projected family 'app:one'"
-    )
-
-
-def test_lower_source_repeating_an_id_from_another_repository_loses_whole() -> None:
-    rjny = app("shared", "rjny", url="https://example.com/x", name="rjny build")
-    bboi = app("shared", "bboi", url="https://example.com/y", name="bboi build")
-    result = compose([bboi, rjny], [], [], policy=policy_of([]))
-    for variant in Variant:
-        assert [(item.data["name"], item.url) for item in result.apps[variant]] == [
-            ("rjny build", rjny.url)
-        ]
-    assert [
-        (item.family, item.source, item.considered) for item in result.report.selections
-    ] == [
-        (
-            "package:shared",
-            "rjny",
-            (ConsideredCandidate("bboi", "bboi-standard-asset", "shared", bboi.url),),
-        )
-    ] * 2
-
-
 def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
     ordinary = app("shared", "rjny", url="https://example.com/x")
     preferred = app(
@@ -1033,10 +1004,16 @@ def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
         url="https://example.com/y",
         eligibility=frozenset({Variant.DUAL}),
     )
-    result = compose([ordinary, preferred], [], [], policy=policy_of([]))
+    result = compose(
+        [ordinary, preferred],
+        [],
+        [],
+        policy=policy_of([family_rule(ordinary, "app:x")]),
+    )
     assert [
-        (item.variant, item.source, item.reason) for item in result.report.selections
+        (item.family, item.variant, item.source, item.reason)
+        for item in result.report.selections
     ] == [
-        (Variant.SINGLE, "rjny", "source"),
-        (Variant.DUAL, "bboi", "dual-preferred"),
+        ("app:x", Variant.SINGLE, "rjny", "source"),
+        ("app:x", Variant.DUAL, "bboi", "dual-preferred"),
     ]

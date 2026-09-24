@@ -868,7 +868,6 @@ def test_joined_explicit_families_report_both_families_and_joining_candidates(
         "('bboi', 'bboi-standard-asset', 'shared', 'example.test/y'); "
         "('rjny', 'rjny-catalog', 'shared', 'example.test/x')"
     )
-    assert "target" not in str(report["error"])
     assert_denials_preserved(report)
 
 

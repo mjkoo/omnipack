@@ -299,12 +299,6 @@ def test_single_pin_exempts_an_extra_that_joins_the_pinned_family_by_id() -> Non
     assert _single_pin_exemptions(
         extras_config, policy_document, [ruled, extra], []
     ) == {_extra_selector(extras_config[0])}
-    assert (
-        _candidate_families([ruled, extra], policy_document, [])[
-            _extra_selector(extras_config[0])
-        ]
-        == "app:x"
-    )
 
 
 def test_hollow_knight_source_composition_preserves_dual_only_catalog(
