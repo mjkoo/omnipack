@@ -210,6 +210,10 @@ changed inputs or a different supported verifier identity make evidence stale.
 A verification report with any schema other than the current one requires
 regeneration with `pack verify`.
 
+The README catalog pairs the rendered packs the same way and writes one row per
+pair or unpaired entry. Rows sharing a label are never merged. Catalog
+generation fails when a package id or explicit family repeats within a pack.
+
 Selected-project metadata failure prevents publication. It never switches to a
 family alternative. Existing configured fallback among releases of the selected
 project is unchanged. Nightly does not edit composition policy.
