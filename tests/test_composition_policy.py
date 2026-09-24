@@ -7,9 +7,11 @@ import pytest
 
 from omnipack.composition_policy import (
     CompositionPolicyError,
+    Pairing,
     apply_composition_policy,
     form_families,
     load_composition_policy,
+    pair_entries,
     parse_composition_policy,
 )
 from omnipack.merge import _import_data
@@ -537,3 +539,97 @@ def test_selector_url_must_be_normalizable_before_candidate_matching(
         parse_composition_policy(policy(**{kind: [record]}))
 
     assert str(error.value) == f"{kind}[0].match.url is not a project URL: {url!r}"
+
+
+def family_rule(package_id: str, url: str, family: str) -> dict[str, object]:
+    return rule(
+        match={
+            "source": "rjny",
+            "origin": "rjny-catalog",
+            "id": package_id,
+            "url": url,
+        },
+        family=family,
+    )
+
+
+def key(package_id: str, host: str = "x.test") -> tuple[str, str]:
+    return package_id, f"{host}/{package_id}"
+
+
+def test_pairing_joins_by_id_then_by_explicit_family() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                family_rule("a", "https://x.test/a", "app:x"),
+                family_rule("c", "https://x.test/c", "app:x"),
+            ]
+        )
+    )
+    single = [key("same"), key("a"), key("lonely")]
+    dual = [key("c"), key("same"), key("dual.only")]
+    result = pair_entries(parsed, single, dual)
+    assert set(result.pairs) == {
+        Pairing("package:same", key("same"), key("same")),
+        Pairing("app:x", key("a"), key("c")),
+        Pairing("package:lonely", key("lonely"), None),
+        Pairing("package:dual.only", None, key("dual.only")),
+    }
+    reversed_result = pair_entries(parsed, single[::-1], dual[::-1])
+    assert set(reversed_result.pairs) == set(result.pairs)
+    assert result.repeated_ids == result.repeated_families == ()
+
+
+def test_pairing_never_joins_different_explicit_families() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                family_rule("a", "https://x.test/a", "app:x"),
+                family_rule("a", "https://y.test/a", "app:y"),
+            ]
+        )
+    )
+    result = pair_entries(parsed, [key("a")], [key("a", "y.test")])
+    assert set(result.pairs) == {
+        Pairing("app:x", key("a"), None),
+        Pairing("app:y", None, key("a", "y.test")),
+    }
+
+
+def test_identity_only_rule_leaves_a_same_id_pair_to_the_id_pass() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                rule(
+                    match={
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "a.original",
+                        "url": "https://x.test/a",
+                    },
+                    packageId="a",
+                )
+            ]
+        )
+    )
+    result = pair_entries(parsed, [key("a")], [key("a", "y.test")])
+    assert result.pairs == (Pairing("package:a", key("a"), key("a", "y.test")),)
+
+
+def test_repeated_ids_and_families_leave_their_entries_unpaired() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                family_rule("a", "https://x.test/a", "app:x"),
+                family_rule("b", "https://x.test/b", "app:x"),
+                family_rule("c", "https://x.test/c", "app:x"),
+            ]
+        )
+    )
+    single = [key("a"), key("b"), key("dup"), key("dup", "y.test"), key("kept")]
+    dual = [key("c"), key("dup"), key("kept")]
+    for ordered in (single, single[::-1]):
+        result = pair_entries(parsed, ordered, dual)
+        assert result.pairs == (Pairing("package:kept", key("kept"), key("kept")),)
+        assert result.repeated_ids == ("dup",)
+        assert result.repeated_families == ("app:x",)

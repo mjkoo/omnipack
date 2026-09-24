@@ -84,6 +84,107 @@ def rendered_key(package_id: str, url: str) -> RenderedKey:
     return package_id, normalize_project_url(url)
 
 
+@dataclass(frozen=True, slots=True)
+class Pairing:
+    """A single-screen and a dual-screen entry that pair, or one left unpaired.
+
+    The label is the explicit family either entry projects, otherwise
+    `package:<id>` after the entry's package id.
+    """
+
+    label: str
+    single: RenderedKey | None
+    dual: RenderedKey | None
+
+
+@dataclass(frozen=True, slots=True)
+class Pairings:
+    """Rendered entries paired without provenance.
+
+    Package ids and explicit families repeated within a variant are listed
+    here, and every entry carrying one, in either variant, is left out of
+    `pairs`, so no pairing depends on entry order.
+    """
+
+    pairs: tuple[Pairing, ...]
+    repeated_ids: tuple[str, ...]
+    repeated_families: tuple[str, ...]
+
+
+def pair_entries(
+    policy: CompositionPolicy,
+    single: Sequence[RenderedKey],
+    dual: Sequence[RenderedKey],
+) -> Pairings:
+    """Pair entries by package id, then by explicit family among the rest.
+
+    Entries whose projections name different explicit families never pair.
+    """
+    family = policy.projections.get
+    repeated_ids = _repeated([key[0] for key in single], [key[0] for key in dual])
+    repeated_families = _repeated(
+        [name for key in single if (name := family(key)) is not None],
+        [name for key in dual if (name := family(key)) is not None],
+    )
+
+    def pairable(key: RenderedKey) -> bool:
+        return key[0] not in repeated_ids and family(key) not in repeated_families
+
+    singles = [key for key in single if pairable(key)]
+    duals = [key for key in dual if pairable(key)]
+    matched: dict[RenderedKey, RenderedKey] = {}
+    dual_by_id = {key[0]: key for key in duals}
+    for key in singles:
+        other = dual_by_id.get(key[0])
+        if other is not None and _compatible(family(key), family(other)):
+            matched[key] = other
+    paired_duals = set(matched.values())
+    dual_by_family = {
+        name: key
+        for key in duals
+        if key not in paired_duals and (name := family(key)) is not None
+    }
+    for key in singles:
+        name = family(key)
+        if key not in matched and name is not None and name in dual_by_family:
+            matched[key] = dual_by_family[name]
+    paired_duals = set(matched.values())
+
+    def label(*keys: RenderedKey) -> str:
+        names = [name for key in keys if (name := family(key)) is not None]
+        return names[0] if names else f"package:{keys[0][0]}"
+
+    pairs = [
+        Pairing(label(key, matched[key]), key, matched[key])
+        if key in matched
+        else Pairing(label(key), key, None)
+        for key in singles
+    ]
+    pairs.extend(
+        Pairing(label(key), None, key) for key in duals if key not in paired_duals
+    )
+    return Pairings(
+        tuple(pairs), tuple(sorted(repeated_ids)), tuple(sorted(repeated_families))
+    )
+
+
+def _compatible(first: str | None, second: str | None) -> bool:
+    """Whether two projections leave room for one family."""
+    return first is None or second is None or first == second
+
+
+def _repeated(*variants: list[str]) -> set[str]:
+    """Values occurring more than once within any one variant."""
+    repeated: set[str] = set()
+    for values in variants:
+        seen: set[str] = set()
+        for value in values:
+            if value in seen:
+                repeated.add(value)
+            seen.add(value)
+    return repeated
+
+
 def parse_composition_policy(document: object) -> CompositionPolicy:
     root = _object(document, "composition policy")
     _fields(root, {"schemaVersion", "candidates", "pins"}, "policy")

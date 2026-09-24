@@ -67,7 +67,7 @@
 
 ## 3. Offline pairing
 
-- [ ] 3.1 Add one pairing function shared by offline verification, the README catalog and the
+- [x] 3.1 Add one pairing function shared by offline verification, the README catalog and the
   build's post-selection check. It runs two whole passes: the same package id, then the same
   explicit family through projections among entries still unpaired. No pass pairs entries whose
   projections name different explicit families. A pair is labelled by its explicit family or
