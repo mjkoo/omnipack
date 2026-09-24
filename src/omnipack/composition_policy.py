@@ -73,12 +73,6 @@ class CompositionPolicy:
     projections: dict[RenderedKey, str]
     projected_pins: dict[PinKey, RenderedKey]
 
-    def rendered_family(self, package_id: str, url: str) -> str:
-        """Interpret a current rendered entry without build-report state."""
-        return self.projections.get(
-            rendered_key(package_id, url), f"package:{package_id}"
-        )
-
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
     return package_id, normalize_project_url(url)

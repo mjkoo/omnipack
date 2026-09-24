@@ -9,7 +9,12 @@ from html import escape
 from typing import Any
 from urllib.parse import quote, urlencode
 
-from omnipack.composition_policy import CompositionPolicy
+from omnipack.composition_policy import (
+    CompositionPolicy,
+    RenderedKey,
+    pair_entries,
+    rendered_key,
+)
 
 START_MARKER = b"<!-- omnipack:catalog:start -->"
 END_MARKER = b"<!-- omnipack:catalog:end -->"
@@ -22,7 +27,7 @@ class CatalogError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class _Row:
-    family: str
+    label: str
     name: str
     category: str
     single: dict[str, Any] | None
@@ -35,8 +40,11 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
         ("single-screen", _apps(single, "single-screen")),
         ("dual-screen", _apps(dual, "dual-screen")),
     )
-    families: dict[str, dict[str, dict[str, Any]]] = {}
+    records: dict[str, dict[RenderedKey, dict[str, Any]]] = {}
     for variant, apps in variants:
+        by_key = records[variant] = {}
+        ids: set[str] = set()
+        families: set[str] = set()
         for index, record in enumerate(apps):
             package_id = _text(record, "id", variant, index)
             url = _text(record, "url", variant, index)
@@ -48,25 +56,34 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
                 raise CatalogError(
                     f"{variant} app {package_id!r} has invalid categories"
                 )
-            family = policy.rendered_family(package_id, url)
-            projected = families.setdefault(family, {})
-            if variant in projected:
+            if package_id in ids:
                 raise CatalogError(
-                    f"{variant} contains duplicate projected family {family!r}"
+                    f"{variant} contains duplicate package id {package_id!r}"
                 )
-            projected[variant] = record
+            ids.add(package_id)
+            key = rendered_key(package_id, url)
+            family = policy.projections.get(key)
+            if family is not None and family in families:
+                raise CatalogError(
+                    f"{variant} contains duplicate explicit family {family!r}"
+                )
+            if family is not None:
+                families.add(family)
+            by_key[key] = record
 
+    single_records, dual_records = records["single-screen"], records["dual-screen"]
+    pairs = pair_entries(policy, list(single_records), list(dual_records))
     rows: list[_Row] = []
-    for family, projected in families.items():
-        single_record = projected.get("single-screen")
-        dual_record = projected.get("dual-screen")
+    for pair in pairs.pairs:
+        single_record = single_records[pair.single] if pair.single else None
+        dual_record = dual_records[pair.dual] if pair.dual else None
         presenter = single_record or dual_record
         assert presenter is not None
         categories = presenter.get("categories", [])
         category = categories[0] if categories else "Other"
         rows.append(
             _Row(
-                family,
+                pair.label,
                 presenter["name"],
                 category or "Other",
                 single_record,
@@ -80,7 +97,9 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
             row.category,
             row.name.casefold(),
             row.name,
-            row.family,
+            row.label,
+            row.single["id"] if row.single else "",
+            row.dual["id"] if row.dual else "",
         )
     )
     lines: list[str] = []

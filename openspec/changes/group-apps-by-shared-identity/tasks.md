@@ -74,7 +74,7 @@
   `package:<shared id>`. Verify with unit tests for each pass, the same pairs when either
   variant's order is reversed, entries with different explicit families sharing an id left
   unpaired, and a same-id pair where one entry has an identity-only rule pairing in the id pass.
-- [ ] 3.2 Switch offline verification to the pairing: remove `duplicate_family`, add a finding for
+- [x] 3.2 Switch offline verification to the pairing: remove `duplicate_family`, add a finding for
   an explicit family projected onto more than one entry within a variant naming the entries, keep
   the entry-level `duplicate_id` finding as the only report of a repeated package id, leave the
   entries of a repeated package id or a repeated explicit family out of pairing and coverage in
@@ -94,7 +94,7 @@
   - a denied entry inside an explicit family repeated within a variant still reporting the denial,
     since the denial check iterates entries rather than a map keyed by family label;
   - an entry violating both package-id and explicit-family uniqueness reporting both findings.
-- [ ] 3.3 Switch README catalog generation to the pairing. Fail generation on a repeated package id
+- [x] 3.3 Switch README catalog generation to the pairing. Fail generation on a repeated package id
   or explicit family within a variant. Verify with catalog tests for the repeated-id and repeated-family failures and for entries of
   different explicit families sharing an id as separate rows, for a single entry projecting a
   family that pairs by package id with an unprojected dual entry while another dual entry

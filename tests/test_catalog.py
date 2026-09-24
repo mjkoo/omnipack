@@ -186,16 +186,72 @@ def test_source_label_and_category_render_as_text_without_changing_payload() -> 
     assert decoded_apps(catalog) == [hostile]
 
 
-def test_duplicate_projected_family_in_one_variant_is_rejected() -> None:
+def test_duplicate_explicit_family_in_one_variant_is_rejected() -> None:
     first = app("one", "One", "https://example.test/one")
     second = app("two", "Two", "https://example.test/two")
     shared = policy(
-        ("one", "https://example.test/one", "shared"),
-        ("two", "https://example.test/two", "shared"),
+        ("one", "https://example.test/one", "app:shared"),
+        ("two", "https://example.test/two", "app:shared"),
     )
 
-    with pytest.raises(CatalogError, match="duplicate.*family.*shared"):
-        generate_catalog(pack(first, second), pack(), shared)
+    with pytest.raises(
+        CatalogError,
+        match="^dual-screen contains duplicate explicit family 'app:shared'$",
+    ):
+        generate_catalog(pack(), pack(first, second), shared)
+
+
+def test_duplicate_package_id_in_one_variant_is_rejected() -> None:
+    first = app("one", "One", "https://example.test/one")
+    second = app("one", "One", "https://example.test/two")
+
+    with pytest.raises(
+        CatalogError, match="^single-screen contains duplicate package id 'one'$"
+    ):
+        generate_catalog(pack(first, second), pack(first), policy())
+
+
+def row_programs(catalog: bytes) -> list[tuple[str, int]]:
+    """Each table row's program name and how many import links it holds."""
+    return [
+        (line.split(" | ", 1)[0].removeprefix("| "), line.count("Add to Obtainium"))
+        for line in catalog.decode().splitlines()
+        if line.startswith("| ")
+        and not line.startswith("| Program")
+        and not line.startswith("| ---")
+    ]
+
+
+def test_same_id_entries_of_different_explicit_families_are_separate_rows() -> None:
+    single = app("same", "Single", "https://example.test/one")
+    dual = app("same", "Dual", "https://example.test/two")
+    projected = policy(
+        ("same", "https://example.test/one", "app:one"),
+        ("same", "https://example.test/two", "app:two"),
+    )
+    catalog = generate_catalog(pack(single), pack(dual), projected)
+    assert row_programs(catalog) == [("Dual", 1), ("Single", 1)]
+    assert decoded_apps(catalog) == [dual, single]
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_package_id_pair_and_a_dual_entry_share_a_label_in_separate_rows(
+    reverse: bool,
+) -> None:
+    single = app("a", "Shared", "https://example.test/a")
+    same_id = app("a", "Shared", "https://example.test/a-dual")
+    projected_dual = app("c", "Shared", "https://example.test/c")
+    projected = policy(
+        ("a", "https://example.test/a", "app:x"),
+        ("c", "https://example.test/c", "app:x"),
+    )
+    duals = [projected_dual, same_id]
+    if reverse:
+        duals.reverse()
+    catalog = generate_catalog(pack(single), pack(*duals), projected)
+    # The rows tie on category, name and label; their package ids order them.
+    assert row_programs(catalog) == [("Shared", 1), ("Shared", 2)]
+    assert decoded_apps(catalog) == [projected_dual, single, same_id]
 
 
 @pytest.mark.parametrize(
