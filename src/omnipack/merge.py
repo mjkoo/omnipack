@@ -14,6 +14,7 @@ from omnipack.composition_policy import (
     apply_composition_policy,
     candidate_selector,
     form_families,
+    pair_entries,
     rendered_key,
 )
 from omnipack.model import App, Variant
@@ -115,6 +116,7 @@ def compose(
         raise CompositionError(str(error)) from error
     pinned = _resolve_pins(candidates, formed, policy.pins, denied)
     selected = _select(_families(formed), pinned, report)
+    _validate_pairing(selected, policy)
     try:
         patches = parse_overlay(overlay, "overlay")
         _validate_overlay_targets(selected, patches)
@@ -122,7 +124,6 @@ def compose(
             selected[variant] = apply_overlay(selected[variant], patches)
     except OverlayError as error:
         raise CompositionError(str(error)) from error
-    _validate_unique_packages(selected)
     _validate_coverage(selected)
     return CompositionResult(selected, report)
 
@@ -298,15 +299,38 @@ def _select(
     return result
 
 
-def _validate_unique_packages(apps: dict[Variant, list[ComposedApp]]) -> None:
-    for variant, values in apps.items():
-        seen: dict[str, str] = {}
-        for app in values:
-            if app.id in seen and seen[app.id] != app.family:
-                raise CompositionError(
-                    f"target {variant.value!r} selects package id {app.id!r} for distinct families {seen[app.id]!r} and {app.family!r}"
-                )
-            seen[app.id] = app.family
+def _validate_pairing(
+    apps: dict[Variant, list[ComposedApp]], policy: CompositionPolicy
+) -> None:
+    """Require each family in both variants to pair the way offline checks do.
+
+    Offline verification and the README see only rendered entries, so a
+    family whose selected entries differ in package id must project its
+    explicit family onto both of them.
+    """
+    pairs = pair_entries(
+        policy,
+        [rendered_key(app.id, app.url) for app in apps[Variant.SINGLE]],
+        [rendered_key(app.id, app.url) for app in apps[Variant.DUAL]],
+    )
+    paired = {(pair.single, pair.dual) for pair in pairs.pairs}
+    duals = {app.family: app for app in apps[Variant.DUAL]}
+    for single in apps[Variant.SINGLE]:
+        dual = duals.get(single.family)
+        if dual is None:
+            continue
+        keys = rendered_key(single.id, single.url), rendered_key(dual.id, dual.url)
+        if keys in paired:
+            continue
+        unprojected = [
+            key for key in keys if policy.projections.get(key) != single.family
+        ]
+        raise CompositionError(
+            f"family {single.family!r} selects single-screen {keys[0]!r} and "
+            f"dual-screen {keys[1]!r}, which offline verification cannot pair; "
+            f"add a family rule assigning {single.family!r} to "
+            + " and ".join(map(repr, unprojected))
+        )
 
 
 def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:

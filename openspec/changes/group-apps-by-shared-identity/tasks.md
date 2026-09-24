@@ -40,7 +40,7 @@
 
 ## 2. Selection
 
-- [ ] 2.1 Group selection by the new families and remove the distinct-family package check.
+- [x] 2.1 Group selection by the new families and remove the distinct-family package check.
   Verify with these tests:
   - a lower source repeating a package id from another repository loses whole and appears as
     considered;
@@ -51,12 +51,12 @@
     `test_cross_package_family_coverage_passes_and_package_collision_fails` (explicit `app:x` and
     `app:y` sharing one effective id) now expects the joined-explicit-families failure naming both
     families and both selectors.
-- [ ] 2.2 Make the failed build report identify each composition conflict: the family, target and
+- [x] 2.2 Make the failed build report identify each composition conflict: the family, target and
   selectors for tied candidates; both families and the joining candidates, with no target, for
   joined explicit families; the family and both entries for a family whose selected entries do
   not pair. Verify with the existing composition-diagnostics tests plus one report test for each
   of the latter two, each also asserting that prior diagnostics are preserved.
-- [ ] 2.3 After selection, require every family that publishes in both variants to pair its
+- [x] 2.3 After selection, require every family that publishes in both variants to pair its
   selected single and dual entries under the shared pairing function, and fail composition when
   they do not, naming the family and both entries and asking for a `family` rule on each selected
   entry that does not yet project the family. Depends on 3.1. Verify with an end-to-end build test

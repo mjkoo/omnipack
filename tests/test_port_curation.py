@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import re
 from copy import deepcopy
+from dataclasses import replace
 from pathlib import Path
 from typing import Any
 
@@ -12,10 +13,11 @@ from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import (
     apply_composition_policy,
     candidate_selector,
+    form_families,
     parse_composition_policy,
 )
 from omnipack.merge import compose
-from omnipack.model import App, Provenance, Variant
+from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.render import render
 from omnipack.sources.extras import fetch
 from omnipack.urls import normalize_project_url
@@ -148,34 +150,41 @@ def _extra_selector(entry: dict[str, Any]) -> tuple[str, str, str, str]:
     )
 
 
+def _candidate_families(
+    candidates: list[App],
+    policy_document: dict[str, Any],
+    denials: list[dict[str, str]],
+) -> dict[tuple[str, str, str, str], str]:
+    """Each candidate's formed family, or its own assignment once removed."""
+    applied = apply_composition_policy(
+        parse_composition_policy(policy_document), candidates
+    )
+    denied = {entry["id"] for entry in denials}
+    surviving = [app for app in applied if app.eligibility and app.id not in denied]
+    families = {candidate_selector(app).key: app.family for app in applied}
+    families.update(
+        (candidate_selector(app).key, app.family) for app in form_families(surviving)
+    )
+    return {key: family for key, family in families.items() if family is not None}
+
+
 def _single_pin_exemptions(
-    extras_config: list[dict[str, Any]], policy_document: dict[str, Any]
+    extras_config: list[dict[str, Any]],
+    policy_document: dict[str, Any],
+    candidates: list[App],
+    denials: list[dict[str, str]],
 ) -> set[tuple[str, str, str, str]]:
     single_pins = {
         pin["family"]
         for pin in policy_document["pins"]
         if pin["variant"] == Variant.SINGLE.value
     }
-    if not single_pins:
-        return set()
-
-    rules = {
-        (
-            rule["match"]["source"],
-            rule["match"]["origin"],
-            rule["match"]["id"],
-            normalize_project_url(rule["match"]["url"]),
-        ): rule
-        for rule in policy_document["candidates"]
+    families = _candidate_families(candidates, policy_document, denials)
+    return {
+        selector
+        for entry in extras_config
+        if families.get(selector := _extra_selector(entry)) in single_pins
     }
-    exemptions = set()
-    for entry in extras_config:
-        selector = _extra_selector(entry)
-        rule = rules.get(selector, {})
-        family = rule.get("family") or f"package:{rule.get('packageId', entry['id'])}"
-        if family in single_pins:
-            exemptions.add(selector)
-    return exemptions
 
 
 def _assert_baseline_extras_win_single(
@@ -187,7 +196,10 @@ def _assert_baseline_extras_win_single(
         if not entry.get("dualScreen", False)
     }
     expected -= _single_pin_exemptions(
-        current_configuration.extras, current_configuration.policy
+        current_configuration.extras,
+        current_configuration.policy,
+        current_configuration.candidates,
+        denials,
     )
     result = compose(
         current_configuration.candidates,
@@ -205,13 +217,9 @@ def _assert_baseline_extras_win_single(
         for item in result.report.selections
         if item.variant is Variant.SINGLE
     }
-    families = {
-        candidate_selector(app).key: app.family or f"package:{app.id}"
-        for app in apply_composition_policy(
-            parse_composition_policy(current_configuration.policy),
-            current_configuration.candidates,
-        )
-    }
+    families = _candidate_families(
+        current_configuration.candidates, current_configuration.policy, denials
+    )
     missing = sorted(families[selector] for selector in expected - selected)
     assert not missing, f"curated extras not selected in single: {missing}"
 
@@ -227,8 +235,12 @@ def test_committed_configuration_selects_each_baseline_extra_in_single(
 def test_denied_designated_extra_fails_single_winner_guard_with_family(
     current_configuration: CurrentConfiguration,
 ) -> None:
+    committed = read(ROOT / "config/deny.json")
     single_pin_exemptions = _single_pin_exemptions(
-        current_configuration.extras, current_configuration.policy
+        current_configuration.extras,
+        current_configuration.policy,
+        current_configuration.candidates,
+        committed,
     )
     entry = next(
         item
@@ -236,24 +248,63 @@ def test_denied_designated_extra_fails_single_winner_guard_with_family(
         if not item.get("dualScreen", False)
         and _extra_selector(item) not in single_pin_exemptions
     )
-    rules = {
-        (
-            rule["match"]["source"],
-            rule["match"]["origin"],
-            rule["match"]["id"],
-            normalize_project_url(rule["match"]["url"]),
-        ): rule
-        for rule in current_configuration.policy["candidates"]
-    }
-    rule = rules.get(_extra_selector(entry), {})
-    family = rule.get("family") or f"package:{rule.get('packageId', entry['id'])}"
-    denials = [
-        *read(ROOT / "config/deny.json"),
-        {"id": rule.get("packageId", entry["id"]), "reason": "test denial"},
+    [extra] = [
+        app
+        for app in apply_composition_policy(
+            parse_composition_policy(current_configuration.policy),
+            current_configuration.candidates,
+        )
+        if candidate_selector(app).key == _extra_selector(entry)
     ]
+    denials = [*committed, {"id": extra.id, "reason": "test denial"}]
+    family = _candidate_families(
+        current_configuration.candidates, current_configuration.policy, denials
+    )[_extra_selector(entry)]
 
     with pytest.raises(AssertionError, match=re.escape(family)):
         _assert_baseline_extras_win_single(current_configuration, denials)
+
+
+def test_single_pin_exempts_an_extra_that_joins_the_pinned_family_by_id() -> None:
+    ruled = App(
+        "shared",
+        "https://example.test/x",
+        "Ruled",
+        SourceType.HTML,
+        (),
+        Provenance("rjny", "catalog"),
+        eligibility=frozenset(Variant),
+        origin="rjny-catalog",
+    )
+    extra = replace(
+        ruled,
+        url="https://example.test/y",
+        provenance=Provenance("extras", "extras"),
+        origin="extras",
+    )
+    match = {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "shared",
+        "url": ruled.url,
+    }
+    policy_document = {
+        "schemaVersion": 1,
+        "candidates": [{"match": match, "family": "app:x", "rationale": "test"}],
+        "pins": [
+            {"family": "app:x", "variant": "single", "match": match, "rationale": "t"}
+        ],
+    }
+    extras_config = [{"id": "shared", "url": extra.url}]
+    assert _single_pin_exemptions(
+        extras_config, policy_document, [ruled, extra], []
+    ) == {_extra_selector(extras_config[0])}
+    assert (
+        _candidate_families([ruled, extra], policy_document, [])[
+            _extra_selector(extras_config[0])
+        ]
+        == "app:x"
+    )
 
 
 def test_hollow_knight_source_composition_preserves_dual_only_catalog(

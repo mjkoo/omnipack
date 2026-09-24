@@ -1004,3 +1004,39 @@ def test_pin_naming_another_family_than_a_denied_candidate_s_projection() -> Non
     assert str(error.value) == (
         "pin family 'app:two' target 'dual' conflicts with projected family 'app:one'"
     )
+
+
+def test_lower_source_repeating_an_id_from_another_repository_loses_whole() -> None:
+    rjny = app("shared", "rjny", url="https://example.com/x", name="rjny build")
+    bboi = app("shared", "bboi", url="https://example.com/y", name="bboi build")
+    result = compose([bboi, rjny], [], [], policy=policy_of([]))
+    for variant in Variant:
+        assert [(item.data["name"], item.url) for item in result.apps[variant]] == [
+            ("rjny build", rjny.url)
+        ]
+    assert [
+        (item.family, item.source, item.considered) for item in result.report.selections
+    ] == [
+        (
+            "package:shared",
+            "rjny",
+            (ConsideredCandidate("bboi", "bboi-standard-asset", "shared", bboi.url),),
+        )
+    ] * 2
+
+
+def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
+    ordinary = app("shared", "rjny", url="https://example.com/x")
+    preferred = app(
+        "shared",
+        "bboi",
+        url="https://example.com/y",
+        eligibility=frozenset({Variant.DUAL}),
+    )
+    result = compose([ordinary, preferred], [], [], policy=policy_of([]))
+    assert [
+        (item.variant, item.source, item.reason) for item in result.report.selections
+    ] == [
+        (Variant.SINGLE, "rjny", "source"),
+        (Variant.DUAL, "bboi", "dual-preferred"),
+    ]
