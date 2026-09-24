@@ -1,6 +1,6 @@
 ## 1. Family formation
 
-- [ ] 1.1 Form families by shared identity in the composition policy, after exclusions and over
+- [x] 1.1 Form families by shared identity in the composition policy, after exclusions and over
   the surviving candidates eligible for at least one variant: a transitive join on effective
   package id and on explicit family, assigning the family also to candidates at a `family`
   rule's projected key even when the ruled candidate drops out. No project URL join. Name each
@@ -20,12 +20,12 @@
   - an `app:x` rule on an RJNY candidate eligible for no variant, a rule-less BBoi candidate at
     the same effective id and URL, and another eligible candidate ruled into `app:x`, where all
     eligible ones form `app:x` and a pin naming `app:x` works.
-- [ ] 1.2 Remove the rendered-projection conflict error for candidates without a rule. Keep the
+- [x] 1.2 Remove the rendered-projection conflict error for candidates without a rule. Keep the
   rule-versus-rule projection agreement check. Verify with tests showing that a rule-less
   candidate sharing a projected key joins that family, that two rules projecting one key to
   different families still fail, and that an identity-only rule and an `app:` rule at one key load
   and join that family (only `family` rules project a family).
-- [ ] 1.3 Check pin families against formed families. Keep the parse-time pin-family check only
+- [x] 1.3 Check pin families against formed families. Keep the parse-time pin-family check only
   for pins whose selector has an explicit `app:` projection; check every pin at build time
   against its candidate's formed family. A pin whose candidate is denied or eligible for no
   variant fails as a conflict with that exclusion, naming the pin and the denial or the

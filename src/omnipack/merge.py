@@ -13,6 +13,7 @@ from omnipack.composition_policy import (
     PinKey,
     apply_composition_policy,
     candidate_selector,
+    form_families,
     rendered_key,
 )
 from omnipack.model import App, Variant
@@ -106,12 +107,14 @@ def compose(
     exclusions = parse_exclusions(denylist)
     try:
         candidates = list(apply_composition_policy(policy, candidates))
+        denied = _exclude(candidates, exclusions, report)
+        formed = form_families(
+            [item for item in candidates if item.eligibility and id(item) not in denied]
+        )
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
-    families = _families(candidates)
-    denied = _exclude(families, exclusions, report)
-    pinned = _resolve_pins(candidates, policy.pins, denied)
-    selected = _select(families, denied, pinned, report)
+    pinned = _resolve_pins(candidates, formed, policy.pins, denied)
+    selected = _select(_families(formed), pinned, report)
     try:
         patches = parse_overlay(overlay, "overlay")
         _validate_overlay_targets(selected, patches)
@@ -146,7 +149,7 @@ def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
     return tuple(result)
 
 
-def _families(candidates: list[App]) -> dict[str, list[App]]:
+def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:
     families: dict[str, list[App]] = {}
     for candidate in candidates:
         source = candidate.provenance.source
@@ -159,29 +162,31 @@ def _families(candidates: list[App]) -> dict[str, list[App]]:
 
 
 def _exclude(
-    families: dict[str, list[App]],
+    candidates: list[App],
     exclusions: tuple[_Exclusion, ...],
     report: CompositionReport,
-) -> dict[tuple[int, Variant], str]:
-    """Record each candidate a denial removes, keyed by candidate and variant.
+) -> dict[int, str]:
+    """Record each candidate a denial removes, keyed by candidate.
 
-    A denial is stale only when no candidate carries its package id. One whose
-    candidates are eligible for neither pack removes nothing but still applies.
+    A removed candidate belongs to no formed family, so its removals name its
+    own assignment. A denial is stale only when no candidate carries its
+    package id. One whose candidates are eligible for neither pack removes
+    nothing but still applies.
     """
-    denied: dict[tuple[int, Variant], str] = {}
+    denied: dict[int, str] = {}
     for rule in exclusions:
         matched = False
-        for family, members in families.items():
-            for candidate in members:
-                if candidate.id != rule.package_id:
-                    continue
-                matched = True
-                for variant in Variant:
-                    if variant in candidate.eligibility:
-                        denied[(id(candidate), variant)] = rule.reason
-                        report.removals.append(
-                            Removal(candidate.id, variant, rule.reason, family)
-                        )
+        for candidate in candidates:
+            if candidate.id != rule.package_id:
+                continue
+            matched = True
+            denied[id(candidate)] = rule.reason
+            for variant in Variant:
+                if variant in candidate.eligibility:
+                    assert candidate.family is not None
+                    report.removals.append(
+                        Removal(candidate.id, variant, rule.reason, candidate.family)
+                    )
         if not matched:
             report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
     return denied
@@ -189,10 +194,16 @@ def _exclude(
 
 def _resolve_pins(
     candidates: list[App],
+    formed: tuple[App, ...],
     pins: tuple[Pin, ...],
-    denied: dict[tuple[int, Variant], str],
+    denied: dict[int, str],
 ) -> dict[PinKey, App]:
-    """Validate every pin against the admitted candidates before any selection."""
+    """Validate every pin against the admitted candidates before any selection.
+
+    A denied candidate, or one eligible for no variant, forms no family, so its
+    pin fails on that exclusion before the family comparison.
+    """
+    by_selector = {candidate_selector(item).key: item for item in formed}
     resolved: dict[PinKey, App] = {}
     # Sorted so the first failing pin reported does not depend on policy order.
     for pin in sorted(pins, key=lambda item: (item.family, item.variant.value)):
@@ -200,23 +211,25 @@ def _resolve_pins(
         matches = [item for item in candidates if candidate_selector(item) == pin.match]
         if len(matches) != 1:
             raise CompositionError(f"{label} is missing or ambiguous")
-        [winner] = matches
+        [candidate] = matches
+        denied_reason = denied.get(id(candidate))
+        if denied_reason is not None:
+            raise CompositionError(f"{label} is denied: {denied_reason}")
+        if not candidate.eligibility:
+            raise CompositionError(f"{label} is ineligible for every variant")
+        winner = by_selector[pin.match.key]
         if winner.family != pin.family:
             raise CompositionError(
                 f"{label} names a candidate of family {winner.family!r}"
             )
         if pin.variant not in winner.eligibility:
             raise CompositionError(f"{label} is ineligible")
-        denied_reason = denied.get((id(winner), pin.variant))
-        if denied_reason is not None:
-            raise CompositionError(f"{label} is denied: {denied_reason}")
         resolved[(pin.family, pin.variant)] = winner
     return resolved
 
 
 def _select(
     families: dict[str, list[App]],
-    denied: dict[tuple[int, Variant], str],
     pinned: dict[PinKey, App],
     report: CompositionReport,
 ) -> dict[Variant, list[ComposedApp]]:
@@ -225,9 +238,7 @@ def _select(
         family_candidates = families[family]
         for variant in Variant:
             available = [
-                item
-                for item in family_candidates
-                if variant in item.eligibility and (id(item), variant) not in denied
+                item for item in family_candidates if variant in item.eligibility
             ]
             pinned_winner = pinned.get((family, variant))
             if pinned_winner is not None:
