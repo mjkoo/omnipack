@@ -63,8 +63,10 @@ pack settings or category colours, or GitLab project URL rules. Rendering fills
 every default key and derives each category colour from its name, and ingestion
 enforces the GitLab URL rules.
 
-Composition checks cover rendered families, projected pins, denied packages,
-package uniqueness, family coverage and overlay targets. They do not check
+Composition checks pair single-screen and dual-screen entries by package id,
+then by explicit family, and cover package-id and explicit-family uniqueness
+within each pack, projected pins, denied packages, family coverage and overlay
+targets. They do not check
 eligibility, which no candidate rule declares and rendered entries cannot reveal.
 Rendered output omits losing candidates, so verification cannot reconstruct
 provenance, candidate presence, preference or source ranking, or prove that a

@@ -104,8 +104,8 @@
 
 ## 4. Regression
 
-- [ ] 4.1 Confirm unchanged outputs: the frozen codm baseline fixture reproduces its golden exports
+- [x] 4.1 Confirm unchanged outputs: the frozen codm baseline fixture reproduces its golden exports
   and family winners byte for byte. Rebuilding from the current configuration yields
   byte-identical `dist/` exports and README. Verify with the fixture test suite and a full
   `pack build` plus `pack verify`.
-- [ ] 4.2 Run the full test suite, lint and type checks and confirm they pass.
+- [x] 4.2 Run the full test suite, lint and type checks and confirm they pass.

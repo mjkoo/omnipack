@@ -20,3 +20,8 @@ manifest package and version, APK digest and signer certificate digest for each
 corrected retained source. `../curation/reconciliation.json` records the bounded
 identity map and official Ghostship ZIP/member observation. Runtime behavior does
 not pin these dated hashes.
+
+`formed-families.json` records, for every family the current composition forms
+from these snapshots, the original selectors of the candidates that survive
+exclusions and are eligible for some variant. It is an expected output, so it
+changes whenever the maintained rules or snapshots change the families.
