@@ -366,10 +366,9 @@ def form_families(candidates: Sequence[App]) -> tuple[App, ...]:
 
 
 def _explicit_family(app: App) -> str | None:
-    """The candidate's own `app:` assignment, if it has one."""
-    if app.family is not None and app.family.startswith("app:"):
-        return app.family
-    return None
+    """The candidate's own explicit assignment, if it has one."""
+    family = assigned_family(app)
+    return None if family == default_family(app.id) else family
 
 
 def _joined_families_message(explicit: list[str], apps: list[App]) -> str:

@@ -342,7 +342,10 @@ The system SHALL normalize candidates, apply identity and family rules, remove
 excluded candidates, form families from shared identity over the surviving
 candidates eligible for at least one variant, validate explicit selections, select by family and target, check
 that each family's selected entries pair, validate overlay targets, apply
-overlays, and check unique packages and family coverage. Exclusions SHALL
+overlays, and check family coverage. Each package id SHALL occur at most once
+per variant because candidates sharing an effective package id form one family
+and overlays cannot change `id`; no separate uniqueness stage runs, and the
+offline gate reports any repeat. Exclusions SHALL
 observe corrected package identities before selection and SHALL NOT be
 re-applied after overlays. Because a removed candidate belongs to no formed
 family, its exclusion SHALL be reported under `package:<its own effective id>`,
