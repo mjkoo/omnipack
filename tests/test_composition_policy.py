@@ -8,7 +8,9 @@ import pytest
 from omnipack.composition_policy import (
     CompositionPolicyError,
     Pairing,
+    Repeats,
     apply_composition_policy,
+    find_repeats,
     form_families,
     load_composition_policy,
     pair_entries,
@@ -319,8 +321,15 @@ def test_explicit_families_joined_through_a_shared_id_fail() -> None:
     bystander = candidate(
         id="org.example.else", original_id="org.example.else", url="https://x.test/e"
     )
+    rule_less_carrier = candidate(url="https://x.test/u")
     applied = apply_composition_policy(
-        parsed, [candidate(), bboi_candidate(url="https://x.test/y"), bystander]
+        parsed,
+        [
+            candidate(),
+            bboi_candidate(url="https://x.test/y"),
+            bystander,
+            rule_less_carrier,
+        ],
     )
     with pytest.raises(CompositionPolicyError) as error:
         form_families(applied)
@@ -568,16 +577,19 @@ def test_pairing_joins_by_id_then_by_explicit_family() -> None:
     )
     single = [key("same"), key("a"), key("lonely")]
     dual = [key("c"), key("same"), key("dual.only")]
-    result = pair_entries(parsed, single, dual)
-    assert set(result.pairs) == {
+    expected = {
         Pairing("package:same", key("same"), key("same")),
         Pairing("app:x", key("a"), key("c")),
         Pairing("package:lonely", key("lonely"), None),
         Pairing("package:dual.only", None, key("dual.only")),
     }
-    reversed_result = pair_entries(parsed, single[::-1], dual[::-1])
-    assert set(reversed_result.pairs) == set(result.pairs)
-    assert result.repeated_ids == result.repeated_families == ()
+    for singles, duals in [
+        (single, dual),
+        (single[::-1], dual),
+        (single, dual[::-1]),
+        (single[::-1], dual[::-1]),
+    ]:
+        assert set(pair_entries(parsed, singles, duals)) == expected
 
 
 def test_pairing_never_joins_different_explicit_families() -> None:
@@ -590,7 +602,7 @@ def test_pairing_never_joins_different_explicit_families() -> None:
         )
     )
     result = pair_entries(parsed, [key("a")], [key("a", "y.test")])
-    assert set(result.pairs) == {
+    assert set(result) == {
         Pairing("app:x", key("a"), None),
         Pairing("app:y", None, key("a", "y.test")),
     }
@@ -613,7 +625,7 @@ def test_identity_only_rule_leaves_a_same_id_pair_to_the_id_pass() -> None:
         )
     )
     result = pair_entries(parsed, [key("a")], [key("a", "y.test")])
-    assert result.pairs == (Pairing("package:a", key("a"), key("a", "y.test")),)
+    assert result == (Pairing("package:a", key("a"), key("a", "y.test")),)
 
 
 def test_repeated_ids_and_families_leave_their_entries_unpaired() -> None:
@@ -629,7 +641,10 @@ def test_repeated_ids_and_families_leave_their_entries_unpaired() -> None:
     single = [key("a"), key("b"), key("dup"), key("dup", "y.test"), key("kept")]
     dual = [key("c"), key("dup"), key("kept")]
     for ordered in (single, single[::-1]):
-        result = pair_entries(parsed, ordered, dual)
-        assert result.pairs == (Pairing("package:kept", key("kept"), key("kept")),)
-        assert result.repeated_ids == ("dup",)
-        assert result.repeated_families == ("app:x",)
+        assert pair_entries(parsed, ordered, dual) == (
+            Pairing("package:kept", key("kept"), key("kept")),
+        )
+        assert find_repeats(parsed, ordered) == Repeats(
+            ("dup",), {"app:x": (key("a"), key("b"))}
+        )
+    assert find_repeats(parsed, dual) == Repeats((), {})

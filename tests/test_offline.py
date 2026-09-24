@@ -575,6 +575,22 @@ def test_denial_inside_a_repeated_explicit_family_is_still_reported() -> None:
     }
 
 
+def test_denied_id_repeated_within_a_variant_is_reported_once_per_variant() -> None:
+    repeated = [at("a", "one"), at("a", "two")]
+    findings = validate_offline(
+        inputs(repeated, deepcopy(repeated), deny=[{"id": "a", "reason": "excluded"}])
+    )
+    denials = [item for item in findings if item.code == "denied_output_present"]
+    assert [(item.variant, item.entry_id, item.message) for item in denials] == [
+        (
+            variant,
+            "a",
+            "denied selection 'a' in family label 'package:a' remains present",
+        )
+        for variant in ("single", "dual")
+    ]
+
+
 def test_entry_repeating_both_its_id_and_its_family_gets_both_findings() -> None:
     first, second = at("a", "one"), at("a", "two")
     findings = validate_offline(

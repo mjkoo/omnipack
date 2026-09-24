@@ -423,6 +423,8 @@ def _validate_composition(
     from omnipack.composition_policy import (
         CompositionPolicyError,
         RenderedKey,
+        entry_family,
+        find_repeats,
         pair_entries,
         parse_composition_policy,
         rendered_key,
@@ -460,22 +462,16 @@ def _validate_composition(
                 continue
 
     for variant, variant_keys in keys.items():
-        projected: dict[str, list[RenderedKey]] = {}
-        for key in variant_keys:
-            family = policy.projections.get(key)
-            if family is not None:
-                projected.setdefault(family, []).append(key)
-        for family, members in sorted(projected.items()):
-            if len(members) > 1:
-                findings.append(
-                    Finding(
-                        "composition",
-                        "duplicate_explicit_family",
-                        f"explicit family {family!r} is projected onto more than "
-                        f"one entry: {', '.join(map(repr, sorted(members)))}",
-                        variant,
-                    )
+        for family, members in find_repeats(policy, variant_keys).families.items():
+            findings.append(
+                Finding(
+                    "composition",
+                    "duplicate_explicit_family",
+                    f"explicit family {family!r} is projected onto more than "
+                    f"one entry: {', '.join(map(repr, members))}",
+                    variant,
                 )
+            )
 
     for (family, target), pinned in policy.projected_pins.items():
         if pinned not in keys[target.value]:
@@ -491,18 +487,23 @@ def _validate_composition(
 
     for exclusion in exclusions:
         for target in Variant:
-            for key in keys[target.value]:
-                if key[0] == exclusion.package_id:
-                    label = policy.projections.get(key, f"package:{key[0]}")
-                    findings.append(
-                        Finding(
-                            "composition",
-                            "denied_output_present",
-                            f"denied selection {key[0]!r} in family {label!r} remains present",
-                            target.value,
-                            key[0],
-                        )
+            present = [
+                key for key in keys[target.value] if key[0] == exclusion.package_id
+            ]
+            if present:
+                labels = " and ".join(
+                    sorted({repr(entry_family(policy, key)) for key in present})
+                )
+                findings.append(
+                    Finding(
+                        "composition",
+                        "denied_output_present",
+                        f"denied selection {exclusion.package_id!r} in family label "
+                        f"{labels} remains present",
+                        target.value,
+                        exclusion.package_id,
                     )
+                )
 
     all_keys = {*keys["single"], *keys["dual"]}
     for patch in patches:
@@ -517,13 +518,13 @@ def _validate_composition(
             )
 
     pairs = pair_entries(policy, keys["single"], keys["dual"])
-    for pair in sorted(pairs.pairs, key=lambda item: (item.label, item.single or ())):
+    for pair in sorted(pairs, key=lambda item: (item.label, item.single or ())):
         if pair.single is not None and pair.dual is None:
             findings.append(
                 Finding(
                     "composition",
                     "dual_coverage_gap",
-                    f"dual variant is missing family {pair.label!r}",
+                    f"dual variant is missing family label {pair.label!r}",
                     "dual",
                     pair.single[0],
                 )

@@ -12,6 +12,7 @@ from urllib.parse import quote, urlencode
 from omnipack.composition_policy import (
     CompositionPolicy,
     RenderedKey,
+    find_repeats,
     pair_entries,
     rendered_key,
 )
@@ -42,9 +43,7 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
     )
     records: dict[str, dict[RenderedKey, dict[str, Any]]] = {}
     for variant, apps in variants:
-        by_key = records[variant] = {}
-        ids: set[str] = set()
-        families: set[str] = set()
+        keyed: list[tuple[RenderedKey, dict[str, Any]]] = []
         for index, record in enumerate(apps):
             package_id = _text(record, "id", variant, index)
             url = _text(record, "url", variant, index)
@@ -56,27 +55,23 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
                 raise CatalogError(
                     f"{variant} app {package_id!r} has invalid categories"
                 )
-            if package_id in ids:
-                raise CatalogError(
-                    f"{variant} contains duplicate package id {package_id!r}"
-                )
-            ids.add(package_id)
-            key = rendered_key(package_id, url)
-            family = policy.projections.get(key)
-            if family is not None and family in families:
-                raise CatalogError(
-                    f"{variant} contains duplicate explicit family {family!r}"
-                )
-            if family is not None:
-                families.add(family)
-            by_key[key] = record
+            keyed.append((rendered_key(package_id, url), record))
+        repeats = find_repeats(policy, [key for key, _ in keyed])
+        if repeats.ids:
+            raise CatalogError(
+                f"{variant} contains duplicate package id {repeats.ids[0]!r}"
+            )
+        if repeats.families:
+            raise CatalogError(
+                f"{variant} contains duplicate explicit family {min(repeats.families)!r}"
+            )
+        records[variant] = dict(keyed)
 
     single_records, dual_records = records["single-screen"], records["dual-screen"]
-    pairs = pair_entries(policy, list(single_records), list(dual_records))
     rows: list[_Row] = []
-    for pair in pairs.pairs:
-        single_record = single_records[pair.single] if pair.single else None
-        dual_record = dual_records[pair.dual] if pair.dual else None
+    for pair in pair_entries(policy, list(single_records), list(dual_records)):
+        single_record = single_records[pair.single] if pair.single is not None else None
+        dual_record = dual_records[pair.dual] if pair.dual is not None else None
         presenter = single_record or dual_record
         assert presenter is not None
         categories = presenter.get("categories", [])

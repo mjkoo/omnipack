@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Any, cast
 from urllib.parse import urlsplit
 
+from omnipack.composition_policy import default_family
 from omnipack.http import HttpError
 from omnipack.overlay import ComposedApp
 from omnipack.package_id import resolve_release_assets
@@ -428,7 +429,7 @@ def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
         if not isinstance(settings, dict):
             raise TypeError(f"entry {data.get('id')!r} has invalid additionalSettings")
         data["additionalSettings"] = settings
-        apps.append(ComposedApp(f"package:{data['id']}", data))
+        apps.append(ComposedApp(default_family(data["id"]), data))
     return render(apps).encode()
 
 

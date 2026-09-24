@@ -12,6 +12,7 @@ from omnipack.composition_policy import (
     Pin,
     PinKey,
     apply_composition_policy,
+    assigned_family,
     candidate_selector,
     form_families,
     pair_entries,
@@ -108,6 +109,7 @@ def compose(
     exclusions = parse_exclusions(denylist)
     try:
         candidates = list(apply_composition_policy(policy, candidates))
+        _check_sources(candidates)
         denied = _exclude(candidates, exclusions, report)
         formed = form_families(
             [item for item in candidates if item.eligibility and id(item) not in denied]
@@ -150,15 +152,17 @@ def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
     return tuple(result)
 
 
-def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:
-    families: dict[str, list[App]] = {}
+def _check_sources(candidates: list[App]) -> None:
     for candidate in candidates:
         source = candidate.provenance.source
         if source not in _PRECEDENCE:
             raise CompositionError(f"unknown candidate source {source!r}")
-        if candidate.family is None:
-            raise CompositionError(f"candidate {candidate.original_id!r} has no family")
-        families.setdefault(candidate.family, []).append(candidate)
+
+
+def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:
+    families: dict[str, list[App]] = {}
+    for candidate in candidates:
+        families.setdefault(assigned_family(candidate), []).append(candidate)
     return families
 
 
@@ -182,11 +186,11 @@ def _exclude(
                 continue
             matched = True
             denied[id(candidate)] = rule.reason
+            family = assigned_family(candidate)
             for variant in Variant:
                 if variant in candidate.eligibility:
-                    assert candidate.family is not None
                     report.removals.append(
-                        Removal(candidate.id, variant, rule.reason, candidate.family)
+                        Removal(candidate.id, variant, rule.reason, family)
                     )
         if not matched:
             report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
@@ -313,7 +317,7 @@ def _validate_pairing(
         [rendered_key(app.id, app.url) for app in apps[Variant.SINGLE]],
         [rendered_key(app.id, app.url) for app in apps[Variant.DUAL]],
     )
-    paired = {(pair.single, pair.dual) for pair in pairs.pairs}
+    paired = {(pair.single, pair.dual) for pair in pairs}
     duals = {app.family: app for app in apps[Variant.DUAL]}
     for single in apps[Variant.SINGLE]:
         dual = duals.get(single.family)
@@ -325,11 +329,15 @@ def _validate_pairing(
         unprojected = [
             key for key in keys if policy.projections.get(key) != single.family
         ]
+        remedy = (
+            f"; add a family rule assigning {single.family!r} to "
+            + " and ".join(map(repr, unprojected))
+            if unprojected
+            else ""
+        )
         raise CompositionError(
             f"family {single.family!r} selects single-screen {keys[0]!r} and "
-            f"dual-screen {keys[1]!r}, which offline verification cannot pair; "
-            f"add a family rule assigning {single.family!r} to "
-            + " and ".join(map(repr, unprojected))
+            f"dual-screen {keys[1]!r}, which offline verification cannot pair" + remedy
         )
 
 
