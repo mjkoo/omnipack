@@ -311,8 +311,9 @@ change.
 
 #### Scenario: Family conflict stops composition
 
-- **WHEN** selection fails on tied candidates or a package collision
-- **THEN** the report identifies the family, target and conflicting selectors and preserves prior diagnostics
+- **WHEN** composition fails on tied candidates, on two explicit families joined through shared identity, or on a family whose selected entries do not pair
+- **THEN** for tied candidates the report identifies the family, target and conflicting selectors; for joined explicit families it identifies both families and the joining candidates, with no target; for entries that do not pair it identifies the family and both entries
+- **AND** in each case the report preserves prior diagnostics
 
 ### Requirement: The generate-source command builds the reviewed README source catalog
 
