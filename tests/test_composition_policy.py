@@ -7,8 +7,13 @@ import pytest
 
 from omnipack.composition_policy import (
     CompositionPolicyError,
+    Pairing,
+    Repeats,
     apply_composition_policy,
+    find_repeats,
+    form_families,
     load_composition_policy,
+    pair_entries,
     parse_composition_policy,
 )
 from omnipack.merge import _import_data
@@ -193,39 +198,146 @@ def test_policy_application_leaves_pins_to_composition() -> None:
     )
 
 
-def test_projection_conflicts_and_unruled_candidate_conflicts_fail() -> None:
-    other = rule(
+def bboi_rule(**changes: object) -> dict[str, object]:
+    return rule(
         match={
             "source": "bboi",
             "origin": "bboi-standard-asset",
             "id": "org.example.new",
             "url": "https://github.com/example/app",
         },
-        family="app:other",
+        **changes,
     )
+
+
+def bboi_candidate(**changes: object) -> App:
+    values: dict[str, object] = {
+        "id": "org.example.new",
+        "original_id": "org.example.new",
+        "provenance": Provenance("bboi", "asset"),
+        "origin": "bboi-standard-asset",
+    }
+    return candidate(**{**values, **changes})
+
+
+def test_rules_projecting_one_key_to_different_families_fail() -> None:
     with pytest.raises(CompositionPolicyError, match="rendered key.*org.example.new"):
         parse_composition_policy(
             policy(
                 candidates=[
                     rule(packageId="org.example.new", family="app:example"),
-                    other,
+                    bboi_rule(family="app:other"),
                 ]
             )
         )
 
+
+def test_rule_less_candidate_at_a_projected_key_takes_that_family() -> None:
     parsed = parse_composition_policy(
         policy(candidates=[rule(packageId="org.example.new", family="app:example")])
     )
-    unruled = candidate(
-        id="org.example.new",
-        original_id="org.example.new",
-        provenance=Provenance("bboi", "asset"),
-        origin="bboi-standard-asset",
+    applied = apply_composition_policy(parsed, [candidate(), bboi_candidate()])
+    assert [(app.id, app.family) for app in applied] == [
+        ("org.example.new", "app:example"),
+        ("org.example.new", "app:example"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "identity_only",
+    [bboi_rule(), bboi_rule(packageId="org.example.new")],
+    ids=["rationale", "packageId"],
+)
+def test_identity_only_rule_shares_a_key_with_a_family_rule(
+    identity_only: dict[str, object],
+) -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                rule(packageId="org.example.new", family="app:example"),
+                identity_only,
+            ]
+        )
     )
-    with pytest.raises(
-        CompositionPolicyError, match="unruled candidate.*rendered projection"
-    ):
-        apply_composition_policy(parsed, [candidate(), unruled])
+    assert parsed.projections == {
+        ("org.example.new", "github.com/example/app"): "app:example"
+    }
+    formed = form_families(
+        apply_composition_policy(parsed, [candidate(), bboi_candidate()])
+    )
+    assert [app.family for app in formed] == ["app:example", "app:example"]
+
+
+def test_candidates_sharing_an_id_across_repositories_form_one_family() -> None:
+    parsed = parse_composition_policy(policy())
+    formed = form_families(
+        apply_composition_policy(
+            parsed,
+            [
+                candidate(),
+                bboi_candidate(
+                    id="org.example.old",
+                    original_id="org.example.old",
+                    url="https://x.test/b",
+                ),
+            ],
+        )
+    )
+    assert [app.family for app in formed] == ["package:org.example.old"] * 2
+
+
+def test_rule_less_candidate_sharing_an_id_joins_the_explicit_family() -> None:
+    parsed = parse_composition_policy(policy(candidates=[rule(family="app:x")]))
+    other = candidate(
+        url="https://gitlab.com/other/app",
+        provenance=Provenance("extras", "catalog"),
+        origin="extras",
+    )
+    formed = form_families(apply_composition_policy(parsed, [candidate(), other]))
+    assert [(app.url, app.family) for app in formed] == [
+        (candidate().url, "app:x"),
+        (other.url, "app:x"),
+    ]
+
+
+def test_explicit_families_joined_through_a_shared_id_fail() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                rule(family="app:x"),
+                rule(
+                    match={
+                        "source": "bboi",
+                        "origin": "bboi-standard-asset",
+                        "id": "org.example.new",
+                        "url": "https://x.test/y",
+                    },
+                    packageId="org.example.old",
+                    family="app:y",
+                ),
+            ]
+        )
+    )
+    bystander = candidate(
+        id="org.example.else", original_id="org.example.else", url="https://x.test/e"
+    )
+    rule_less_carrier = candidate(url="https://x.test/u")
+    applied = apply_composition_policy(
+        parsed,
+        [
+            candidate(),
+            bboi_candidate(url="https://x.test/y"),
+            bystander,
+            rule_less_carrier,
+        ],
+    )
+    with pytest.raises(CompositionPolicyError) as error:
+        form_families(applied)
+    assert str(error.value) == (
+        "explicit families 'app:x', 'app:y' join through a shared package id: "
+        "('bboi', 'bboi-standard-asset', 'org.example.new', 'x.test/y'); "
+        "('rjny', 'rjny-catalog', 'org.example.old', 'github.com/example/app')"
+    )
 
 
 def test_agreeing_rules_share_one_projected_family() -> None:
@@ -264,20 +376,23 @@ def test_agreeing_rules_share_one_projected_family() -> None:
     ]
 
 
-def test_pin_family_must_match_its_projected_candidate_family() -> None:
-    with pytest.raises(CompositionPolicyError, match="pin family.*conflicts"):
+def test_pin_family_must_match_an_explicit_projection_at_load() -> None:
+    pin = {
+        "family": "app:wrong",
+        "variant": "dual",
+        "match": rule()["match"],
+        "rationale": "Prefer this build.",
+    }
+    with pytest.raises(
+        CompositionPolicyError,
+        match="pin family 'app:wrong' target 'dual' conflicts with projected "
+        "family 'app:example'",
+    ):
         parse_composition_policy(
-            policy(
-                pins=[
-                    {
-                        "family": "app:wrong",
-                        "variant": "dual",
-                        "match": rule()["match"],
-                        "rationale": "Prefer this build.",
-                    }
-                ]
-            )
+            policy(candidates=[rule(family="app:example")], pins=[pin])
         )
+    # Without an explicit projection the family forms at build time.
+    assert parse_composition_policy(policy(pins=[pin])).pins[0].family == "app:wrong"
 
 
 @pytest.mark.parametrize(
@@ -433,3 +548,103 @@ def test_selector_url_must_be_normalizable_before_candidate_matching(
         parse_composition_policy(policy(**{kind: [record]}))
 
     assert str(error.value) == f"{kind}[0].match.url is not a project URL: {url!r}"
+
+
+def family_rule(package_id: str, url: str, family: str) -> dict[str, object]:
+    return rule(
+        match={
+            "source": "rjny",
+            "origin": "rjny-catalog",
+            "id": package_id,
+            "url": url,
+        },
+        family=family,
+    )
+
+
+def key(package_id: str, host: str = "x.test") -> tuple[str, str]:
+    return package_id, f"{host}/{package_id}"
+
+
+def test_pairing_joins_by_id_then_by_explicit_family() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                family_rule("a", "https://x.test/a", "app:x"),
+                family_rule("c", "https://x.test/c", "app:x"),
+            ]
+        )
+    )
+    single = [key("same"), key("a"), key("lonely")]
+    dual = [key("c"), key("same"), key("dual.only")]
+    expected = {
+        Pairing("package:same", key("same"), key("same")),
+        Pairing("app:x", key("a"), key("c")),
+        Pairing("package:lonely", key("lonely"), None),
+        Pairing("package:dual.only", None, key("dual.only")),
+    }
+    for singles, duals in [
+        (single, dual),
+        (single[::-1], dual),
+        (single, dual[::-1]),
+        (single[::-1], dual[::-1]),
+    ]:
+        assert set(pair_entries(parsed, singles, duals)) == expected
+
+
+def test_pairing_never_joins_different_explicit_families() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                family_rule("a", "https://x.test/a", "app:x"),
+                family_rule("a", "https://y.test/a", "app:y"),
+            ]
+        )
+    )
+    result = pair_entries(parsed, [key("a")], [key("a", "y.test")])
+    assert set(result) == {
+        Pairing("app:x", key("a"), None),
+        Pairing("app:y", None, key("a", "y.test")),
+    }
+
+
+def test_identity_only_rule_leaves_a_same_id_pair_to_the_id_pass() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                rule(
+                    match={
+                        "source": "rjny",
+                        "origin": "rjny-catalog",
+                        "id": "a.original",
+                        "url": "https://x.test/a",
+                    },
+                    packageId="a",
+                )
+            ]
+        )
+    )
+    result = pair_entries(parsed, [key("a")], [key("a", "y.test")])
+    assert result == (Pairing("package:a", key("a"), key("a", "y.test")),)
+
+
+def test_repeated_ids_and_families_leave_their_entries_unpaired() -> None:
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[
+                family_rule("a", "https://x.test/a", "app:x"),
+                family_rule("b", "https://x.test/b", "app:x"),
+                family_rule("c", "https://x.test/c", "app:x"),
+            ]
+        )
+    )
+    single = [key("a"), key("b"), key("dup"), key("dup", "y.test"), key("kept")]
+    dual = [key("c"), key("dup"), key("kept")]
+    for ordered in (single, single[::-1]):
+        assert pair_entries(parsed, ordered, dual) == (
+            Pairing("package:kept", key("kept"), key("kept")),
+        )
+        assert find_repeats(parsed, ordered) == Repeats(
+            ("dup",), {"app:x": (key("a"), key("b"))}
+        )
+    assert find_repeats(parsed, dual) == Repeats((), {})

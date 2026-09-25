@@ -12,7 +12,10 @@ from omnipack.composition_policy import (
     Pin,
     PinKey,
     apply_composition_policy,
+    assigned_family,
     candidate_selector,
+    form_families,
+    pair_entries,
     rendered_key,
 )
 from omnipack.model import App, Variant
@@ -106,12 +109,16 @@ def compose(
     exclusions = parse_exclusions(denylist)
     try:
         candidates = list(apply_composition_policy(policy, candidates))
+        _check_sources(candidates)
+        denied = _exclude(candidates, exclusions, report)
+        formed = form_families(
+            [item for item in candidates if item.eligibility and id(item) not in denied]
+        )
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
-    families = _families(candidates)
-    denied = _exclude(families, exclusions, report)
-    pinned = _resolve_pins(candidates, policy.pins, denied)
-    selected = _select(families, denied, pinned, report)
+    pinned = _resolve_pins(candidates, formed, policy.pins, denied)
+    selected = _select(_families(formed), pinned, report)
+    _validate_pairing(selected, policy)
     try:
         patches = parse_overlay(overlay, "overlay")
         _validate_overlay_targets(selected, patches)
@@ -119,7 +126,6 @@ def compose(
             selected[variant] = apply_overlay(selected[variant], patches)
     except OverlayError as error:
         raise CompositionError(str(error)) from error
-    _validate_unique_packages(selected)
     _validate_coverage(selected)
     return CompositionResult(selected, report)
 
@@ -146,42 +152,46 @@ def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
     return tuple(result)
 
 
-def _families(candidates: list[App]) -> dict[str, list[App]]:
-    families: dict[str, list[App]] = {}
+def _check_sources(candidates: list[App]) -> None:
     for candidate in candidates:
         source = candidate.provenance.source
         if source not in _PRECEDENCE:
             raise CompositionError(f"unknown candidate source {source!r}")
-        if candidate.family is None:
-            raise CompositionError(f"candidate {candidate.original_id!r} has no family")
-        families.setdefault(candidate.family, []).append(candidate)
+
+
+def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:
+    families: dict[str, list[App]] = {}
+    for candidate in candidates:
+        families.setdefault(assigned_family(candidate), []).append(candidate)
     return families
 
 
 def _exclude(
-    families: dict[str, list[App]],
+    candidates: list[App],
     exclusions: tuple[_Exclusion, ...],
     report: CompositionReport,
-) -> dict[tuple[int, Variant], str]:
-    """Record each candidate a denial removes, keyed by candidate and variant.
+) -> dict[int, str]:
+    """Record each candidate a denial removes, keyed by candidate.
 
-    A denial is stale only when no candidate carries its package id. One whose
-    candidates are eligible for neither pack removes nothing but still applies.
+    A removed candidate belongs to no formed family, so its removals name its
+    own assignment. A denial is stale only when no candidate carries its
+    package id. One whose candidates are eligible for neither pack removes
+    nothing but still applies.
     """
-    denied: dict[tuple[int, Variant], str] = {}
+    denied: dict[int, str] = {}
     for rule in exclusions:
         matched = False
-        for family, members in families.items():
-            for candidate in members:
-                if candidate.id != rule.package_id:
-                    continue
-                matched = True
-                for variant in Variant:
-                    if variant in candidate.eligibility:
-                        denied[(id(candidate), variant)] = rule.reason
-                        report.removals.append(
-                            Removal(candidate.id, variant, rule.reason, family)
-                        )
+        for candidate in candidates:
+            if candidate.id != rule.package_id:
+                continue
+            matched = True
+            denied[id(candidate)] = rule.reason
+            family = assigned_family(candidate)
+            for variant in Variant:
+                if variant in candidate.eligibility:
+                    report.removals.append(
+                        Removal(candidate.id, variant, rule.reason, family)
+                    )
         if not matched:
             report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
     return denied
@@ -189,10 +199,16 @@ def _exclude(
 
 def _resolve_pins(
     candidates: list[App],
+    formed: tuple[App, ...],
     pins: tuple[Pin, ...],
-    denied: dict[tuple[int, Variant], str],
+    denied: dict[int, str],
 ) -> dict[PinKey, App]:
-    """Validate every pin against the admitted candidates before any selection."""
+    """Validate every pin against the admitted candidates before any selection.
+
+    A denied candidate, or one eligible for no variant, forms no family, so its
+    pin fails on that exclusion before the family comparison.
+    """
+    by_selector = {candidate_selector(item).key: item for item in formed}
     resolved: dict[PinKey, App] = {}
     # Sorted so the first failing pin reported does not depend on policy order.
     for pin in sorted(pins, key=lambda item: (item.family, item.variant.value)):
@@ -200,23 +216,25 @@ def _resolve_pins(
         matches = [item for item in candidates if candidate_selector(item) == pin.match]
         if len(matches) != 1:
             raise CompositionError(f"{label} is missing or ambiguous")
-        [winner] = matches
+        [candidate] = matches
+        denied_reason = denied.get(id(candidate))
+        if denied_reason is not None:
+            raise CompositionError(f"{label} is denied: {denied_reason}")
+        if not candidate.eligibility:
+            raise CompositionError(f"{label} is ineligible for every variant")
+        winner = by_selector[pin.match.key]
         if winner.family != pin.family:
             raise CompositionError(
                 f"{label} names a candidate of family {winner.family!r}"
             )
         if pin.variant not in winner.eligibility:
             raise CompositionError(f"{label} is ineligible")
-        denied_reason = denied.get((id(winner), pin.variant))
-        if denied_reason is not None:
-            raise CompositionError(f"{label} is denied: {denied_reason}")
         resolved[(pin.family, pin.variant)] = winner
     return resolved
 
 
 def _select(
     families: dict[str, list[App]],
-    denied: dict[tuple[int, Variant], str],
     pinned: dict[PinKey, App],
     report: CompositionReport,
 ) -> dict[Variant, list[ComposedApp]]:
@@ -225,9 +243,7 @@ def _select(
         family_candidates = families[family]
         for variant in Variant:
             available = [
-                item
-                for item in family_candidates
-                if variant in item.eligibility and (id(item), variant) not in denied
+                item for item in family_candidates if variant in item.eligibility
             ]
             pinned_winner = pinned.get((family, variant))
             if pinned_winner is not None:
@@ -287,15 +303,42 @@ def _select(
     return result
 
 
-def _validate_unique_packages(apps: dict[Variant, list[ComposedApp]]) -> None:
-    for variant, values in apps.items():
-        seen: dict[str, str] = {}
-        for app in values:
-            if app.id in seen and seen[app.id] != app.family:
-                raise CompositionError(
-                    f"target {variant.value!r} selects package id {app.id!r} for distinct families {seen[app.id]!r} and {app.family!r}"
-                )
-            seen[app.id] = app.family
+def _validate_pairing(
+    apps: dict[Variant, list[ComposedApp]], policy: CompositionPolicy
+) -> None:
+    """Require each family in both variants to pair the way offline checks do.
+
+    Offline verification and the README see only rendered entries, so a
+    family whose selected entries differ in package id must project its
+    explicit family onto both of them.
+    """
+    pairs = pair_entries(
+        policy,
+        [rendered_key(app.id, app.url) for app in apps[Variant.SINGLE]],
+        [rendered_key(app.id, app.url) for app in apps[Variant.DUAL]],
+    )
+    paired = {(pair.single, pair.dual) for pair in pairs}
+    duals = {app.family: app for app in apps[Variant.DUAL]}
+    for single in apps[Variant.SINGLE]:
+        dual = duals.get(single.family)
+        if dual is None:
+            continue
+        keys = rendered_key(single.id, single.url), rendered_key(dual.id, dual.url)
+        if keys in paired:
+            continue
+        unprojected = [
+            key for key in keys if policy.projections.get(key) != single.family
+        ]
+        remedy = (
+            f"; add a family rule assigning {single.family!r} to "
+            + " and ".join(map(repr, unprojected))
+            if unprojected
+            else ""
+        )
+        raise CompositionError(
+            f"family {single.family!r} selects single-screen {keys[0]!r} and "
+            f"dual-screen {keys[1]!r}, which offline verification cannot pair" + remedy
+        )
 
 
 def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:

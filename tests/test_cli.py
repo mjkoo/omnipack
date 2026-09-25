@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
+from typing import Any
 from urllib.request import Request
 
 import pytest
@@ -766,3 +767,152 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
         in output
     )
     assert path.read_bytes() == before
+
+
+def selector(app: App) -> dict[str, str]:
+    return {
+        "source": app.provenance.source,
+        "origin": app.origin,
+        "id": app.original_id,
+        "url": app.url,
+    }
+
+
+def family_rules(family: str, *apps: App) -> list[dict[str, object]]:
+    return [
+        {"match": selector(app), "family": family, "rationale": "test"} for app in apps
+    ]
+
+
+def build_candidate(
+    package_id: str,
+    source: str,
+    origin: str,
+    url: str,
+    eligibility: frozenset[Variant] = frozenset(Variant),
+) -> App:
+    return App(
+        package_id,
+        url,
+        f"{source} {package_id}",
+        SourceType.HTML,
+        (),
+        Provenance(source, "https://example.test/catalog"),
+        eligibility=eligibility,
+        origin=origin,
+    )
+
+
+def run_build(
+    root: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    candidates: list[App],
+    rules: list[dict[str, object]],
+) -> tuple[int, dict[str, Any]]:
+    """Build candidates plus one denied and one stale denial under the rules."""
+    write_config(root)
+    removed = build_candidate(
+        "removed.app", "extras", "extras", "https://example.test/removed"
+    )
+    config = root / "config"
+    (config / "composition.json").write_text(
+        json.dumps({"schemaVersion": 1, "candidates": rules, "pins": []})
+    )
+    (config / "deny.json").write_text(
+        json.dumps(
+            [
+                {"id": "removed.app", "reason": "excluded"},
+                {"id": "stale.app", "reason": "obsolete"},
+            ]
+        )
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [*candidates, removed]
+    )
+    monkeypatch.chdir(root)
+    code = main(["build"])
+    return code, json.loads((root / ".build/report.json").read_text())
+
+
+def assert_denials_preserved(report: dict[str, Any]) -> None:
+    assert report["denylistRemovals"] == [
+        {
+            "id": "removed.app",
+            "variant": variant.value,
+            "reason": "excluded",
+            "family": "package:removed.app",
+        }
+        for variant in Variant
+    ]
+    assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
+    assert report["changes"] is None
+
+
+def test_joined_explicit_families_report_both_families_and_joining_candidates(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    first = build_candidate("shared", "rjny", "rjny-catalog", "https://example.test/x")
+    second = build_candidate(
+        "shared", "bboi", "bboi-standard-asset", "https://example.test/y"
+    )
+    code, report = run_build(
+        tmp_path,
+        monkeypatch,
+        [first, second],
+        [*family_rules("app:x", first), *family_rules("app:y", second)],
+    )
+    assert code == 1
+    assert report["stage"] == "composition"
+    assert report["error"] == (
+        "explicit families 'app:x', 'app:y' join through a shared package id: "
+        "('bboi', 'bboi-standard-asset', 'shared', 'example.test/y'); "
+        "('rjny', 'rjny-catalog', 'shared', 'example.test/x')"
+    )
+    assert_denials_preserved(report)
+
+
+def selected_builds_joined_by_losers() -> tuple[list[App], list[App], list[App]]:
+    """Rules on losing builds only; the winners join their family by id."""
+    ruled = [
+        build_candidate("a", "rjny", "rjny-catalog", "https://example.test/X"),
+        build_candidate("c", "rjny", "rjny-catalog", "https://example.test/W"),
+    ]
+    winners = [
+        build_candidate("a", "extras", "extras", "https://example.test/Y"),
+        build_candidate(
+            "c",
+            "bboi",
+            "bboi-dual-asset",
+            "https://example.test/V",
+            frozenset({Variant.DUAL}),
+        ),
+    ]
+    return [*ruled, *winners], ruled, winners
+
+
+def test_family_whose_selected_builds_do_not_pair_fails_until_both_project_it(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    candidates, ruled, winners = selected_builds_joined_by_losers()
+    code, report = run_build(
+        tmp_path, monkeypatch, candidates, family_rules("app:x", *ruled)
+    )
+    assert code == 1
+    assert report["stage"] == "composition"
+    assert report["error"] == (
+        "family 'app:x' selects single-screen ('a', 'example.test/Y') and "
+        "dual-screen ('c', 'example.test/V'), which offline verification cannot "
+        "pair; add a family rule assigning 'app:x' to ('a', 'example.test/Y') and "
+        "('c', 'example.test/V')"
+    )
+    assert [
+        (item["family"], item["variant"], item["source"])
+        for item in report["selections"]
+    ] == [("app:x", "single", "extras"), ("app:x", "dual", "bboi")]
+    assert_denials_preserved(report)
+
+    code, report = run_build(
+        tmp_path, monkeypatch, candidates, family_rules("app:x", *ruled, *winners)
+    )
+    assert code == 0, report.get("error")
+    assert report["offlineVerification"] == {"status": "success", "findings": []}

@@ -5,6 +5,7 @@ from pathlib import Path
 
 from omnipack.model import Variant
 from omnipack.render import render
+from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
     current_configuration_fixture,  # noqa: F401
@@ -14,6 +15,7 @@ ROOT = Path(__file__).parents[1]
 FIXTURE = ROOT / "tests/fixtures/curation/reconciliation.json"
 OBSERVATIONS = ROOT / "tests/fixtures/reconciliation/selected-observations.json"
 CTR_EVIDENCE = ROOT / "tests/fixtures/curation/ctr.json"
+FORMED_FAMILIES = ROOT / "tests/fixtures/reconciliation/formed-families.json"
 
 
 def read(path: Path):
@@ -146,3 +148,33 @@ def test_full_reconciliation_holds_for_current_composition(
         assert settings["trackOnly"] is False
         assert settings["exemptFromBackgroundUpdates"] is False
         assert settings["skipUpdateNotifications"] is False
+
+
+def test_captured_candidates_form_the_recorded_families(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    """Every surviving candidate is a winner or considered in some variant."""
+    families: dict[str, set[tuple[str, str, str, str]]] = {}
+    for selection in current_configuration.result.report.selections:
+        members = families.setdefault(selection.family, set())
+        members.add(
+            (
+                selection.source,
+                selection.origin,
+                selection.original_id,
+                normalize_project_url(selection.url),
+            )
+        )
+        members.update(
+            (
+                item.source,
+                item.origin,
+                item.original_id,
+                normalize_project_url(item.url),
+            )
+            for item in selection.considered
+        )
+    assert {
+        family: sorted(list(member) for member in members)
+        for family, members in families.items()
+    } == read(FORMED_FAMILIES)

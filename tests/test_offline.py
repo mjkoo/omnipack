@@ -471,3 +471,132 @@ def test_absent_unpinned_losing_candidate_cannot_be_assessed_offline() -> None:
         "pins": [],
     }
     assert validate_offline(inputs(composition=policy)) == ()
+
+
+def at(package_id: str, path: str | None = None) -> dict[str, Any]:
+    value = app(package_id)
+    value["url"] = f"https://example.com/{path or package_id}"
+    return value
+
+
+def projecting(family: str, *entries: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "schemaVersion": 1,
+        "candidates": [
+            {
+                "match": {
+                    "source": "extras",
+                    "origin": "extras",
+                    "id": entry["id"],
+                    "url": entry["url"],
+                },
+                "family": family,
+                "rationale": "fixture",
+            }
+            for entry in entries
+        ],
+        "pins": [],
+    }
+
+
+def test_explicit_family_repeated_within_a_variant_is_rejected() -> None:
+    a, b = at("a"), at("b")
+    [finding] = validate_offline(
+        inputs([a, b], [], composition=projecting("app:x", a, b))
+    )
+    assert (finding.variant, finding.code) == ("single", "duplicate_explicit_family")
+    assert finding.message == (
+        "explicit family 'app:x' is projected onto more than one entry: "
+        "('a', 'example.com/a'), ('b', 'example.com/b')"
+    )
+
+
+@pytest.mark.parametrize("repeated_in", ["single", "dual"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_repeated_explicit_family_leaves_both_variants_out_of_coverage(
+    repeated_in: str, reverse: bool
+) -> None:
+    a, b, c = at("a"), at("b"), at("c")
+    repeated, other = [a, b], [c]
+    if reverse:
+        repeated.reverse()
+    single, dual = (repeated, other) if repeated_in == "single" else (other, repeated)
+    findings = validate_offline(
+        inputs(single, dual, composition=projecting("app:x", a, b, c))
+    )
+    assert [(item.variant, item.code) for item in findings] == [
+        (repeated_in, "duplicate_explicit_family")
+    ]
+
+
+def test_same_id_entries_of_different_explicit_families_leave_a_coverage_gap() -> None:
+    single, dual = at("a", "one"), at("a", "two")
+    policy = projecting("app:x", single)
+    policy["candidates"] += projecting("app:y", dual)["candidates"]
+    findings = validate_offline(inputs([single], [dual], composition=policy))
+    assert [(item.variant, item.entry_id, item.code) for item in findings] == [
+        ("dual", "a", "dual_coverage_gap")
+    ]
+    assert "'app:x'" in findings[0].message
+
+
+@pytest.mark.parametrize("repeated_in", ["single", "dual"])
+@pytest.mark.parametrize("reverse", [False, True])
+def test_repeated_package_id_is_reported_once_without_a_coverage_gap(
+    repeated_in: str, reverse: bool
+) -> None:
+    repeated = [at("a", "one"), at("a", "two")]
+    if reverse:
+        repeated.reverse()
+    single, dual = (
+        (repeated, [at("a", "one")])
+        if repeated_in == "single"
+        else ([at("a", "one")], repeated)
+    )
+    findings = validate_offline(inputs(single, dual))
+    assert [(item.variant, item.code) for item in findings] == [
+        (repeated_in, "duplicate_id")
+    ]
+
+
+def test_denial_inside_a_repeated_explicit_family_is_still_reported() -> None:
+    a, b = at("a"), at("b")
+    findings = validate_offline(
+        inputs(
+            [a, b],
+            [],
+            composition=projecting("app:x", a, b),
+            deny=[{"id": "b", "reason": "excluded"}],
+        )
+    )
+    assert {(item.variant, item.entry_id, item.code) for item in findings} == {
+        ("single", None, "duplicate_explicit_family"),
+        ("single", "b", "denied_output_present"),
+    }
+
+
+def test_denied_id_repeated_within_a_variant_is_reported_once_per_variant() -> None:
+    repeated = [at("a", "one"), at("a", "two")]
+    findings = validate_offline(
+        inputs(repeated, deepcopy(repeated), deny=[{"id": "a", "reason": "excluded"}])
+    )
+    denials = [item for item in findings if item.code == "denied_output_present"]
+    assert [(item.variant, item.entry_id, item.message) for item in denials] == [
+        (
+            variant,
+            "a",
+            "denied selection 'a' in family label 'package:a' remains present",
+        )
+        for variant in ("single", "dual")
+    ]
+
+
+def test_entry_repeating_both_its_id_and_its_family_gets_both_findings() -> None:
+    first, second = at("a", "one"), at("a", "two")
+    findings = validate_offline(
+        inputs([first, second], [], composition=projecting("app:x", first, second))
+    )
+    assert sorted((item.variant, item.code) for item in findings) == [
+        ("single", "duplicate_explicit_family"),
+        ("single", "duplicate_id"),
+    ]

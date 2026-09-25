@@ -1,10 +1,18 @@
 # Pack composition
 
-Each output contains at most one selected build per logical app family. A family
-normally follows the effective Android package id, using `package:<id>`. Maintained
-rules can associate different package identities under `app:<name>`. The exported
-Obtainium records carry each selected build's effective package id; family and
-source-selection metadata remain internal.
+Each output contains at most one selected build per logical app family. Families
+form after identity corrections and denials, over the candidates that survive and
+are eligible for at least one pack. Candidates sharing an effective Android
+package id belong to one family, and so do candidates assigned the same explicit
+family. Nothing else joins them: two sources listing different package ids at one
+repository stay separate families unless a rule joins them. A family without an
+explicit assignment holds one package id and is named `package:<id>`; maintained
+rules can associate different package identities under `app:<name>`. A family
+rule also assigns its family to any candidate carrying the rule's effective id at
+the same project URL. Two different `app:` families joined through a shared
+package id fail the build, naming both families and the candidates that join
+them. The exported Obtainium records carry each selected build's effective
+package id; family and source-selection metadata remain internal.
 
 ## Baseline and dual-screen builds
 
@@ -105,6 +113,11 @@ installation, or data-migration compatibility.
 A pin names `family`, `variant`, `match`, and `rationale`. The referenced candidate
 must exist, belong to the family, be eligible for that pack, and survive
 denials. A denial does not disable a contradictory pin silently; the build fails.
+A pin on a denied candidate, or on one its source makes eligible for no pack,
+fails on that removal, since the candidate belongs to no family. When the pinned
+build's rule, or another rule at its effective id and URL, assigns an `app:`
+family, a pin naming a different family fails when the policy loads; any other
+pin names the family its candidate forms, which the build checks.
 
 ## Denials and patches
 
@@ -141,8 +154,15 @@ cannot be published in single only. To keep an app out of both packs, deny every
 package id its family's builds carry. Source ineligibility and denials of other
 packages in the family do not waive coverage. A different-package replacement in
 the same family satisfies it, and an app with only a dual-screen build needs no
-single counterpart. Different families selecting the same package in one output
-fail.
+single counterpart.
+
+Offline verification and the README see only rendered entries, so the build
+also requires every family published in both packs to pair the way they do:
+entries pair by package id, then by explicit family among the rest. A family's
+selected builds with different package ids pair only when rules assign that
+`app:` family to both selected builds; a rule on a losing build is not enough.
+Otherwise the build fails naming the family and both entries, asking for a
+`family` rule on each selected build that lacks one.
 
 ## Build report
 
@@ -178,14 +198,21 @@ losing candidate's settings with the winner's by reading the source catalogs.
 `pack report` reads only schema 3 build reports; an older report must be
 regenerated with `pack build`.
 
-Offline verification checks serialized family and package uniqueness, rendered
-family projections, pins, denied packages, coverage, and overlay targets. It does
+Offline verification pairs entries without provenance, as described above. It
+rejects a package id repeated within a pack and an explicit family assigned to
+more than one entry within a pack, and leaves those entries out of pairing and
+coverage. It also checks pins, denied packages, coverage, and overlay targets.
+It does
 not check eligibility, which rendered entries cannot reveal, and it cannot prove
 source provenance, ranking, presence of losing upstream candidates, or that patch
 values were applied. Composition policy bytes participate in input fingerprints;
 changed inputs or a different supported verifier identity make evidence stale.
 A verification report with any schema other than the current one requires
 regeneration with `pack verify`.
+
+The README catalog pairs the rendered packs the same way and writes one row per
+pair or unpaired entry. Rows sharing a label are never merged. Catalog
+generation fails when a package id or explicit family repeats within a pack.
 
 Selected-project metadata failure prevents publication. It never switches to a
 family alternative. Existing configured fallback among releases of the selected

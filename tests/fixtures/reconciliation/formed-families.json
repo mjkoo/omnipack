@@ -1,0 +1,990 @@
+{
+  "app:ctr": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.simon358.ctrnative",
+      "github.com/simon358/ctr-native-android"
+    ],
+    [
+      "codm2000",
+      "codm-generated",
+      "com.ctrnative",
+      "github.com/igawa6/ctr-native-android"
+    ]
+  ],
+  "app:dusklight": [
+    [
+      "bboi",
+      "bboi-dual-asset",
+      "com.igawa6.dusklight",
+      "github.com/igawa6/dusklight"
+    ],
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.twilitrealm.dusklight",
+      "github.com/twilitrealm/dusklight"
+    ]
+  ],
+  "app:gen1recomp": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.bryanthaboi.pokemonredblue",
+      "github.com/bryanthaboi/pokemon-gen1-recomp-project"
+    ],
+    [
+      "extras",
+      "extras",
+      "com.theboisclub.pokemonred",
+      "github.com/bryanthaboi/gen1recomp"
+    ]
+  ],
+  "app:ghostship": [
+    [
+      "extras",
+      "extras",
+      "dev.net64.ghostship",
+      "github.com/harbourmasters/ghostship"
+    ]
+  ],
+  "app:openmw": [
+    [
+      "bboi",
+      "bboi-dual-asset",
+      "com.joshdaniels.openmwds",
+      "github.com/josh-daniels/openmw-ds"
+    ],
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.xyzz.openmw",
+      "github.com/xyzz/openmw-android"
+    ]
+  ],
+  "app:super-metroid": [
+    [
+      "extras",
+      "extras",
+      "com.metroidarch.app.aarch64",
+      "github.com/raekwon1603/retroarch"
+    ]
+  ],
+  "package:1845280017": [
+    [
+      "codm2000",
+      "codm-generated",
+      "1845280017",
+      "github.com/averageconsumer/kanto-gear"
+    ]
+  ],
+  "package:476086958": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "476086958",
+      "github.com/stevenmxz/adreno-tools-drivers"
+    ]
+  ],
+  "package:767644078": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "767644078",
+      "github.com/glazedbelmont/es-de-android-custom-systems"
+    ]
+  ],
+  "package:809443320": [
+    [
+      "extras",
+      "extras",
+      "809443320",
+      "github.com/mjkoo/omnipack"
+    ]
+  ],
+  "package:994078275": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "994078275",
+      "github.com/mrpurple666/purple-turnip"
+    ]
+  ],
+  "package:aenu.aps3e": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "aenu.aps3e",
+      "github.com/aenu1/aps3e"
+    ]
+  ],
+  "package:app.gamenative": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "app.gamenative",
+      "github.com/utkarshdalal/gamenative"
+    ]
+  ],
+  "package:app.nanostack.pixelguide": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "app.nanostack.pixelguide",
+      "github.com/rexmont/pixel-guide-android"
+    ]
+  ],
+  "package:com.andreyvelsk.skyrimwebmonitor": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.andreyvelsk.skyrimwebmonitor",
+      "github.com/andreyvelsk/skyrimwebmonitor"
+    ]
+  ],
+  "package:com.armsx2": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.armsx2",
+      "github.com/armsx2/armsx2"
+    ]
+  ],
+  "package:com.armsx3": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.armsx3",
+      "github.com/armsx2/armsx3"
+    ]
+  ],
+  "package:com.aure.banjorecomp": [
+    [
+      "bboi",
+      "bboi-dual-asset",
+      "com.aure.banjorecomp",
+      "github.com/aureliob/banjorecomp-android"
+    ],
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.aure.banjorecomp",
+      "github.com/aureliob/banjorecomp-android"
+    ]
+  ],
+  "package:com.aure.clustertune": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.aure.clustertune",
+      "github.com/aureliob/cluster-tune"
+    ]
+  ],
+  "package:com.aurora.store": [
+    [
+      "extras",
+      "extras",
+      "com.aurora.store",
+      "gitlab.com/AuroraOSS/AuroraStore"
+    ]
+  ],
+  "package:com.balatro.dualscreen": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.balatro.dualscreen",
+      "github.com/rosbean/balatro-dualscreen"
+    ]
+  ],
+  "package:com.blacklabelhq.sotn": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.sergiomanzur.sotnrecomp",
+      "github.com/sergiomanzur/symphonyrecomp"
+    ]
+  ],
+  "package:com.buku313.skate3mobile": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.buku313.skate3mobile",
+      "github.com/buku313/skate3-mobile"
+    ]
+  ],
+  "package:com.c4rlox.simpsons": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.carlox33.hitandrun",
+      "github.com/carlox33/the-simpsons-hit-and-run-android"
+    ]
+  ],
+  "package:com.chimeragaming.pixelnavigator": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.chimeragaming.pixelnavigator",
+      "github.com/chimeragaming/pixelnavigator"
+    ]
+  ],
+  "package:com.chimeragaming.pokemonzmap": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.chimeragaming.pokemonzmap",
+      "github.com/chimeragaming/fanmakepokemonmaps_android"
+    ]
+  ],
+  "package:com.cylonid.nativealpha": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.cylonid.nativealpha",
+      "github.com/cylonid/nativealphaforandroid"
+    ]
+  ],
+  "package:com.darkaxt.dualdex": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.darkaxt.dualdex",
+      "github.com/darkaxt/dualscreendex"
+    ]
+  ],
+  "package:com.digitaladventure.dw2003": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.digitaladventure.dw2003",
+      "github.com/rsigristc/dw3-ds-android"
+    ]
+  ],
+  "package:com.dishii.soh": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.waterdish.shipwright",
+      "github.com/waterdish/shipwright-android"
+    ]
+  ],
+  "package:com.dishii.zelda3": [
+    [
+      "bboi",
+      "bboi-dual-asset",
+      "com.samyost1.zelda3android",
+      "github.com/samyost1/zelda3-android"
+    ],
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.samyost1.zelda3android",
+      "github.com/samyost1/zelda3-android"
+    ]
+  ],
+  "package:com.emulnk": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.emulnk",
+      "github.com/emulnk/emulnk"
+    ]
+  ],
+  "package:com.enrpau.dualscreendex": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.enrpau.dualscreendex",
+      "github.com/enrique-paulino/dualscreendex"
+    ]
+  ],
+  "package:com.esde.companion": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.esde.companion",
+      "github.com/robzombie9043/es-de-companion"
+    ]
+  ],
+  "package:com.exojosh.minecraftsecondscreen": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.exojosh.minecraftsecondscreen",
+      "github.com/exojosh/aynthorsecondscreen"
+    ]
+  ],
+  "package:com.flycast.emulator": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.flycast.emulator",
+      "github.com/flyinghead/flycast"
+    ]
+  ],
+  "package:com.game.cinderbox": [
+    [
+      "extras",
+      "extras",
+      "com.game.cinderbox",
+      "github.com/ekyso/cinderbox"
+    ]
+  ],
+  "package:com.github.bvschaik.julius": [
+    [
+      "extras",
+      "extras",
+      "com.github.bvschaik.julius",
+      "github.com/bvschaik/julius"
+    ]
+  ],
+  "package:com.github.catfriend1.syncthingfork": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.github.catfriend1.syncthingfork",
+      "github.com/researchxxl/syncthing-android"
+    ]
+  ],
+  "package:com.github.stenzek.duckstation": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.github.stenzek.duckstation",
+      "duckstation-mirror.rmacias.workers.dev"
+    ]
+  ],
+  "package:com.iisulauncher": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.iisulauncher",
+      "github.com/iisu-network/iisu"
+    ]
+  ],
+  "package:com.izzy.kart": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.izzy2lost.spaghettikart",
+      "github.com/izzy2lost/spaghettikart"
+    ]
+  ],
+  "package:com.izzy2lost.x1box": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.izzy2lost.x1box",
+      "github.com/izzy2lost/xemu"
+    ]
+  ],
+  "package:com.jakobkhansen.silksong": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.jakobkhansen.silksong",
+      "github.com/jakobkhansen/silksongandroid"
+    ]
+  ],
+  "package:com.jeffory.goldeneyerecomp": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.jeffory.goldeneyerecomp",
+      "github.com/jeffory/goldeneye-recomp"
+    ]
+  ],
+  "package:com.jrickey.battleship": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.jrickey.battleship",
+      "github.com/jrickey/battleship"
+    ]
+  ],
+  "package:com.k2.consolelauncher": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.k2.consolelauncher",
+      "github.com/likeich/console-launcher"
+    ]
+  ],
+  "package:com.kalenjohnson.chronoduo": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.kalenjohnson.chronoduo",
+      "github.com/kalenjohnson/chrono-duo"
+    ]
+  ],
+  "package:com.karin.idTech4Amm": [
+    [
+      "extras",
+      "extras",
+      "com.karin.idTech4Amm",
+      "github.com/glkarin/com.n0n3m4.diii4a"
+    ]
+  ],
+  "package:com.kei.pulse": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.kei.pulse",
+      "github.com/keiretrogaming/pulse"
+    ]
+  ],
+  "package:com.limelight": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.limelight",
+      "github.com/moonlight-stream/moonlight-android"
+    ]
+  ],
+  "package:com.limelight.noir": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.limelight.noir",
+      "github.com/classicoldsong/moonlight-android"
+    ]
+  ],
+  "package:com.magneticchen.daijishou": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.magneticchen.daijishou",
+      "github.com/tapiocafox/daijishou"
+    ]
+  ],
+  "package:com.mastercook777.heimdall": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.mastercook777.heimdall",
+      "github.com/mastercook777/heimdall-ayn-thor-assistant"
+    ]
+  ],
+  "package:com.moonbench.bifrost": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.moonbench.bifrost",
+      "github.com/pollux-moonbench/bifrost"
+    ]
+  ],
+  "package:com.nanodata.armsx": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.nanodata.armsx",
+      "github.com/armsx2/armsx1"
+    ]
+  ],
+  "package:com.nendo.argosy": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.nendo.argosy",
+      "github.com/rommapp/argosy-launcher"
+    ]
+  ],
+  "package:com.neogamelab.neostation": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.neogamelab.neostation",
+      "github.com/misobadev/neostation-frontend"
+    ]
+  ],
+  "package:com.ogdanimal.goemon64": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.ogdanimal.goemon64",
+      "github.com/ogdanimal/goemon64recomp-android"
+    ]
+  ],
+  "package:com.perfectdark.port": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.izzy2lost.perfectdark",
+      "github.com/izzy2lost/perfect_dark"
+    ]
+  ],
+  "package:com.pokeemerald.dualscreen": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.pokeemerald.dualscreen",
+      "github.com/goldoire/pokeemerald-dualscreen"
+    ]
+  ],
+  "package:com.producdevity.emureadylite": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.producdevity.emureadylite",
+      "github.com/producdevity/emureadyappreleases"
+    ]
+  ],
+  "package:com.quantumsoul.esde_android": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.quantumsoul.esde_android",
+      "github.com/binaryquantumsoul/esde_android_apps"
+    ]
+  ],
+  "package:com.raofflineproxy": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.raofflineproxy",
+      "github.com/misantronic/raofflineproxy"
+    ]
+  ],
+  "package:com.retroarch.aarch64": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "487343354",
+      "buildbot.libretro.com/stable"
+    ]
+  ],
+  "package:com.retrohrai.launcher": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.retrohrai.launcher",
+      "github.com/retrohrai/releases"
+    ]
+  ],
+  "package:com.rfandango.haku_x": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.rfandango.haku_x",
+      "github.com/rfandango/hakux"
+    ]
+  ],
+  "package:com.sansnope.unleashedrecomp": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.sansnope.unleashedrecomp",
+      "github.com/sansnope/unleashedrecomp-android"
+    ]
+  ],
+  "package:com.starship.android": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.izzy2lost.starship",
+      "github.com/izzy2lost/starship"
+    ]
+  ],
+  "package:com.stormpanda.megingiard": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.stormpanda.megingiard",
+      "github.com/stormpanda/megingiard"
+    ]
+  ],
+  "package:com.thor.mph": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.thor.mph",
+      "github.com/aabrole/huntersrecomp"
+    ]
+  ],
+  "package:com.twoshipfork.mm": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "org.linkzenic.twoship",
+      "github.com/linkzenic/2ship2harkinian-android"
+    ]
+  ],
+  "package:com.virtualapplications.play": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.virtualapplications.play",
+      "purei.org/downloads/play/stable"
+    ]
+  ],
+  "package:com.winlator": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.winlator",
+      "github.com/brunodev85/winlator"
+    ]
+  ],
+  "package:com.winlator.cmod": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.winlator.cmod",
+      "github.com/coffincolors/winlator"
+    ]
+  ],
+  "package:com.winlator.ludashi": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "com.winlator.ludashi",
+      "github.com/stevenmxz/winlator-ludashi"
+    ]
+  ],
+  "package:de.langerhans.odintools": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "de.langerhans.odintools",
+      "github.com/langerhans/odintools"
+    ]
+  ],
+  "package:dev.adrian.showdown": [
+    [
+      "codm2000",
+      "codm-generated",
+      "dev.adrian.showdown",
+      "github.com/castdrian/showdown-ds"
+    ]
+  ],
+  "package:dev.cannoli.scorza": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "dev.cannoli.scorza",
+      "github.com/cannolihq/cannoli"
+    ]
+  ],
+  "package:dev.eden.eden_emulator": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "dev.eden.eden_emulator",
+      "stable.eden-emu.dev/latest/release.json"
+    ]
+  ],
+  "package:dev.picori.tmc": [
+    [
+      "bboi",
+      "bboi-dual-asset",
+      "com.samyost1.tmcandroid",
+      "github.com/samyost1/tmc-android"
+    ],
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.samyost1.tmcandroid",
+      "github.com/samyost1/tmc-android"
+    ],
+    [
+      "extras",
+      "extras",
+      "dev.picori.tmc",
+      "github.com/999sian/tmc"
+    ]
+  ],
+  "package:emu.x360mobile.com": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "emu.x360mobile.com",
+      "github.com/ashnar2602/x360-mobile---official"
+    ]
+  ],
+  "package:gamehub.lite": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "gamehub.lite",
+      "github.com/producdevity/gamehub-lite"
+    ]
+  ],
+  "package:igawa6.dualsouls": [
+    [
+      "codm2000",
+      "codm-generated",
+      "igawa6.dualsouls",
+      "github.com/igawa6/dualsouls"
+    ]
+  ],
+  "package:info.cemu.cemu": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "info.cemu.cemu",
+      "github.com/sapphirerhodonite/cemu"
+    ],
+    [
+      "rjny",
+      "rjny-catalog",
+      "info.cemu.cemu",
+      "github.com/ssimco/cemu"
+    ]
+  ],
+  "package:io.github.gopher64.gopher64": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "io.github.gopher64.gopher64",
+      "github.com/gopher64/gopher64"
+    ]
+  ],
+  "package:io.github.hm64recomp": [
+    [
+      "bboi",
+      "bboi-dual-asset",
+      "com.igawa6.harvestmoon64",
+      "github.com/igawa6/harvestmoon64recomp"
+    ],
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.igawa6.harvestmoon64",
+      "github.com/igawa6/harvestmoon64recomp"
+    ]
+  ],
+  "package:io.github.matteo842.crashlauncher.runtime": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "com.matteo842.crashbandicoot",
+      "github.com/matteo842/crashbandicoot-launcher"
+    ]
+  ],
+  "package:io.github.tomba2recomp": [
+    [
+      "codm2000",
+      "codm-generated",
+      "io.github.tomba2recomp",
+      "github.com/igawa6/tomba2recompds"
+    ]
+  ],
+  "package:io.navivani.swiff": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "io.navivani.swiff",
+      "github.com/navivani-dev/swiff"
+    ]
+  ],
+  "package:io.wip.pico8": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "io.wip.pico8",
+      "github.com/macs75/pico8-android"
+    ]
+  ],
+  "package:is.xyz.vcmi": [
+    [
+      "extras",
+      "extras",
+      "is.xyz.vcmi",
+      "github.com/vcmi/vcmi"
+    ]
+  ],
+  "package:it.ottaviomiele.chd": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "it.ottaviomiele.chd",
+      "github.com/ottavio97/chdroid"
+    ]
+  ],
+  "package:jr.brian.home": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "jr.brian.home",
+      "github.com/brianjr03/jarngreipr"
+    ]
+  ],
+  "package:me.magnum.melonds": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "me.magnum.melonds",
+      "github.com/rafaelvcaetano/melonds-android"
+    ]
+  ],
+  "package:me.magnum.melonds.nightly": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "me.magnum.melonds.nightly",
+      "github.com/rafaelvcaetano/melonds-android"
+    ]
+  ],
+  "package:me.magnum.melondualds": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "me.magnum.melondualds",
+      "github.com/sapphirerhodonite/watermelonds"
+    ]
+  ],
+  "package:net.rpcsx": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "net.rpcsx",
+      "github.com/rpcsx/rpcsx-ui-android"
+    ]
+  ],
+  "package:org.azahar_emu.azahar": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.azahar_emu.azahar",
+      "github.com/azahar-emu/azahar"
+    ]
+  ],
+  "package:org.citra.emu": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.citra.emu",
+      "github.com/weihuoya/citra"
+    ]
+  ],
+  "package:org.citron.citron_emu": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.citron.citron_emu",
+      "github.com/citron-neo/emulator"
+    ]
+  ],
+  "package:org.diasurgical.devilutionx": [
+    [
+      "bboi",
+      "bboi-standard-asset",
+      "org.diasurgical.devilutionx",
+      "github.com/diasurgical/devilutionx"
+    ]
+  ],
+  "package:org.dolphinemu.dolphinemu": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.dolphinemu.dolphinemu",
+      "dolphin-emu.org/download?ref=btn"
+    ]
+  ],
+  "package:org.force9.starboard": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.force9.starboard",
+      "github.com/get-starboard/starboard"
+    ]
+  ],
+  "package:org.pegasus_frontend.android": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.pegasus_frontend.android",
+      "github.com/mmatyas/pegasus-frontend"
+    ]
+  ],
+  "package:org.pkforge.app": [
+    [
+      "codm2000",
+      "codm-generated",
+      "org.pkforge.app",
+      "github.com/sofianeelhor/pkforge"
+    ]
+  ],
+  "package:org.ppsspp.ppsspp": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.ppsspp.ppsspp",
+      "ppsspp.org/download"
+    ]
+  ],
+  "package:org.scummvm.scummvm": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.scummvm.scummvm",
+      "scummvm.org/downloads"
+    ]
+  ],
+  "package:org.vita3k.emulator": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "org.vita3k.emulator",
+      "github.com/vita3k/vita3k-builds"
+    ]
+  ],
+  "package:pup.app.mimir": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "pup.app.mimir",
+      "github.com/itsretropup/mimir"
+    ]
+  ],
+  "package:rip.moth.cocoonshell": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "rip.moth.cocoonshell",
+      "github.com/inssekt/cocoonfe"
+    ]
+  ],
+  "package:su.xash.engine.test": [
+    [
+      "extras",
+      "extras",
+      "su.xash.engine.test",
+      "github.com/fwgs/xash3d-fwgs"
+    ]
+  ],
+  "package:xendroid.compose": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "xendroid.compose",
+      "github.com/rfandango/xendroid"
+    ]
+  ],
+  "package:xyz.aethersx2.android": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "xyz.aethersx2.android",
+      "github.com/trixarian/nethersx2-patch"
+    ]
+  ],
+  "package:xyz.aethersx2.tturnip": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "xyz.aethersx2.tturnip",
+      "github.com/nckstwrt/nethersx2-turnip"
+    ]
+  ],
+  "package:xyz.blacksheep.mjolnir": [
+    [
+      "rjny",
+      "rjny-catalog",
+      "xyz.blacksheep.mjolnir",
+      "github.com/blacksheepmvp/mjolnir"
+    ]
+  ]
+}

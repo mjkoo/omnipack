@@ -422,12 +422,16 @@ def _validate_composition(
         return
     from omnipack.composition_policy import (
         CompositionPolicyError,
+        RenderedKey,
+        entry_family,
+        find_repeats,
+        pair_entries,
         parse_composition_policy,
+        rendered_key,
     )
     from omnipack.merge import CompositionError, parse_exclusions
     from omnipack.model import Variant
     from omnipack.overlay import OverlayError, parse_overlay
-    from omnipack.urls import normalize_project_url
 
     try:
         policy = parse_composition_policy(composition)
@@ -439,9 +443,7 @@ def _validate_composition(
         findings.append(Finding("config", "invalid_composition_config", str(error)))
         return
 
-    families: dict[str, set[str]] = {"single": set(), "dual": set()}
-    keys: dict[str, set[tuple[str, str]]] = {"single": set(), "dual": set()}
-    family_ids: dict[str, dict[str, str]] = {"single": {}, "dual": {}}
+    keys: dict[str, list[RenderedKey]] = {"single": [], "dual": []}
     for variant, document in documents.items():
         raw_apps = document.get("apps", []) if isinstance(document, dict) else []
         for raw in raw_apps if isinstance(raw_apps, list) else []:
@@ -455,23 +457,22 @@ def _validate_composition(
             ):
                 continue
             try:
-                key = (package_id, normalize_project_url(url))
+                keys[variant].append(rendered_key(package_id, url))
             except ValueError:
                 continue
-            family = policy.rendered_family(*key)
-            if family in families[variant]:
-                findings.append(
-                    Finding(
-                        "composition",
-                        "duplicate_family",
-                        f"family {family!r} is selected more than once",
-                        variant,
-                        package_id,
-                    )
+
+    for variant, variant_keys in keys.items():
+        for family, members in find_repeats(policy, variant_keys).families.items():
+            findings.append(
+                Finding(
+                    "composition",
+                    "duplicate_explicit_family",
+                    f"explicit family {family!r} is projected onto more than "
+                    f"one entry: {', '.join(map(repr, members))}",
+                    variant,
                 )
-            families[variant].add(family)
-            keys[variant].add(key)
-            family_ids[variant][family] = package_id
+            )
+
     for (family, target), pinned in policy.projected_pins.items():
         if pinned not in keys[target.value]:
             findings.append(
@@ -486,19 +487,25 @@ def _validate_composition(
 
     for exclusion in exclusions:
         for target in Variant:
-            for family, package_id in family_ids[target.value].items():
-                if package_id == exclusion.package_id:
-                    findings.append(
-                        Finding(
-                            "composition",
-                            "denied_output_present",
-                            f"denied selection {package_id!r} in family {family!r} remains present",
-                            target.value,
-                            package_id,
-                        )
+            present = [
+                key for key in keys[target.value] if key[0] == exclusion.package_id
+            ]
+            if present:
+                labels = " and ".join(
+                    sorted({repr(entry_family(policy, key)) for key in present})
+                )
+                findings.append(
+                    Finding(
+                        "composition",
+                        "denied_output_present",
+                        f"denied selection {exclusion.package_id!r} in family label "
+                        f"{labels} remains present",
+                        target.value,
+                        exclusion.package_id,
                     )
+                )
 
-    all_keys = keys["single"] | keys["dual"]
+    all_keys = {*keys["single"], *keys["dual"]}
     for patch in patches:
         if patch.key not in all_keys:
             findings.append(
@@ -510,16 +517,18 @@ def _validate_composition(
                 )
             )
 
-    for family in families["single"] - families["dual"]:
-        findings.append(
-            Finding(
-                "composition",
-                "dual_coverage_gap",
-                f"dual variant is missing family {family!r}",
-                "dual",
-                family_ids["single"][family],
+    pairs = pair_entries(policy, keys["single"], keys["dual"])
+    for pair in sorted(pairs, key=lambda item: (item.label, item.single or ())):
+        if pair.single is not None and pair.dual is None:
+            findings.append(
+                Finding(
+                    "composition",
+                    "dual_coverage_gap",
+                    f"dual variant is missing family label {pair.label!r}",
+                    "dual",
+                    pair.single[0],
+                )
             )
-        )
 
 
 def _add(
