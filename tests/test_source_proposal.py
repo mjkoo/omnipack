@@ -49,6 +49,7 @@ def _repo(tmp_path: Path, name: str = "repo") -> Path:
         tmp_path,
         {
             CATALOG_PATH: '{"apps": []}\n',
+            "config/catalogs/quiver.json": '{"apps": []}\n',
             "dist/single-screen.json": '{"apps": []}\n',
             "README.md": "guide\n",
             ".gitignore": ".build/\n",
@@ -57,8 +58,10 @@ def _repo(tmp_path: Path, name: str = "repo") -> Path:
     )
 
 
-def _write_candidate(root: Path, catalog_text: str, report: dict) -> None:
-    generation_dir = root / CANDIDATE_DIR
+def _write_candidate(
+    root: Path, catalog_text: str, report: dict, source: str = "codm"
+) -> None:
+    generation_dir = root / f".build/source-generation/{source}"
     generation_dir.mkdir(parents=True, exist_ok=True)
     (generation_dir / "catalog.json").write_text(catalog_text)
     (generation_dir / "report.json").write_text(json.dumps(report))
@@ -449,11 +452,15 @@ def _bare_branch_sha(bare: Path) -> str:
     )
 
 
-def _pr(number: int, *, cross_repo: bool = False, owner: str = "mjkoo") -> dict:
+def _pr(
+    number: int, *, cross_repo: bool = False, owner: str = "mjkoo", source: str = "codm"
+) -> dict:
     return {
         "number": number,
         "isCrossRepository": cross_repo,
         "headRepositoryOwner": {"login": owner},
+        "headRefName": f"automation/{source}-catalog",
+        "baseRefName": "main",
     }
 
 
@@ -464,18 +471,26 @@ def _bare_from(seed: Path, tmp_path: Path, name: str = "remote.git") -> Path:
 
 
 def _staged_candidate(
-    tmp_path: Path, *, seed_name: str = "seed"
+    tmp_path: Path, *, seed_name: str = "seed", source: str = "codm"
 ) -> tuple[Path, str, str, Path, Path]:
     """Run a real `stage` to produce a commit, its bundle and body file."""
     seed = _repo(tmp_path, seed_name)
     base = _git(seed, "rev-parse", "HEAD")
     _write_candidate(
-        seed, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
+        seed,
+        '{"apps": [{"id": "a"}]}\n',
+        _report(added=("https://example.test/a",)),
+        source,
     )
     bundle_path = tmp_path / f"{seed_name}-candidate.bundle"
     body_path = tmp_path / f"{seed_name}-pr-body.md"
     outcome = run_stage(
-        seed, base, "https://github.example/runs/1", bundle_path, body_path
+        seed,
+        base,
+        "https://github.example/runs/1",
+        bundle_path,
+        body_path,
+        source=source,
     )
     assert outcome.status == "changed"
     sha = outcome.sha
@@ -759,8 +774,11 @@ def test_unsafe_catalog_commit_is_rejected(
     assert _bare_branch_sha(bare) == ""
 
 
-def test_remote_main_other_than_base_fails_on_both_paths(tmp_path: Path) -> None:
-    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path)
+@pytest.mark.parametrize("source", ["codm", "quiver"])
+def test_remote_main_other_than_base_fails_on_both_paths(
+    tmp_path: Path, source: str
+) -> None:
+    seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path, source=source)
     bare = _bare_from(seed, tmp_path)
 
     other = tmp_path / "other"
@@ -773,16 +791,18 @@ def test_remote_main_other_than_base_fails_on_both_paths(tmp_path: Path) -> None
     _git(other, "push", "-q", "origin", "HEAD:main")
 
     write_side = shallow_checkout(tmp_path, bare, base)
-    gh = _proposal_gh(pr_list=[_pr(9)])
+    gh = _proposal_gh(pr_list=[_pr(9, source=source)])
 
-    unchanged_result = run_publish(write_side, "false", base, base, None, None, gh=gh)
+    unchanged_result = run_publish(
+        write_side, "false", base, base, None, None, gh=gh, source=source
+    )
     assert unchanged_result.status == "failed"
     assert unchanged_result.summary == "publish failed: main advanced"
     assert not any(call[:2] == ("pr", "close") for call in gh.calls)
 
-    gh2 = _proposal_gh(pr_list=[_pr(9)])
+    gh2 = _proposal_gh(pr_list=[_pr(9, source=source)])
     changed_result = run_publish(
-        write_side, "true", sha, base, bundle_path, body_path, gh=gh2
+        write_side, "true", sha, base, bundle_path, body_path, gh=gh2, source=source
     )
     assert changed_result.status == "failed"
     assert changed_result.summary == "publish failed: main advanced"
@@ -790,7 +810,15 @@ def test_remote_main_other_than_base_fails_on_both_paths(tmp_path: Path) -> None
         call[:2] in (("pr", "close"), ("pr", "edit"), ("pr", "create"))
         for call in gh2.calls
     )
-    assert _bare_branch_sha(bare) == ""
+    assert (
+        _git(
+            bare,
+            "for-each-ref",
+            "--format=%(refname)",
+            f"refs/heads/automation/{source}-catalog",
+        )
+        == ""
+    )
 
 
 @pytest.mark.parametrize(
@@ -1045,3 +1073,275 @@ def test_bot_branch_built_on_an_older_main_is_compared_from_a_shallow_checkout(
     assert [call[:3] for call in gh.calls if call[:2] == ("pr", "edit")] == [
         ("pr", "edit", "8")
     ]
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
+def test_source_stage_and_publish_cannot_cross_catalogs(
+    tmp_path: Path, source: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    other = "quiver" if source == "codm" else "codm"
+    selected_path = f"config/catalogs/{source}.json"
+    other_path = f"config/catalogs/{other}.json"
+    _write_candidate(root, '{"apps": ["selected"]}\n', _report(), source)
+    _write_candidate(root, '{"apps": ["other"]}\n', _report(), other)
+    (root / other_path).write_text("unstaged other source\n")
+    bundle, body = tmp_path / "candidate.bundle", tmp_path / "body.md"
+
+    result = run_stage(root, base, "run", bundle, body, source=source)
+
+    assert result.status == "changed"
+    assert result.sha is not None
+    assert (
+        _git(root, "diff-tree", "--no-commit-id", "--name-only", "-r", result.sha)
+        == selected_path
+    )
+    assert _git(root, "show", f"HEAD:{other_path}") == '{"apps": []}'
+    assert (root / other_path).read_text() == "unstaged other source\n"
+    bare = _bare_from(root, tmp_path)
+    writer = shallow_checkout(tmp_path, bare, base)
+    gh = _proposal_gh(pr_list=[])
+    rejected = run_publish(
+        writer, "true", result.sha, base, bundle, body, gh=gh, source=other
+    )
+    assert rejected.status == "failed"
+    assert not any(
+        c[:2] in (("pr", "edit"), ("pr", "create"), ("pr", "close")) for c in gh.calls
+    )
+    gh = _proposal_gh(
+        pr_list=[_pr(1, source=other), _pr(2, source=other), _pr(3, source=source)]
+    )
+    published = run_publish(
+        writer, "true", result.sha, base, bundle, body, gh=gh, source=source
+    )
+    assert published.status == "published"
+    assert [c[:3] for c in gh.calls if c[:2] == ("pr", "edit")] == [("pr", "edit", "3")]
+    assert (
+        _git(bare, "rev-parse", f"refs/heads/automation/{source}-catalog") == result.sha
+    )
+    assert (
+        _git(
+            bare,
+            "for-each-ref",
+            "--format=%(refname)",
+            f"refs/heads/automation/{other}-catalog",
+        )
+        == ""
+    )
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
+def test_unchanged_closure_and_pr_count_are_source_scoped(
+    tmp_path: Path, source: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    bare = _bare_from(root, tmp_path)
+    writer = shallow_checkout(tmp_path, bare, base)
+    other = "quiver" if source == "codm" else "codm"
+    gh = _proposal_gh(
+        pr_list=[_pr(1, source=other), _pr(2, source=other), _pr(3, source=source)]
+    )
+    outcome = run_publish(writer, "false", base, base, None, None, gh=gh, source=source)
+    assert outcome.status == "closed"
+    assert [c[:3] for c in gh.calls if c[:2] == ("pr", "close")] == [
+        ("pr", "close", "3")
+    ]
+    listing = next(c for c in gh.calls if c[:2] == ("pr", "list"))
+    assert listing[listing.index("--head") + 1] == f"automation/{source}-catalog"
+    gh = _proposal_gh(
+        pr_list=[_pr(1, source=other), _pr(2, source=source), _pr(3, source=source)]
+    )
+    outcome = run_publish(writer, "false", base, base, None, None, gh=gh, source=source)
+    assert outcome.status == "failed"
+    assert not any(c[:2] == ("pr", "close") for c in gh.calls)
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
+def test_stage_rejects_pre_staged_other_source(tmp_path: Path, source: str) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    other = "quiver" if source == "codm" else "codm"
+    path = f"config/catalogs/{other}.json"
+    (root / path).write_text("staged other source\n")
+    _git(root, "add", path)
+    _write_candidate(root, '{"apps": ["selected"]}\n', _report(), source)
+    result = run_stage(
+        root,
+        base,
+        "run",
+        tmp_path / "candidate.bundle",
+        tmp_path / "body.md",
+        source=source,
+    )
+    assert result.status == "failed"
+    assert _git(root, "rev-parse", "HEAD") == base
+    assert _git(root, "diff", "--cached", "--name-only") == path
+
+
+def test_unchanged_quiver_diagnostics_include_skips_and_policy(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    report = _report()
+    report.update(
+        {
+            "skipped": [
+                {
+                    "row": {"repository": "o/repo"},
+                    "reason": "<paused>",
+                    "retained": True,
+                }
+            ],
+            "effectivePolicy": {"o/repo": {}},
+            "noAndroid": [{"url": "o/desktop"}],
+        }
+    )
+    _write_candidate(root, '{"apps": []}\n', report, "quiver")
+    result = run_stage(
+        root,
+        base,
+        "run",
+        tmp_path / "candidate.bundle",
+        tmp_path / "body.md",
+        source="quiver",
+    )
+    assert result.status == "unchanged"
+    assert "&lt;paused&gt;" in _pre_block(result.summary)
+    assert "o/desktop" in result.summary and "effectivePolicy" in result.summary
+
+
+@pytest.mark.parametrize("mutation", ["changed-bytes", "symlink", "other-source"])
+def test_guard_rejects_changed_or_cross_source_checked_catalog(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
+) -> None:
+    root, base, sha, _, _ = _staged_candidate(tmp_path)
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    source = "codm"
+    if mutation == "other-source":
+        source = "quiver"
+    elif mutation == "changed-bytes":
+        (root / CATALOG_PATH).write_text("changed after checks\n")
+    else:
+        path = root / CATALOG_PATH
+        data = path.read_bytes()
+        path.unlink()
+        target = tmp_path / "same-bytes"
+        target.write_bytes(data)
+        path.symlink_to(target)
+    assert proposal_module.main(["guard", "--source", source]) == 1
+
+
+def test_summary_reports_actual_checks_and_escaped_skips_even_when_unchanged(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    report = _report()
+    report["skipped"] = [{"row": {"repository": "o/repo"}, "reason": "<skip>"}]
+    _write_candidate(root, '{"apps": []}\n', report, "quiver")
+    base = _git(root, "rev-parse", "HEAD")
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    for stage in ("GENERATION", "STAGING", "TESTS", "BUILD", "VERIFY", "GUARD"):
+        monkeypatch.setenv(
+            stage + "_RESULT",
+            "success" if stage in ("GENERATION", "STAGING") else "skipped",
+        )
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["summarize", "--source", "quiver"]) == 0
+    summary = (tmp_path / "summary.md").read_text()
+    assert base in summary
+    assert "&lt;skip&gt;" in _pre_block(summary)
+    assert "tests: skipped" in summary and "generation: success" in summary
+
+
+def test_summary_does_not_claim_validation_when_generation_report_is_missing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    _stage_environment(monkeypatch, root, tmp_path, _git(root, "rev-parse", "HEAD"))
+    monkeypatch.setenv("GENERATION_RESULT", "failure")
+    monkeypatch.setenv("STAGING_RESULT", "skipped")
+    assert proposal_module.main(["summarize", "--source", "quiver"]) == 0
+    summary = (tmp_path / "summary.md").read_text()
+    assert "generation report unavailable" in summary
+    assert "generation: failure" in summary and "staging: skipped" in summary
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
+def test_source_cli_handoff_carries_successful_validation_results(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, '{"apps": ["selected"]}\n', _report(), source)
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+    assert proposal_module.main(["stage", "--source", source]) == 0
+    sha = _git(root, "rev-parse", "HEAD")
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["guard", "--source", source]) == 0
+    for stage in ("GENERATION", "STAGING", "TESTS", "BUILD", "VERIFY", "GUARD"):
+        monkeypatch.setenv(stage + "_RESULT", "success")
+    assert proposal_module.main(["summarize", "--source", source]) == 0
+    handoff = runner_temp / "source-handoff"
+    body = handoff / "pr-body.md"
+    assert "tests: success\nbuild: success\nverify: success" in body.read_text()
+    assert base in body.read_text()
+    bare = _bare_from(root, tmp_path)
+    writer = shallow_checkout(tmp_path, bare, base)
+    monkeypatch.chdir(writer)
+    monkeypatch.setenv("CHANGED", "true")
+    gh = _proposal_gh(pr_list=[])
+    monkeypatch.setattr(proposal_module, "SubprocessGhRunner", lambda: gh)
+    assert (
+        proposal_module.main(
+            [
+                "publish",
+                "--source",
+                source,
+                "--bundle",
+                str(handoff / "candidate.bundle"),
+                "--body-file",
+                str(body),
+            ]
+        )
+        == 0
+    )
+    creation = next(c for c in gh.calls if c[:2] == ("pr", "create"))
+    assert creation[creation.index("--head") + 1] == f"automation/{source}-catalog"
+    assert (
+        creation[creation.index("--title") + 1]
+        == f"chore(catalog): update reviewed {source} source"
+    )
+
+
+def test_publisher_rejects_unsupported_source_before_any_command(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(
+        subprocess, "run", lambda *a, **kw: pytest.fail("unexpected subprocess")
+    )
+    with pytest.raises(SystemExit):
+        proposal_module.main(["publish", "--source", "../other"])
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
+def test_source_stage_rejects_executable_base_catalog(
+    tmp_path: Path, source: str
+) -> None:
+    root = _repo(tmp_path)
+    path = f"config/catalogs/{source}.json"
+    _git(root, "config", "core.fileMode", "true")
+    (root / path).chmod(0o755)
+    _git(root, "add", path)
+    _git(root, "commit", "-qm", "executable catalog")
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, '{"apps": ["selected"]}\n', _report(), source)
+    result = run_stage(
+        root, base, "run", tmp_path / "b.bundle", tmp_path / "body.md", source=source
+    )
+    assert result.status == "failed"
+    assert _git(root, "rev-parse", "HEAD") == base

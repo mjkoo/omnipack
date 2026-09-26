@@ -1,17 +1,19 @@
-# Reviewed codm source generation
+# Reviewed source generation
 
-Normal pack builds consume the committed Obtainium document at
-`config/catalogs/codm.json`. Source generation is a separate operation that
-reads the codm README, applies reviewed per-project policy, resolves APK
-identities, and writes a candidate catalog under
-`.build/source-generation/codm/`. It never changes the committed catalog,
-packs, README or git history by itself; a separate workflow proposes its
-output for review.
+Normal pack builds consume committed Obtainium documents, without fetching
+source discovery lists or APKs. Generation is a separate operation that writes
+candidate catalogs and reports for review. It never changes the committed
+catalogs, packs, README or git history itself.
+
+| Source | Discovery | Policy | Accepted catalog | Candidate and report directory | Proposal branch |
+| --- | --- | --- | --- | --- | --- |
+| `codm` | codm README project tables | `config/codm-projects.json` | `config/catalogs/codm.json` | `.build/source-generation/codm/` | `automation/codm-catalog` |
+| `quiver` | Quiver catalog index and every required list | `config/quiver-projects.json` | `config/catalogs/quiver.json` | `.build/source-generation/quiver/` | `automation/quiver-catalog` |
 
 ## Stateless generation
 
 Generation keeps no state between runs and has no forced-refresh mode: every
-run re-reads the README, the reviewed policy and fresh release data, and
+run re-reads its discovery input, the reviewed policy and fresh release data, and
 resolves every eligible project from scratch, without reusing an identity or
 a skip decision recorded by an earlier run. There is no metadata file binding
 the committed catalog to particular README or policy bytes, and nothing to
@@ -20,20 +22,19 @@ skip.
 
 ### Retained failures
 
-A project that fails to resolve on a given run (an unreachable release, a
-disagreeing or unreadable APK, and so on) keeps its entry from the committed
+An accepted project that fails to resolve on a given run (an unreachable release,
+a disagreeing or unreadable APK, and so on) keeps its entry from the committed
 catalog, reported as a retained failure, but only when the current policy
 would render that same entry: for an APK project, using the committed
 package ID; for a track-only project, using the rule's own tracker ID. Both
-compare against the committed URL. Any other failure, including a project
-with no committed entry, or a project whose effective policy changed, fails
-the whole run and offers no candidate catalog. A later run retries every
+compare against the committed URL. A resolution failure without an entry that
+can be retained fails the whole run and offers no candidate catalog. A later run retries every
 failure automatically; there is no maintainer action to acknowledge or retry
 one.
 
 A run in which every project's lookup fails, for example under a GitHub API
 rate limit, is not a visible failure when every project already has a
-committed entry and its effective policy is unchanged: every one is then
+matching committed entry and its policy and display name are unchanged: every one is then
 retained, so the candidate catalog reproduces the committed catalog exactly.
 The proposal workflow reports its ordinary "unchanged" outcome, closing any
 open proposal, and the run itself reports success. The only signal that
@@ -41,6 +42,43 @@ anything went wrong is the retained-failures list in that run's summary and
 generation report; there is no separate failure indicator. A new project, or
 one whose effective policy changed, has no entry to retain, so the same
 outage fails that run visibly.
+
+### Quiver discovery, skips and removals
+
+Quiver reads every list from the configured catalog index. Missing or malformed
+required lists fail the complete run. Platform metadata is advisory; it never
+replaces a fresh release or APK check. Supported GitHub rows are normalized and
+canonical repository aliases are collapsed, preserving row provenance. Unsupported
+rows, such as GitLab repositories, are reported without GitHub requests.
+
+For a new Quiver project, an identified repository with no permitted release or
+eligible direct APK is a `noAndroid` skip. A repository metadata response of HTTP
+404 or 451 is a distinct `unavailableRepositories` outcome. Transport,
+authentication, rate-limit and unreadable-APK errors are resolution failures,
+not evidence that a project has no Android release. Accepted entries with unchanged
+policy and display name can be retained on these failures or missing artifacts.
+An accepted repository returning 404 or 451 is removed, as is an accepted entry
+no discovered row names. Fresh entries use the current canonical repository URL;
+retained entries preserve accepted bytes and match by canonical or listed URL,
+never by package ID. An alias outage that prevents either URL from matching
+blocks the run visibly.
+
+`config/quiver-projects.json` has schema version 1, optional per-repository
+exceptions in `projects`, and reasoned discovery `skips`. An omitted project rule
+uses stable APK discovery. Exceptions may set a port name, category, prerelease
+selection or supported filename/release filters. Quiver supports APK entries only.
+All selected APK manifests must be readable and agree on one package ID. Upstream
+`project` names the port; the game title and upstream asset filters do not control
+admission or consumer filtering. Duplicate upstream filter disagreement is a
+diagnostic, not a selection rule.
+
+A listed-URL skip is matched before any repository request. It pauses discovery
+and retains a matching accepted entry byte-for-byte. A literal unsupported-row
+skip may instead name `repository` and `repositorySource`. Every skip needs a
+reason. Neither kind prunes apps from this source or any other source. Use the
+package deny list in `config/deny.json` for permanent exclusion from both packs:
+package denial applies globally, including after a repository rename. A denied
+package can remain in a source candidate catalog while composition excludes it.
 
 ### Retained failures and an open proposal
 
@@ -79,7 +117,7 @@ such as `[0-9]` or `[A-Za-z0-9_]`; shorthand classes (`\d`, `\D`, `\s`, `\S`,
 Python and Dart matching semantics differ. Existing reviewed rules use
 explicit classes.
 
-A `track-only` rule instead supplies a stable resource ID, rationale,
+For codm only, a `track-only` rule instead supplies a stable resource ID, rationale,
 installation instruction, and optional supported settings. It creates an
 Obtainium release tracker without downloading an APK. Failed APK resolution
 never converts a project into a tracker, and a change of kind requires fresh
@@ -97,14 +135,24 @@ Run from the repository root:
 
 ```sh
 uv run pack generate-source codm
+uv run pack generate-source quiver
 ```
 
-Inspect `.build/source-generation/codm/report.json`. On success, the
-directory also holds `catalog.json`, the candidate catalog; `pack report`
+A full local Quiver run needs a GitHub token in practice: complete repository and
+release discovery exceeds GitHub's unauthenticated request allowance. Export a
+read-only `GITHUB_TOKEN` in your shell before running the command; do not put it
+in a policy file or command argument. `config/http.json` scopes this credential
+to the configured GitHub host. The CLI permits an absent token, but a full run
+then normally fails visibly at the rate limit. Automated generation supplies its
+read-only job token to both sources.
+
+Inspect `.build/source-generation/<source>/report.json`, including on unchanged
+runs. On success, that directory also holds `catalog.json`, the candidate catalog;
+`pack report`
 remains the build and structural-verification report viewer and does not
 cover source generation.
 
-Generation fails, with no `catalog.json` written, if the README tables are
+For codm, generation fails with no `catalog.json` written if the README tables are
 malformed or empty, any eligible project is unaccounted for, a new APK or
 tracker cannot be resolved, eligible APKs disagree, an ID collides, or a
 project's effective policy changed and its fresh resolution failed. Partial
@@ -127,117 +175,108 @@ keeps `com.digitaladventure.dw2003`. The companion is not catalogued.
 
 ## Proposal workflow
 
-Automated source PRs intentionally contain only `config/catalogs/codm.json`.
-Their generated packs and README are checked diagnostics, not committed PR
-content or retained artifacts; nightly rebuilds and publishes outputs after
-merge. Manual policy PRs instead include their accepted catalog and changed
-outputs under the [manual review convention](development.md#manual-review-and-pr-contents).
+Automated source PRs contain only the selected source's accepted catalog. Generated
+packs and README are checked diagnostics, not proposed files or retained artifacts;
+nightly rebuilds outputs after merge. Manual policy PRs include their accepted
+catalog and changed outputs under the
+[manual review convention](development.md#manual-review-and-pr-contents).
 
-The **Reviewed source catalog** Actions workflow runs daily at 04:17 UTC and
-can be dispatched manually, with no inputs. It runs only for
-`mjkoo/omnipack` on `main`, under one non-canceling concurrency group, and
-splits into a read-only `check` job and a write-capable `publish` job so
-that nothing which generates, tests, builds or verifies the candidate ever
-shares a job or the write credential with the steps that push a branch or
-touch a pull request. The two jobs run in sequence, each limited to 60
-minutes, so a run can take about 120 minutes end to end.
+The **Reviewed source catalog** Actions workflow runs daily at 04:17 UTC and can
+be dispatched manually with no inputs. It runs only for `mjkoo/omnipack` on `main`.
+The codm and Quiver caller jobs invoke the same reusable workflow, each under its
+own non-canceling concurrency group covering the complete check-and-publish chain.
+They do not wait on, count PRs from, close proposals from, or stage catalogs from
+the other source. Each source runs a read-only `check` job followed by its own
+write-capable `publish` job, each limited to 60 minutes.
 
-**`check`** holds `permissions: contents: read`, with no step receiving a
-write token. It checks out `${{ github.sha }}`, sets up uv with its GitHub
-Actions cache disabled, so that nothing this job writes can be restored into
-a later run, syncs the locked project environment, and runs:
+The caller grants the reusable workflow only the ceiling needed for publication;
+its check job reduces permissions to `contents: read`. No workflow grants
+permissions at workflow level. Every check step, including checkout, setup,
+generation, tests and build, receives only that read-only job token. The generation
+step explicitly sets `GITHUB_TOKEN: ${{ github.token }}`. Checkouts never persist
+credentials. The environment is synced with uv's Actions cache disabled.
+
+The check job runs the selected source command and stages its candidate:
 
 ```sh
-uv run --no-sync pack generate-source codm
-uv run --no-sync python -m scripts.source_proposal stage
+uv run --no-sync pack generate-source quiver
+uv run --no-sync python -m scripts.source_proposal stage --source quiver
 ```
 
-`stage` refuses a generation report whose status is not `success`. It
-copies the generated candidate over `config/catalogs/codm.json` (keeping its
-mode `100644`) and, when that differs from the checked-out revision, commits
-only that file on a local `automation/codm-catalog` branch created at
-`HEAD`, as `github-actions[bot]` with hooks disabled, with the subject
-`chore(catalog): update reviewed codm source` and a body naming the workflow
-run's URL and the base SHA, and writes a
-`git bundle create <dir>/candidate.bundle <base>..HEAD`. It writes
-`changed`, `sha` and `base` as job outputs, and the base SHA, the catalog
-changes and any retained failures to the step summary. If the retained
-failures would take the PR body past GitHub's 65,536-character limit, the
-list stops at the last one that fits and ends with an `and N more` line.
+Use `codm` for the other source. Script commands default to codm when `--source`
+is omitted; only the fixed `codm` and `quiver` descriptors are accepted, never
+arbitrary catalog or branch paths. `stage` requires a successful generation report,
+regular candidate/catalog files, an empty index, and a base catalog mode of
+`100644`. If the candidate differs from main, it commits only that catalog on its
+local `automation/<source>-catalog` branch with hooks disabled. It emits the
+checked commit SHA and base revision, a Git bundle containing the commit, and an
+escaped PR body. Staging failure hands off nothing.
 
-When the candidate changed, `check` goes on to run the full test suite,
-`pack build` and `pack verify` against the candidate catalog. This includes a
-live build beyond main CI, which tests and verifies committed outputs offline
-without rebuilding them. The workflow then requires
-`git diff --quiet "$SHA" -- config/catalogs/codm.json` (with `SHA` the
-`stage` commit) to confirm the working tree still matches the committed
-candidate. Any of those steps failing blocks the proposal: the bundle and PR
-body file are uploaded, as `source-handoff-<run-id>` with one-day retention,
-only when every one of them succeeded, and that upload fails if either file
-is missing. The generation report is always uploaded, as
-`source-generation-report-<run-id>`, with 14-day retention. Both uploads
-replace an artifact of the same name, so **Re-run all jobs**, which keeps
-the run ID, does not fail on a name an earlier attempt already used.
+For a changed candidate, the job runs the full tests, `pack build` and `pack verify`
+with that catalog in place. Its `guard` command then checks the candidate's single
+base parent, source-specific path and file modes, and confirms that the regular
+workspace catalog still equals the checked commit. The always-run summary reports
+generation, staging, tests, build, verification and guard outcomes from the actual
+step results. A successful changed candidate's PR body includes those same
+validation results. Failed or skipped checks are never reported as successful.
 
-**`publish`** needs `check`, holds `permissions: contents: write` and
-`pull-requests: write`, and runs no `setup-uv` and no `uv`. It checks out
-`${{ github.sha }}` shallowly, then a guard step,
-`test "$BASE_SHA" = "$GITHUB_SHA"` with `BASE_SHA` mapped from
-`needs.check.outputs.base`, before any step that receives `GH_TOKEN`. It
-downloads the bundle and body file when `changed` is `true`, then runs, with
-`GH_TOKEN`:
+The checked bundle and PR body are uploaded only after successful checks as
+`source-handoff-<source>-<run-id>` with one-day retention. The selected generation
+report is uploaded when available on success or failure as
+`source-generation-report-<source>-<run-id>` with 14-day retention. Reruns replace
+the same named artifacts. These artifacts contain no APKs, raw HTTP cache,
+credentials, policies, pack exports or README output. A missing report after an
+early failure is explicitly reported and does not imply successful validation.
+
+The write job runs no dependency installation, generation, tests, build or
+verification. It checks out the original triggering `${{ github.sha }}` afresh,
+then requires its base output to equal `GITHUB_SHA` before any step receives
+`GH_TOKEN`. Read-only outputs reach the publisher through environment variables,
+never shell interpolation. Only this job holds `contents: write` and
+`pull-requests: write`; only its publication step receives `GH_TOKEN`.
 
 ```sh
-python3 -m scripts.source_proposal publish \
+python3 -m scripts.source_proposal publish --source quiver \
   --bundle <downloaded bundle path> --body-file <downloaded body path>
 ```
 
-`publish` first requires `git ls-remote origin refs/heads/main` to still
-report the run's base SHA; if `main` has moved on, it writes nothing and
-summarizes `publish failed: main advanced`. It then selects the open PR
-whose head is `automation/codm-catalog` in the canonical repository (a PR
-from a fork sharing that branch name is neither edited nor closed); more
-than one such PR fails the run before any write.
+The publisher first confirms remote main still equals the checked base. If main
+advanced, publication fails without a branch or PR write. It considers only open
+PRs from the selected source's branch in the canonical repository to main; fork
+PRs sharing a branch name and the other source's PRs are untouched. More than one
+matching PR fails before any write. An unchanged catalog needs no tests/build or
+verification: closing that source's existing proposal is the only permitted write.
 
-When the candidate is unchanged, `publish` closes the selected PR, if any,
-and makes no other write. When it changed, `publish` runs the same hand-off
-checks as the nightly write job (see [nightly publishing](publishing.md)):
-the bundle must verify, its `HEAD` must be the checked commit, and that
-commit's only parent must be the base revision. Only the path rule differs:
-the commit must change exactly one file, `config/catalogs/codm.json`, at
-mode `100644` on both sides. Before any push, `publish` also requires the
-downloaded PR body file to be a regular file (not a symlink), valid UTF-8,
-and at most 65,536 characters. It then compares the commit's tree with the
-remote `automation/codm-catalog` branch's tree: a branch already at that
-tree, even from a different, hand-made commit, is left as it is. Otherwise
-it overwrites the branch:
+For a changed candidate, the bundle must identify the exact checked commit, with
+one parent equal to the base and exactly the selected catalog changed at mode
+`100644` on both sides. The PR body must be regular, valid UTF-8 and within 65,536
+characters. The publisher compares the whole candidate tree to that source branch's
+remote tree, avoiding a push when they match even if commits differ. Otherwise it
+replaces that source branch with the checked commit. It then edits its existing PR
+or opens one to main, titled `chore(catalog): update reviewed <source> source`.
+No automatic merge, direct-main write, issue or release operation occurs.
 
-```sh
-git push --force origin <sha>:refs/heads/automation/codm-catalog
-```
-
-and edits the selected PR's body, or creates the PR (titled
-`chore(catalog): update reviewed codm source`, with `--base main --head
-automation/codm-catalog`), from the downloaded body file. That body holds
-the workflow run's URL, the base SHA and the catalog's added, removed and
-changed projects, plus any retained failures, with upstream-derived text
-HTML-escaped inside a `<pre>` block so upstream Markdown renders as literal
-text rather than markup.
+The body links the checking workflow run, records the base SHA, catalog changes,
+source diagnostics and actual validation results. Upstream strings are HTML-escaped
+inside a preformatted block. Long diagnostic bodies end with an omission count;
+the full summary and retained generation report remain available for review.
 
 ### Stage summary lines
 
-On success, `stage` writes the base SHA, the catalog changes and any
-retained failures to the step summary. On failure it writes one line naming
+On success, `stage` writes the base SHA, catalog changes, retained failures and
+source diagnostics to the step summary, including when the catalog is unchanged. On failure it writes one line naming
 what failed, and hands nothing off:
 
 - `stage failed: could not read HEAD`, or
   `stage failed: HEAD is not GITHUB_SHA`;
 - `stage failed: <path> is missing`, `is a symlink` or
   `is not a regular file`, for the generated candidate or
-  `config/catalogs/codm.json`;
+  the selected `config/catalogs/<source>.json`;
 - `stage failed: could not read the generation report or candidate`, or
   `stage failed: generation did not succeed`;
-- `stage failed: could not read the base catalog`;
+- `stage failed: could not read the base catalog`,
+  `stage failed: base catalog is not a regular mode 100644 file`, or
+  `stage failed: index contains staged changes`;
 - `stage failed: could not write the catalog`;
 - `stage failed: could not commit the candidate`;
 - `stage failed: HEAD is not the candidate commit`, or
@@ -301,9 +340,9 @@ changed automatically by any workflow.
 
 ## Diagnostics and credentials
 
-`check` performs no writes: its only token is the read-only job token
-(`contents: read`) that checkout uses, and no step in it receives a write
-token. Only `publish` holds `contents: write` and `pull-requests: write`,
+`check` performs no remote writes: its only token is the read-only job token
+(`contents: read`) used by checkout and explicitly supplied to generation. No
+step receives a write token. Only `publish` holds `contents: write` and `pull-requests: write`,
 and only its one step receives `GH_TOKEN`; its checkout uses the job token
 only to fetch the triggering revision, and `persist-credentials: false`
 keeps it out of `.git/config`. `scripts/source_proposal.py`
@@ -314,7 +353,16 @@ text, project URLs, asset names and other upstream-derived strings are
 treated as data: credentials, downloaded APKs and raw HTTP
 caches are excluded from summaries and artifacts.
 
+Inspect skips, unsupported rows, no-Android outcomes, unavailable repositories,
+retained failures, unresolved projects, effective policy, discovery coverage,
+APK/tracking observations and catalog changes even when the result is unchanged.
+For Quiver these are the `skipped`, `unsupportedRows`, `noAndroid`,
+`unavailableRepositories`, `retainedFailures`, `unresolved`, `effectivePolicy`,
+`coverage`, `apk`, `tracking` and `changes` report fields. Successful retention or
+a reasoned skip is not a fresh APK check. The run summary also records the actual
+validation outcomes and explicitly marks checks skipped for unchanged candidates.
+
 Nightly pack publication remains independent of this workflow. It reads only
-the committed source catalog on `main` and publishes
+the committed source catalogs on `main` and publishes
 `dist/single-screen.json`, `dist/dual-screen.json` and the generated
 interior of `README.md`; it never stages a catalog or policy change.
