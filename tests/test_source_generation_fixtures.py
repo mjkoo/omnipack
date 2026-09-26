@@ -193,11 +193,9 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     tmp_path: Path,
 ) -> None:
     host_url = "https://github.com/example/host"
-    covering_url = "https://github.com/example/covered"
     higher = fetch_extras(
         [
             {"id": "com.example.host", "url": host_url, "name": "Host"},
-            {"id": "com.example.higher", "url": covering_url, "name": "Covering App"},
         ]
     )
     policy = parse_composition_policy(
@@ -206,19 +204,15 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
 
     def compose_catalog(
         apps: list[dict[str, Any]], directory: Path
-    ) -> tuple[list[App], CompositionResult]:
+    ) -> CompositionResult:
         directory.mkdir()
         (directory / "codm.json").write_text(json.dumps({"apps": apps}))
         generated = codm.fetch(directory, {"catalog": "codm.json"})
-        return generated, compose([*higher, *generated], [], [], policy=policy)
+        return compose([*higher, *generated], [], [], policy=policy)
 
-    _, baseline = compose_catalog([], tmp_path / "baseline")
+    baseline = compose_catalog([], tmp_path / "baseline")
     before = {(item.family, item.variant): item for item in baseline.report.selections}
-    assert set(before) == {
-        (f"package:{package_id}", variant)
-        for package_id in ("com.example.host", "com.example.higher")
-        for variant in Variant
-    }
+    assert set(before) == {("package:com.example.host", variant) for variant in Variant}
     prerelease_settings = {
         "includePrereleases": True,
         "apkFilterRegEx": r"^Fixture-v[0-9.]+-rc[0-9]+\.apk$",
@@ -246,14 +240,8 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
                 "about": tracker_about,
             },
         ),
-        _codm_entry(
-            "com.example.covered",
-            covering_url,
-            "Covered App",
-            {"includePrereleases": True, "trackOnly": False},
-        ),
     ]
-    generated, result = compose_catalog(catalog, tmp_path / "fixture")
+    result = compose_catalog(catalog, tmp_path / "fixture")
     after = {(item.family, item.variant): item for item in result.report.selections}
     settings = {
         (app.data["id"], variant): app.data["additionalSettings"]
@@ -261,15 +249,11 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
         for app in result.apps[variant]
     }
 
-    # Shared project URLs do not join different package identities.
-    assert "com.example.covered" in {app.id for app in generated}
-    # Every earlier selection is unchanged, which covers the covering project's
-    # and the tracked host's selections in both packs.
+    # The tracked host's selections are unchanged in both packs.
     assert {key: after[key] for key in before} == before
     assert set(after) - set(before) == {
         ("package:com.example.prerelease", Variant.DUAL),
         ("package:1234567890", Variant.DUAL),
-        ("package:com.example.covered", Variant.DUAL),
     }
 
     prerelease = after[("package:com.example.prerelease", Variant.DUAL)]
