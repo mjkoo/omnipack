@@ -332,7 +332,7 @@ All hashes are SHA-256 of the downloaded bytes. Signing fingerprints identify th
 
 ## Implementation checks
 
-- `pack generate-source quiver`: success with the reviewed policy; 24 resolved APK projects, 199 no-Android outcomes, six unsupported rows, no unresolved failures, no stale accepted-entry retentions. All candidate identities matched the independently inspected APKs before acceptance, and all 24 generated release IDs matched the reviewed release records.
+- Live `generate_quiver` invocation, the generator used by `pack generate-source quiver`: success with the reviewed policy; 24 resolved APK projects, 199 no-Android outcomes, six unsupported rows, no unresolved failures, no stale accepted-entry retentions. All candidate identities matched the independently inspected APKs before acceptance, and all 24 generated release IDs matched the reviewed release records.
 - `pack build`: success against live RJNY/BBoi and committed codm/Quiver catalogs. Produced 110 single-screen and 134 dual-screen entries. Build performs no Quiver discovery or APK requests; adapter and ordinary-build tests enforce that boundary.
 - `pack verify`: success, offline structural validation of both rendered exports.
 - Focused Quiver discovery/generation/ingestion tests: 79 passed with the accepted catalog.
@@ -340,7 +340,7 @@ All hashes are SHA-256 of the downloaded bytes. Signing fingerprints identify th
 - Publisher/workflow regressions: 136 passed; Python 3.12 compatibility: 126 passed using the pinned Nix pytest runner without the project environment. The usual uv ephemeral environment did not expose pytest, so the equivalent pinned interpreter/pytest environment was used.
 - `actionlint` and `zizmor --persona pedantic .github/workflows`: passed. Local disposable Git remotes exercised publication; no real proposal or remote write occurred.
 - Initial full-suite run: 955 passed and one old exact-family-roster assertion failed after valid Quiver additions. The assertion was revised to account for every surviving candidate and preserve recorded family relationships without freezing source membership. Focused admission/reconciliation tests then passed (8 tests).
-- Final whole-diff reviews, completion audit and post-audit full-suite result are recorded below when complete.
+- Full integration suite after the roster correction: 956 passed. Per-group evidencing reviews passed for discovery, generation, ingestion, initial admission and automation. Final whole-diff reviews, completion audit and post-audit full-suite result are recorded below when complete.
 
 ## Export comparison
 
@@ -351,3 +351,21 @@ The final build adds 14 Quiver baseline apps to single and 13 to dual. Emerald a
 The new baseline apps are AeroGauge, Automobili Lamborghini, Eternal Sonata Reprise, Resident Evil Gaiden, Augustus, Star Fox Enhanced, Melee PC, doukutsu-rs, Yakumo, OpenRCT2, Sonic 3 A.I.R., LEGO Island Portable and Open Nectar in both variants, plus EmeraldRecomp in single. KartPad and Silent Hill were already present through BBoi and therefore are source overlaps rather than new user-visible apps.
 
 A separate captured-source comparison isolates code changes from live upstream drift. Before initial admission, all 91 single and 116 dual captured entries remained identical. Current configuration tests compare composition with and without Quiver dynamically, preserve higher-ranked selections and settings, and cover the reviewed ID corrections using representative live BBoi selectors absent from the older capture. Catalog membership is not frozen by a second roster assertion.
+
+## Whole-change implementation review
+
+Four independent review lenses covered correctness, automation/concurrency,
+idiomatic implementation, and test proportionality. The fix round addressed
+malformed optional metadata URLs aborting discovery, overlap assertions that
+blocked otherwise valid Quiver catalog removals, and a skip/rename test whose
+setup did not exercise generation. The replacement scenario generates and
+loads the renamed candidate, then proves the global denial removes it from
+both variants. Retention prose was narrowed to the actual URL matching rule.
+
+After these fixes, 89 focused Quiver tests and the full suite passed: **961 tests,
+94% coverage**. Formatting, lint, typing and whitespace checks also passed.
+The optional transport-interface cleanup is deferred: the production HTTP client
+enforces confinement before redirects; any future custom adapter must preserve
+that behavior rather than relying only on post-response URL validation.
+
+The scoped fix review and final completion audit are recorded after they finish.

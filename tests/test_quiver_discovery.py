@@ -95,18 +95,30 @@ def test_discovery_collapses_renames_preserves_provenance_and_filter_diagnostic(
     assert "https://api.github.com/repos/x/y" not in http.urls
 
 
-def test_out_of_scope_list_fails_before_fetch_and_metadata_is_advisory() -> None:
-    outside = "https://raw.githubusercontent.com/o/other/main/list.json"
+@pytest.mark.parametrize(
+    "outside",
+    [
+        "https://raw.githubusercontent.com/o/other/main/list.json",
+        "https://raw.githubusercontent.com:bad/o/catalog/main/platform.json",
+        "https://[broken/platform.json",
+    ],
+    ids=["outside-root", "nonnumeric-port", "malformed-authority"],
+)
+def test_out_of_scope_list_fails_before_fetch_and_metadata_is_advisory(
+    outside: str,
+) -> None:
     http = FakeHttp(documents({"repository": "O/Repo"}, list_url=outside))
-    with pytest.raises(ValueError, match="index"):
+    with pytest.raises(ValueError):
         discover_quiver(INDEX, policy(), http)
     assert http.urls == [INDEX]
     values = documents({"repository": "O/Repo"})
     values[INDEX]["platformMetadataUrl"] = outside
     values[API] = {"full_name": "O/Repo"}
-    result = discover_quiver(INDEX, policy(), FakeHttp(values))
+    http = FakeHttp(values)
+    result = discover_quiver(INDEX, policy(), http)
     assert len(result.projects) == 1
     assert result.metadata_diagnostic
+    assert http.urls == [INDEX, LIST, API]
 
 
 def test_redirected_list_outside_catalog_is_rejected() -> None:

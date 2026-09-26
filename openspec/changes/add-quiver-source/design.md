@@ -97,15 +97,17 @@ platform data is reported and ignored.
 
 For new projects, no permitted release or eligible direct APK is a reported
 skip. Eligible APKs must all be readable and agree on identity. For accepted
-projects those same outcomes, and transient lookup failures, trigger
-unchanged-policy retention, so a transient missing artifact never becomes a
-removal. Other unresolved projects and changed-policy failures block candidate
-emission. Generation regenerates the catalog from the lists: a row matches an
-entry by its canonical or listed URL, never by package ID, and an entry no row
-matches, or whose repository returns 404 or 451, is removed in the reviewed
+projects whose discovered rows still match by canonical or listed URL, those
+same outcomes and transient lookup failures trigger unchanged-policy retention.
+Other unresolved projects and changed-policy failures block candidate emission.
+Generation regenerates the catalog from the lists: a row matches an entry by
+its canonical or listed URL, never by package ID, and an entry no row matches, or whose repository returns 404 or 451, is removed in the reviewed
 PR. A renamed repository surfaces there as a changed URL or as a removal plus
-an addition. Retention uses the committed catalog, not the contents of an open
-automated proposal. Clear stale candidate output on rerun.
+an addition. If discovery lists only a new repository name and its release has
+no eligible APK, the unmatched old entry is removed without a replacement;
+package IDs and titles do not establish rename identity. Retention uses the
+committed catalog, not the contents of an open automated proposal. Clear stale
+candidate output on rerun.
 
 Render ordinary GitHub Obtainium records with no observed release pin. Name an
 entry by the row's `project` (the port name, such as "Sonic 3 A.I.R."), falling

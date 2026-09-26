@@ -238,18 +238,21 @@ def _catalog_root(index_url: str) -> tuple[str, str] | None:
 
 
 def _within_catalog(url: str, root: tuple[str, str]) -> bool:
-    parsed = urlsplit(url)
-    return (
-        parsed.scheme == "https"
-        and parsed.hostname == root[0]
-        and parsed.username is None
-        and parsed.port is None
-        and not parsed.query
-        and not parsed.fragment
-        and "%" not in parsed.path
-        and all(part not in {".", ".."} for part in parsed.path.split("/"))
-        and parsed.path.startswith(root[1])
-    )
+    try:
+        parsed = urlsplit(url)
+        return (
+            parsed.scheme == "https"
+            and parsed.hostname == root[0]
+            and parsed.username is None
+            and parsed.port is None
+            and not parsed.query
+            and not parsed.fragment
+            and "%" not in parsed.path
+            and all(part not in {".", ".."} for part in parsed.path.split("/"))
+            and parsed.path.startswith(root[1])
+        )
+    except ValueError:
+        return False
 
 
 def _read_catalog_json(http: GenerationHttp, url: str, root: tuple[str, str]) -> object:
