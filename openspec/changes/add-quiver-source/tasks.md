@@ -30,6 +30,6 @@
 
 ## 6. Implementation review and completion audit
 
-- [ ] 6.1 Complete the required per-group evidencing reviews and parallel implementation review wave; record findings and resolutions, with no unresolved blocking implementation issue.
-- [ ] 6.2 Run required formatting, lint, typing and test checks, live Quiver generation, pack build and pack verify; record results in validation.md and confirm ordinary builds still do no APK discovery.
+- [x] 6.1 Complete the required per-group evidencing reviews and parallel implementation review wave; record findings and resolutions, with no unresolved blocking implementation issue.
+- [x] 6.2 Run required formatting, lint, typing and test checks, live Quiver generation, pack build and pack verify; record results in validation.md and confirm ordinary builds still do no APK discovery.
 - [ ] 6.3 Audit every implementation checkbox against code, tests and evidence, and inspect the final changed-file scope; leave this change active and report the implementation branch without invoking OpenSpec verification or archive.
