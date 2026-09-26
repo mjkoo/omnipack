@@ -63,11 +63,6 @@ def captured_higher() -> list[App]:
 
 def captured_pipeline() -> tuple[list[App], list[App]]:
     higher = captured_higher()
-    covered = {
-        normalize_project_url(app.url)
-        for app in higher
-        if Variant.DUAL in app.eligibility
-    }
     generated = [
         normalize_record(
             record,
@@ -77,7 +72,6 @@ def captured_pipeline() -> tuple[list[App], list[App]]:
             origin="codm-generated",
         )
         for record in load_json(PRE_MIGRATION / "admitted-catalog.json")["apps"]
-        if normalize_project_url(record["url"]) not in covered
     ]
     return higher, generated
 
@@ -157,7 +151,7 @@ def test_catalog_addition_and_removal_leave_single_screen_selection_unchanged(
             f"com.example.{name}", f"https://github.com/example/{name}", name, {}
         )
         (directory / "codm.json").write_text(json.dumps({"apps": [entry]}))
-        generated = codm.fetch(directory, {"catalog": "codm.json"}, higher)
+        generated = codm.fetch(directory, {"catalog": "codm.json"})
         results.append(
             compose(
                 [*higher, *generated],
@@ -215,7 +209,7 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     ) -> tuple[list[App], CompositionResult]:
         directory.mkdir()
         (directory / "codm.json").write_text(json.dumps({"apps": apps}))
-        generated = codm.fetch(directory, {"catalog": "codm.json"}, higher)
+        generated = codm.fetch(directory, {"catalog": "codm.json"})
         return generated, compose([*higher, *generated], [], [], policy=policy)
 
     _, baseline = compose_catalog([], tmp_path / "baseline")
@@ -267,16 +261,15 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
         for app in result.apps[variant]
     }
 
-    # A dual-eligible higher-source candidate already supplies the covered
-    # project, so its codm2000 entry is suppressed before selection: it neither
-    # competes in nor changes any family's selection.
-    assert "com.example.covered" not in {app.id for app in generated}
+    # Shared project URLs do not join different package identities.
+    assert "com.example.covered" in {app.id for app in generated}
     # Every earlier selection is unchanged, which covers the covering project's
     # and the tracked host's selections in both packs.
     assert {key: after[key] for key in before} == before
     assert set(after) - set(before) == {
         ("package:com.example.prerelease", Variant.DUAL),
         ("package:1234567890", Variant.DUAL),
+        ("package:com.example.covered", Variant.DUAL),
     }
 
     prerelease = after[("package:com.example.prerelease", Variant.DUAL)]

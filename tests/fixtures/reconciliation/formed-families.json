@@ -25,6 +25,12 @@
       "bboi-standard-asset",
       "com.twilitrealm.dusklight",
       "github.com/twilitrealm/dusklight"
+    ],
+    [
+      "codm2000",
+      "codm-generated",
+      "dev.twilitrealm.dusk",
+      "github.com/igawa6/dusklight"
     ]
   ],
   "app:gen1recomp": [
@@ -61,6 +67,12 @@
       "bboi-standard-asset",
       "com.xyzz.openmw",
       "github.com/xyzz/openmw-android"
+    ],
+    [
+      "codm2000",
+      "codm-generated",
+      "org.openmw.ds",
+      "github.com/josh-daniels/openmw-ds"
     ]
   ],
   "app:super-metroid": [
@@ -129,6 +141,12 @@
   ],
   "package:app.nanostack.pixelguide": [
     [
+      "codm2000",
+      "codm-generated",
+      "app.nanostack.pixelguide",
+      "github.com/rexmont/pixel-guide-android"
+    ],
+    [
       "rjny",
       "rjny-catalog",
       "app.nanostack.pixelguide",
@@ -169,6 +187,12 @@
     [
       "bboi",
       "bboi-standard-asset",
+      "com.aure.banjorecomp",
+      "github.com/aureliob/banjorecomp-android"
+    ],
+    [
+      "codm2000",
+      "codm-generated",
       "com.aure.banjorecomp",
       "github.com/aureliob/banjorecomp-android"
     ]
@@ -281,9 +305,21 @@
       "bboi-standard-asset",
       "com.samyost1.zelda3android",
       "github.com/samyost1/zelda3-android"
+    ],
+    [
+      "codm2000",
+      "codm-generated",
+      "com.dishii.zelda3",
+      "github.com/samyost1/zelda3-android"
     ]
   ],
   "package:com.emulnk": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.emulnk",
+      "github.com/emulnk/emulnk"
+    ],
     [
       "rjny",
       "rjny-catalog",
@@ -539,6 +575,14 @@
       "github.com/binaryquantumsoul/esde_android_apps"
     ]
   ],
+  "package:com.raekwon.supermetroid": [
+    [
+      "codm2000",
+      "codm-generated",
+      "com.raekwon.supermetroid",
+      "github.com/raekwon1603/super_metroid-android"
+    ]
+  ],
   "package:com.raofflineproxy": [
     [
       "rjny",
@@ -689,6 +733,12 @@
       "github.com/samyost1/tmc-android"
     ],
     [
+      "codm2000",
+      "codm-generated",
+      "dev.picori.tmc",
+      "github.com/samyost1/tmc-android"
+    ],
+    [
       "extras",
       "extras",
       "dev.picori.tmc",
@@ -752,6 +802,12 @@
       "bboi",
       "bboi-standard-asset",
       "com.igawa6.harvestmoon64",
+      "github.com/igawa6/harvestmoon64recomp"
+    ],
+    [
+      "codm2000",
+      "codm-generated",
+      "io.github.hm64recomp",
       "github.com/igawa6/harvestmoon64recomp"
     ]
   ],

@@ -14,7 +14,7 @@ import pytest
 from omnipack import cli
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpResponse
-from omnipack.merge import CompositionError, _import_data, compose
+from omnipack.merge import _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import render
@@ -272,11 +272,9 @@ def _fetch_bboi(
     )
 
 
-def _fetch_codm(
-    tmp_path: Path, records: list[dict[str, object]], higher: list[App]
-) -> list[App]:
+def _fetch_codm(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
-    return codm.fetch(tmp_path, {"catalog": "catalog.json"}, higher)
+    return codm.fetch(tmp_path, {"catalog": "catalog.json"})
 
 
 @pytest.mark.parametrize("field", ["family", "packageId", "variant"])
@@ -293,7 +291,7 @@ def _fetch_codm(
         ),
         pytest.param(
             "codm2000",
-            lambda record, tmp_path: _fetch_codm(tmp_path, [record], []),
+            lambda record, tmp_path: _fetch_codm(tmp_path, [record]),
             id="codm2000",
         ),
         pytest.param("extras", lambda record, _: extras.fetch([record]), id="extras"),
@@ -327,18 +325,6 @@ def test_rjny_excluded_record_is_not_guarded_but_neither_pack_record_is() -> Non
     }
     with pytest.raises(SourceError, match="^rjny: entry 'Entry' field 'family' "):
         _fetch_rjny([neither_pack])
-
-
-def test_suppressed_codm_record_is_still_guarded(tmp_path: Path) -> None:
-    higher = [rjny_candidate(frozenset({Variant.DUAL}))]
-    unguarded = _record_with("ordinary", True)
-    unguarded["url"] = PROJECT
-    assert _fetch_codm(tmp_path, [unguarded], higher) == []
-
-    guarded = _record_with("variant", "dual")
-    guarded["url"] = PROJECT
-    with pytest.raises(SourceError, match="^codm2000: entry 'Entry' field 'variant' "):
-        _fetch_codm(tmp_path, [guarded], higher)
 
 
 def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
@@ -394,7 +380,7 @@ def test_non_rjny_catalog_metadata_is_dropped_but_unmodeled_fields_render(
     if source == "extras":
         [app] = extras.fetch([record])
     else:
-        [app] = _fetch_codm(tmp_path, [record], [])
+        [app] = _fetch_codm(tmp_path, [record])
 
     [rendered] = json.loads(
         render([ComposedApp(f"package:{app.id}", _import_data(app))])
@@ -411,7 +397,7 @@ def test_codm_declared_source_type_wins_and_omitted_type_is_derived(
     inferred = {**declared, "id": "app.inferred", "name": "Inferred"}
     del inferred["overrideSource"]
 
-    apps = _fetch_codm(tmp_path, [declared, inferred], [])
+    apps = _fetch_codm(tmp_path, [declared, inferred])
 
     assert [(app.id, app.source_type) for app in apps] == [
         ("app.entry", SourceType.HTML),
@@ -457,7 +443,7 @@ def test_upstream_record_without_declared_source_type_is_rejected(
         ),
         pytest.param(
             "codm",
-            lambda tmp_path: codm.fetch(tmp_path, {"catalog": ""}, []),
+            lambda tmp_path: codm.fetch(tmp_path, {"catalog": ""}),
             id="codm2000",
         ),
     ],
@@ -549,38 +535,9 @@ def test_bboi_rejects_malformed_settings() -> None:
         )
 
 
-def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
+def test_codm_loads_every_committed_entry_and_reports_admission(
     tmp_path: Path,
 ) -> None:
-    higher = [
-        App(
-            "x",
-            "https://www.github.com/SAMYOST1/ZELDA3-ANDROID.git/",
-            "x",
-            SourceType.GITHUB,
-            (),
-            Provenance("x", "x"),
-            eligibility=frozenset({Variant.DUAL}),
-        ),
-        App(
-            "y",
-            "http://github.com/igawa6/DUSKLIGHT",
-            "y",
-            SourceType.GITHUB,
-            (),
-            Provenance("x", "x"),
-            eligibility=frozenset({Variant.DUAL}),
-        ),
-        App(
-            "z",
-            "https://github.com/Josh-Daniels/OpenMW-DS",
-            "z",
-            SourceType.GITHUB,
-            (),
-            Provenance("x", "x"),
-            eligibility=frozenset({Variant.SINGLE}),
-        ),
-    ]
     catalog = {
         "apps": [
             {
@@ -607,10 +564,10 @@ def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
     path = tmp_path / "catalog.json"
     path.write_text(json.dumps(catalog))
     report = IngestionReport()
-    apps = codm.fetch(tmp_path, {"catalog": "catalog.json"}, higher, report)
+    apps = codm.fetch(tmp_path, {"catalog": "catalog.json"}, report)
     urls = {app.url for app in apps}
-    assert "https://github.com/samyost1/zelda3-android" not in urls
-    assert "https://github.com/igawa6/dusklight" not in urls
+    assert "https://github.com/samyost1/zelda3-android" in urls
+    assert "https://github.com/igawa6/dusklight" in urls
     assert "https://github.com/Josh-Daniels/OpenMW-DS" in urls
     assert all(
         app.eligibility == frozenset({Variant.DUAL})
@@ -623,15 +580,11 @@ def test_codm_loads_committed_catalog_and_suppresses_dual_coverage(
     assert (
         next(app for app in apps if app.url.endswith("OpenMW-DS")).name == "OpenMW-DS"
     )
-    assert apps[0].additional_settings == {"includePrereleases": True}
-    assert len(urls) == 1
+    assert apps[2].additional_settings == {"includePrereleases": True}
+    assert len(urls) == 3
     assert report.admitted == [
-        {
-            "source": "codm2000",
-            "url": "https://github.com/Josh-Daniels/OpenMW-DS",
-            "kind": "apk",
-            "id": "openmw",
-        }
+        {"source": "codm2000", "url": record["url"], "kind": "apk", "id": record["id"]}
+        for record in catalog["apps"]
     ]
 
 
@@ -653,7 +606,7 @@ def test_codm_reports_committed_apk_and_tracker_identities(tmp_path: Path) -> No
     ]
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
     report = IngestionReport()
-    codm.fetch(tmp_path, {"catalog": "catalog.json"}, [], report)
+    codm.fetch(tmp_path, {"catalog": "catalog.json"}, report)
     assert [(item["kind"], item["id"]) for item in report.admitted] == [
         ("apk", "app.apk"),
         ("track-only", "123"),
@@ -686,7 +639,6 @@ def test_build_keeps_tracking_resource_beside_the_app_it_extends(
                 },
             }
         ],
-        [app],
     )
     result = compose(
         [app, tracker],
@@ -728,7 +680,7 @@ def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
     ]
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
     with pytest.raises(SourceError, match="duplicate id.*same.*repo0.*repo1"):
-        codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
+        codm.fetch(tmp_path, {"catalog": "catalog.json"})
 
 
 PROJECT = "https://github.com/owner/project"
@@ -770,62 +722,27 @@ def ingest_over_codm_entry(
     )
 
 
-@pytest.mark.parametrize(
-    ("eligibility", "suppressed"),
-    [
-        (frozenset(Variant), True),
-        (frozenset({Variant.DUAL}), True),
-        (frozenset({Variant.SINGLE}), False),
-    ],
-    ids=["both-exports", "dual-export-only", "left-out-of-dual"],
-)
-def test_codm_suppression_follows_source_dual_eligibility(
+def test_codm_url_overlap_keeps_both_candidates_in_composition(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
-    eligibility: frozenset[Variant],
-    suppressed: bool,
 ) -> None:
-    result = ingest_over_codm_entry(
-        tmp_path, monkeypatch, [rjny_candidate(eligibility)]
-    )
-    expected = [("app.standard", None)]
-    if not suppressed:
-        expected.append(("app.generated", None))
-    assert [(app.id, app.family) for app in result] == expected
-
-
-@pytest.mark.parametrize(
-    ("selector_kind", "message"),
-    [("rule", "matched no candidate"), ("pin", "missing or ambiguous")],
-)
-def test_policy_naming_a_suppressed_codm_entry_fails_in_composition(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    selector_kind: str,
-    message: str,
-) -> None:
-    result = ingest_over_codm_entry(
+    candidates = ingest_over_codm_entry(
         tmp_path, monkeypatch, [rjny_candidate(frozenset(Variant))]
     )
-    required = {
-        "match": {
-            "source": "codm2000",
-            "origin": "codm-generated",
-            "id": "app.generated",
-            "url": PROJECT,
-        },
-        "rationale": "Required generated candidate.",
-    }
-    pin = {**required, "family": "package:app.generated", "variant": "dual"}
-    policy = parse_composition_policy(
-        {
-            "schemaVersion": 1,
-            "candidates": [required] if selector_kind == "rule" else [],
-            "pins": [pin] if selector_kind == "pin" else [],
-        }
+    assert [app.id for app in candidates] == ["app.standard", "app.generated"]
+    result = compose(
+        candidates,
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
     )
-    with pytest.raises(CompositionError, match=message):
-        compose(result, [], [], policy=policy)
+    assert {app.data["id"] for app in result.apps[Variant.DUAL]} == {
+        "app.standard",
+        "app.generated",
+    }
+    assert {app.data["id"] for app in result.apps[Variant.SINGLE]} == {"app.standard"}
 
 
 @pytest.mark.parametrize("missing", ["id", "url", "name"])
@@ -985,12 +902,12 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
 def test_codm_malformed_catalog_names_source(tmp_path: Path, body: str) -> None:
     (tmp_path / "catalog.json").write_text(body)
     with pytest.raises(SourceError, match="codm"):
-        codm.fetch(tmp_path, {"catalog": "catalog.json"}, [])
+        codm.fetch(tmp_path, {"catalog": "catalog.json"})
 
 
 def test_codm_missing_catalog_names_source(tmp_path: Path) -> None:
     with pytest.raises(SourceError, match="codm"):
-        codm.fetch(tmp_path, {"catalog": "missing.json"}, [])
+        codm.fetch(tmp_path, {"catalog": "missing.json"})
 
 
 def test_explicit_null_extra_source_is_not_inferred():

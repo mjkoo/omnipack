@@ -34,8 +34,7 @@ def ingest_all(
     """Fetch every source in precedence order and retain structured outcomes.
 
     Candidates come back as their sources describe them; composition applies
-    the policy. A codm2000 entry is suppressed when a higher-precedence
-    candidate that its source makes eligible for dual covers the same project.
+    the policy. Every committed codm2000 entry joins the candidate set.
     """
     from . import bboi, codm, extras, rjny
 
@@ -50,8 +49,7 @@ def ingest_all(
     rjny_apps = rjny.fetch(http, section("rjny"))
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)
-    higher = [*extra_apps, *rjny_apps, *bboi_apps]
-    generated = codm.fetch(root, section("codm"), higher, report)
+    generated = codm.fetch(root, section("codm"), report)
     return [*rjny_apps, *bboi_apps, *generated, *extra_apps]
 
 

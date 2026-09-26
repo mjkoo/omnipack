@@ -62,7 +62,7 @@ def current_configuration_fixture() -> CurrentConfiguration:
         *bboi.fetch(http, sources["bboi"]),
         *fetch_extras(extras),
     ]
-    generated = codm.fetch(ROOT, sources["codm"], higher)
+    generated = codm.fetch(ROOT, sources["codm"])
     candidates = [*higher, *generated]
     policy = load_json(ROOT / "config/composition.json")
     denials = load_json(ROOT / "config/deny.json")
