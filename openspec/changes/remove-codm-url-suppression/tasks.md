@@ -5,7 +5,7 @@
 
 ## 2. Configuration
 
-- [ ] 2.1 Add a package denial for `com.raekwon.supermetroid` and dual pins selecting the RJNY builds in the `package:app.nanostack.pixelguide` and `package:com.emulnk` families, each with a rationale. Verify composition validates the policy.
+- [x] 2.1 Add a package denial for `com.raekwon.supermetroid` and dual pins selecting the RJNY builds in the `package:app.nanostack.pixelguide` and `package:com.emulnk` families, each with a rationale. Verify composition validates the policy.
 
 ## 3. Outputs and review
 
