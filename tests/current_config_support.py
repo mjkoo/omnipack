@@ -12,7 +12,7 @@ import pytest
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App
-from omnipack.sources import bboi, codm, rjny
+from omnipack.sources import bboi, codm, quiver, rjny
 from omnipack.sources.extras import fetch as fetch_extras
 from tests.test_sources import FakeHttp
 
@@ -33,8 +33,7 @@ class CurrentConfiguration:
     result: CompositionResult
 
 
-@pytest.fixture(name="current_configuration", scope="session")
-def current_configuration_fixture() -> CurrentConfiguration:
+def build_current_configuration() -> CurrentConfiguration:
     sources = load_json(ROOT / "config/sources.json")
     release = load_json(CAPTURED / "bboi-release.json")
     standard_url, dual_url = (
@@ -63,7 +62,8 @@ def current_configuration_fixture() -> CurrentConfiguration:
         *fetch_extras(extras),
     ]
     generated = codm.fetch(ROOT, sources["codm"])
-    candidates = [*higher, *generated]
+    quiver_candidates = quiver.fetch(ROOT, sources["quiver"])
+    candidates = [*higher, *generated, *quiver_candidates]
     policy = load_json(ROOT / "config/composition.json")
     denials = load_json(ROOT / "config/deny.json")
     overlay = load_json(ROOT / "config/overlay.json")
@@ -75,3 +75,8 @@ def current_configuration_fixture() -> CurrentConfiguration:
         policy=parse_composition_policy(policy),
     )
     return CurrentConfiguration(extras, policy, catalog, candidates, result)
+
+
+@pytest.fixture(name="current_configuration", scope="session")
+def current_configuration_fixture() -> CurrentConfiguration:
+    return build_current_configuration()

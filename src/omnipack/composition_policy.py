@@ -14,7 +14,7 @@ from omnipack.urls import normalize_project_url
 RenderedKey = tuple[str, str]
 PinKey = tuple[str, Variant]
 
-SOURCES = frozenset({"rjny", "bboi", "extras", "codm2000"})
+SOURCES = frozenset({"rjny", "bboi", "extras", "codm2000", "quiver"})
 ORIGINS = frozenset(
     {
         "rjny-catalog",
@@ -22,6 +22,7 @@ ORIGINS = frozenset(
         "bboi-dual-asset",
         "extras",
         "codm-generated",
+        "quiver-generated",
     }
 )
 _SOURCE_ORIGINS = {
@@ -29,6 +30,7 @@ _SOURCE_ORIGINS = {
     "bboi": frozenset({"bboi-standard-asset", "bboi-dual-asset"}),
     "extras": frozenset({"extras"}),
     "codm2000": frozenset({"codm-generated"}),
+    "quiver": frozenset({"quiver-generated"}),
 }
 
 
