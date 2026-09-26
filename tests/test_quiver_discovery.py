@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import urllib.error
 from email.message import Message
 from typing import Any
 from urllib.request import Request
 
 import pytest
 
-from omnipack.http import HttpError, HttpResponse
+from omnipack.http import HttpError, HttpResponse, HttpStatusError
 from omnipack.quiver_source import (
     NoApk,
     NoRelease,
@@ -20,6 +21,7 @@ from omnipack.quiver_source import (
     resolve_quiver_apk,
 )
 from omnipack.source_http import HttpConfig, SourceHttpClient
+from tests.test_package_id import AssetTransport, malformed_manifest, release
 
 INDEX = "https://raw.githubusercontent.com/o/catalog/main/index.json"
 LIST = "https://raw.githubusercontent.com/o/catalog/main/lists/one.json"
@@ -174,9 +176,21 @@ def test_missing_and_empty_discovery_fail() -> None:
     assert not unsupported.projects
 
 
-def test_repository_lookup_failure_is_available_for_accepted_entry_retention() -> None:
-    from omnipack.http import HttpStatusError
+def test_required_list_404_fails_complete_discovery() -> None:
+    missing = LIST.replace("one.json", "missing.json")
+    values = documents({"repository": "O/Repo"})
+    values[INDEX]["lists"].append({"id": "missing", "remoteLocation": missing})
+    values[missing] = HttpStatusError(missing, 404)
+    http = FakeHttp(values)
 
+    with pytest.raises(HttpStatusError) as caught:
+        discover_quiver(INDEX, policy(), http)
+
+    assert caught.value.status == 404
+    assert http.urls == [INDEX, LIST, missing]
+
+
+def test_repository_lookup_failure_is_available_for_accepted_entry_retention() -> None:
     values = documents({"repository": "O/Repo", "project": "Port"})
     values[API] = HttpStatusError(API, 403)
     result = discover_quiver(INDEX, policy(), FakeHttp(values))
@@ -195,8 +209,6 @@ def test_duplicate_policy_json_keys_fail() -> None:
 
 
 def test_release_outcomes_distinguish_absence_from_failure() -> None:
-    from omnipack.http import HttpStatusError
-
     rule = policy().rule_for("github.com/o/repo")
     metadata = {API: {"full_name": "O/Repo"}}
     latest = API + "/releases/latest"
@@ -221,7 +233,43 @@ def test_release_outcomes_distinguish_absence_from_failure() -> None:
         )
 
 
-def test_no_apk_is_typed_but_unreadable_apk_remains_an_error() -> None:
+@pytest.mark.parametrize("status", [None, 401, 403, 429])
+@pytest.mark.parametrize("include_prereleases", [False, True])
+def test_release_request_failures_do_not_become_no_release(
+    status: int | None, include_prereleases: bool
+) -> None:
+    endpoint = API + (
+        "/releases?per_page=100&page=1" if include_prereleases else "/releases/latest"
+    )
+    requests: list[str] = []
+
+    def transport(
+        request: Request, timeout: float, max_bytes: int | None
+    ) -> HttpResponse:
+        requests.append(request.full_url)
+        if request.full_url == API:
+            return HttpResponse(API, 200, Message(), b'{"full_name": "O/Repo"}')
+        assert request.full_url == endpoint
+        if status is None:
+            raise OSError("connection interrupted")
+        raise urllib.error.HTTPError(
+            endpoint, status, "request failed", Message(), None
+        )
+
+    rule = policy(
+        projects={
+            "github.com/o/repo": {
+                "additionalSettings": {"includePrereleases": include_prereleases}
+            }
+        }
+    ).rule_for("github.com/o/repo")
+    http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
+    with pytest.raises(HttpError):
+        lookup_quiver_release(http, "github.com/o/repo", rule)
+    assert requests == [API, endpoint]
+
+
+def test_no_eligible_apk_is_typed() -> None:
     release = {"assets": [{"name": "desktop.zip"}]}
     with pytest.raises(NoApk):
         resolve_quiver_apk(
@@ -231,6 +279,48 @@ def test_no_apk_is_typed_but_unreadable_apk_remains_an_error() -> None:
             {},
             "github.com/o/repo",
         )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [b"PK\x05\x06", malformed_manifest("utf8")],
+    ids=["truncated-zip", "malformed-manifest"],
+)
+def test_unreadable_selected_apk_is_an_error_not_no_apk(body: bytes) -> None:
+    asset = "https://objects.example/app.apk"
+    transport = AssetTransport({asset: body})
+    http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
+
+    with pytest.raises(ValueError, match="cannot read eligible APK") as caught:
+        resolve_quiver_apk(
+            http,
+            release([("app.apk", asset)]),
+            policy().rule_for("github.com/o/repo"),
+            {},
+            "github.com/o/repo",
+        )
+
+    assert not isinstance(caught.value, NoApk)
+    assert any(request.method == "GET" for request, _ in transport.requests)
+
+
+def test_apk_transport_failure_is_an_error_not_no_apk() -> None:
+    asset = "https://objects.example/app.apk"
+    transport = AssetTransport({asset: OSError("connection interrupted")})
+    http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
+
+    with pytest.raises(ValueError, match="cannot read eligible APK") as caught:
+        resolve_quiver_apk(
+            http,
+            release([("app.apk", asset)]),
+            policy().rule_for("github.com/o/repo"),
+            {},
+            "github.com/o/repo",
+        )
+
+    assert not isinstance(caught.value, NoApk)
+    assert isinstance(caught.value.__cause__, HttpError)
+    assert [request.method for request, _ in transport.requests] == ["HEAD", "GET"]
 
 
 def test_catalog_scope_rejects_parent_path_and_encoded_traversal() -> None:

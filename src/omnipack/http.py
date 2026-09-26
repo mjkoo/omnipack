@@ -29,9 +29,11 @@ class HttpError(RuntimeError):
 class HttpStatusError(HttpError):
     """A non-retryable HTTP response with its status available to callers."""
 
-    def __init__(self, url: str, status: int) -> None:
+    def __init__(self, url: str, status: int, attempts: int = 1) -> None:
         self.status = status
-        super().__init__(f"request to {redact_url(url)} returned HTTP {status}")
+        super().__init__(
+            f"request to {redact_url(url)} returned HTTP {status} after {attempts} attempts"
+        )
 
 
 class TransientHttpError(HttpError):
@@ -123,7 +125,7 @@ class RetryingClient:
                         404,
                         451,
                     }:
-                        raise HttpStatusError(url, error.code) from error
+                        raise HttpStatusError(url, error.code, number + 1) from error
                     raise HttpError(
                         f"request to {redact_url(url)} failed after {number + 1} attempts"
                     ) from error

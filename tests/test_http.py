@@ -10,7 +10,13 @@ from urllib.response import addinfourl
 
 import pytest
 
-from omnipack.http import HttpClient, HttpError, HttpResponse, redact_url
+from omnipack.http import (
+    HttpClient,
+    HttpError,
+    HttpResponse,
+    HttpStatusError,
+    redact_url,
+)
 
 if TYPE_CHECKING:
     from urllib.request import Request
@@ -157,6 +163,22 @@ def test_embedded_url_credentials_are_rejected() -> None:
 
     with pytest.raises(ValueError, match="embedded URL credentials"):
         client.get("https://user:pass@example.com/app")
+
+
+def test_nontransient_status_preserves_attempt_count_after_a_retry() -> None:
+    url = "https://example.com/data"
+    transport = RecordingTransport(
+        [
+            OSError("connection interrupted"),
+            urllib.error.HTTPError(url, 403, "forbidden", Message(), None),
+        ]
+    )
+
+    with pytest.raises(HttpStatusError, match="HTTP 403 after 2 attempts") as caught:
+        HttpClient(transport=transport, sleep=lambda _: None).get(url)
+
+    assert caught.value.status == 403
+    assert len(transport.requests) == 2
 
 
 def test_diagnostic_urls_redact_credentials_and_query_values() -> None:
