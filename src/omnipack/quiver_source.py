@@ -275,7 +275,10 @@ def _listed_repository(repository: object, source: object) -> str | None:
         not isinstance(source, str) or source.lower() != "github"
     ):
         return None
-    return repository_url(f"https://github.com/{repository}")
+    try:
+        return repository_url(f"https://github.com/{repository}")
+    except ValueError:
+        return None
 
 
 def _repository_api(project: str) -> str:
@@ -366,6 +369,7 @@ def discover_quiver(
     lookup_failures: list[QuiverLookupFailure] = []
     grouped: dict[str, list[QuiverRow]] = {}
     aliases: dict[str, str] = {}
+    lookups: dict[str, str | HttpError | ValueError | TypeError] = {}
     for row in rows:
         skip = next(
             (
@@ -381,19 +385,19 @@ def discover_quiver(
         if row.listed is None:
             unsupported.append(row)
             continue
-        try:
-            canonical = _canonical_repository(http, row.listed)
-        except HttpStatusError as error:
-            if error.status in {404, 451}:
-                canonical = row.listed
-            else:
-                lookup_failures.append(
-                    QuiverLookupFailure(row, policy.rule_for(row.listed), error)
+        if row.listed not in lookups:
+            try:
+                lookups[row.listed] = _canonical_repository(http, row.listed)
+            except HttpStatusError as error:
+                lookups[row.listed] = (
+                    row.listed if error.status in {404, 451} else error
                 )
-                continue
-        except (HttpError, ValueError, TypeError) as error:
+            except (HttpError, ValueError, TypeError) as error:
+                lookups[row.listed] = error
+        canonical = lookups[row.listed]
+        if not isinstance(canonical, str):
             lookup_failures.append(
-                QuiverLookupFailure(row, policy.rule_for(row.listed), error)
+                QuiverLookupFailure(row, policy.rule_for(row.listed), canonical)
             )
             continue
         grouped.setdefault(canonical, []).append(row)

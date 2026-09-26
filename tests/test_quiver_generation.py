@@ -326,6 +326,65 @@ def test_names_and_catalog_are_independent_of_row_order(tmp_path: Path) -> None:
     assert (tmp_path / OUTPUT / "catalog.json").read_bytes() == first
 
 
+@pytest.mark.parametrize("accepted", [False, True])
+@pytest.mark.parametrize("first_fails", [False, True])
+def test_duplicate_listed_rows_share_one_discovery_lookup(
+    tmp_path: Path, accepted: bool, first_fails: bool
+) -> None:
+    values = setup(tmp_path)
+    generate_quiver(tmp_path, http=ScenarioHttp(values))
+    if accepted:
+        entries = candidate(tmp_path)
+        entries[0]["url"] = "https://github.com/o/old"
+        (tmp_path / "config/catalogs/quiver.json").write_bytes(_render_catalog(entries))
+    values[LIST]["apps"] = [
+        {"repository": "o/old", "project": "Port", "releaseAssetFilter": "one"},
+        {"repository": "O/Old", "project": "Z Port", "releaseAssetFilter": "two"},
+    ]
+    old_api = "https://api.github.com/repos/o/old"
+    calls: list[str] = []
+
+    class FluctuatingHttp(ScenarioHttp):
+        def get(self, url: str, **kwargs: Any) -> HttpResponse:
+            if url == old_api:
+                calls.append(url)
+                fails = (len(calls) == 1) == first_fails
+                self.values[url] = (
+                    HttpError("temporary metadata outage")
+                    if fails
+                    else {"full_name": "o/repo"}
+                )
+            return super().get(url, **kwargs)
+
+    report = generate_quiver(tmp_path, http=FluctuatingHttp(values))
+    assert calls == [old_api]
+    if first_fails and not accepted:
+        assert report["status"] == "failed"
+        assert len(report["unresolved"]) == 1
+        assert len(report["unresolved"][0]["rows"]) == 2
+    else:
+        assert report["status"] == "success"
+        assert len(candidate(tmp_path)) == 1
+        assert candidate(tmp_path)[0]["name"] == "Port"
+        if first_fails:
+            assert len(report["retainedFailures"]) == 1
+            assert len(report["retainedFailures"][0]["rows"]) == 2
+        else:
+            assert not report["retainedFailures"]
+            assert report["filterDisagreements"] == ["github.com/o/repo"]
+            assert len(report["coverage"][0]["rows"]) == 2
+
+
+def test_invalid_github_owner_is_an_unsupported_row(tmp_path: Path) -> None:
+    values = setup(tmp_path, rows=[{"repository": "bad_owner/repo"}])
+    http = ScenarioHttp(values)
+    report = generate_quiver(tmp_path, http=http)
+    assert report["status"] == "success"
+    assert len(report["unsupportedRows"]) == 1
+    assert candidate(tmp_path) == []
+    assert http.urls == [INDEX, LIST]
+
+
 @pytest.mark.parametrize(
     "defect",
     ["duplicate-id", "duplicate-project", "bad-id", "track-only", "policy-field"],
