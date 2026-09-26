@@ -7,14 +7,11 @@ import json
 import re
 import shutil
 from dataclasses import dataclass
-from datetime import datetime
 from pathlib import Path
-from typing import Any, cast
+from typing import Any
 from urllib.parse import urlsplit
 
-from omnipack.composition_policy import default_family
 from omnipack.http import HttpError
-from omnipack.overlay import ComposedApp
 from omnipack.package_id import resolve_release_assets
 from omnipack.project_policy import (
     ProjectRule,
@@ -22,15 +19,15 @@ from omnipack.project_policy import (
     parse_project_policy,
     repository_url,
 )
-from omnipack.render import render
 from omnipack.report_model import Status
+from omnipack.source_catalog import _render_catalog, _rendered_entry, _validate_ids
 from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
+from omnipack.source_release import _release_id, select_release
 from omnipack.sources import load_json
 from omnipack.urls import normalize_project_url
 
 LINK_RE = re.compile(r"\[[^\]]+\]\((https?://[^)\s]+)\)")
 SEPARATOR_RE = re.compile(r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
-MAX_RELEASES = 100
 
 
 @dataclass(frozen=True, slots=True)
@@ -127,84 +124,6 @@ def _canonical_json(value: object) -> bytes:
     return (
         json.dumps(value, ensure_ascii=False, separators=(",", ":")) + "\n"
     ).encode()
-
-
-def _release_api(project: str, listed: bool) -> str:
-    _, owner, repo = project.split("/")
-    suffix = "releases?per_page=100&page=1" if listed else "releases/latest"
-    return f"https://api.github.com/repos/{owner}/{repo}/{suffix}"
-
-
-def _release_id(release: dict[str, Any]) -> int:
-    value = release.get("id")
-    if not isinstance(value, int) or isinstance(value, bool):
-        raise TypeError("release has no host-assigned identifier")
-    if value <= 0:
-        raise ValueError("release has an invalid host-assigned identifier")
-    return value
-
-
-def select_release(
-    http: GenerationHttp, project: str, rule: ProjectRule
-) -> dict[str, Any]:
-    settings = rule.additional_settings
-    listed = bool(
-        settings.get("includePrereleases") or settings.get("filterReleaseTitlesByRegEx")
-    )
-    document = http.get(
-        _release_api(project, listed), headers={"Accept": "application/vnd.github+json"}
-    ).json()
-    if not listed:
-        if not isinstance(document, dict):
-            raise ValueError("unexpected latest release response")
-        _publication_time(document)
-        _release_id(document)
-        if document.get("draft") is True or document.get("prerelease") is True:
-            raise ValueError("latest release must be published and stable")
-        return document
-    if not isinstance(document, list):
-        raise TypeError("unexpected releases-list response")
-    if len(document) > MAX_RELEASES:
-        raise ValueError("release scan exceeded the 100-release bound")
-    title_pattern = settings.get("filterReleaseTitlesByRegEx", "")
-    pattern = re.compile(title_pattern) if title_pattern else None
-    candidates: list[tuple[datetime, int, dict[str, Any]]] = []
-    for release in document:
-        if not isinstance(release, dict) or release.get("draft") is True:
-            continue
-        if release.get("prerelease") is True and not settings.get(
-            "includePrereleases", False
-        ):
-            continue
-        release_id = _release_id(release)
-        timestamp = _publication_time(release)
-        title = release.get("name")
-        if title is None or (isinstance(title, str) and not title.strip()):
-            title = release.get("tag_name")
-        if not isinstance(title, str):
-            raise TypeError("release has no title or tag")
-        if pattern and pattern.search(title.strip()) is None:
-            continue
-        candidates.append((timestamp, release_id, release))
-    if not candidates:
-        raise ValueError("no permitted release in the bounded 100-release scan")
-    return max(candidates, key=lambda item: (item[0], item[1]))[2]
-
-
-def _publication_time(release: dict[str, Any]) -> datetime:
-    for flag in ("draft", "prerelease"):
-        if flag in release and not isinstance(release[flag], bool):
-            raise TypeError(f"release {flag} must be boolean")
-    published = release.get("published_at")
-    if not isinstance(published, str):
-        raise TypeError("release has no publication date")
-    try:
-        timestamp = datetime.fromisoformat(published)
-    except ValueError as error:
-        raise ValueError(f"invalid release publication date {published!r}") from error
-    if timestamp.tzinfo is None:
-        raise ValueError("release publication date requires a timezone")
-    return timestamp
 
 
 def effective_settings(rule: ProjectRule) -> dict[str, Any]:
@@ -362,14 +281,6 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
         return report
 
 
-def _rendered_entry(entry: dict[str, Any]) -> dict[str, Any]:
-    """Render one catalog entry through the same normalization the generator
-    uses to write the catalog, so entries can be compared regardless of
-    settings ordering or default-merging.
-    """
-    return cast(dict[str, Any], json.loads(_render_catalog([entry]))["apps"][0])
-
-
 def _retained(rule: ProjectRule, accepted: dict[str, Any]) -> bool:
     """A failed project keeps its committed entry only when the current rule,
     rendered with the identity it is authoritative for, reproduces that entry
@@ -417,31 +328,6 @@ def _load_catalog(path: Path) -> list[dict[str, Any]]:
             )
         seen_ids[item["id"]] = item["url"]
     return doc["apps"]
-
-
-def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
-    apps: list[ComposedApp] = []
-    for entry in entries:
-        data = dict(entry)
-        settings = data.get("additionalSettings", {})
-        if isinstance(settings, str):
-            settings = json.loads(settings)
-        if not isinstance(settings, dict):
-            raise TypeError(f"entry {data.get('id')!r} has invalid additionalSettings")
-        data["additionalSettings"] = settings
-        apps.append(ComposedApp(default_family(data["id"]), data))
-    return render(apps).encode()
-
-
-def _validate_ids(entries: list[dict[str, Any]]) -> None:
-    seen: dict[str, str] = {}
-    for entry in entries:
-        prior = seen.get(entry["id"])
-        if prior is not None:
-            raise ValueError(
-                f"entry ID collision {entry['id']!r} between {prior} and {entry['url']}"
-            )
-        seen[entry["id"]] = entry["url"]
 
 
 def _write_report(output: Path, report: dict[str, Any]) -> None:

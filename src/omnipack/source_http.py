@@ -11,7 +11,8 @@ from __future__ import annotations
 import json
 import os
 import urllib.request
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
+from contextvars import ContextVar
 from dataclasses import dataclass
 from http.client import HTTPMessage
 from io import BytesIO
@@ -140,6 +141,9 @@ class SourceHttpClient(RetryingClient):
         super().__init__(**settings)
         self.config = config
         self.transport = transport or self._urllib_transport
+        self._allowed_url: ContextVar[Callable[[str], bool] | None] = ContextVar(
+            "source_allowed_url", default=None
+        )
 
     def get(
         self,
@@ -148,18 +152,25 @@ class SourceHttpClient(RetryingClient):
         headers: Mapping[str, str] | None = None,
         max_bytes: int | None = None,
         method: str = "GET",
+        allowed_url: Callable[[str], bool] | None = None,
     ) -> HttpResponse:
         """Fetch one URL, retrying transient failures up to the configured bound."""
         if max_bytes is not None and max_bytes < 0:
             raise ValueError("max_bytes must be nonnegative")
-        return self._retry(
-            url,
-            lambda: self.transport(
-                self.build_request(url, headers=headers, method=method),
-                self.timeout,
-                max_bytes,
-            ),
-        )
+        if allowed_url is not None and not allowed_url(url):
+            raise ValueError("request URL is outside the configured catalog")
+        token = self._allowed_url.set(allowed_url)
+        try:
+            return self._retry(
+                url,
+                lambda: self.transport(
+                    self.build_request(url, headers=headers, method=method),
+                    self.timeout,
+                    max_bytes,
+                ),
+            )
+        finally:
+            self._allowed_url.reset(token)
 
     def build_request(
         self,
@@ -179,6 +190,9 @@ class SourceHttpClient(RetryingClient):
         self, request: urllib.request.Request, new_url: str
     ) -> urllib.request.Request:
         """Rebuild authorization for a redirect destination."""
+        allowed_url = self._allowed_url.get()
+        if allowed_url is not None and not allowed_url(new_url):
+            raise ValueError("redirect URL is outside the configured catalog")
         headers = {
             name: value
             for name, value in (
