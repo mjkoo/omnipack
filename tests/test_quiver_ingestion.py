@@ -317,7 +317,12 @@ def test_current_configuration_fixture_composes_quiver(
     injected = other(
         "org.example.future", "newpublisher/future", "quiver", "quiver-generated"
     )
-    monkeypatch.setattr(current_config_support.quiver, "fetch", lambda *_: [injected])
+    original_fetch = current_config_support.quiver.fetch
+    monkeypatch.setattr(
+        current_config_support.quiver,
+        "fetch",
+        lambda *args: [*original_fetch(*args), injected],
+    )
     current = build_current_configuration()
     assert any(app == injected for app in current.candidates)
     assert all(

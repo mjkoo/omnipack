@@ -123,6 +123,26 @@
     {
       "match": {"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},
       "rationale": "The curated entry carries the rolling Xash3D Android APK policy."
+    },
+    {
+      "match": {"source":"quiver","origin":"quiver-generated","id":"com.mstan.emeraldrecomp","url":"https://github.com/mstan/emeraldrecomp"},
+      "family": "app:pokemon-emerald",
+      "rationale": "The native Emerald recompilation provides a standard-screen build of the same game as the separate dual-screen port."
+    },
+    {
+      "match": {"source":"codm2000","origin":"codm-generated","id":"com.pokeemerald.dualscreen","url":"https://github.com/Goldoire/pokeemerald-dualscreen"},
+      "family": "app:pokemon-emerald",
+      "rationale": "The existing dual-screen Emerald port remains the preferred dual build while the native recompilation supplies the standard-screen variant."
+    },
+    {
+      "match": {"source":"bboi","origin":"bboi-standard-asset","id":"com.chrissotraidis.kartpad","url":"https://github.com/chrissotraidis/kartpad"},
+      "packageId": "dev.kartpad.android",
+      "rationale": "Use the package identity declared by the inspected KartPad Android release while retaining the existing BBoi source settings."
+    },
+    {
+      "match": {"source":"bboi","origin":"bboi-standard-asset","id":"com.slickamogus.silenthill","url":"https://github.com/SlickAmogus/silent-hill-decomp"},
+      "packageId": "com.silenthill.port",
+      "rationale": "Use the package identity declared by the inspected Silent Hill Android release while retaining the existing BBoi source settings."
     }
   ],
   "pins": [

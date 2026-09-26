@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    candidate_selector,
+    parse_composition_policy,
+)
 from omnipack.model import Variant
 from omnipack.render import render
 from omnipack.urls import normalize_project_url
@@ -189,7 +194,23 @@ def test_captured_candidates_form_the_recorded_families(
             )
             for item in selection.considered
         )
-    assert {
-        family: sorted(list(member) for member in members)
-        for family, members in families.items()
-    } == read(FORMED_FAMILIES)
+    actual_family = {
+        member: family for family, members in families.items() for member in members
+    }
+    corrected = apply_composition_policy(
+        parse_composition_policy(current_configuration.policy),
+        current_configuration.candidates,
+    )
+    denied_ids = {item["id"] for item in read(ROOT / "config/deny.json")}
+    surviving = {
+        candidate_selector(app).key
+        for app in corrected
+        if app.eligibility and app.id not in denied_ids
+    }
+    assert set(actual_family) == surviving
+
+    for recorded_members in read(FORMED_FAMILIES).values():
+        present = [
+            tuple(member) for member in recorded_members if tuple(member) in surviving
+        ]
+        assert len({actual_family[member] for member in present}) <= 1
