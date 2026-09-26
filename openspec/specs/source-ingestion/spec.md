@@ -487,7 +487,7 @@ Package ids for these explicit extras SHALL be supplied by the maintainer who ad
 - **WHEN** an entry declares GitLab with a gitlab.com URL whose host is spelled with a `www.` prefix, or that carries a query, a fragment, credentials, an explicit port, a reserved `-` path component or more path components than a project and its namespaces
 - **THEN** the build fails with the entry and the invalid URL identified, rather than reading a project path out of it
 
-### Requirement: Committed codm2000 entries are dual-screen builds that keep their generated identity
+### Requirement: Every committed codm2000 entry is a dual-screen candidate with its generated identity
 
 The system SHALL ingest accepted codm2000 entries from committed Obtainium JSON.
 README parsing and package-ID resolution SHALL occur only in the separate
@@ -498,12 +498,11 @@ prerelease enablement and filename filters, and SHALL NOT reinterpret a
 track-only resource ID as an Android package ID.
 
 During routine ingestion, codm2000 entries SHALL be dual-screen builds, eligible
-for dual only and preferred there. A normalized project URL already supplied by
-a higher-precedence candidate that its source makes eligible for dual SHALL
-suppress the corresponding codm2000 candidate before exclusions and selection.
-Single-only coverage SHALL NOT suppress it. Suppression SHALL use source
-eligibility alone, and ingestion SHALL NOT read or apply the composition policy.
-Merely appearing in codm2000 SHALL NOT promote an ordinary higher-source build.
+for dual only and preferred there. Every committed entry SHALL become a
+candidate whether or not another source lists the same project, and ingestion
+SHALL NOT read or apply the composition policy. Family formation, dual
+preference, precedence, pins and package denials in pack-composition decide
+between a codm2000 build and another source's build of the same app.
 
 Retained entries SHALL preserve codm2000 provenance, generated origin, original
 package identity and source settings, so family rules and fork-specific overlays
@@ -513,15 +512,10 @@ candidate does, is defined by "Composition policy separates app families from
 package identities" and "Explicit selections identify an eligible candidate" in
 pack-composition.
 
-#### Scenario: Dual coverage suppresses a local catalog candidate
+#### Scenario: Another source lists the same project
 
-- **WHEN** a higher-source candidate covers dual with a normalized URL equal to a committed codm2000 entry
-- **THEN** the codm2000 candidate is suppressed without promoting the higher-source candidate
-
-#### Scenario: Single-only coverage leaves a dual candidate
-
-- **WHEN** the higher-precedence candidate for that URL is eligible for single only, as an RJNY entry left out of the dual-screen export is
-- **THEN** the committed entry remains a dual-screen codm2000 candidate, preferred in dual
+- **WHEN** a higher-precedence source supplies a candidate with a normalized URL equal to a committed codm2000 entry's
+- **THEN** the committed entry still enters composition as a dual-screen codm2000 candidate, and pack-composition selects between the two builds
 
 #### Scenario: Retained generated selectors keep matching
 
@@ -535,7 +529,7 @@ pack-composition.
 
 #### Scenario: Committed prerelease entries retain their settings
 
-- **WHEN** the committed catalog includes manifest-verified APK entries with explicit prerelease settings and no higher-source coverage
+- **WHEN** the committed catalog includes manifest-verified APK entries with explicit prerelease settings
 - **THEN** they enter dual as installable APK entries, retaining those settings and their original identities without entering single
 
 #### Scenario: A tracking resource keeps its identity
@@ -544,10 +538,9 @@ pack-composition.
 - **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
 - **AND** neither pack's entry for the app the resource extends is replaced
 
-### Requirement: Source records carry no composition policy fields
+### Requirement: No source record carries composition policy fields
 
-This requirement SHALL apply to every record a source normalizes, including a
-committed codm2000 record later suppressed by higher-precedence dual coverage,
+This requirement SHALL apply to every record a source normalizes,
 and SHALL NOT apply to an RJNY entry marked as excluded from export, which is
 dropped before normalization. Every such record, from each upstream catalog, the
 committed codm2000 catalog and the hand-written extras, SHALL be
@@ -592,12 +585,6 @@ unchanged for rendering, from every source.
 - **WHEN** an RJNY entry marked as excluded from export carries a top-level
   `family`
 - **THEN** ingestion does not fail and the entry is dropped
-
-#### Scenario: Suppressed codm2000 entry is checked
-
-- **WHEN** a committed codm2000 entry whose normalized URL is covered by a
-  higher-precedence dual candidate carries a top-level `variant`
-- **THEN** ingestion fails naming codm2000, the entry and `variant`
 
 #### Scenario: Unrelated unmodeled field passes through
 
