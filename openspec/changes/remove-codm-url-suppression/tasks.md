@@ -10,4 +10,4 @@
 ## 3. Outputs and review
 
 - [x] 3.1 Rebuild both packs and the README and verify they match the committed outputs byte-for-byte; record the comparison in a `validation.md` in this change directory.
-- [ ] 3.2 Run formatting, lint, typing and tests, complete the implementation review wave and address its findings, and audit every checkbox against code, tests and evidence.
+- [x] 3.2 Run formatting, lint, typing and tests, complete the implementation review wave and address its findings, and audit every checkbox against code, tests and evidence.
