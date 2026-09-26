@@ -75,7 +75,12 @@ def test_full_reconciliation_holds_for_current_composition(
         assert "com.ghostship.android" not in ids
         assert "com.retroarch.aarch64" in ids
         assert (
-            not {"com.raekwon1603.supermetroid", "com.raekwon1603.supermetroidds"} & ids
+            not {
+                "com.raekwon1603.supermetroid",
+                "com.raekwon1603.supermetroidds",
+                "com.raekwon.supermetroid",
+            }
+            & ids
         )
         metroid = [app for app in apps if app.family == "app:super-metroid"]
         if variant is Variant.SINGLE:
@@ -122,6 +127,16 @@ def test_full_reconciliation_holds_for_current_composition(
         gen1 = next(app for app in apps if app.id == "com.theboisclub.pokemonred")
         assert gen1.url == "https://github.com/bryanthaboi/gen1recomp"
         assert gen1.data["additionalSettings"]["versionDetection"] is True
+
+    for package_id in ("app.nanostack.pixelguide", "com.emulnk"):
+        selection = next(
+            item
+            for item in result.report.selections
+            if item.family == f"package:{package_id}" and item.variant is Variant.DUAL
+        )
+        assert selection.source == "rjny"
+        assert selection.origin == "rjny-catalog"
+        assert selection.reason == "pin"
 
     ctr = [
         selection

@@ -575,14 +575,6 @@
       "github.com/binaryquantumsoul/esde_android_apps"
     ]
   ],
-  "package:com.raekwon.supermetroid": [
-    [
-      "codm2000",
-      "codm-generated",
-      "com.raekwon.supermetroid",
-      "github.com/raekwon1603/super_metroid-android"
-    ]
-  ],
   "package:com.raofflineproxy": [
     [
       "rjny",

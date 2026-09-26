@@ -1,7 +1,7 @@
 ## 1. Ingestion
 
-- [ ] 1.1 Remove the covered-URL filter and the higher-precedence input from the codm2000 adapter and ingestion wiring, keeping its dual-only, dual-preferred mapping, duplicate-ID check and admission reporting; verify every committed entry becomes a candidate and the admissions report lists all of them.
-- [ ] 1.2 Replace the codm2000 suppression tests with one test where a higher-precedence source lists the same project URL and both builds reach composition; keep the policy-field check covering every codm2000 record. Update the captured-fixture pipeline to stop filtering by URL. Verify the full test suite passes.
+- [x] 1.1 Remove the covered-URL filter and the higher-precedence input from the codm2000 adapter and ingestion wiring, keeping its dual-only, dual-preferred mapping, duplicate-ID check and admission reporting; verify every committed entry becomes a candidate and the admissions report lists all of them.
+- [x] 1.2 Replace the codm2000 suppression tests with one test where a higher-precedence source lists the same project URL and both builds reach composition; keep the policy-field check covering every codm2000 record. Update the captured-fixture pipeline to stop filtering by URL. Verify the full test suite passes.
 
 ## 2. Configuration
 

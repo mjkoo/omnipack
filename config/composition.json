@@ -126,6 +126,8 @@
     }
   ],
   "pins": [
+    {"family":"package:app.nanostack.pixelguide","variant":"dual","match":{"source":"rjny","origin":"rjny-catalog","id":"app.nanostack.pixelguide","url":"https://github.com/rexmont/Pixel-Guide-Android"},"rationale":"Keep RJNY's Pixel Guide rendering in dual when the codm2000 build is also admitted."},
+    {"family":"package:com.emulnk","variant":"dual","match":{"source":"rjny","origin":"rjny-catalog","id":"com.emulnk","url":"https://github.com/EmuLnk/emulnk"},"rationale":"Keep RJNY's EmuLnk rendering in dual when the codm2000 build is also admitted."},
     {"family":"app:super-metroid","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"rationale":"Select the vetted MetroidArch successor for dual-screen devices."},
     {"family":"app:ghostship","variant":"dual","match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"rationale":"Keep official Ghostship in the dual-screen pack."},
     {"family":"app:gen1recomp","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"rationale":"Keep canonical Gen1Recomp in the dual-screen pack."},

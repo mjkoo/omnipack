@@ -8,6 +8,10 @@
     "reason": "Replace the legacy Ghostship Android fork with the maintained official release."
   },
   {
+    "id": "com.raekwon.supermetroid",
+    "reason": "Retire the codm2000 Super Metroid build alongside the old BBoi entries; dual-screen devices use MetroidArch."
+  },
+  {
     "id": "com.raekwon1603.supermetroid",
     "reason": "Retire the reviewed old Super Metroid catalog entry; dual-screen devices use MetroidArch."
   },
