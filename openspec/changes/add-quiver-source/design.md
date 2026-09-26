@@ -35,7 +35,10 @@ versioned and holds per-project APK settings and name/category overrides keyed
 by canonical GitHub project URL, plus a skip list. A skip rule carries a reason
 and names a row's listed normalized GitHub URL or, for an unsupported row, its
 literal repository values; it is matched before any request for that row, so a
-persistently failing or unsupported row is silenced. Pruning an app is not
+persistently failing or unsupported row is silenced. A discovery skip pauses
+inspection, not admission: an accepted entry matching the skipped listed URL
+is retained unchanged and reported as skipped, without claiming a fresh check.
+Other sources are unaffected. Pruning an app is not
 Quiver policy: the package deny list matches by package ID across every
 source, so a denied app stays out under any repository name. Omitted rules
 mean stable APK discovery. Do not add an include allowlist or silently convert

@@ -103,7 +103,11 @@ unsupported row, by its literal `repository` value together with its
 `repositorySource` when present, and SHALL carry a reason. It SHALL be matched
 before any request for that row, so a skipped row makes no repository, release
 or APK request and a persistently failing or unsupported row is silenced.
-Pruning an app from the packs is done by package denial, not by a skip rule.
+A discovery skip pauses inspection of that row; it does not reject the app.
+If the skipped row's listed URL matches an accepted entry, generation SHALL
+retain that entry unchanged and report it as skipped without claiming a fresh
+check. A skip SHALL NOT affect entries supplied by other sources. Pruning an
+app from the packs is done by package denial, not by a skip rule.
 
 #### Scenario: Newly discovered stable Android project
 
@@ -138,7 +142,13 @@ Pruning an app from the packs is done by package denial, not by a skip rule.
 #### Scenario: Reviewed skip
 
 - **WHEN** a skip rule names a row's listed URL with a reason and that repository's lookup would fail, for example with HTTP 403
-- **THEN** the project is omitted and reported with that reason, no request is made for the row, and generation continues
+- **THEN** fresh resolution is omitted and reported with that reason, no request is made for the row, and generation continues
+
+#### Scenario: Discovery skip matches an accepted entry
+
+- **WHEN** a reviewed discovery skip names a listed row whose URL matches an accepted Quiver entry
+- **THEN** generation retains that entry byte-for-byte and reports the skipped refresh, without requesting the repository, release or APK
+- **AND** entries from other sources remain unaffected
 
 ### Requirement: Quiver candidates are deterministic and preserve unchanged entries on resolution failure
 
