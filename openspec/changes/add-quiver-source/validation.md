@@ -378,3 +378,61 @@ After the audit, the full suite passed again: **961 tests in 29.90 seconds,
 50 changed paths contain no scratch evidence, APK binaries, credentials or
 device artifacts. The change remains active on `add-quiver-source`; separate
 OpenSpec verification and archive were not invoked.
+
+## Post-implementation review revisions
+
+A later three-lens review (generation, ingestion and composition, proposal
+automation) found no source-specific rule and confirmed precedence, codm
+behavior and every export difference. It raised the following, all resolved:
+
+- Generated Quiver URLs, authors and fallback names were lowercased because
+  rendering used the normalized matching key. Rendering now uses GitHub's
+  reported `full_name`; matching and policy lookup still use the normalized key.
+- Each repository was looked up twice. Discovery now records 404 and 451 as
+  unavailable repositories, and release lookup no longer re-reads repository
+  metadata.
+- A skip or retained lookup failure could collide with another row resolving
+  to the same accepted entry. The collision is now decided once per project,
+  with the other rows reported against the retained entry. A skip on an old
+  repository name while another row lists the new name still fails naming both
+  URLs, because the skipped row is never looked up and the rename is unknown.
+- Every non-transient HTTP status is now typed, so codm's HTTP failure wording
+  reads "returned HTTP N after N attempts"; its catalog bytes are unchanged.
+- The `quiver` source section is required like every other source, and
+  catalog records are normalized once.
+- Quiver project rules wrap the shared project rule with a closed category
+  type; skips are two typed variants; name selection has one helper; the
+  generation report is typed; platform metadata is no longer read, and the
+  location clause and its scenario were removed from the spec delta. The
+  transport-interface cleanup deferred above is done: the catalog confinement
+  predicate is part of the HTTP interface and reaches the redirect handler
+  directly.
+- The proposal publisher types its source names and step outcomes, drops
+  unused codm constants, and renders the PR body only in `summarize` after every
+  check succeeds; the workflow derives the report path from its source input.
+- Test inputs: the captured RJNY and BBoi inputs were refreshed from live
+  upstream on 2026-09-26 (BBoi v3.3.0 adds the real KartPad and Silent Hill rows
+  plus `com.sergiomanzur.cvlodrecomp`; RJNY adds `com.med.sleepmanager` and
+  `local.nova.diagnostic`), replacing the fabricated BBoi rows. The exact
+  formed-families comparison is restored for members outside generated
+  catalogs. The codm pre-migration reproduction keeps its own frozen 2026-09-10
+  copies.
+
+Checks after the revisions:
+
+- Live `pack generate-source quiver`: success, no unresolved projects, 199
+  no-Android outcomes. Eleven entries changed URL or author casing only.
+  EmeraldRecomp's latest release currently has no eligible APK, so its accepted
+  entry was retained unchanged; its URL keeps the accepted lowercase form until
+  a later run resolves it.
+- `pack build` and `pack verify`: success. Both exports and the README differ
+  from the prior build only in URL and author casing of six Quiver-selected
+  apps.
+- Full suite: 973 passed. Ruff format, Ruff lint and Ty passed; actionlint and
+  zizmor passed on the workflows.
+
+Existing Obtainium installs of KartPad and Silent Hill tracked under the old
+BBoi IDs (`com.chrissotraidis.kartpad`, `com.slickamogus.silenthill`) may be
+left as orphaned entries after the ID correction; release notes should say so.
+The change remains active on `add-quiver-source`; OpenSpec verification and
+archive were not invoked.
