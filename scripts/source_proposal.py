@@ -17,7 +17,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 from scripts.workflow_support import (
     FULL_SHA,
@@ -46,9 +46,12 @@ CANONICAL_REPOSITORY = "mjkoo/omnipack"
 CANONICAL_OWNER = "mjkoo"
 
 
+SourceName = Literal["codm", "quiver"]
+
+
 @dataclass(frozen=True)
 class SourceDescriptor:
-    name: str
+    name: SourceName
     branch: str
     catalog: str
     candidate: str
@@ -56,7 +59,7 @@ class SourceDescriptor:
     subject: str
 
 
-SOURCES = {
+SOURCES: Mapping[SourceName, SourceDescriptor] = {
     name: SourceDescriptor(
         name,
         f"automation/{name}-catalog",
@@ -65,21 +68,21 @@ SOURCES = {
         f".build/source-generation/{name}/report.json",
         f"chore(catalog): update reviewed {name} source",
     )
-    for name in ("codm", "quiver")
+    for name in get_args(SourceName)
 }
-# Preserve the original codm defaults for callers that do not select a source.
-BRANCH_NAME = SOURCES["codm"].branch
-CATALOG_PATH = SOURCES["codm"].catalog
-CANDIDATE_PATH = SOURCES["codm"].candidate
-REPORT_PATH = SOURCES["codm"].report
-COMMIT_SUBJECT = SOURCES["codm"].subject
-PR_TITLE = COMMIT_SUBJECT
 GENERATION_SUCCESS_STATUS = "success"
 HANDOFF_DIRECTORY = "source-handoff"
 BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
 # GitHub rejects a pull request body longer than this many characters.
 PR_BODY_LIMIT = 65536
+
+# The values GitHub reports for a step's `outcome`.
+StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
+STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
+# The summary reports this for a step whose outcome is absent or unrecognized.
+StepResult = StepOutcome | Literal["unavailable"]
+VALIDATION_STEPS = ("generation", "staging", "tests", "build", "verify", "guard")
 
 
 # --- stage (read-only check job) -----------------------------------------
@@ -135,16 +138,15 @@ def run_stage(
     github_sha: str,
     run_url: str,
     bundle_path: Path,
-    body_path: Path,
     *,
-    source: str = "codm",
+    source: SourceName = "codm",
 ) -> StageOutcome:
     """Copy the generated candidate over the reviewed catalog and commit it.
 
     Runs in the read-only job. When the catalog changes, it commits only that
     file on a fresh local branch and hands the commit to the write job as a
-    bundle, alongside a PR body file, so the write job can push only bytes
-    this run actually rendered.
+    bundle. The PR body is written later by `summarize`, and only once every
+    check has succeeded.
     """
     descriptor = SOURCES[source]
     try:
@@ -215,21 +217,8 @@ def run_stage(
                 )
             bundle_path.parent.mkdir(parents=True, exist_ok=True)
             git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
-            body_text = _render_report(
-                base_sha=base_sha,
-                run_url=run_url,
-                added=added,
-                removed=removed,
-                changed=changed_urls,
-                retained_failures=retained_failures,
-                diagnostics=diagnostics,
-            )
-            body_path.parent.mkdir(parents=True, exist_ok=True)
-            body_path.write_text(body_text, encoding="utf-8")
         except OSError:
-            return _stage_failure(
-                "bundle", "could not write the bundle or PR body", base_sha
-            )
+            return _stage_failure("bundle", "could not write the bundle", base_sha)
 
     status: StageStatus = "changed" if changed else "unchanged"
     return StageOutcome(
@@ -304,7 +293,6 @@ def _report_diagnostics(report: Mapping[str, object]) -> tuple[str, ...]:
             "tracking",
             "filteredAssets",
             "filterDisagreements",
-            "platformMetadata",
         )
         if key in report
     )
@@ -399,7 +387,7 @@ def run_publish(
     body_path: Path | None,
     *,
     gh: GhRunner | None = None,
-    source: str = "codm",
+    source: SourceName = "codm",
 ) -> PublishOutcome:
     """Close a stale proposal, or push and open or refresh the source-update PR.
 
@@ -614,9 +602,8 @@ def _catalog_only_diff(
 # --- shared CLI plumbing ---------------------------------------------------
 
 
-def _handoff_paths(environ: Mapping[str, str]) -> tuple[Path, Path]:
-    directory = Path(require_env(environ, "RUNNER_TEMP")) / HANDOFF_DIRECTORY
-    return directory / BUNDLE_NAME, directory / BODY_NAME
+def _handoff_directory(environ: Mapping[str, str]) -> Path:
+    return Path(require_env(environ, "RUNNER_TEMP")) / HANDOFF_DIRECTORY
 
 
 def _report_outcome(environ: Mapping[str, str], summary: str, *, failed: bool) -> int:
@@ -633,16 +620,17 @@ def _report_outcome(environ: Mapping[str, str], summary: str, *, failed: bool) -
 
 
 def _run_stage_command(
-    environ: Mapping[str, str], *, root: Path | None = None, source: str = "codm"
+    environ: Mapping[str, str],
+    *,
+    root: Path | None = None,
+    source: SourceName = "codm",
 ) -> int:
     selected_root = root or Path.cwd()
-    bundle_path, body_path = _handoff_paths(environ)
     outcome = run_stage(
         selected_root,
         environ.get("GITHUB_SHA", ""),
         run_url(environ),
-        bundle_path,
-        body_path,
+        _handoff_directory(environ) / BUNDLE_NAME,
         source=source,
     )
     if outcome.status != "failed":
@@ -663,7 +651,7 @@ def _run_publish_command(
     body_path: Path | None,
     *,
     root: Path | None = None,
-    source: str = "codm",
+    source: SourceName = "codm",
 ) -> int:
     selected_root = root or Path.cwd()
     outcome = run_publish(
@@ -678,7 +666,7 @@ def _run_publish_command(
     return _report_outcome(environ, outcome.summary, failed=outcome.status == "failed")
 
 
-def _run_guard_command(environ: Mapping[str, str], source: str) -> int:
+def _run_guard_command(environ: Mapping[str, str], source: SourceName) -> int:
     descriptor = SOURCES[source]
     root = Path.cwd()
     sha = environ.get("CANDIDATE_SHA", "")
@@ -702,20 +690,54 @@ def _run_guard_command(environ: Mapping[str, str], source: str) -> int:
     return 0
 
 
-def _run_summary_command(environ: Mapping[str, str], source: str) -> int:
-    descriptor = SOURCES[source]
-    stages = ("generation", "staging", "tests", "build", "verify", "guard")
-    outcomes = {
-        stage: environ.get(stage.upper() + "_RESULT", "unavailable") for stage in stages
-    }
-    validation = (
-        "Validation outcomes:\n"
-        + "\n".join(
-            f"{stage}: {value if value in {'success', 'failure', 'skipped', 'cancelled'} else 'unavailable'}"
-            for stage, value in outcomes.items()
-        )
-        + "\n"
+def _step_result(value: str) -> StepResult:
+    return value if value in STEP_OUTCOMES else "unavailable"
+
+
+def _render_validation(results: Mapping[str, StepResult]) -> str:
+    lines = [f"{step}: {result}" for step, result in results.items()]
+    return "Validation outcomes:\n" + "\n".join(lines) + "\n"
+
+
+def render_pr_body(
+    report: Mapping[str, object],
+    *,
+    base_sha: str,
+    run_url: str,
+    results: Mapping[str, StepResult],
+) -> str:
+    """The escaped PR body: the run, base, changes, diagnostics and results.
+
+    The report section is bounded so the whole body, including the validation
+    results, stays within GitHub's length limit.
+    """
+    validation = _render_validation(results)
+    added, removed, changed = _report_changes(report)
+    report_text = _render_report(
+        base_sha=base_sha,
+        run_url=run_url,
+        added=added,
+        removed=removed,
+        changed=changed,
+        retained_failures=_report_retained_failures(report),
+        diagnostics=_report_diagnostics(report),
+        limit=PR_BODY_LIMIT - len(validation) - 1,
     )
+    return report_text + "\n" + validation
+
+
+def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
+    """Summarize the run, and write the PR body only when every step succeeded.
+
+    Writing the body here, after the checks, means the write job can only ever
+    receive a body for a candidate that passed them.
+    """
+    descriptor = SOURCES[source]
+    results = {
+        step: _step_result(environ.get(step.upper() + "_RESULT", ""))
+        for step in VALIDATION_STEPS
+    }
+    validation = _render_validation(results)
     base = environ.get("BASE_SHA", "")
     if FULL_SHA.fullmatch(base) is None:
         base = "unavailable (staging did not succeed)"
@@ -737,21 +759,13 @@ def _run_summary_command(environ: Mapping[str, str], source: str) -> int:
             diagnostics=_report_diagnostics(report),
             limit=None,
         )
-        if all(outcomes[stage] == "success" for stage in stages):
-            _, body_path = _handoff_paths(environ)
+        if all(result == "success" for result in results.values()):
+            body_path = _handoff_directory(environ) / BODY_NAME
+            body_path.parent.mkdir(parents=True, exist_ok=True)
             body_path.write_text(
-                _render_report(
-                    base_sha=base,
-                    run_url=run_url(environ),
-                    added=added,
-                    removed=removed,
-                    changed=changed,
-                    retained_failures=_report_retained_failures(report),
-                    diagnostics=_report_diagnostics(report),
-                    limit=PR_BODY_LIMIT - len(validation) - 1,
-                )
-                + "\n"
-                + validation,
+                render_pr_body(
+                    report, base_sha=base, run_url=run_url(environ), results=results
+                ),
                 encoding="utf-8",
             )
     append_summary(environ, summary + "\n" + validation)

@@ -209,16 +209,18 @@ arbitrary catalog or branch paths. `stage` requires a successful generation repo
 regular candidate/catalog files, an empty index, and a base catalog mode of
 `100644`. If the candidate differs from main, it commits only that catalog on its
 local `automation/<source>-catalog` branch with hooks disabled. It emits the
-checked commit SHA and base revision, a Git bundle containing the commit, and an
-escaped PR body. Staging failure hands off nothing.
+checked commit SHA and base revision and a Git bundle containing the commit.
+Staging failure hands off nothing.
 
 For a changed candidate, the job runs the full tests, `pack build` and `pack verify`
 with that catalog in place. Its `guard` command then checks the candidate's single
 base parent, source-specific path and file modes, and confirms that the regular
 workspace catalog still equals the checked commit. The always-run summary reports
 generation, staging, tests, build, verification and guard outcomes from the actual
-step results. A successful changed candidate's PR body includes those same
-validation results. Failed or skipped checks are never reported as successful.
+step results. Only when every one of those steps succeeded does the summary also
+write the escaped PR body, which includes the same validation results, so a
+candidate that failed a check never has a body to publish. Failed or skipped
+checks are never reported as successful.
 
 The checked bundle and PR body are uploaded only after successful checks as
 `source-handoff-<source>-<run-id>` with one-day retention. The selected generation
@@ -280,7 +282,7 @@ what failed, and hands nothing off:
 - `stage failed: could not write the catalog`;
 - `stage failed: could not commit the candidate`;
 - `stage failed: HEAD is not the candidate commit`, or
-  `stage failed: could not write the bundle or PR body`.
+  `stage failed: could not write the bundle`.
 
 ### Publish summary lines
 

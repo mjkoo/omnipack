@@ -18,8 +18,10 @@ import pytest
 
 from scripts import source_proposal as proposal_module
 from scripts.source_proposal import (
-    BRANCH_NAME,
-    CATALOG_PATH,
+    SOURCES,
+    VALIDATION_STEPS,
+    SourceName,
+    render_pr_body,
     run_publish,
     run_stage,
 )
@@ -42,6 +44,8 @@ from tests.publication_support import (
 pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
 
 CANDIDATE_DIR = ".build/source-generation/codm"
+BRANCH_NAME = SOURCES["codm"].branch
+CATALOG_PATH = SOURCES["codm"].catalog
 
 
 def _repo(tmp_path: Path, name: str = "repo") -> Path:
@@ -59,12 +63,32 @@ def _repo(tmp_path: Path, name: str = "repo") -> Path:
 
 
 def _write_candidate(
-    root: Path, catalog_text: str, report: dict, source: str = "codm"
+    root: Path, catalog_text: str, report: dict, source: SourceName = "codm"
 ) -> None:
     generation_dir = root / f".build/source-generation/{source}"
     generation_dir.mkdir(parents=True, exist_ok=True)
     (generation_dir / "catalog.json").write_text(catalog_text)
     (generation_dir / "report.json").write_text(json.dumps(report))
+
+
+def _write_body(
+    root: Path,
+    body_path: Path,
+    base: str,
+    run: str = "https://github.example/runs/1",
+    source: SourceName = "codm",
+) -> None:
+    """Write the PR body `summarize` renders once every check has succeeded."""
+    report = json.loads(root.joinpath(SOURCES[source].report).read_text())
+    body_path.write_text(
+        render_pr_body(
+            report,
+            base_sha=base,
+            run_url=run,
+            results=dict.fromkeys(VALIDATION_STEPS, "success"),
+        ),
+        encoding="utf-8",
+    )
 
 
 def _report(
@@ -96,17 +120,13 @@ def test_head_other_than_github_sha_fails_with_no_commit_or_bundle(
     root = _repo(tmp_path)
     _write_candidate(root, '{"apps": [1]}\n', _report())
     bundle_path = tmp_path / "candidate.bundle"
-    body_path = tmp_path / "pr-body.md"
 
-    outcome = run_stage(
-        root, "0" * 40, "https://github.example/runs/1", bundle_path, body_path
-    )
+    outcome = run_stage(root, "0" * 40, "https://github.example/runs/1", bundle_path)
 
     assert outcome.status == "failed"
     assert outcome.stage == "checkout"
     assert outcome.summary == "stage failed: HEAD is not GITHUB_SHA"
     assert not bundle_path.exists()
-    assert not body_path.exists()
 
 
 def test_successful_stage_summary_reports_base_revision(
@@ -124,7 +144,6 @@ def test_successful_stage_summary_reports_base_revision(
         base,
         "https://github.example/runs/2",
         tmp_path / "success.bundle",
-        tmp_path / "success-body.md",
     )
     assert outcome.status == "changed"
     assert f"Base SHA: {base}" in outcome.summary
@@ -160,8 +179,9 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
     body_path = tmp_path / "pr-body.md"
 
     outcome = run_stage(
-        root, base, "https://github.example/runs/9", tmp_path / "b.bundle", body_path
+        root, base, "https://github.example/runs/9", tmp_path / "b.bundle"
     )
+    _write_body(root, body_path, base, "https://github.example/runs/9")
 
     expected = (
         "Added:\nhttps://example.test/a?x=1&amp;y=2\n\n"
@@ -193,9 +213,7 @@ def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) ->
     (root / "dist/single-screen.json").write_text('{"apps": [1]}\n')
     (root / "README.md").write_text("changed guide\n")
 
-    outcome = run_stage(
-        root, base, "run", tmp_path / "candidate.bundle", tmp_path / "pr-body.md"
-    )
+    outcome = run_stage(root, base, "run", tmp_path / "candidate.bundle")
 
     assert outcome.status == "changed"
     assert outcome.sha is not None
@@ -225,16 +243,14 @@ def test_symlinked_stage_input_fails_with_no_commit_or_bundle(
     link_target = CATALOG_PATH if symlink_path != CATALOG_PATH else "README.md"
     target.symlink_to(root / link_target)
     bundle_path = tmp_path / "candidate.bundle"
-    body_path = tmp_path / "pr-body.md"
 
-    outcome = run_stage(root, base, "run", bundle_path, body_path)
+    outcome = run_stage(root, base, "run", bundle_path)
 
     assert outcome.status == "failed"
     assert outcome.stage == "files"
     assert outcome.summary == f"stage failed: {symlink_path} is a symlink"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
-    assert not body_path.exists()
 
 
 def test_missing_generated_candidate_fails_naming_it(tmp_path: Path) -> None:
@@ -244,7 +260,7 @@ def test_missing_generated_candidate_fails_naming_it(tmp_path: Path) -> None:
     (root / CANDIDATE_DIR / "catalog.json").unlink()
     bundle_path = tmp_path / "candidate.bundle"
 
-    outcome = run_stage(root, base, "run", bundle_path, tmp_path / "pr-body.md")
+    outcome = run_stage(root, base, "run", bundle_path)
 
     assert outcome.status == "failed"
     assert outcome.summary == f"stage failed: {CANDIDATE_DIR}/catalog.json is missing"
@@ -277,11 +293,10 @@ def test_stage_cli_reads_env_and_exit_code_and_writes_outputs(
     assert f"Base SHA: {base}" in summary
     handoff = runner_temp / "source-handoff"
     bundle_path = handoff / "candidate.bundle"
-    body = (handoff / "pr-body.md").read_text()
     assert _git(root, "bundle", "list-heads", str(bundle_path)) == f"{sha} HEAD"
     assert base in _git(root, "bundle", "verify", str(bundle_path))
-    assert "https://github.example/mjkoo/omnipack/actions/runs/42" in body
-    assert base in body
+    # Only `summarize`, after every check has succeeded, writes the PR body.
+    assert not (handoff / "pr-body.md").exists()
     assert _git(root, "show", "-s", "--format=%an <%ae>%n%cn <%ce>", sha) == (
         f"{BOT_NAME} <{BOT_EMAIL}>\n{BOT_NAME} <{BOT_EMAIL}>"
     )
@@ -301,20 +316,18 @@ def test_report_whose_status_is_not_success_fails_with_no_commit(
     report["status"] = "failed"
     _write_candidate(root, '{"apps": [{"id": "a"}]}\n', report)
     bundle_path = tmp_path / "candidate.bundle"
-    body_path = tmp_path / "pr-body.md"
 
-    outcome = run_stage(root, base, "run", bundle_path, body_path)
+    outcome = run_stage(root, base, "run", bundle_path)
 
     assert outcome.status == "failed"
     assert outcome.stage == "report"
     assert outcome.summary == "stage failed: generation did not succeed"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
-    assert not body_path.exists()
 
 
-def test_stage_caps_a_huge_retained_failure_list_inside_the_pre_block(
-    tmp_path: Path,
+def test_summary_caps_a_huge_retained_failure_list_inside_the_pre_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
@@ -324,21 +337,21 @@ def test_stage_caps_a_huge_retained_failure_list_inside_the_pre_block(
     _write_candidate(
         root, '{"apps": [{"id": "a"}]}\n', _report(retained_failures=failures)
     )
-    body_path = tmp_path / "pr-body.md"
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+    for step in VALIDATION_STEPS:
+        monkeypatch.setenv(step.upper() + "_RESULT", "success")
+    monkeypatch.setenv("BASE_SHA", base)
 
-    outcome = run_stage(
-        root, base, "https://github.example/runs/1", tmp_path / "b.bundle", body_path
-    )
+    assert proposal_module.main(["summarize"]) == 0
 
-    assert outcome.status == "changed"
-    body_text = body_path.read_text()
+    body_text = (runner_temp / "source-handoff" / "pr-body.md").read_text()
     assert len(body_text) <= 65536
     pre_block = body_text[body_text.index("<pre>") : body_text.index("</pre>")]
     assert "https://example.test/project-0: " in pre_block
     kept = pre_block.count("https://example.test/project-")
     assert 0 < kept < 1000
     assert f"and {1000 - kept} more" in pre_block
-    assert body_text.endswith("</pre>\n")
+    assert body_text.endswith("guard: success\n")
 
 
 def _stage_environment(
@@ -453,7 +466,11 @@ def _bare_branch_sha(bare: Path) -> str:
 
 
 def _pr(
-    number: int, *, cross_repo: bool = False, owner: str = "mjkoo", source: str = "codm"
+    number: int,
+    *,
+    cross_repo: bool = False,
+    owner: str = "mjkoo",
+    source: SourceName = "codm",
 ) -> dict:
     return {
         "number": number,
@@ -471,9 +488,10 @@ def _bare_from(seed: Path, tmp_path: Path, name: str = "remote.git") -> Path:
 
 
 def _staged_candidate(
-    tmp_path: Path, *, seed_name: str = "seed", source: str = "codm"
+    tmp_path: Path, *, seed_name: str = "seed", source: SourceName = "codm"
 ) -> tuple[Path, str, str, Path, Path]:
-    """Run a real `stage` to produce a commit, its bundle and body file."""
+    """Run a real `stage` to produce a commit and its bundle, then write the
+    body file `summarize` would write after successful checks."""
     seed = _repo(tmp_path, seed_name)
     base = _git(seed, "rev-parse", "HEAD")
     _write_candidate(
@@ -489,12 +507,12 @@ def _staged_candidate(
         base,
         "https://github.example/runs/1",
         bundle_path,
-        body_path,
         source=source,
     )
     assert outcome.status == "changed"
     sha = outcome.sha
     assert sha is not None
+    _write_body(seed, body_path, base, source=source)
     return seed, base, sha, bundle_path, body_path
 
 
@@ -537,7 +555,6 @@ def test_retained_failure_reproducing_main_closes_open_proposal(
         base,
         "https://github.example/runs/1",
         tmp_path / "candidate.bundle",
-        tmp_path / "pr-body.md",
     )
     assert stage.status == "unchanged"
     assert stage.changed is False
@@ -776,7 +793,7 @@ def test_unsafe_catalog_commit_is_rejected(
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 def test_remote_main_other_than_base_fails_on_both_paths(
-    tmp_path: Path, source: str
+    tmp_path: Path, source: SourceName
 ) -> None:
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path, source=source)
     bare = _bare_from(seed, tmp_path)
@@ -865,12 +882,11 @@ def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
     )
     bundle_path = tmp_path / "candidate.bundle"
     body_path = tmp_path / "pr-body.md"
-    outcome = run_stage(
-        seed, base, "https://github.example/runs/1", bundle_path, body_path
-    )
+    outcome = run_stage(seed, base, "https://github.example/runs/1", bundle_path)
     assert outcome.status == "changed"
     sha = outcome.sha
     assert sha is not None
+    _write_body(seed, body_path, base)
 
     bare = _bare_from(seed, tmp_path)
     write_side = shallow_checkout(tmp_path, bare, base)
@@ -1045,11 +1061,10 @@ def test_bot_branch_built_on_an_older_main_is_compared_from_a_shallow_checkout(
     )
     bundle_path = tmp_path / "candidate.bundle"
     body_path = tmp_path / "pr-body.md"
-    outcome = run_stage(
-        seed, base, "https://github.example/runs/1", bundle_path, body_path
-    )
+    outcome = run_stage(seed, base, "https://github.example/runs/1", bundle_path)
     sha = outcome.sha
     assert sha is not None
+    _write_body(seed, body_path, base)
     # The existing bot branch was built on the older main, outside the write
     # side's depth-1 history of the newer one.
     if tree_difference == "none":
@@ -1077,7 +1092,7 @@ def test_bot_branch_built_on_an_older_main_is_compared_from_a_shallow_checkout(
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 def test_source_stage_and_publish_cannot_cross_catalogs(
-    tmp_path: Path, source: str
+    tmp_path: Path, source: SourceName
 ) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
@@ -1089,7 +1104,8 @@ def test_source_stage_and_publish_cannot_cross_catalogs(
     (root / other_path).write_text("unstaged other source\n")
     bundle, body = tmp_path / "candidate.bundle", tmp_path / "body.md"
 
-    result = run_stage(root, base, "run", bundle, body, source=source)
+    result = run_stage(root, base, "run", bundle, source=source)
+    _write_body(root, body, base, source=source)
 
     assert result.status == "changed"
     assert result.sha is not None
@@ -1133,7 +1149,7 @@ def test_source_stage_and_publish_cannot_cross_catalogs(
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 def test_unchanged_closure_and_pr_count_are_source_scoped(
-    tmp_path: Path, source: str
+    tmp_path: Path, source: SourceName
 ) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
@@ -1159,7 +1175,9 @@ def test_unchanged_closure_and_pr_count_are_source_scoped(
 
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
-def test_stage_rejects_pre_staged_other_source(tmp_path: Path, source: str) -> None:
+def test_stage_rejects_pre_staged_other_source(
+    tmp_path: Path, source: SourceName
+) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     other = "quiver" if source == "codm" else "codm"
@@ -1172,7 +1190,6 @@ def test_stage_rejects_pre_staged_other_source(tmp_path: Path, source: str) -> N
         base,
         "run",
         tmp_path / "candidate.bundle",
-        tmp_path / "body.md",
         source=source,
     )
     assert result.status == "failed"
@@ -1203,7 +1220,6 @@ def test_unchanged_quiver_diagnostics_include_skips_and_policy(tmp_path: Path) -
         base,
         "run",
         tmp_path / "candidate.bundle",
-        tmp_path / "body.md",
         source="quiver",
     )
     assert result.status == "unchanged"
@@ -1272,7 +1288,7 @@ def test_summary_does_not_claim_validation_when_generation_report_is_missing(
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 def test_source_cli_handoff_carries_successful_validation_results(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: SourceName
 ) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
@@ -1318,6 +1334,54 @@ def test_source_cli_handoff_carries_successful_validation_results(
     )
 
 
+def test_failed_check_leaves_no_body_so_publish_fails_before_any_write(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(
+        root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
+    )
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+    assert proposal_module.main(["stage"]) == 0
+    sha = _git(root, "rev-parse", "HEAD")
+    for step in VALIDATION_STEPS:
+        monkeypatch.setenv(
+            step.upper() + "_RESULT", "failure" if step == "tests" else "success"
+        )
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["summarize"]) == 0
+    handoff = runner_temp / "source-handoff"
+    assert not (handoff / "pr-body.md").exists()
+    assert "tests: failure" in (tmp_path / "summary.md").read_text()
+
+    bare = _bare_from(root, tmp_path)
+    writer = shallow_checkout(tmp_path, bare, base)
+    monkeypatch.chdir(writer)
+    monkeypatch.setenv("CHANGED", "true")
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    gh = _proposal_gh(pr_list=[_pr(4)])
+    monkeypatch.setattr(proposal_module, "SubprocessGhRunner", lambda: gh)
+    exit_code = proposal_module.main(
+        [
+            "publish",
+            "--bundle",
+            str(handoff / "candidate.bundle"),
+            "--body-file",
+            str(handoff / "pr-body.md"),
+        ]
+    )
+
+    assert exit_code == 1
+    assert (
+        (tmp_path / "summary.md")
+        .read_text()
+        .endswith("publish failed: PR body rejected\n")
+    )
+    assert not any(call[:2] in (("pr", "edit"), ("pr", "create")) for call in gh.calls)
+    assert _bare_branch_sha(bare) == ""
+
+
 def test_publisher_rejects_unsupported_source_before_any_command(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -1330,7 +1394,7 @@ def test_publisher_rejects_unsupported_source_before_any_command(
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 def test_source_stage_rejects_executable_base_catalog(
-    tmp_path: Path, source: str
+    tmp_path: Path, source: SourceName
 ) -> None:
     root = _repo(tmp_path)
     path = f"config/catalogs/{source}.json"
@@ -1340,8 +1404,6 @@ def test_source_stage_rejects_executable_base_catalog(
     _git(root, "commit", "-qm", "executable catalog")
     base = _git(root, "rev-parse", "HEAD")
     _write_candidate(root, '{"apps": ["selected"]}\n', _report(), source)
-    result = run_stage(
-        root, base, "run", tmp_path / "b.bundle", tmp_path / "body.md", source=source
-    )
+    result = run_stage(root, base, "run", tmp_path / "b.bundle", source=source)
     assert result.status == "failed"
     assert _git(root, "rev-parse", "HEAD") == base
