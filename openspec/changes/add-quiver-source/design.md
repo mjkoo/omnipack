@@ -28,8 +28,8 @@ extras remain supported. No device access is authorized by this change.
 
 ### Generate an accepted local source
 
-Add a Quiver section to config/sources.json with index URL, optional platform
-metadata location from the index, catalog path and exception-policy path.
+Add a Quiver section to config/sources.json with index URL, catalog path and
+exception-policy path.
 Use config/catalogs/quiver.json and config/quiver-projects.json. The latter is
 versioned and holds per-project APK settings and name/category overrides keyed
 by canonical GitHub project URL, plus a skip list. A skip rule carries a reason
@@ -65,7 +65,7 @@ blocks nothing. A list whose overall shape is malformed fails. Of the remaining 
 uses only `project` for naming and `releaseAssetFilter` for diagnostics.
 Resolve supported GitHub repositories through repository metadata, retain canonical identity and alias provenance,
 and collapse duplicate canonical projects. Treat upstream text as data; ignore
-mod/install directives. Confining list and platform-metadata locations to the
+mod/install directives. Confining list locations to the
 configured catalog host and path prefix keeps an upstream index from steering
 requests elsewhere; reuse bounded HTTP and exact-host credential handling.
 
@@ -90,8 +90,8 @@ failure, such as a repository GitHub blocks with 403, blocks every run visibly
 until a reviewed skip names its row. No fallback scan broadens selection.
 Platform metadata is advisory and never authorizes skipping fresh discovery.
 A valid list of desktop-only projects can yield an empty APK candidate; an empty
-project discovery result or missing list fails instead. Missing/malformed optional
-platform data is reported and ignored.
+project discovery result or missing list fails instead. Generation does not read
+optional platform data at all.
 
 ### Deterministic candidate and conservative failure behavior
 

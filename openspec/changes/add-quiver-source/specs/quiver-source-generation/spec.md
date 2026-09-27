@@ -11,11 +11,9 @@ building and device validation.
 Generation SHALL read the configured Quiver index and all lists it references,
 validate their shapes, and preserve project/list provenance in diagnostics.
 Malformed or unavailable required lists and an empty discovered project set
-SHALL fail generation without proposing deletions. Every list location and
-the platform-metadata location SHALL lie within the configured catalog host
-and path prefix: a list location outside it SHALL fail generation as a
-malformed index, and a platform-metadata location outside it SHALL be reported
-and ignored like other unusable optional metadata. A row's repository SHALL
+SHALL fail generation without proposing deletions. Every list location SHALL
+lie within the configured catalog host and path prefix: a list location
+outside it SHALL fail generation as a malformed index. A row's repository SHALL
 be its `repository` value, an `owner/name` pair mapped to
 https://github.com/owner/name (the row's listed URL), and a `repositorySource`
 that is absent or equals `github` case-insensitively SHALL mean GitHub; of the other row fields, only
@@ -41,11 +39,6 @@ missing, stale or failed metadata SHALL NOT prevent fresh release discovery.
 
 - **WHEN** the index references a list outside the configured catalog host and path prefix
 - **THEN** generation fails as a malformed index without fetching that list
-
-#### Scenario: Platform metadata outside the configured catalog
-
-- **WHEN** the index names a platform-metadata location outside the configured catalog host and path prefix
-- **THEN** that metadata is reported and ignored, and discovery continues
 
 #### Scenario: Repository rename overlaps another row
 
