@@ -117,18 +117,10 @@ class RetryingClient:
             except (OSError, HTTPException) as error:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
-                if not _is_transient(error) or number + 1 == attempts:
-                    if _is_transient(error):
-                        raise TransientHttpError(url, number + 1) from error
-                    if isinstance(error, urllib.error.HTTPError) and error.code in {
-                        403,
-                        404,
-                        451,
-                    }:
+                    if not _is_transient(error):
                         raise HttpStatusError(url, error.code, number + 1) from error
-                    raise HttpError(
-                        f"request to {redact_url(url)} failed after {number + 1} attempts"
-                    ) from error
+                if number + 1 == attempts:
+                    raise TransientHttpError(url, number + 1) from error
                 self.sleep(self.backoff * (2**number))
         raise AssertionError("request loop did not return or raise")
 

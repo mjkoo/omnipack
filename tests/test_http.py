@@ -195,3 +195,19 @@ def test_diagnostic_urls_redact_credentials_and_query_values() -> None:
     message = str(raised.value)
     assert "secret" not in message
     assert "token=REDACTED" in message
+
+
+@pytest.mark.parametrize("status", [400, 401, 410, 422])
+def test_every_nontransient_http_status_is_typed(status: int) -> None:
+    url = "https://example.com/data"
+    transport = RecordingTransport(
+        [urllib.error.HTTPError(url, status, "rejected", Message(), None)]
+    )
+
+    with pytest.raises(
+        HttpStatusError, match=f"returned HTTP {status} after 1 attempts"
+    ) as caught:
+        HttpClient(transport=transport).get(url)
+
+    assert caught.value.status == status
+    assert len(transport.requests) == 1
