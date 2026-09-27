@@ -50,13 +50,7 @@ def ingest_all(
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)
     generated = codm.fetch(root, section("codm"), report)
-    # Historical source fixtures predate Quiver; an absent section remains a
-    # valid way to reproduce those captures. Current configuration includes it.
-    quiver_apps = (
-        quiver.fetch(root, section("quiver"), report)
-        if "quiver" in source_config
-        else []
-    )
+    quiver_apps = quiver.fetch(root, section("quiver"), report)
     return [*rjny_apps, *bboi_apps, *generated, *quiver_apps, *extra_apps]
 
 

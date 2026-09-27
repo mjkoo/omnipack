@@ -6,7 +6,7 @@ import json
 from pathlib import Path
 from typing import Any
 
-from omnipack.model import Variant
+from omnipack.model import App, Variant
 from omnipack.package_id import PACKAGE_NAME_RE
 from omnipack.project_policy import ProjectRule, parse_project_policy, repository_url
 from omnipack.quiver_source import QuiverRule
@@ -27,11 +27,21 @@ _POLICY_SETTINGS = {
 
 def load_quiver_catalog(path: Path) -> list[dict[str, Any]]:
     """Read accepted source records without fetching or changing their bytes."""
+    return [entry for entry, _ in _validated_catalog(path)]
+
+
+def load_quiver_apps(path: Path) -> list[App]:
+    """Read accepted source records as normalized build candidates."""
+    return [app for _, app in _validated_catalog(path)]
+
+
+def _validated_catalog(path: Path) -> list[tuple[dict[str, Any], App]]:
     try:
         document = json.loads(path.read_bytes())
         if not isinstance(document, dict) or not isinstance(document.get("apps"), list):
             raise TypeError("catalog must be an object with an apps list")
         entries = document["apps"]
+        result: list[tuple[dict[str, Any], App]] = []
         projects: set[str] = set()
         for entry in entries:
             app = normalize_record(
@@ -73,8 +83,9 @@ def load_quiver_catalog(path: Path) -> list[dict[str, Any]]:
                     },
                 }
             )
+            result.append((entry, app))
         _validate_ids(entries)
-        return entries
+        return result
     except (OSError, ValueError, TypeError, KeyError) as error:
         raise SourceError("quiver", str(error)) from error
 

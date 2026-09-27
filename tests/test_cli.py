@@ -50,6 +50,7 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
             "dual_asset_pattern": "dual-*.json",
         },
         "codm": {"catalog": "config/catalogs/codm.json"},
+        "quiver": {"catalog": "config/catalogs/quiver.json"},
     }
     files: dict[str, object] = {
         "sources.json": source_config,
@@ -61,6 +62,7 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
     for name, value in files.items():
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     (config / "catalogs").mkdir()
+    (config / "catalogs/quiver.json").write_text('{"apps": []}')
     (config / "catalogs/codm.json").write_text(
         json.dumps(
             {

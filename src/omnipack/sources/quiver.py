@@ -6,8 +6,8 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Any
 
-from omnipack.model import App, Variant
-from omnipack.sources.common import SourceError, normalize_record
+from omnipack.model import App
+from omnipack.sources.common import SourceError
 
 
 def fetch(
@@ -18,23 +18,12 @@ def fetch(
     catalog_path = config.get("catalog")
     if not isinstance(catalog_path, str) or not catalog_path.strip():
         raise SourceError("quiver", "configured location is empty")
-    from omnipack.quiver_catalog import load_quiver_catalog
+    from omnipack.quiver_catalog import load_quiver_apps
 
-    try:
-        entries = load_quiver_catalog(root / catalog_path)
-    except (OSError, ValueError, TypeError) as error:
-        raise SourceError("quiver", str(error)) from error
-    result: list[App] = []
-    for record in entries:
-        app = normalize_record(
-            record,
-            source="quiver",
-            eligibility=frozenset(Variant),
-            origin="quiver-generated",
+    apps = load_quiver_apps(root / catalog_path)
+    if report is not None:
+        report.admitted.extend(
+            {"source": "quiver", "url": app.url, "kind": "apk", "id": app.id}
+            for app in apps
         )
-        result.append(app)
-        if report is not None:
-            report.admitted.append(
-                {"source": "quiver", "url": app.url, "kind": "apk", "id": app.id}
-            )
-    return result
+    return apps

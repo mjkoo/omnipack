@@ -710,13 +710,19 @@ def ingest_over_codm_entry(
         "overrideSource": "GitHub",
     }
     (tmp_path / "codm.json").write_text(json.dumps({"apps": [entry]}))
+    (tmp_path / "quiver.json").write_text(json.dumps({"apps": []}))
     monkeypatch.setattr(rjny, "fetch", lambda *_args: higher)
     monkeypatch.setattr(bboi, "fetch", lambda *_args: [])
     monkeypatch.setattr(extras, "fetch", lambda *_args: [])
     return ingest_all(
         tmp_path,
         FakeHttp({}),
-        {"rjny": {}, "bboi": {}, "codm": {"catalog": "codm.json"}},
+        {
+            "rjny": {},
+            "bboi": {},
+            "codm": {"catalog": "codm.json"},
+            "quiver": {"catalog": "quiver.json"},
+        },
         [],
         IngestionReport(),
     )
