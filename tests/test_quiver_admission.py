@@ -5,15 +5,12 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-import pytest
-
 from omnipack.catalog import generate_catalog, replace_catalog, split_catalog
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.quiver_generation import generate_quiver
 from omnipack.render import render
-from omnipack.source_catalog import render_catalog
 from omnipack.sources import quiver
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
@@ -114,80 +111,51 @@ def test_initial_admission_keeps_preexisting_pack_entries(
         } == {}
 
 
-@pytest.mark.parametrize(
-    "membership",
-    ["committed", "fixture-overlaps", "dev.kartpad.android", "com.silenthill.port"],
-)
-def test_existing_bboi_port_settings_win_over_same_project_quiver_entries(
+def test_committed_package_id_corrections_onto_quiver_ids_keep_the_packs(
     current_configuration: CurrentConfiguration,
-    tmp_path: Path,
-    membership: str,
 ) -> None:
-    overlaps = (
-        ("com.chrissotraidis.kartpad", "dev.kartpad.android"),
-        ("com.slickamogus.silenthill", "com.silenthill.port"),
-    )
-    replaced_ids = (
-        {effective for _, effective in overlaps}
-        if membership == "fixture-overlaps"
-        else {membership}
-    )
-    candidates = [
-        app
-        for app in current_configuration.candidates
-        if not (app.provenance.source == "quiver" and app.id in replaced_ids)
-    ]
-    if membership == "fixture-overlaps":
-        entries = [
-            {
-                "id": effective_id,
-                "url": original.url,
-                "name": original.name,
-                "overrideSource": "GitHub",
-                "additionalSettings": {"includePrereleases": True},
-            }
-            for original_id, effective_id in overlaps
-            for original in candidates
-            if original.provenance.source == "bboi" and original.id == original_id
-        ]
-        assert len(entries) == len(overlaps)
-        (tmp_path / "quiver.json").write_bytes(render_catalog(entries))
-        candidates.extend(quiver.fetch(tmp_path, {"catalog": "quiver.json"}))
-    result = compose(
-        candidates,
+    """Quiver never displaces a candidate corrected onto its package id."""
+    current = current_configuration
+    quiver_ids = {
+        app.id for app in current.candidates if app.provenance.source == "quiver"
+    }
+    corrected = {
+        (
+            rule["match"]["source"],
+            rule["match"]["origin"],
+            rule["match"]["id"],
+            normalize_project_url(rule["match"]["url"]),
+        ): rule["packageId"]
+        for rule in current.policy["candidates"]
+        if rule.get("packageId") in quiver_ids and rule["match"]["source"] != "quiver"
+    }
+    for selection in current.result.report.selections:
+        members = {
+            (
+                item.source,
+                item.origin,
+                item.original_id,
+                normalize_project_url(item.url),
+            )
+            for item in (selection, *selection.considered)
+        }
+        if corrected.keys() & members:
+            assert selection.source != "quiver"
+
+    without_overlaps = compose(
+        [
+            app
+            for app in current.candidates
+            if not (app.provenance.source == "quiver" and app.id in corrected.values())
+        ],
         json.loads((ROOT / "config/deny.json").read_text()),
         json.loads((ROOT / "config/overlay.json").read_text()),
-        policy=parse_composition_policy(current_configuration.policy),
+        policy=parse_composition_policy(current.policy),
     )
     for variant in Variant:
-        assert render(result.apps[variant]) == render(
-            current_configuration.result.apps[variant]
+        assert render(without_overlaps.apps[variant]) == render(
+            current.result.apps[variant]
         )
-    for original_id, effective_id in overlaps:
-        [original] = [
-            app
-            for app in candidates
-            if app.provenance.source == "bboi" and app.id == original_id
-        ]
-        for variant in Variant:
-            [selection] = [
-                item
-                for item in result.report.selections
-                if item.variant is variant and item.effective_id == effective_id
-            ]
-            assert selection.source == "bboi"
-            assert selection.original_id == original_id
-            has_quiver_overlap = any(
-                app.provenance.source == "quiver" and app.id == effective_id
-                for app in candidates
-            )
-            assert (
-                any(item.source == "quiver" for item in selection.considered)
-                == has_quiver_overlap
-            )
-            [selected] = [app for app in result.apps[variant] if app.id == effective_id]
-            assert selected.url == original.url
-            assert selected.data["additionalSettings"] == original.additional_settings
 
 
 def test_quiver_credit_survives_catalog_rendering(

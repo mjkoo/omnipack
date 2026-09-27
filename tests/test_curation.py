@@ -68,6 +68,10 @@ def test_upstream_pack_tracker_stays_excluded_from_current_composition(
 def test_every_committed_denial_excludes_its_package_when_present(
     current_configuration: CurrentConfiguration,
 ) -> None:
+    # A denial can match nothing because a generated catalog dropped the app.
+    # The build reports such a denial as stale rather than failing, so check
+    # that every stale report is genuinely absent and every present package
+    # is removed from both packs.
     denied = {entry["id"] for entry in read(ROOT / "config/deny.json")}
     effective_candidates = apply_composition_policy(
         parse_composition_policy(current_configuration.policy),

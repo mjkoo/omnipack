@@ -209,8 +209,21 @@ def test_captured_candidates_form_the_recorded_families(
     }
     assert set(actual_family) == surviving
 
-    for recorded_members in read(FORMED_FAMILIES).values():
+    recorded = read(FORMED_FAMILIES)
+    for recorded_members in recorded.values():
         present = [
             tuple(member) for member in recorded_members if tuple(member) in surviving
         ]
         assert len({actual_family[member] for member in present}) <= 1
+
+    # Generated catalogs change only through reviewed catalog updates, so the
+    # recorded families freeze only the members the maintained rules and the
+    # captured upstream inputs decide.
+    generated = current_configuration.generated_origins
+    projected = {
+        family: sorted(list(member) for member in members if member[1] not in generated)
+        for family, members in families.items()
+    }
+    assert {family: members for family, members in projected.items() if members} == (
+        recorded
+    )

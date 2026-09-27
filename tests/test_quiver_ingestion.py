@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import shutil
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -190,6 +191,41 @@ def test_same_project_different_package_remains_a_separate_family() -> None:
         == {"org.example.old", "org.example.new"}
         for variant in Variant
     )
+
+
+def test_package_id_correction_joins_a_quiver_candidates_family() -> None:
+    existing = replace(
+        other("org.example.old", "owner/same", "bboi", "bboi-standard-asset"),
+        additional_settings={"includePrereleases": False},
+    )
+    quiver_app = replace(
+        other("org.example.new", "Owner/Same", "quiver", "quiver-generated"),
+        additional_settings={"includePrereleases": True},
+    )
+    parsed = policy(
+        [
+            {
+                "match": {
+                    "source": "bboi",
+                    "origin": "bboi-standard-asset",
+                    "id": existing.id,
+                    "url": existing.url,
+                },
+                "packageId": quiver_app.id,
+                "rationale": "Use the package identity the release declares.",
+            }
+        ]
+    )
+    result = compose([existing, quiver_app], [], [], policy=parsed)
+    for variant in Variant:
+        [selected] = result.apps[variant]
+        assert (selected.id, selected.url) == (quiver_app.id, existing.url)
+        assert selected.data["additionalSettings"] == existing.additional_settings
+        [selection] = [
+            item for item in result.report.selections if item.variant is variant
+        ]
+        assert (selection.source, selection.original_id) == ("bboi", existing.id)
+        assert [item.source for item in selection.considered] == ["quiver"]
 
 
 def test_quiver_only_single_and_codm_dual_preference() -> None:
