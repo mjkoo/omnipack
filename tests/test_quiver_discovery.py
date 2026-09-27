@@ -13,7 +13,6 @@ from omnipack.quiver_source import (
     NoApk,
     NoRelease,
     QuiverPolicy,
-    RepositoryUnavailable,
     discover_quiver,
     load_quiver_config,
     lookup_quiver_release,
@@ -87,9 +86,10 @@ def test_discovery_collapses_renames_preserves_provenance_and_filter_diagnostic(
     http = FakeHttp(values)
     result = discover_quiver(INDEX, policy(), http)
     assert len(result.projects) == 2
-    merged = next(p for p in result.projects if p.canonical == "github.com/o/repo")
+    merged = next(p for p in result.projects if p.key == "github.com/o/repo")
     assert {r.listed for r in merged.rows} == {"github.com/o/old", "github.com/o/repo"}
     assert merged.name == "Port A"
+    assert merged.url == "https://github.com/O/Repo"
     assert result.filter_disagreements
     assert len(result.unsupported) == 2
     assert "https://api.github.com/repos/x/y" not in http.urls
@@ -215,6 +215,24 @@ def test_repository_lookup_failure_is_available_for_accepted_entry_retention() -
     assert isinstance(failure.error, HttpStatusError)
 
 
+@pytest.mark.parametrize("status", [404, 451])
+def test_conclusive_repository_absence_is_unavailable_not_a_project(
+    status: int,
+) -> None:
+    values = documents(
+        {"repository": "O/Repo", "project": "Port"}, {"repository": "o/repo"}
+    )
+    values[API] = HttpStatusError(API, status)
+    http = FakeHttp(values)
+    result = discover_quiver(INDEX, policy(), http)
+    assert not result.projects and not result.lookup_failures
+    assert len(result.unavailable) == 1
+    unavailable = result.unavailable[0]
+    assert (unavailable.url, unavailable.error.status) == ("github.com/o/repo", status)
+    assert len(unavailable.rows) == 2
+    assert http.urls == [INDEX, LIST, API]
+
+
 def test_duplicate_policy_json_keys_fail() -> None:
     with pytest.raises(ValueError, match="duplicate"):
         parse_quiver_policy(b'{"schemaVersion":1,"projects":{},"projects":{}}')
@@ -222,26 +240,14 @@ def test_duplicate_policy_json_keys_fail() -> None:
 
 def test_release_outcomes_distinguish_absence_from_failure() -> None:
     rule = policy().rule_for("github.com/o/repo")
-    metadata = {API: {"full_name": "O/Repo"}}
     latest = API + "/releases/latest"
-    with pytest.raises(RepositoryUnavailable):
-        lookup_quiver_release(
-            FakeHttp({API: HttpStatusError(API, 404)}), "github.com/o/repo", rule
-        )
+    http = FakeHttp({latest: HttpStatusError(latest, 404)})
     with pytest.raises(NoRelease):
-        lookup_quiver_release(
-            FakeHttp({**metadata, latest: HttpStatusError(latest, 404)}),
-            "github.com/o/repo",
-            rule,
-        )
-    with pytest.raises(RepositoryUnavailable) as unavailable:
-        lookup_quiver_release(
-            FakeHttp({API: HttpStatusError(API, 451)}), "github.com/o/repo", rule
-        )
-    assert unavailable.value.status == 451
+        lookup_quiver_release(http, "github.com/o/repo", rule)
+    assert http.urls == [latest]
     with pytest.raises(HttpError):
         lookup_quiver_release(
-            FakeHttp({API: HttpStatusError(API, 403)}), "github.com/o/repo", rule
+            FakeHttp({latest: HttpStatusError(latest, 403)}), "github.com/o/repo", rule
         )
 
 
@@ -259,8 +265,6 @@ def test_release_request_failures_do_not_become_no_release(
         request: Request, timeout: float, max_bytes: int | None
     ) -> HttpResponse:
         requests.append(request.full_url)
-        if request.full_url == API:
-            return HttpResponse(API, 200, Message(), b'{"full_name": "O/Repo"}')
         assert request.full_url == endpoint
         if status is None:
             raise OSError("connection interrupted")
@@ -278,7 +282,7 @@ def test_release_request_failures_do_not_become_no_release(
     http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
     with pytest.raises(HttpError):
         lookup_quiver_release(http, "github.com/o/repo", rule)
-    assert requests == [API, endpoint]
+    assert requests == [endpoint]
 
 
 def test_no_eligible_apk_is_typed() -> None:

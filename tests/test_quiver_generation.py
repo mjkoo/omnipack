@@ -466,3 +466,99 @@ def test_invalid_policy_makes_no_requests_and_fallback_name_is_repository(
     http = ScenarioHttp(values)
     assert generate_quiver(tmp_path, http=http)["status"] == "failed"
     assert not http.urls
+
+
+def test_rendered_entry_keeps_github_casing_for_url_author_and_fallback_name(
+    tmp_path: Path,
+) -> None:
+    values = setup(tmp_path, rows=[{"repository": "eukaryot/Sonic3AIR"}])
+    api = "https://api.github.com/repos/eukaryot/sonic3air"
+    values[api] = {"full_name": "Eukaryot/sonic3air"}
+    values[api + "/releases/latest"] = values.pop(API + "/releases/latest")
+    report = generate_quiver(tmp_path, http=ScenarioHttp(values))
+    assert report["status"] == "success"
+    entry = candidate(tmp_path)[0]
+    assert (entry["url"], entry["author"], entry["name"]) == (
+        "https://github.com/Eukaryot/sonic3air",
+        "Eukaryot",
+        "sonic3air",
+    )
+    assert report["apk"][0]["url"] == "github.com/eukaryot/sonic3air"
+
+
+def test_repository_metadata_is_requested_once_per_project(tmp_path: Path) -> None:
+    values = setup(tmp_path)
+    http = ScenarioHttp(values)
+    assert generate_quiver(tmp_path, http=http)["status"] == "success"
+    assert http.urls.count(API) == 1
+
+
+def _renamed(values: dict[str, Any]) -> None:
+    """List the renamed repository under its old name as a second row."""
+    values[LIST]["apps"].append({"repository": "o/old", "project": "Port"})
+    values["https://api.github.com/repos/o/old"] = {"full_name": "o/repo"}
+
+
+def test_skip_on_canonical_url_covers_a_row_listing_an_old_name(
+    tmp_path: Path,
+) -> None:
+    values = setup(tmp_path)
+    generate_quiver(tmp_path, http=ScenarioHttp(values))
+    accepted = accept(tmp_path)
+    _renamed(values)
+    set_policy(tmp_path, skips=[{"url": "github.com/o/repo", "reason": "paused"}])
+    http = ScenarioHttp(values)
+    report = generate_quiver(tmp_path, http=http)
+    assert report["status"] == "success", report.get("error")
+    assert (tmp_path / OUTPUT / "catalog.json").read_bytes() == accepted
+    assert API + "/releases/latest" not in http.urls
+    assert not report["apk"]
+    [skipped] = report["skipped"]
+    assert skipped["retained"] is True
+    [matched] = skipped["matchedProjects"]
+    assert matched["url"] == "github.com/o/repo"
+    assert [row["listed"] for row in matched["rows"]] == ["github.com/o/old"]
+
+
+def test_skip_on_old_name_with_resolving_new_name_fails_naming_both_projects(
+    tmp_path: Path,
+) -> None:
+    values = setup(tmp_path, rows=[{"repository": "o/old", "project": "Port"}])
+    values["https://api.github.com/repos/o/old"] = {"full_name": "o/old"}
+    values["https://api.github.com/repos/o/old/releases/latest"] = values[
+        API + "/releases/latest"
+    ]
+    generate_quiver(tmp_path, http=ScenarioHttp(values))
+    accepted = accept(tmp_path)
+    values[LIST]["apps"].append({"repository": "o/repo", "project": "Port"})
+    values["https://api.github.com/repos/o/old"] = {"full_name": "o/repo"}
+    set_policy(tmp_path, skips=[{"url": "github.com/o/old", "reason": "paused"}])
+    http = ScenarioHttp(values)
+    report = generate_quiver(tmp_path, http=http)
+    assert report["status"] == "failed"
+    assert "https://github.com/o/old" in report["error"]
+    assert "https://github.com/o/repo" in report["error"]
+    assert "collision" in report["error"]
+    assert "https://api.github.com/repos/o/old" not in http.urls
+    assert accepted
+
+
+def test_retained_lookup_failure_covers_a_row_resolving_to_its_entry(
+    tmp_path: Path,
+) -> None:
+    values = setup(tmp_path)
+    generate_quiver(tmp_path, http=ScenarioHttp(values))
+    accepted = accept(tmp_path)
+    _renamed(values)
+    values[API] = HttpStatusError(API, 403)
+    http = ScenarioHttp(values)
+    report = generate_quiver(tmp_path, http=http)
+    assert report["status"] == "success", report.get("error")
+    assert (tmp_path / OUTPUT / "catalog.json").read_bytes() == accepted
+    assert API + "/releases/latest" not in http.urls
+    assert not report["apk"] and not report["unresolved"]
+    [retained] = report["retainedFailures"]
+    assert retained["url"] == "github.com/o/repo"
+    [matched] = retained["matchedProjects"]
+    assert matched["url"] == "github.com/o/repo"
+    assert [row["listed"] for row in matched["rows"]] == ["github.com/o/old"]

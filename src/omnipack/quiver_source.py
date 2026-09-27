@@ -195,8 +195,8 @@ class QuiverRow:
 
 @dataclass(frozen=True, slots=True)
 class QuiverProject:
-    canonical: str
-    canonical_url: str
+    key: str
+    url: str
     name: str
     rows: tuple[QuiverRow, ...]
     rule: QuiverRule
@@ -210,11 +210,21 @@ class QuiverLookupFailure:
 
 
 @dataclass(frozen=True, slots=True)
+class QuiverUnavailable:
+    """A listed repository whose lookup conclusively returned HTTP 404 or 451."""
+
+    url: str
+    rows: tuple[QuiverRow, ...]
+    error: HttpStatusError
+
+
+@dataclass(frozen=True, slots=True)
 class QuiverDiscovery:
     projects: tuple[QuiverProject, ...]
     skipped: tuple[tuple[QuiverRow, str], ...]
     unsupported: tuple[QuiverRow, ...]
     lookup_failures: tuple[QuiverLookupFailure, ...]
+    unavailable: tuple[QuiverUnavailable, ...]
     filter_disagreements: tuple[str, ...]
     metadata_diagnostic: str | None
     list_ids: tuple[str, ...]
@@ -289,7 +299,8 @@ def _repository_api(project: str) -> str:
     return f"https://api.github.com/repos/{owner}/{repository}"
 
 
-def _canonical_repository(http: GenerationHttp, listed: str) -> str:
+def _canonical_repository(http: GenerationHttp, listed: str) -> tuple[str, str]:
+    """Return the normalized key used for matching and GitHub's display URL."""
     response = http.get(
         _repository_api(listed), headers={"Accept": "application/vnd.github+json"}
     )
@@ -299,7 +310,8 @@ def _canonical_repository(http: GenerationHttp, listed: str) -> str:
     full_name = value["full_name"]
     if _PAIR.fullmatch(full_name) is None:
         raise ValueError(f"repository metadata has invalid full_name for {listed}")
-    return repository_url(f"https://github.com/{full_name}")
+    url = f"https://github.com/{full_name}"
+    return repository_url(url), url
 
 
 def discover_quiver(
@@ -371,8 +383,10 @@ def discover_quiver(
     unsupported: list[QuiverRow] = []
     lookup_failures: list[QuiverLookupFailure] = []
     grouped: dict[str, list[QuiverRow]] = {}
+    display: dict[str, str] = {}
     aliases: dict[str, str] = {}
-    lookups: dict[str, str | HttpError | ValueError | TypeError] = {}
+    unavailable: dict[str, tuple[HttpStatusError, list[QuiverRow]]] = {}
+    lookups: dict[str, tuple[str, str] | HttpError | ValueError | TypeError] = {}
     for row in rows:
         skip = next(
             (
@@ -391,18 +405,18 @@ def discover_quiver(
         if row.listed not in lookups:
             try:
                 lookups[row.listed] = _canonical_repository(http, row.listed)
-            except HttpStatusError as error:
-                lookups[row.listed] = (
-                    row.listed if error.status in {404, 451} else error
-                )
             except (HttpError, ValueError, TypeError) as error:
                 lookups[row.listed] = error
-        canonical = lookups[row.listed]
-        if not isinstance(canonical, str):
+        lookup = lookups[row.listed]
+        if isinstance(lookup, HttpStatusError) and lookup.status in {404, 451}:
+            unavailable.setdefault(row.listed, (lookup, []))[1].append(row)
+            continue
+        if not isinstance(lookup, tuple):
             lookup_failures.append(
-                QuiverLookupFailure(row, policy.rule_for(row.listed), canonical)
+                QuiverLookupFailure(row, policy.rule_for(row.listed), lookup)
             )
             continue
+        canonical, display[canonical] = lookup
         grouped.setdefault(canonical, []).append(row)
         aliases[row.listed] = canonical
     projects: list[QuiverProject] = []
@@ -422,21 +436,24 @@ def discover_quiver(
             {row.project_name for row in members if row.project_name},
             key=lambda value: (value.casefold(), value),
         )
-        name = rule.name or (names[0] if names else canonical.rsplit("/", 1)[-1])
+        url = display[canonical]
+        name = rule.name or (names[0] if names else url.rsplit("/", 1)[-1])
         filters = {
             json.dumps(row.release_asset_filter, sort_keys=True, default=str)
             for row in members
         }
         if len(filters) > 1:
             disagreements.append(canonical)
-        projects.append(
-            QuiverProject(canonical, f"https://{canonical}", name, tuple(members), rule)
-        )
+        projects.append(QuiverProject(canonical, url, name, tuple(members), rule))
     return QuiverDiscovery(
         tuple(projects),
         tuple(skipped),
         tuple(unsupported),
         tuple(lookup_failures),
+        tuple(
+            QuiverUnavailable(listed, tuple(members), error)
+            for listed, (error, members) in sorted(unavailable.items())
+        ),
         tuple(disagreements),
         metadata_diagnostic,
         tuple(list_id for list_id, _ in locations),
@@ -451,24 +468,10 @@ class NoApk(ValueError):
     """A selected release contains no eligible direct APK asset."""
 
 
-class RepositoryUnavailable(ValueError):
-    """Repository metadata conclusively returned HTTP 404 or 451."""
-
-    def __init__(self, project: str, status: int) -> None:
-        self.status = status
-        super().__init__(f"repository {project} is unavailable (HTTP {status})")
-
-
 def lookup_quiver_release(
-    http: GenerationHttp, project: str, rule: QuiverRule
-) -> tuple[str, dict[str, Any]]:
-    """Identify a repository first, then distinguish release absence from errors."""
-    try:
-        canonical = _canonical_repository(http, project)
-    except HttpStatusError as error:
-        if error.status in {404, 451}:
-            raise RepositoryUnavailable(project, error.status) from error
-        raise
+    http: GenerationHttp, canonical: str, rule: QuiverRule
+) -> dict[str, Any]:
+    """Select a discovered repository's release, distinguishing absence from errors."""
     codm_rule = ProjectRule("apk", rule.name, rule.additional_settings)
     try:
         release = select_release(http, canonical, codm_rule)
@@ -481,7 +484,7 @@ def lookup_quiver_release(
         raise
     except NoPermittedRelease as error:
         raise NoRelease(f"{canonical} has no permitted release") from error
-    return canonical, release
+    return release
 
 
 def resolve_quiver_apk(

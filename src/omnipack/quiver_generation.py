@@ -14,7 +14,6 @@ from omnipack.quiver_source import (
     NoApk,
     NoRelease,
     QuiverRule,
-    RepositoryUnavailable,
     discover_quiver,
     load_quiver_config,
     lookup_quiver_release,
@@ -27,10 +26,9 @@ from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
 from omnipack.urls import normalize_project_url
 
 
-def _accepted_match(
-    accepted: dict[str, dict[str, Any]], urls: set[str]
-) -> dict[str, Any] | None:
-    matches = [entry for url, entry in accepted.items() if url in urls]
+def _accepted_match(accepted: dict[str, dict[str, Any]], urls: set[str]) -> str | None:
+    """Return the normalized URL of the one accepted entry a project matches."""
+    matches = [url for url in accepted if url in urls]
     if len(matches) > 1:
         raise ValueError(
             f"multiple accepted entries match canonical project: {sorted(urls)}"
@@ -38,11 +36,8 @@ def _accepted_match(
     return matches[0] if matches else None
 
 
-def _retain(accepted: dict[str, Any] | None, name: str, rule: QuiverRule) -> bool:
-    return (
-        accepted is not None
-        and render_quiver_entry(accepted["url"], name, rule, accepted["id"]) == accepted
-    )
+def _retain(accepted: dict[str, Any], name: str, rule: QuiverRule) -> bool:
+    return render_quiver_entry(accepted["url"], name, rule, accepted["id"]) == accepted
 
 
 def generate_quiver(
@@ -85,22 +80,37 @@ def generate_quiver(
             "listIds": list(discovery.list_ids),
         }
         report["coverage"] = [
-            {"url": p.canonical, "rows": [asdict(r) for r in p.rows]}
+            {"url": p.key, "rows": [asdict(r) for r in p.rows]}
             for p in discovery.projects
         ]
         report["unsupportedRows"] = [asdict(r) for r in discovery.unsupported]
         report["filterDisagreements"] = list(discovery.filter_disagreements)
         report["platformMetadata"] = discovery.metadata_diagnostic
         entries: list[dict[str, Any]] = []
-        retained_urls: set[str] = set()
+        # Accepted entries kept by a skip or a retained lookup failure, keyed by
+        # normalized URL, with the report detail that explains the retention. A
+        # project matching one of them was already decided and is not resolved.
+        retained: dict[str, dict[str, Any]] = {}
         for row, reason in discovery.skipped:
             existing = accepted.get(row.listed or "")
-            report["skipped"].append(
-                {"row": asdict(row), "reason": reason, "retained": existing is not None}
-            )
-            if existing is not None and row.listed not in retained_urls:
+            detail = {
+                "row": asdict(row),
+                "reason": reason,
+                "retained": existing is not None,
+            }
+            report["skipped"].append(detail)
+            if existing is not None and row.listed not in retained:
                 entries.append(existing)
-                retained_urls.add(row.listed or "")
+                retained[row.listed or ""] = detail
+        for unavailable in discovery.unavailable:
+            report["unavailableRepositories"].append(
+                {
+                    "url": unavailable.url,
+                    "message": str(unavailable.error),
+                    "status": unavailable.error.status,
+                    "rows": [asdict(row) for row in unavailable.rows],
+                }
+            )
         # Duplicate failed rows still describe one listed project. Pick the same
         # deterministic discovery name that successful canonical grouping uses.
         failures: dict[str, list[Any]] = {}
@@ -120,47 +130,44 @@ def generate_quiver(
                 "message": str(failure.error),
                 "rows": [asdict(x.row) for x in items],
             }
-            if _retain(existing, name, failure.rule):
-                assert existing is not None
+            if existing is not None and _retain(existing, name, failure.rule):
                 entries.append(existing)
                 report["retainedFailures"].append(detail)
+                retained[listed] = detail
             else:
                 report["unresolved"].append(detail)
         for project in discovery.projects:
-            urls = {project.canonical, *(r.listed for r in project.rows if r.listed)}
-            existing = _accepted_match(accepted, urls)
-            report["effectivePolicy"][project.canonical] = asdict(project.rule)
-            try:
-                canonical, release = lookup_quiver_release(
-                    client, project.canonical, project.rule
+            urls = {project.key, *(r.listed for r in project.rows if r.listed)}
+            matched = _accepted_match(accepted, urls)
+            existing = accepted.get(matched or "")
+            report["effectivePolicy"][project.key] = asdict(project.rule)
+            if matched in retained:
+                retained[matched].setdefault("matchedProjects", []).append(
+                    {"url": project.key, "rows": [asdict(r) for r in project.rows]}
                 )
+                continue
+            try:
+                release = lookup_quiver_release(client, project.key, project.rule)
                 identifier = resolve_quiver_apk(
-                    client, release, project.rule, report, canonical
+                    client, release, project.rule, report, project.key
                 )
                 entry = render_quiver_entry(
-                    "https://" + canonical, project.name, project.rule, identifier
+                    project.url, project.name, project.rule, identifier
                 )
                 entries.append(entry)
                 report["apk"].append(
                     {
-                        "url": canonical,
+                        "url": project.key,
                         "packageId": identifier,
                         "releaseId": release["id"],
                         "status": "resolved",
                     }
                 )
-            except RepositoryUnavailable as error:
-                report["unavailableRepositories"].append(
-                    {
-                        "url": project.canonical,
-                        "message": str(error),
-                        "status": error.status,
-                    }
-                )
             except (HttpError, ValueError, TypeError, KeyError) as error:
-                detail = {"url": project.canonical, "message": str(error)}
-                if _retain(existing, project.name, project.rule):
-                    assert existing is not None
+                detail = {"url": project.key, "message": str(error)}
+                if existing is not None and _retain(
+                    existing, project.name, project.rule
+                ):
                     entries.append(existing)
                     report["retainedFailures"].append(detail)
                 elif existing is None and isinstance(error, (NoApk, NoRelease)):
