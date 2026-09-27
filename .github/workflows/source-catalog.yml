@@ -17,7 +17,8 @@ jobs:
     concurrency:
       group: omnipack-reviewed-source-catalog-codm
       cancel-in-progress: false
-    # actionlint 1.7.12 does not yet parse the equivalent $/ syntax.
+    # zizmor prefers `uses: $/.github/workflows/source-maintenance.yml`, but
+    # actionlint 1.7.12 rejects that form as a malformed reusable workflow call.
     uses: ./.github/workflows/source-maintenance.yml # zizmor: ignore[self-repository]
     with:
       source: codm
@@ -31,7 +32,8 @@ jobs:
     concurrency:
       group: omnipack-reviewed-source-catalog-quiver
       cancel-in-progress: false
-    # actionlint 1.7.12 does not yet parse the equivalent $/ syntax.
+    # zizmor prefers `uses: $/.github/workflows/source-maintenance.yml`, but
+    # actionlint 1.7.12 rejects that form as a malformed reusable workflow call.
     uses: ./.github/workflows/source-maintenance.yml # zizmor: ignore[self-repository]
     with:
       source: quiver

@@ -105,7 +105,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
         with:
           name: source-generation-report-${{ inputs.source }}-${{ github.run_id }}
-          path: ${{ inputs.source == 'quiver' && '.build/source-generation/quiver/report.json' || '.build/source-generation/codm/report.json' }}
+          path: .build/source-generation/${{ inputs.source }}/report.json
           if-no-files-found: ignore
           retention-days: 14
           overwrite: true

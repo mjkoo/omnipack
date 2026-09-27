@@ -35,24 +35,34 @@ def workflow(request):
     return yaml.safe_load((WORKFLOWS / request.param).read_text())
 
 
+def triggers(workflow):
+    # PyYAML's YAML 1.1 loader parses the unquoted `on` key as True.
+    return workflow.get("on", workflow.get(True, {}))
+
+
 def test_nightly_refreshes_daily_at_three_in_eastern_time():
-    # Only nightly keeps this schedule, so the shared fixture cannot assert it.
     nightly = yaml.safe_load((WORKFLOWS / "nightly.yml").read_text())
-    triggers = nightly.get("on", nightly.get(True, {}))
-    assert triggers["schedule"] == [
-        {"cron": "0 3 * * *", "timezone": "America/New_York"}
-    ]
+    assert triggers(nightly) == {
+        "schedule": [{"cron": "0 3 * * *", "timezone": "America/New_York"}],
+        "workflow_dispatch": None,
+    }
+    assert nightly["concurrency"]["cancel-in-progress"] is False
+
+
+def test_source_maintenance_runs_only_when_called_for_one_source():
+    # The caller schedules each source and serializes its runs, so the
+    # reusable workflow declares neither a schedule nor its own concurrency.
+    workflow = yaml.safe_load((WORKFLOWS / "source-maintenance.yml").read_text())
+    assert set(triggers(workflow)) == {"workflow_call"}
+    inputs = triggers(workflow)["workflow_call"]["inputs"]
+    assert set(inputs) == {"source"}
+    assert inputs["source"]["required"] is True
+    assert inputs["source"]["type"] == "string"
+    assert "concurrency" not in workflow
 
 
 def test_publication_permissions_and_runtime_boundaries(workflow):
-    # PyYAML's YAML 1.1 loader parses the unquoted `on` key as True.
-    triggers = workflow.get("on", workflow.get(True, {}))
-    if "workflow_call" not in triggers:
-        assert triggers["schedule"]
-        assert "workflow_dispatch" in triggers
     assert workflow["permissions"] == {}
-    if "workflow_call" not in triggers:
-        assert workflow["concurrency"]["cancel-in-progress"] is False
     publish = workflow["jobs"]["publish"]
     check = workflow["jobs"][publish["needs"]]
     assert check["permissions"] == {"contents": "read"}
@@ -154,9 +164,7 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
     assert reports == (
         {".build/report.json", ".build/verify.json"}
         if stage_id == "prepare"
-        else {
-            "${{ inputs.source == 'quiver' && '.build/source-generation/quiver/report.json' || '.build/source-generation/codm/report.json' }}"
-        }
+        else {".build/source-generation/${{ inputs.source }}/report.json"}
     )
     assert check["steps"].index(stage) < check["steps"].index(handoff)
     writer = next(s for s in publish["steps"] if "CANDIDATE_SHA" in s.get("env", {}))
@@ -259,9 +267,10 @@ def test_source_candidate_validation_finishes_before_handoff():
 
 def test_sources_run_independent_complete_check_publish_chains():
     caller = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())
-    triggers = caller.get("on", caller.get(True, {}))
-    assert triggers["schedule"] == [{"cron": "17 4 * * *"}]
-    assert "workflow_dispatch" in triggers
+    assert triggers(caller) == {
+        "schedule": [{"cron": "17 4 * * *"}],
+        "workflow_dispatch": None,
+    }
     assert caller["permissions"] == {}
     assert "concurrency" not in caller
     assert set(caller["jobs"]) == {"codm", "quiver"}
