@@ -23,7 +23,7 @@ from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
 FIXTURES = Path(__file__).parent / "fixtures/source-generation/codm"
-CAPTURED = ROOT / "tests/fixtures/reconciliation"
+CAPTURED = FIXTURES / "pre-migration-captures"
 PRE_MIGRATION = FIXTURES / "pre-migration-config"
 
 
