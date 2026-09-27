@@ -117,8 +117,7 @@ def report(_args: argparse.Namespace) -> int:
 
 
 def generate_source(args: argparse.Namespace) -> int:
-    generator = generate_quiver if args.source == "quiver" else generate_codm
-    result = generator(Path.cwd())
+    result = args.generator(Path.cwd())
     if result["status"] == Status.FAILED:
         detail = result.get("error") or result.get("unresolved") or "generation failed"
         print(f"source generation failed: {detail}", file=sys.stderr)
@@ -148,9 +147,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     source_parsers = generate_parser.add_subparsers(dest="source", required=True)
     codm_parser = source_parsers.add_parser("codm", help="generate codm source")
-    codm_parser.set_defaults(func=generate_source)
+    codm_parser.set_defaults(func=generate_source, generator=generate_codm)
     quiver_parser = source_parsers.add_parser("quiver", help="generate Quiver source")
-    quiver_parser.set_defaults(func=generate_source)
+    quiver_parser.set_defaults(func=generate_source, generator=generate_quiver)
 
     return parser
 

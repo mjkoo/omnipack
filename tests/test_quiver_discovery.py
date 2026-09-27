@@ -2,17 +2,23 @@ from __future__ import annotations
 
 import json
 import urllib.error
+import urllib.request
 from email.message import Message
+from io import BytesIO
 from typing import Any
 from urllib.request import Request
+from urllib.response import addinfourl
 
 import pytest
 
 from omnipack.http import HttpError, HttpResponse, HttpStatusError
+from omnipack.project_policy import default_apk_rule
 from omnipack.quiver_source import (
+    Category,
     NoApk,
     NoRelease,
     QuiverPolicy,
+    QuiverRule,
     discover_quiver,
     load_quiver_config,
     lookup_quiver_release,
@@ -55,9 +61,12 @@ def policy(**kwargs: object) -> QuiverPolicy:
 
 def test_policy_defaults_and_rejects_invalid_rules_before_requests() -> None:
     parsed = policy()
-    assert parsed.rule_for("github.com/o/repo").additional_settings == {}
+    assert parsed.rule_for("github.com/o/repo") == QuiverRule(default_apk_rule())
+    assert parsed.rule_for("github.com/o/repo").category is Category.DECOMPS
     for invalid in (
-        {"projects": {"github.com/o/repo": {"kind": "track-only"}}},
+        {"projects": {"github.com/o/repo": {"kind": "apk"}}},
+        {"projects": {"github.com/o/repo": {"category": "Emulators"}}},
+        {"projects": {"github.com/o/repo": {"name": " "}}},
         {
             "projects": {
                 "github.com/o/repo": {"additionalSettings": {"apkFilterRegEx": "["}}
@@ -104,20 +113,20 @@ def test_discovery_collapses_renames_preserves_provenance_and_filter_diagnostic(
     ],
     ids=["outside-root", "nonnumeric-port", "malformed-authority"],
 )
-def test_out_of_scope_list_fails_before_fetch_and_metadata_is_advisory(
-    outside: str,
-) -> None:
+def test_out_of_scope_list_fails_before_fetch(outside: str) -> None:
     http = FakeHttp(documents({"repository": "O/Repo"}, list_url=outside))
     with pytest.raises(ValueError):
         discover_quiver(INDEX, policy(), http)
     assert http.urls == [INDEX]
+
+
+def test_platform_metadata_is_never_read() -> None:
     values = documents({"repository": "O/Repo"})
-    values[INDEX]["platformMetadataUrl"] = outside
+    values[INDEX]["platformMetadataUrl"] = LIST.replace("lists/one", "platform")
     values[API] = {"full_name": "O/Repo"}
     http = FakeHttp(values)
     result = discover_quiver(INDEX, policy(), http)
     assert len(result.projects) == 1
-    assert result.metadata_diagnostic
     assert http.urls == [INDEX, LIST, API]
 
 
@@ -130,18 +139,24 @@ def test_redirected_list_outside_catalog_is_rejected() -> None:
         discover_quiver(INDEX, policy(), FakeHttp(values))
 
 
-def test_catalog_redirect_is_stopped_before_destination_request() -> None:
+def test_catalog_redirect_is_stopped_before_destination_request(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     seen: list[str] = []
-    client: SourceHttpClient
 
-    def transport(
-        request: Request, timeout: float, max_bytes: int | None
-    ) -> HttpResponse:
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(
+        handler: urllib.request.HTTPSHandler, request: Request
+    ) -> FixtureResponse:
         seen.append(request.full_url)
-        client.redirect_request(request, "https://elsewhere.test/list.json")
-        raise AssertionError("redirect should have been refused")
+        headers = Message()
+        headers["Location"] = "https://elsewhere.test/list.json"
+        return FixtureResponse(BytesIO(b""), headers, request.full_url, 302)
 
-    client = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+    client = SourceHttpClient(HttpConfig({}), retries=0)
     with pytest.raises(ValueError, match="redirect"):
         client.get(
             LIST,
@@ -211,7 +226,7 @@ def test_repository_lookup_failure_is_available_for_accepted_entry_retention() -
     failure = result.lookup_failures[0]
     assert failure.row.listed == "github.com/o/repo"
     assert failure.row.project_name == "Port"
-    assert failure.rule.additional_settings == {}
+    assert failure.rule.project.additional_settings == {}
     assert isinstance(failure.error, HttpStatusError)
 
 
@@ -292,7 +307,7 @@ def test_no_eligible_apk_is_typed() -> None:
             FakeHttp({}),
             release,
             policy().rule_for("github.com/o/repo"),
-            {},
+            [],
             "github.com/o/repo",
         )
 
@@ -312,7 +327,7 @@ def test_unreadable_selected_apk_is_an_error_not_no_apk(body: bytes) -> None:
             http,
             release([("app.apk", asset)]),
             policy().rule_for("github.com/o/repo"),
-            {},
+            [],
             "github.com/o/repo",
         )
 
@@ -330,7 +345,7 @@ def test_apk_transport_failure_is_an_error_not_no_apk() -> None:
             http,
             release([("app.apk", asset)]),
             policy().rule_for("github.com/o/repo"),
-            {},
+            [],
             "github.com/o/repo",
         )
 

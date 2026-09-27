@@ -12,8 +12,8 @@ import json
 import os
 import urllib.request
 from collections.abc import Callable, Mapping
-from contextvars import ContextVar
 from dataclasses import dataclass
+from functools import partial
 from http.client import HTTPMessage
 from io import BytesIO
 from pathlib import Path
@@ -79,6 +79,7 @@ class GenerationHttp(Protocol):
         headers: dict[str, str] | None = None,
         max_bytes: int | None = None,
         method: str = "GET",
+        allowed_url: Callable[[str], bool] | None = None,
     ) -> HttpResponse: ...
 
 
@@ -91,8 +92,11 @@ class BoundedTransport(Protocol):
 class _CredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
     max_redirections = MAX_REDIRECTS
 
-    def __init__(self, client: SourceHttpClient) -> None:
+    def __init__(
+        self, client: SourceHttpClient, allowed_url: Callable[[str], bool] | None
+    ) -> None:
         self.client = client
+        self.allowed_url = allowed_url
 
     def http_error_302(
         self,
@@ -122,6 +126,8 @@ class _CredentialRedirectHandler(urllib.request.HTTPRedirectHandler):
         headers: HTTPMessage,
         newurl: str,
     ) -> urllib.request.Request | None:
+        if self.allowed_url is not None and not self.allowed_url(newurl):
+            raise ValueError("redirect URL is outside the configured catalog")
         redirected = super().redirect_request(req, fp, code, msg, headers, newurl)
         if redirected is None:
             return None
@@ -140,10 +146,7 @@ class SourceHttpClient(RetryingClient):
     ) -> None:
         super().__init__(**settings)
         self.config = config
-        self.transport = transport or self._urllib_transport
-        self._allowed_url: ContextVar[Callable[[str], bool] | None] = ContextVar(
-            "source_allowed_url", default=None
-        )
+        self.transport = transport
 
     def get(
         self,
@@ -159,18 +162,19 @@ class SourceHttpClient(RetryingClient):
             raise ValueError("max_bytes must be nonnegative")
         if allowed_url is not None and not allowed_url(url):
             raise ValueError("request URL is outside the configured catalog")
-        token = self._allowed_url.set(allowed_url)
-        try:
-            return self._retry(
-                url,
-                lambda: self.transport(
-                    self.build_request(url, headers=headers, method=method),
-                    self.timeout,
-                    max_bytes,
-                ),
-            )
-        finally:
-            self._allowed_url.reset(token)
+        # An injected transport stands in for the network and follows no
+        # redirects, so only the urllib transport needs the redirect predicate.
+        transport = self.transport or partial(
+            self._urllib_transport, allowed_url=allowed_url
+        )
+        return self._retry(
+            url,
+            lambda: transport(
+                self.build_request(url, headers=headers, method=method),
+                self.timeout,
+                max_bytes,
+            ),
+        )
 
     def build_request(
         self,
@@ -190,9 +194,6 @@ class SourceHttpClient(RetryingClient):
         self, request: urllib.request.Request, new_url: str
     ) -> urllib.request.Request:
         """Rebuild authorization for a redirect destination."""
-        allowed_url = self._allowed_url.get()
-        if allowed_url is not None and not allowed_url(new_url):
-            raise ValueError("redirect URL is outside the configured catalog")
         headers = {
             name: value
             for name, value in (
@@ -219,8 +220,12 @@ class SourceHttpClient(RetryingClient):
         request: urllib.request.Request,
         timeout: float,
         max_bytes: int | None,
+        *,
+        allowed_url: Callable[[str], bool] | None,
     ) -> HttpResponse:
-        opener = urllib.request.build_opener(_CredentialRedirectHandler(self))
+        opener = urllib.request.build_opener(
+            _CredentialRedirectHandler(self, allowed_url)
+        )
         with opener.open(request, timeout=timeout) as stream:
             body = stream.read() if max_bytes is None else stream.read(max_bytes + 1)
             if max_bytes is not None and len(body) > max_bytes:

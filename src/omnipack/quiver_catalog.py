@@ -8,10 +8,10 @@ from typing import Any
 
 from omnipack.model import App, Variant
 from omnipack.package_id import PACKAGE_NAME_RE
-from omnipack.project_policy import ProjectRule, parse_project_policy, repository_url
+from omnipack.project_policy import parse_project_policy, repository_url
 from omnipack.quiver_source import QuiverRule
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
-from omnipack.source_catalog import _rendered_entry, _validate_ids
+from omnipack.source_catalog import rendered_entry, validate_ids
 from omnipack.source_generation import effective_settings
 from omnipack.sources.common import SourceError, normalize_record
 
@@ -84,7 +84,7 @@ def _validated_catalog(path: Path) -> list[tuple[dict[str, Any], App]]:
                 }
             )
             result.append((entry, app))
-        _validate_ids(entries)
+        validate_ids(entries)
         return result
     except (OSError, ValueError, TypeError, KeyError) as error:
         raise SourceError("quiver", str(error)) from error
@@ -93,18 +93,19 @@ def _validated_catalog(path: Path) -> list[tuple[dict[str, Any], App]]:
 def render_quiver_entry(
     url: str, name: str, rule: QuiverRule, identifier: str
 ) -> dict[str, Any]:
-    """Render an APK identity with current discovery text and reviewed settings."""
+    """Render an APK identity with current discovery text and reviewed settings.
+
+    A reviewed name override replaces the discovery name here and nowhere else.
+    """
     owner = url.removeprefix("https://").split("/")[1]
-    return _rendered_entry(
+    return rendered_entry(
         {
             "id": identifier,
             "url": url,
             "author": owner,
-            "name": rule.name or name,
-            "additionalSettings": effective_settings(
-                ProjectRule("apk", rule.name, rule.additional_settings)
-            ),
-            "categories": [rule.category or "Decomps/Recomps"],
+            "name": rule.project.name or name,
+            "additionalSettings": effective_settings(rule.project),
+            "categories": [rule.category.value],
             "overrideSource": "GitHub",
         }
     )

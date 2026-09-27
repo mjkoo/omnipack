@@ -8,7 +8,9 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass
+from enum import StrEnum
 from typing import Any
 from urllib.parse import urlsplit
 
@@ -17,10 +19,11 @@ from omnipack.package_id import NoEligibleApk, resolve_release_assets
 from omnipack.project_policy import (
     PolicyError,
     ProjectRule,
+    default_apk_rule,
     parse_project_policy,
     repository_url,
 )
-from omnipack.source_http import GenerationHttp, SourceHttpClient
+from omnipack.source_http import GenerationHttp
 from omnipack.source_release import NoPermittedRelease, select_release
 
 MAX_CATALOG_BYTES = 2_000_000
@@ -49,24 +52,36 @@ def load_quiver_config(value: object) -> QuiverConfig:
     return QuiverConfig(index, catalog, policy)
 
 
+class Category(StrEnum):
+    """Pack categories a Quiver entry may be filed under."""
+
+    DECOMPS = "Decomps/Recomps"
+    PC_PORTS = "PC Ports"
+
+
 @dataclass(frozen=True, slots=True)
 class QuiverRule:
-    name: str | None
-    category: str | None
-    additional_settings: dict[str, Any]
+    project: ProjectRule
+    category: Category = Category.DECOMPS
+
+    def canonical(self) -> dict[str, Any]:
+        return {**self.project.canonical(), "category": self.category}
 
 
 @dataclass(frozen=True, slots=True)
-class QuiverSkip:
+class UrlSkip:
+    url: str
     reason: str
-    url: str | None = None
-    repository: str | None = None
-    repository_source: str | None = None
 
-    def matches(self, repository: object, source: object, listed: str | None) -> bool:
-        if self.url is not None:
-            return listed == self.url
-        return repository == self.repository and source == self.repository_source
+
+@dataclass(frozen=True, slots=True)
+class RepositorySkip:
+    repository: str
+    repository_source: str | None
+    reason: str
+
+
+type QuiverSkip = UrlSkip | RepositorySkip
 
 
 @dataclass(frozen=True, slots=True)
@@ -75,7 +90,18 @@ class QuiverPolicy:
     skips: tuple[QuiverSkip, ...]
 
     def rule_for(self, project: str) -> QuiverRule:
-        return self.projects.get(project, QuiverRule(None, None, {}))
+        return self.projects.get(project, QuiverRule(default_apk_rule()))
+
+    def skip_for(self, row: QuiverRow) -> QuiverSkip | None:
+        for skip in self.skips:
+            match skip:
+                case UrlSkip(url=url) if row.listed == url:
+                    return skip
+                case RepositorySkip(
+                    repository=repository, repository_source=source
+                ) if row.repository == repository and row.repository_source == source:
+                    return skip
+        return None
 
 
 def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
@@ -91,7 +117,8 @@ def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
     raw_projects = data.get("projects")
     if not isinstance(raw_projects, dict):
         raise PolicyError("quiver policy projects must be an object")
-    projects: dict[str, QuiverRule] = {}
+    project_rules: dict[str, dict[str, Any]] = {}
+    categories: dict[str, Category] = {}
     for raw_url, raw_rule in raw_projects.items():
         if not isinstance(raw_url, str) or not isinstance(raw_rule, dict):
             raise PolicyError("quiver project rules must map URLs to objects")
@@ -99,32 +126,24 @@ def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
             url = repository_url(raw_url)
         except ValueError as error:
             raise PolicyError(f"invalid quiver project URL {raw_url!r}") from error
-        if url in projects:
+        if url in project_rules:
             raise PolicyError(f"duplicate normalized quiver project URL {url}")
-        if set(raw_rule) - {"kind", "name", "category", "additionalSettings"}:
+        if set(raw_rule) - {"name", "category", "additionalSettings"}:
             raise PolicyError(f"{url}: unsupported quiver project rule field")
-        if raw_rule.get("kind", "apk") != "apk":
-            raise PolicyError(f"{url}: only APK rules are supported")
-        category = raw_rule.get("category")
-        if category is not None and (
-            not isinstance(category, str) or not category.strip()
-        ):
-            raise PolicyError(f"{url}: category must be a nonempty string")
-        codm_rule = parse_project_policy(
-            {
-                "schemaVersion": 1,
-                "projects": {
-                    url: {
-                        "kind": "apk",
-                        "name": raw_rule.get("name"),
-                        "additionalSettings": raw_rule.get("additionalSettings", {}),
-                    }
-                },
-            }
-        ).projects[url]
-        projects[url] = QuiverRule(
-            codm_rule.name, category, codm_rule.additional_settings
-        )
+        try:
+            categories[url] = Category(raw_rule.get("category", Category.DECOMPS))
+        except ValueError as error:
+            raise PolicyError(
+                f"{url}: category must be one of {[str(c) for c in Category]}"
+            ) from error
+        project_rules[url] = {
+            "kind": "apk",
+            **{k: v for k, v in raw_rule.items() if k != "category"},
+        }
+    parsed = parse_project_policy({"schemaVersion": 1, "projects": project_rules})
+    projects = {
+        url: QuiverRule(rule, categories[url]) for url, rule in parsed.projects.items()
+    }
     raw_skips = data.get("skips", [])
     if not isinstance(raw_skips, list):
         raise PolicyError("quiver skips must be a list")
@@ -137,13 +156,13 @@ def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
             or not item["reason"].strip()
         ):
             raise PolicyError("quiver skip requires a nonempty reason")
+        skip: QuiverSkip
         if set(item) == {"url", "reason"} and isinstance(item["url"], str):
             try:
                 url = repository_url(item["url"])
             except ValueError as error:
                 raise PolicyError("quiver skip has invalid listed URL") from error
-            skip = QuiverSkip(item["reason"], url=url)
-            key = ("url", url)
+            skip = UrlSkip(url, item["reason"])
         elif set(item) in (
             {"repository", "reason"},
             {"repository", "repositorySource", "reason"},
@@ -158,19 +177,25 @@ def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
                 raise PolicyError("quiver literal skip has invalid repository values")
             if _listed_repository(repository, source) is not None:
                 raise PolicyError("supported GitHub rows must be skipped by listed URL")
-            skip = QuiverSkip(
-                item["reason"], repository=repository, repository_source=source
-            )
-            key = ("literal", repository, source or "")
+            skip = RepositorySkip(repository, source, item["reason"])
         else:
             raise PolicyError(
                 "quiver skip must name a listed URL or literal repository values"
             )
+        key = _skip_key(skip)
         if key in seen:
             raise PolicyError("duplicate quiver skip")
         seen.add(key)
         skips.append(skip)
     return QuiverPolicy(projects, tuple(skips))
+
+
+def _skip_key(skip: QuiverSkip) -> tuple[str, ...]:
+    match skip:
+        case UrlSkip(url=url):
+            return (url,)
+        case RepositorySkip(repository=repository, repository_source=source):
+            return (repository, source or "")
 
 
 def _unique_policy_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -226,7 +251,6 @@ class QuiverDiscovery:
     lookup_failures: tuple[QuiverLookupFailure, ...]
     unavailable: tuple[QuiverUnavailable, ...]
     filter_disagreements: tuple[str, ...]
-    metadata_diagnostic: str | None
     list_ids: tuple[str, ...]
 
 
@@ -268,14 +292,11 @@ def _within_catalog(url: str, root: tuple[str, str]) -> bool:
 def _read_catalog_json(http: GenerationHttp, url: str, root: tuple[str, str]) -> object:
     if not _within_catalog(url, root):
         raise ValueError("location is outside the configured catalog")
-    if isinstance(http, SourceHttpClient):
-        response = http.get(
-            url,
-            max_bytes=MAX_CATALOG_BYTES,
-            allowed_url=lambda target: _within_catalog(target, root),
-        )
-    else:
-        response = http.get(url, max_bytes=MAX_CATALOG_BYTES)
+    response = http.get(
+        url,
+        max_bytes=MAX_CATALOG_BYTES,
+        allowed_url=lambda target: _within_catalog(target, root),
+    )
     if not _within_catalog(response.url, root):
         raise ValueError("redirect left the configured catalog")
     return response.json()
@@ -314,6 +335,15 @@ def _canonical_repository(http: GenerationHttp, listed: str) -> tuple[str, str]:
     return repository_url(url), url
 
 
+def discovery_name(rows: Iterable[QuiverRow], fallback: str) -> str:
+    """Pick the port name for rows of one project independently of row order."""
+    names = sorted(
+        {row.project_name for row in rows if row.project_name},
+        key=lambda value: (value.casefold(), value),
+    )
+    return names[0] if names else fallback
+
+
 def discover_quiver(
     index_url: str, policy: QuiverPolicy, http: GenerationHttp
 ) -> QuiverDiscovery:
@@ -342,18 +372,6 @@ def discover_quiver(
             raise ValueError("quiver index has duplicate IDs or an out-of-catalog list")
         seen_ids.add(item["id"])
         locations.append((item["id"], item["remoteLocation"]))
-    metadata_diagnostic = None
-    metadata_url = index.get("platformMetadataUrl")
-    if metadata_url is not None:
-        if not isinstance(metadata_url, str) or not _within_catalog(metadata_url, root):
-            metadata_diagnostic = "platform metadata is outside the configured catalog"
-        else:
-            try:
-                metadata = _read_catalog_json(http, metadata_url, root)
-                if not isinstance(metadata, (dict, list)):
-                    raise TypeError("platform metadata has an invalid shape")
-            except (HttpError, ValueError, TypeError, json.JSONDecodeError) as error:
-                metadata_diagnostic = f"platform metadata unavailable: {error}"
     rows: list[QuiverRow] = []
     for list_id, list_url in locations:
         document = _read_catalog_json(http, list_url, root)
@@ -388,14 +406,7 @@ def discover_quiver(
     unavailable: dict[str, tuple[HttpStatusError, list[QuiverRow]]] = {}
     lookups: dict[str, tuple[str, str] | HttpError | ValueError | TypeError] = {}
     for row in rows:
-        skip = next(
-            (
-                rule
-                for rule in policy.skips
-                if rule.matches(row.repository, row.repository_source, row.listed)
-            ),
-            None,
-        )
+        skip = policy.skip_for(row)
         if skip is not None:
             skipped.append((row, skip.reason))
             continue
@@ -432,12 +443,8 @@ def discover_quiver(
                 f"ambiguous Quiver policy after repository rename: {sorted(matching_rules)}"
             )
         rule = policy.rule_for(next(iter(matching_rules), canonical))
-        names = sorted(
-            {row.project_name for row in members if row.project_name},
-            key=lambda value: (value.casefold(), value),
-        )
         url = display[canonical]
-        name = rule.name or (names[0] if names else url.rsplit("/", 1)[-1])
+        name = discovery_name(members, url.rsplit("/", 1)[-1])
         filters = {
             json.dumps(row.release_asset_filter, sort_keys=True, default=str)
             for row in members
@@ -455,7 +462,6 @@ def discover_quiver(
             for listed, (error, members) in sorted(unavailable.items())
         ),
         tuple(disagreements),
-        metadata_diagnostic,
         tuple(list_id for list_id, _ in locations),
     )
 
@@ -472,13 +478,13 @@ def lookup_quiver_release(
     http: GenerationHttp, canonical: str, rule: QuiverRule
 ) -> dict[str, Any]:
     """Select a discovered repository's release, distinguishing absence from errors."""
-    codm_rule = ProjectRule("apk", rule.name, rule.additional_settings)
+    settings = rule.project.additional_settings
     try:
-        release = select_release(http, canonical, codm_rule)
+        release = select_release(http, canonical, rule.project)
     except HttpStatusError as error:
         if error.status == 404 and not (
-            rule.additional_settings.get("includePrereleases")
-            or rule.additional_settings.get("filterReleaseTitlesByRegEx")
+            settings.get("includePrereleases")
+            or settings.get("filterReleaseTitlesByRegEx")
         ):
             raise NoRelease(f"{canonical} has no latest stable release") from error
         raise
@@ -491,17 +497,24 @@ def resolve_quiver_apk(
     http: GenerationHttp,
     release: dict[str, Any],
     rule: QuiverRule,
-    report: dict[str, Any],
+    filtered_assets: list[dict[str, Any]],
     project: str,
 ) -> str:
-    """Resolve APK identity, exposing only a conclusive empty selection as a skip."""
+    """Resolve APK identity, exposing only a conclusive empty selection as a skip.
+
+    APK names excluded by the reviewed filename filter are appended to
+    `filtered_assets` whatever the outcome.
+    """
+    diagnostics: dict[str, Any] = {}
     try:
         return resolve_release_assets(
             http,
             release,
-            rule.additional_settings.get("apkFilterRegEx", ""),
-            report,
+            rule.project.additional_settings.get("apkFilterRegEx", ""),
+            diagnostics,
             project,
         )
     except NoEligibleApk as error:
         raise NoApk(f"{project} has no eligible direct APK") from error
+    finally:
+        filtered_assets.extend(diagnostics.get("filteredAssets", ()))

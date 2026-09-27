@@ -6,24 +6,47 @@ import json
 import shutil
 from dataclasses import asdict
 from pathlib import Path
-from typing import Any
+from typing import Any, Literal, NotRequired, TypedDict
 
 from omnipack.http import HttpError
 from omnipack.quiver_catalog import load_quiver_catalog, render_quiver_entry
 from omnipack.quiver_source import (
     NoApk,
     NoRelease,
+    QuiverLookupFailure,
     QuiverRule,
     discover_quiver,
+    discovery_name,
     load_quiver_config,
     lookup_quiver_release,
     parse_quiver_policy,
     resolve_quiver_apk,
 )
 from omnipack.report_model import Status
-from omnipack.source_catalog import _render_catalog, _validate_ids
+from omnipack.source_catalog import render_catalog, validate_ids
 from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
 from omnipack.urls import normalize_project_url
+
+
+class QuiverReport(TypedDict):
+    """The generation report written beside every Quiver candidate."""
+
+    status: Status
+    source: Literal["quiver"]
+    apk: list[dict[str, Any]]
+    skipped: list[dict[str, Any]]
+    unsupportedRows: list[dict[str, Any]]
+    noAndroid: list[dict[str, Any]]
+    unavailableRepositories: list[dict[str, Any]]
+    retainedFailures: list[dict[str, Any]]
+    unresolved: list[dict[str, Any]]
+    effectivePolicy: dict[str, dict[str, Any]]
+    filteredAssets: list[dict[str, Any]]
+    inputs: NotRequired[dict[str, Any]]
+    coverage: NotRequired[list[dict[str, Any]]]
+    filterDisagreements: NotRequired[list[str]]
+    changes: NotRequired[dict[str, list[str]]]
+    error: NotRequired[str]
 
 
 def _accepted_match(accepted: dict[str, dict[str, Any]], urls: set[str]) -> str | None:
@@ -40,19 +63,16 @@ def _retain(accepted: dict[str, Any], name: str, rule: QuiverRule) -> bool:
     return render_quiver_entry(accepted["url"], name, rule, accepted["id"]) == accepted
 
 
-def generate_quiver(
-    root: Path, *, http: GenerationHttp | None = None
-) -> dict[str, Any]:
+def generate_quiver(root: Path, *, http: GenerationHttp | None = None) -> QuiverReport:
     """Emit a complete candidate and report, never modifying accepted inputs."""
     output = root / ".build/source-generation/quiver"
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
-    report: dict[str, Any] = {
+    report: QuiverReport = {
         "status": Status.FAILED,
         "source": "quiver",
         "apk": [],
-        "tracking": [],
         "skipped": [],
         "unsupportedRows": [],
         "noAndroid": [],
@@ -60,6 +80,7 @@ def generate_quiver(
         "retainedFailures": [],
         "unresolved": [],
         "effectivePolicy": {},
+        "filteredAssets": [],
     }
     try:
         sources = json.loads((root / "config/sources.json").read_bytes())
@@ -85,7 +106,6 @@ def generate_quiver(
         ]
         report["unsupportedRows"] = [asdict(r) for r in discovery.unsupported]
         report["filterDisagreements"] = list(discovery.filter_disagreements)
-        report["platformMetadata"] = discovery.metadata_diagnostic
         entries: list[dict[str, Any]] = []
         # Accepted entries kept by a skip or a retained lookup failure, keyed by
         # normalized URL, with the report detail that explains the retention. A
@@ -113,18 +133,14 @@ def generate_quiver(
             )
         # Duplicate failed rows still describe one listed project. Pick the same
         # deterministic discovery name that successful canonical grouping uses.
-        failures: dict[str, list[Any]] = {}
+        failures: dict[str, list[QuiverLookupFailure]] = {}
         for failure in discovery.lookup_failures:
             failures.setdefault(failure.row.listed or "", []).append(failure)
         for listed, items in sorted(failures.items()):
             failure = items[0]
-            names = sorted(
-                {x.row.project_name for x in items if x.row.project_name},
-                key=lambda s: (s.casefold(), s),
-            )
-            name = names[0] if names else listed.rsplit("/", 1)[-1]
+            name = discovery_name((x.row for x in items), listed.rsplit("/", 1)[-1])
             existing = accepted.get(listed)
-            report["effectivePolicy"][listed] = asdict(failure.rule)
+            report["effectivePolicy"][listed] = failure.rule.canonical()
             detail = {
                 "url": listed,
                 "message": str(failure.error),
@@ -140,7 +156,7 @@ def generate_quiver(
             urls = {project.key, *(r.listed for r in project.rows if r.listed)}
             matched = _accepted_match(accepted, urls)
             existing = accepted.get(matched or "")
-            report["effectivePolicy"][project.key] = asdict(project.rule)
+            report["effectivePolicy"][project.key] = project.rule.canonical()
             if matched in retained:
                 retained[matched].setdefault("matchedProjects", []).append(
                     {"url": project.key, "rows": [asdict(r) for r in project.rows]}
@@ -149,7 +165,7 @@ def generate_quiver(
             try:
                 release = lookup_quiver_release(client, project.key, project.rule)
                 identifier = resolve_quiver_apk(
-                    client, release, project.rule, report, project.key
+                    client, release, project.rule, report["filteredAssets"], project.key
                 )
                 entry = render_quiver_entry(
                     project.url, project.name, project.rule, identifier
@@ -160,7 +176,6 @@ def generate_quiver(
                         "url": project.key,
                         "packageId": identifier,
                         "releaseId": release["id"],
-                        "status": "resolved",
                     }
                 )
             except (HttpError, ValueError, TypeError, KeyError) as error:
@@ -174,7 +189,7 @@ def generate_quiver(
                     report["noAndroid"].append(detail)
                 else:
                     report["unresolved"].append(detail)
-        _validate_ids(entries)
+        validate_ids(entries)
         by_url = {normalize_project_url(e["url"]): e for e in entries}
         if len(by_url) != len(entries):
             raise ValueError("duplicate normalized project URLs in candidate")
@@ -188,7 +203,7 @@ def generate_quiver(
                     if by_url[url] != accepted[url]
                 ),
             }
-            data = _render_catalog(entries)
+            data = render_catalog(entries)
             (output / "catalog.json").write_bytes(data)
             report["status"] = Status.SUCCESS
     except Exception as error:  # noqa: BLE001 - persist actionable command failure

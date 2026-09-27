@@ -10,7 +10,7 @@ from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
 from omnipack.package_id import _is_valid_package_id
 from omnipack.render import render
-from omnipack.source_generation import _render_catalog
+from omnipack.source_catalog import render_catalog
 from omnipack.sources import bboi, codm, rjny
 from omnipack.sources.common import normalize_record
 from omnipack.sources.extras import fetch as fetch_extras
@@ -127,7 +127,7 @@ def test_committed_catalog_is_valid_canonical_and_composable(
             assert settings.get("trackOnly", False) is False
             assert _is_valid_package_id(app["id"])
     raw = (ROOT / "config/catalogs/codm.json").read_bytes()
-    assert _render_catalog(catalog["apps"]) == raw
+    assert render_catalog(catalog["apps"]) == raw
     assert current_configuration.result.apps[Variant.DUAL]
 
 

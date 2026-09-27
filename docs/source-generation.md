@@ -46,8 +46,8 @@ outage fails that run visibly.
 ### Quiver discovery, skips and removals
 
 Quiver reads every list from the configured catalog index. Missing or malformed
-required lists fail the complete run. Platform metadata is advisory; it never
-replaces a fresh release or APK check. Supported GitHub rows are normalized and
+required lists fail the complete run. Generation does not read the index's
+platform metadata; only a fresh release and APK check decides a project. Supported GitHub rows are normalized and
 canonical repository aliases are collapsed, preserving row provenance. Unsupported
 rows, such as GitLab repositories, are reported without GitHub requests.
 
@@ -58,22 +58,25 @@ authentication, rate-limit and unreadable-APK errors are resolution failures,
 not evidence that a project has no Android release. Accepted entries with unchanged
 policy and display name can be retained on these failures or missing artifacts.
 An accepted repository returning 404 or 451 is removed, as is an accepted entry
-no discovered row names. Fresh entries use the current canonical repository URL;
-retained entries preserve accepted bytes and match by canonical or listed URL,
+no discovered row names. Fresh entries use the current canonical repository URL,
+with GitHub's own capitalization for the URL and author; retained entries preserve accepted bytes and match by canonical or listed URL,
 never by package ID. An alias outage that prevents either URL from matching
 blocks the run visibly.
 
 `config/quiver-projects.json` has schema version 1, optional per-repository
 exceptions in `projects`, and reasoned discovery `skips`. An omitted project rule
-uses stable APK discovery. Exceptions may set a port name, category, prerelease
-selection or supported filename/release filters. Quiver supports APK entries only.
+uses stable APK discovery. Exceptions may set a port name, a category
+(`Decomps/Recomps`, the default, or `PC Ports`), prerelease selection or supported
+filename/release filters. Quiver supports APK entries only.
 All selected APK manifests must be readable and agree on one package ID. Upstream
 `project` names the port; the game title and upstream asset filters do not control
 admission or consumer filtering. Duplicate upstream filter disagreement is a
 diagnostic, not a selection rule.
 
 A listed-URL skip is matched before any repository request. It pauses discovery
-and retains a matching accepted entry byte-for-byte. A literal unsupported-row
+and retains a matching accepted entry byte-for-byte. Another row that resolves
+to the entry a skip or a retained failure already kept is not resolved again; the
+report lists it under that skip or retained failure. A literal unsupported-row
 skip may instead name `repository` and `repositorySource`. Every skip needs a
 reason. Neither kind prunes apps from this source or any other source. Use the
 package deny list in `config/deny.json` for permanent exclusion from both packs:

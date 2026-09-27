@@ -13,7 +13,7 @@ from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.quiver_generation import generate_quiver
 from omnipack.render import render
-from omnipack.source_catalog import _render_catalog
+from omnipack.source_catalog import render_catalog
 from omnipack.sources import quiver
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
@@ -151,7 +151,7 @@ def test_existing_bboi_port_settings_win_over_same_project_quiver_entries(
             if original.provenance.source == "bboi" and original.id == original_id
         ]
         assert len(entries) == len(overlaps)
-        (tmp_path / "quiver.json").write_bytes(_render_catalog(entries))
+        (tmp_path / "quiver.json").write_bytes(render_catalog(entries))
         candidates.extend(quiver.fetch(tmp_path, {"catalog": "quiver.json"}))
     result = compose(
         candidates,

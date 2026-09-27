@@ -20,7 +20,7 @@ from omnipack.project_policy import (
     repository_url,
 )
 from omnipack.report_model import Status
-from omnipack.source_catalog import _render_catalog, _rendered_entry, _validate_ids
+from omnipack.source_catalog import render_catalog, rendered_entry, validate_ids
 from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
 from omnipack.source_release import _release_id, select_release
 from omnipack.sources import load_json
@@ -215,7 +215,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                     assert rule.tracker_id is not None
                     entry = _entry(parsed.source_urls[project], rule, rule.tracker_id)
                     entries.append(entry)
-                    rendered_by_project[project] = _rendered_entry(entry)
+                    rendered_by_project[project] = rendered_entry(entry)
                     report["tracking"].append(
                         {"url": project, "id": rule.tracker_id, "status": "verified"}
                     )
@@ -229,7 +229,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                 )
                 entry = _entry(parsed.source_urls[project], rule, package_id)
                 entries.append(entry)
-                rendered_by_project[project] = _rendered_entry(entry)
+                rendered_by_project[project] = rendered_entry(entry)
                 report["apk"].append(
                     {
                         "url": project,
@@ -242,7 +242,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                 accepted = accepted_by_url.get(project)
                 if accepted is not None and _retained(rule, accepted):
                     entries.append(accepted)
-                    rendered_by_project[project] = _rendered_entry(accepted)
+                    rendered_by_project[project] = rendered_entry(accepted)
                     report["retainedFailures"].append(
                         {"url": project, "message": str(error)}
                     )
@@ -251,12 +251,12 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                     report.setdefault("unresolved", []).append(
                         {"url": project, "error": str(error), "kind": rule.kind}
                     )
-        _validate_ids(entries)
+        validate_ids(entries)
         if failed:
             report["status"] = Status.FAILED
             _write_report(output, report)
             return report
-        catalog_bytes = _render_catalog(entries)
+        catalog_bytes = render_catalog(entries)
         common = set(parsed.projects) & set(accepted_by_url)
         changes = {
             "added": sorted(set(parsed.projects) - set(accepted_by_url)),
@@ -265,7 +265,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                 project
                 for project in common
                 if rendered_by_project[project]
-                != _rendered_entry(accepted_by_url[project])
+                != rendered_entry(accepted_by_url[project])
             ),
         }
         (output / "catalog.json").write_bytes(catalog_bytes)
@@ -292,7 +292,7 @@ def _retained(rule: ProjectRule, accepted: dict[str, Any]) -> bool:
         return False
     try:
         candidate = _entry(accepted["url"], rule, identity)
-        return _rendered_entry(candidate) == _rendered_entry(accepted)
+        return rendered_entry(candidate) == rendered_entry(accepted)
     except TypeError, ValueError, KeyError:
         return False
 

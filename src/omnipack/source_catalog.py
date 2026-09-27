@@ -10,15 +10,15 @@ from omnipack.overlay import ComposedApp
 from omnipack.render import render
 
 
-def _rendered_entry(entry: dict[str, Any]) -> dict[str, Any]:
+def rendered_entry(entry: dict[str, Any]) -> dict[str, Any]:
     """Render one catalog entry through the same normalization the generator
     uses to write the catalog, so entries can be compared regardless of
     settings ordering or default-merging.
     """
-    return cast(dict[str, Any], json.loads(_render_catalog([entry]))["apps"][0])
+    return cast(dict[str, Any], json.loads(render_catalog([entry]))["apps"][0])
 
 
-def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
+def render_catalog(entries: list[dict[str, Any]]) -> bytes:
     apps: list[ComposedApp] = []
     for entry in entries:
         data = dict(entry)
@@ -32,7 +32,7 @@ def _render_catalog(entries: list[dict[str, Any]]) -> bytes:
     return render(apps).encode()
 
 
-def _validate_ids(entries: list[dict[str, Any]]) -> None:
+def validate_ids(entries: list[dict[str, Any]]) -> None:
     seen: dict[str, str] = {}
     for entry in entries:
         prior = seen.get(entry["id"])

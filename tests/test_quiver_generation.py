@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from pathlib import Path
 from typing import Any
 from urllib.request import Request
@@ -10,7 +11,7 @@ import pytest
 from omnipack import cli
 from omnipack.http import HttpError, HttpResponse, HttpStatusError
 from omnipack.quiver_generation import generate_quiver
-from omnipack.source_catalog import _render_catalog
+from omnipack.source_catalog import render_catalog
 from tests.test_package_id import AssetTransport, apk
 from tests.test_quiver_discovery import API, INDEX, LIST, FakeHttp, documents
 
@@ -31,6 +32,7 @@ class ScenarioHttp:
         headers: dict[str, str] | None = None,
         max_bytes: int | None = None,
         method: str = "GET",
+        allowed_url: Callable[[str], bool] | None = None,
     ) -> HttpResponse:
         value = self.values[url]
         if isinstance(value, bytes):
@@ -57,7 +59,7 @@ def setup(root: Path, *, rows: list[dict[str, Any]] | None = None) -> dict[str, 
     (root / "config/quiver-projects.json").write_text(
         json.dumps({"schemaVersion": 1, "projects": {}, "skips": []})
     )
-    (root / "config/catalogs/quiver.json").write_bytes(_render_catalog([]))
+    (root / "config/catalogs/quiver.json").write_bytes(render_catalog([]))
     (root / "README.md").write_text("unchanged README")
     (root / "dist").mkdir()
     (root / "dist/single-screen.json").write_text("unchanged single")
@@ -234,7 +236,7 @@ def test_unavailable_repository_skips_new_and_removes_accepted(
     assert report["status"] == "success" and candidate(tmp_path) == []
     assert report["changes"]["removed"] == ["github.com/o/repo"]
     assert report["unavailableRepositories"]
-    (tmp_path / "config/catalogs/quiver.json").write_bytes(_render_catalog([]))
+    (tmp_path / "config/catalogs/quiver.json").write_bytes(render_catalog([]))
     assert generate_quiver(tmp_path, http=ScenarioHttp(values))["status"] == "success"
     assert accepted
 
@@ -336,7 +338,7 @@ def test_duplicate_listed_rows_share_one_discovery_lookup(
     if accepted:
         entries = candidate(tmp_path)
         entries[0]["url"] = "https://github.com/o/old"
-        (tmp_path / "config/catalogs/quiver.json").write_bytes(_render_catalog(entries))
+        (tmp_path / "config/catalogs/quiver.json").write_bytes(render_catalog(entries))
     values[LIST]["apps"] = [
         {"repository": "o/old", "project": "Port", "releaseAssetFilter": "one"},
         {"repository": "O/Old", "project": "Z Port", "releaseAssetFilter": "two"},

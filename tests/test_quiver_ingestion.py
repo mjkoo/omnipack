@@ -12,7 +12,7 @@ from omnipack.http import HttpResponse
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.render import render
-from omnipack.source_catalog import _render_catalog
+from omnipack.source_catalog import render_catalog
 from omnipack.sources import IngestionReport, SourceError, ingest_all, quiver
 from omnipack.verify import run_verification
 from tests.current_config_support import (
@@ -306,7 +306,7 @@ def test_committed_quiver_catalog_is_canonical_without_a_fixed_roster() -> None:
     from omnipack.quiver_catalog import load_quiver_catalog
 
     entries = load_quiver_catalog(catalog)
-    assert catalog.read_bytes() == _render_catalog(entries)
+    assert catalog.read_bytes() == render_catalog(entries)
 
 
 def test_current_configuration_fixture_composes_quiver(
