@@ -26,6 +26,16 @@ class HttpError(RuntimeError):
     """A request failed or exceeded a configured response bound."""
 
 
+class HttpStatusError(HttpError):
+    """A non-retryable HTTP response with its status available to callers."""
+
+    def __init__(self, url: str, status: int, attempts: int = 1) -> None:
+        self.status = status
+        super().__init__(
+            f"request to {redact_url(url)} returned HTTP {status} after {attempts} attempts"
+        )
+
+
 class TransientHttpError(HttpError):
     """A transient acquisition failure eligible for a caller-owned retry policy."""
 
@@ -107,12 +117,10 @@ class RetryingClient:
             except (OSError, HTTPException) as error:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
-                if not _is_transient(error) or number + 1 == attempts:
-                    if _is_transient(error):
-                        raise TransientHttpError(url, number + 1) from error
-                    raise HttpError(
-                        f"request to {redact_url(url)} failed after {number + 1} attempts"
-                    ) from error
+                    if not _is_transient(error):
+                        raise HttpStatusError(url, error.code, number + 1) from error
+                if number + 1 == attempts:
+                    raise TransientHttpError(url, number + 1) from error
                 self.sleep(self.backoff * (2**number))
         raise AssertionError("request loop did not return or raise")
 

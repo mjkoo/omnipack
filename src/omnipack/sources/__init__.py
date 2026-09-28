@@ -34,9 +34,9 @@ def ingest_all(
     """Fetch every source in precedence order and retain structured outcomes.
 
     Candidates come back as their sources describe them; composition applies
-    the policy. Every committed codm2000 entry joins the candidate set.
+    the policy. Every committed generated entry joins the candidate set.
     """
-    from . import bboi, codm, extras, rjny
+    from . import bboi, codm, extras, quiver, rjny
 
     def section(name: str) -> Mapping[str, object]:
         value = source_config.get(name)
@@ -50,7 +50,8 @@ def ingest_all(
     bboi_apps = bboi.fetch(http, section("bboi"))
     extra_apps = extras.fetch(extras_config)
     generated = codm.fetch(root, section("codm"), report)
-    return [*rjny_apps, *bboi_apps, *generated, *extra_apps]
+    quiver_apps = quiver.fetch(root, section("quiver"), report)
+    return [*rjny_apps, *bboi_apps, *generated, *quiver_apps, *extra_apps]
 
 
 def load_json(path: str | PathLike[str], source: str) -> object:

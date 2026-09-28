@@ -3,6 +3,11 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    candidate_selector,
+    parse_composition_policy,
+)
 from omnipack.model import Variant
 from omnipack.render import render
 from omnipack.urls import normalize_project_url
@@ -189,7 +194,36 @@ def test_captured_candidates_form_the_recorded_families(
             )
             for item in selection.considered
         )
-    assert {
-        family: sorted(list(member) for member in members)
+    actual_family = {
+        member: family for family, members in families.items() for member in members
+    }
+    corrected = apply_composition_policy(
+        parse_composition_policy(current_configuration.policy),
+        current_configuration.candidates,
+    )
+    denied_ids = {item["id"] for item in read(ROOT / "config/deny.json")}
+    surviving = {
+        candidate_selector(app).key
+        for app in corrected
+        if app.eligibility and app.id not in denied_ids
+    }
+    assert set(actual_family) == surviving
+
+    recorded = read(FORMED_FAMILIES)
+    for recorded_members in recorded.values():
+        present = [
+            tuple(member) for member in recorded_members if tuple(member) in surviving
+        ]
+        assert len({actual_family[member] for member in present}) <= 1
+
+    # Generated catalogs change only through reviewed catalog updates, so the
+    # recorded families freeze only the members the maintained rules and the
+    # captured upstream inputs decide.
+    generated = current_configuration.generated_origins
+    projected = {
+        family: sorted(list(member) for member in members if member[1] not in generated)
         for family, members in families.items()
-    } == read(FORMED_FAMILIES)
+    }
+    assert {family: members for family, members in projected.items() if members} == (
+        recorded
+    )

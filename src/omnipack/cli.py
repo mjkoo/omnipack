@@ -11,6 +11,7 @@ from omnipack.build import BuildInputs, previous_ids, publish_build
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App
+from omnipack.quiver_generation import generate_quiver
 from omnipack.report import format_reports, write_report
 from omnipack.report_model import BuildStage, OfflineVerdict, Status, not_run_verdict
 from omnipack.source_generation import generate_codm
@@ -101,6 +102,11 @@ def verify(_args: argparse.Namespace) -> int:
         print(f"verify failed: {error}", file=sys.stderr)
         return 1
     if result["status"] != Status.SUCCESS:
+        for error in result["errors"]:
+            print(
+                f"{error['stage']}/{error['code']}: {error['message']}",
+                file=sys.stderr,
+            )
         print(f"verify failed with {len(result['errors'])} error(s)", file=sys.stderr)
         return 1
     return 0
@@ -115,8 +121,8 @@ def report(_args: argparse.Namespace) -> int:
     return 0
 
 
-def generate_source(_args: argparse.Namespace) -> int:
-    result = generate_codm(Path.cwd())
+def generate_source(args: argparse.Namespace) -> int:
+    result = args.generator(Path.cwd())
     if result["status"] == Status.FAILED:
         detail = result.get("error") or result.get("unresolved") or "generation failed"
         print(f"source generation failed: {detail}", file=sys.stderr)
@@ -146,7 +152,9 @@ def _parser() -> argparse.ArgumentParser:
     )
     source_parsers = generate_parser.add_subparsers(dest="source", required=True)
     codm_parser = source_parsers.add_parser("codm", help="generate codm source")
-    codm_parser.set_defaults(func=generate_source)
+    codm_parser.set_defaults(func=generate_source, generator=generate_codm)
+    quiver_parser = source_parsers.add_parser("quiver", help="generate Quiver source")
+    quiver_parser.set_defaults(func=generate_source, generator=generate_quiver)
 
     return parser
 

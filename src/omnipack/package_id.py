@@ -30,6 +30,10 @@ AXML_TYPE_STRING = 0x03
 PACKAGE_NAME_RE = re.compile(r"^[a-zA-Z][a-zA-Z0-9_]*(\.[a-zA-Z][a-zA-Z0-9_]*)+$")
 
 
+class NoEligibleApk(ValueError):
+    """The selected release has no direct APK selected by current policy."""
+
+
 def resolve_release_assets(
     http: GenerationHttp,
     release: dict[str, Any],
@@ -60,7 +64,7 @@ def resolve_release_assets(
             {"url": project_url, "names": sorted(filtered)}
         )
     if not eligible:
-        raise ValueError("latest release has no eligible APK assets")
+        raise NoEligibleApk("latest release has no eligible APK assets")
     resolved: list[str] = []
     for name, url in eligible:
         try:

@@ -1393,6 +1393,32 @@
       ],
       "allowIdChange": false,
       "overrideSource": "GitHub"
+    },
+    {
+      "id": "local.nova.diagnostic",
+      "url": "https://github.com/pippopapera/nova-display-calibration",
+      "author": "pippopapera",
+      "name": "Nova Display Calibration",
+      "preferredApkIndex": 0,
+      "additionalSettings": {},
+      "categories": [
+        "Utilities"
+      ],
+      "allowIdChange": false,
+      "overrideSource": "GitHub"
+    },
+    {
+      "id": "com.med.sleepmanager",
+      "url": "https://github.com/Baggio94/SleepManager",
+      "author": "Baggio94",
+      "name": "Sleepmanager",
+      "preferredApkIndex": 0,
+      "additionalSettings": {},
+      "categories": [
+        "Utilities"
+      ],
+      "allowIdChange": false,
+      "overrideSource": "GitHub"
     }
   ],
   "settings": {

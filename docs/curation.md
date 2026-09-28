@@ -49,6 +49,13 @@ behavior still require separate device acceptance. Acceptance also covers both
 stable JSON downloads. Passing controlled tests does not complete device or
 live publication acceptance.
 
+## Quiver-discovered ports
+
+[Quiver port setup](quiver-ports.md) lists required game data and known setup
+limitations for the additional baseline ports. Discovery skips pause a particular
+Quiver lookup and retain matching accepted entries. To exclude an app from both
+packs regardless of source, use its package ID in `config/deny.json`.
+
 ## Port setup
 
 The entries below need user action beyond installing them. Each note restates

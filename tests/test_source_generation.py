@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
 
@@ -97,6 +98,7 @@ class JsonHttp:
         headers: dict[str, str] | None = None,
         max_bytes: int | None = None,
         method: str = "GET",
+        allowed_url: Callable[[str], bool] | None = None,
     ) -> HttpResponse:
         self.urls.append(url)
         return HttpResponse(url, 200, Message(), json.dumps(self.value).encode())
@@ -182,6 +184,7 @@ class MappingHttp:
         headers: dict[str, str] | None = None,
         max_bytes: int | None = None,
         method: str = "GET",
+        allowed_url: Callable[[str], bool] | None = None,
     ) -> HttpResponse:
         self.urls.append(url)
         value = self.values[url]

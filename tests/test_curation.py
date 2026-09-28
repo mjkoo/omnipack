@@ -6,7 +6,10 @@ from dataclasses import replace
 from pathlib import Path
 
 from omnipack.catalog import generate_catalog
-from omnipack.composition_policy import parse_composition_policy
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    parse_composition_policy,
+)
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
@@ -62,16 +65,26 @@ def test_upstream_pack_tracker_stays_excluded_from_current_composition(
     assert b"Obtainium-Emulation-Pack" not in catalog
 
 
-def test_every_committed_denial_removes_a_current_candidate(
+def test_every_committed_denial_excludes_its_package_when_present(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    # An unmatched denial is reported stale and does not fail the build, so a
-    # denial whose upstream drops the id would quietly stop excluding anything.
+    # A denial can match nothing because a generated catalog dropped the app.
+    # The build reports such a denial as stale rather than failing, so check
+    # that every stale report is genuinely absent and every present package
+    # is removed from both packs.
     denied = {entry["id"] for entry in read(ROOT / "config/deny.json")}
+    effective_candidates = apply_composition_policy(
+        parse_composition_policy(current_configuration.policy),
+        current_configuration.candidates,
+    )
+    present = {app.id for app in effective_candidates}
     report = current_configuration.result.report
     stale = {item.package_id for item in report.stale_exclusions}
-    assert stale == set(), f"denials matching no candidate: {sorted(stale)}"
-    assert {item.package_id for item in report.removals} == denied
+    assert stale == denied - present
+    assert {item.package_id for item in report.removals} == denied & present
+    for variant in Variant:
+        selected = {app.id for app in current_configuration.result.apps[variant]}
+        assert not (selected & denied)
 
 
 def effective_id(record):

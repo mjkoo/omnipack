@@ -17,7 +17,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal
+from typing import Literal, get_args
 
 from scripts.workflow_support import (
     FULL_SHA,
@@ -28,6 +28,7 @@ from scripts.workflow_support import (
     SubprocessGhRunner,
     append_summary,
     bot_commit,
+    diff_raw_entries,
     expect,
     git,
     git_output,
@@ -43,18 +44,45 @@ from scripts.workflow_support import (
 
 CANONICAL_REPOSITORY = "mjkoo/omnipack"
 CANONICAL_OWNER = "mjkoo"
-BRANCH_NAME = "automation/codm-catalog"
-CATALOG_PATH = "config/catalogs/codm.json"
-CANDIDATE_PATH = ".build/source-generation/codm/catalog.json"
-REPORT_PATH = ".build/source-generation/codm/report.json"
+
+
+SourceName = Literal["codm", "quiver"]
+
+
+@dataclass(frozen=True)
+class SourceDescriptor:
+    name: SourceName
+    branch: str
+    catalog: str
+    candidate: str
+    report: str
+    subject: str
+
+
+SOURCES: Mapping[SourceName, SourceDescriptor] = {
+    name: SourceDescriptor(
+        name,
+        f"automation/{name}-catalog",
+        f"config/catalogs/{name}.json",
+        f".build/source-generation/{name}/catalog.json",
+        f".build/source-generation/{name}/report.json",
+        f"chore(catalog): update reviewed {name} source",
+    )
+    for name in get_args(SourceName)
+}
 GENERATION_SUCCESS_STATUS = "success"
 HANDOFF_DIRECTORY = "source-handoff"
 BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
-COMMIT_SUBJECT = "chore(catalog): update reviewed codm source"
-PR_TITLE = COMMIT_SUBJECT
 # GitHub rejects a pull request body longer than this many characters.
 PR_BODY_LIMIT = 65536
+
+# The values GitHub reports for a step's `outcome`.
+StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
+STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
+# The summary reports this for a step whose outcome is absent or unrecognized.
+StepResult = StepOutcome | Literal["unavailable"]
+VALIDATION_STEPS = ("generation", "staging", "tests", "build", "verify", "guard")
 
 
 # --- stage (read-only check job) -----------------------------------------
@@ -83,6 +111,7 @@ class StageOutcome:
     changed_urls: tuple[str, ...] = ()
     retained_failures: tuple[tuple[str, str], ...] = ()
     reason: str = ""
+    diagnostics: tuple[str, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -99,6 +128,8 @@ class StageOutcome:
             removed=self.removed,
             changed=self.changed_urls,
             retained_failures=self.retained_failures,
+            diagnostics=self.diagnostics,
+            limit=None,
         )
 
 
@@ -107,15 +138,17 @@ def run_stage(
     github_sha: str,
     run_url: str,
     bundle_path: Path,
-    body_path: Path,
+    *,
+    source: SourceName = "codm",
 ) -> StageOutcome:
     """Copy the generated candidate over the reviewed catalog and commit it.
 
     Runs in the read-only job. When the catalog changes, it commits only that
     file on a fresh local branch and hands the commit to the write job as a
-    bundle, alongside a PR body file, so the write job can push only bytes
-    this run actually rendered.
+    bundle. The PR body is written later by `summarize`, and only once every
+    check has succeeded.
     """
+    descriptor = SOURCES[source]
     try:
         head = git_text(root, "rev-parse", "HEAD")
     except OSError:
@@ -124,11 +157,11 @@ def run_stage(
         return _stage_failure("checkout", "HEAD is not GITHUB_SHA", head)
     base_sha = head
 
-    candidate_path = root / CANDIDATE_PATH
-    catalog_path = root / CATALOG_PATH
-    report_path = root / REPORT_PATH
+    candidate_path = root / descriptor.candidate
+    catalog_path = root / descriptor.catalog
+    report_path = root / descriptor.report
 
-    for relative in (CANDIDATE_PATH, CATALOG_PATH):
+    for relative in (descriptor.candidate, descriptor.catalog):
         problem = regular_file_problem(root / relative)
         if problem is not None:
             return _stage_failure(
@@ -150,9 +183,17 @@ def run_stage(
 
     added, removed, changed_urls = _report_changes(report)
     retained_failures = _report_retained_failures(report)
+    diagnostics = _report_diagnostics(report)
 
     try:
-        base_bytes = git_output(root, "show", f"{base_sha}:{CATALOG_PATH}")
+        base_entry = git_text(root, "ls-tree", base_sha, "--", descriptor.catalog)
+        if not base_entry.startswith("100644 blob "):
+            return _stage_failure(
+                "base", "base catalog is not a regular mode 100644 file", base_sha
+            )
+        if git_text(root, "diff", "--cached", "--name-only"):
+            return _stage_failure("base", "index contains staged changes", base_sha)
+        base_bytes = git_output(root, "show", f"{base_sha}:{descriptor.catalog}")
     except OSError:
         return _stage_failure("base", "could not read the base catalog", base_sha)
 
@@ -166,7 +207,7 @@ def run_stage(
     sha = base_sha
     if changed:
         try:
-            sha = _commit_candidate(root, base_sha, run_url)
+            sha = _commit_candidate(root, base_sha, run_url, descriptor)
         except OSError:
             return _stage_failure("commit", "could not commit the candidate", base_sha)
         try:
@@ -176,20 +217,8 @@ def run_stage(
                 )
             bundle_path.parent.mkdir(parents=True, exist_ok=True)
             git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
-            body_text = _render_report(
-                base_sha=base_sha,
-                run_url=run_url,
-                added=added,
-                removed=removed,
-                changed=changed_urls,
-                retained_failures=retained_failures,
-            )
-            body_path.parent.mkdir(parents=True, exist_ok=True)
-            body_path.write_text(body_text, encoding="utf-8")
         except OSError:
-            return _stage_failure(
-                "bundle", "could not write the bundle or PR body", base_sha
-            )
+            return _stage_failure("bundle", "could not write the bundle", base_sha)
 
     status: StageStatus = "changed" if changed else "unchanged"
     return StageOutcome(
@@ -201,6 +230,7 @@ def run_stage(
         removed,
         changed_urls,
         retained_failures,
+        diagnostics=diagnostics,
     )
 
 
@@ -244,6 +274,30 @@ def _report_retained_failures(
     return tuple(failures)
 
 
+def _report_diagnostics(report: Mapping[str, object]) -> tuple[str, ...]:
+    return tuple(
+        f"{key}: {json.dumps(report[key], ensure_ascii=False, sort_keys=True)}"
+        for key in (
+            "error",
+            "inputs",
+            "inactiveRules",
+            "skipped",
+            "unsupportedRows",
+            "unsupportedLinks",
+            "noAndroid",
+            "unavailableRepositories",
+            "unresolved",
+            "effectivePolicy",
+            "coverage",
+            "apk",
+            "tracking",
+            "filteredAssets",
+            "filterDisagreements",
+        )
+        if key in report
+    )
+
+
 def _render_report(
     *,
     base_sha: str,
@@ -252,6 +306,8 @@ def _render_report(
     removed: Sequence[str],
     changed: Sequence[str],
     retained_failures: Sequence[tuple[str, str]],
+    diagnostics: Sequence[str] = (),
+    limit: int | None = PR_BODY_LIMIT,
 ) -> str:
     lines: list[str] = []
     if run_url is not None:
@@ -274,29 +330,34 @@ def _render_report(
         f"{html.escape(url)}: {html.escape(message)}"
         for url, message in retained_failures
     ]
+    failure_lines.extend(html.escape(line) for line in diagnostics)
     text = "\n".join([*lines, *failure_lines, "</pre>"]) + "\n"
-    if len(text) <= PR_BODY_LIMIT:
+    if limit is None or len(text) <= limit:
         return text
 
-    # Keep the PR body within GitHub's limit by listing only as many retained
-    # failures as fit, then counting the rest on one line.
-    longest_omission = f"and {len(failure_lines)} more"
-    budget = PR_BODY_LIMIT - len("\n".join([*lines, longest_omission, "</pre>"]) + "\n")
+    # Bound every upstream section, leaving room for a complete omission line
+    # and closing tag. The full diagnostics remain in the summary and artifact.
+    split = lines.index("<pre>") + 1
+    prefix, details = lines[:split], lines[split:] + failure_lines
+    longest_omission = f"and {len(details)} more"
+    budget = limit - len("\n".join([*prefix, longest_omission, "</pre>"]) + "\n")
     kept: list[str] = []
-    for line in failure_lines:
+    for line in details:
         if len(line) + 1 > budget:
             break
         kept.append(line)
         budget -= len(line) + 1
-    omission = f"and {len(failure_lines) - len(kept)} more"
-    return "\n".join([*lines, *kept, omission, "</pre>"]) + "\n"
+    omission = f"and {len(details) - len(kept)} more"
+    return "\n".join([*prefix, *kept, omission, "</pre>"]) + "\n"
 
 
-def _commit_candidate(root: Path, base_sha: str, run_url: str) -> str:
-    git_output(root, "checkout", "-q", "-B", BRANCH_NAME)
-    git_output(root, "add", "--", CATALOG_PATH)
+def _commit_candidate(
+    root: Path, base_sha: str, run_url: str, descriptor: SourceDescriptor
+) -> str:
+    git_output(root, "checkout", "-q", "-B", descriptor.branch)
+    git_output(root, "add", "--", descriptor.catalog)
     body = f"Workflow run: {run_url}\n\nBase SHA: {base_sha}"
-    return bot_commit(root, COMMIT_SUBJECT, body)
+    return bot_commit(root, descriptor.subject, body)
 
 
 # --- publish (write job) --------------------------------------------------
@@ -326,12 +387,14 @@ def run_publish(
     body_path: Path | None,
     *,
     gh: GhRunner | None = None,
+    source: SourceName = "codm",
 ) -> PublishOutcome:
     """Close a stale proposal, or push and open or refresh the source-update PR.
 
     Every check below runs before any remote write, so a rejected hand-off or
     an advanced main changes neither the bot branch nor any PR.
     """
+    descriptor = SOURCES[source]
     selected_gh = gh or SubprocessGhRunner()
     generic = "publish failed"
     try:
@@ -354,7 +417,7 @@ def run_publish(
         if remote_main != base_sha:
             raise PublishFailure(f"{generic}: main advanced")
 
-        selected_number = _selected_pr_number(selected_gh)
+        selected_number = _selected_pr_number(selected_gh, descriptor)
 
         if not is_changed:
             if selected_number is None:
@@ -374,7 +437,7 @@ def run_publish(
         except HandoffRejected as rejection:
             log(f"hand-off rejected: {rejection}")
             raise PublishFailure(rejected) from None
-        if not _catalog_only_diff(entries):
+        if not _catalog_only_diff(entries, descriptor):
             log(
                 "hand-off rejected: the candidate changes a file other than the "
                 "catalog, or the catalog's mode"
@@ -387,13 +450,19 @@ def run_publish(
             raise PublishFailure(f"{generic}: PR body rejected")
 
         unreadable = f"{generic}: could not read remote branch"
-        remote_branch_sha = ls_remote_sha(root, f"refs/heads/{BRANCH_NAME}")
+        remote_branch_sha = ls_remote_sha(root, f"refs/heads/{descriptor.branch}")
         if remote_branch_sha is None:
             raise PublishFailure(unreadable)
         needs_push = True
         if remote_branch_sha:
             expect(
-                git(root, "fetch", "--quiet", "origin", f"refs/heads/{BRANCH_NAME}"),
+                git(
+                    root,
+                    "fetch",
+                    "--quiet",
+                    "origin",
+                    f"refs/heads/{descriptor.branch}",
+                ),
                 PublishFailure,
                 unreadable,
             )
@@ -413,7 +482,7 @@ def run_publish(
                 "push",
                 "--force",
                 "origin",
-                f"{candidate_sha}:refs/heads/{BRANCH_NAME}",
+                f"{candidate_sha}:refs/heads/{descriptor.branch}",
             )
             if push_result.returncode != 0:
                 raise PublishFailure(f"{generic}: branch push failed")
@@ -441,13 +510,13 @@ def run_publish(
                 "--repo",
                 CANONICAL_REPOSITORY,
                 "--title",
-                PR_TITLE,
+                descriptor.subject,
                 "--body-file",
                 str(body_path),
                 "--base",
                 "main",
                 "--head",
-                BRANCH_NAME,
+                descriptor.branch,
             ]
         )
         if create_result.returncode != 0:
@@ -457,7 +526,7 @@ def run_publish(
         return PublishOutcome("failed", failure.summary)
 
 
-def _selected_pr_number(gh: GhRunner) -> int | None:
+def _selected_pr_number(gh: GhRunner, descriptor: SourceDescriptor) -> int | None:
     result = gh.run(
         [
             "pr",
@@ -465,13 +534,13 @@ def _selected_pr_number(gh: GhRunner) -> int | None:
             "--repo",
             CANONICAL_REPOSITORY,
             "--head",
-            BRANCH_NAME,
+            descriptor.branch,
             "--base",
             "main",
             "--state",
             "open",
             "--json",
-            "number,isCrossRepository,headRepositoryOwner",
+            "number,isCrossRepository,headRepositoryOwner,headRefName,baseRefName",
         ]
     )
     unreadable = "publish failed: PR list failed"
@@ -487,6 +556,8 @@ def _selected_pr_number(gh: GhRunner) -> int | None:
         item
         for item in candidates
         if isinstance(item, dict)
+        and item.get("headRefName") == descriptor.branch
+        and item.get("baseRefName") == "main"
         and item.get("isCrossRepository") is False
         and isinstance(item.get("headRepositoryOwner"), dict)
         and item["headRepositoryOwner"].get("login") == CANONICAL_OWNER
@@ -521,17 +592,18 @@ def _body_problem(body_path: Path) -> str | None:
     return None
 
 
-def _catalog_only_diff(entries: Sequence[DiffEntry]) -> bool:
+def _catalog_only_diff(
+    entries: Sequence[DiffEntry], descriptor: SourceDescriptor
+) -> bool:
     """Exactly one entry: the catalog, at mode 100644 on both sides."""
-    return len(entries) == 1 and entries[0] == (CATALOG_PATH, "100644", "100644")
+    return len(entries) == 1 and entries[0] == (descriptor.catalog, "100644", "100644")
 
 
 # --- shared CLI plumbing ---------------------------------------------------
 
 
-def _handoff_paths(environ: Mapping[str, str]) -> tuple[Path, Path]:
-    directory = Path(require_env(environ, "RUNNER_TEMP")) / HANDOFF_DIRECTORY
-    return directory / BUNDLE_NAME, directory / BODY_NAME
+def _handoff_directory(environ: Mapping[str, str]) -> Path:
+    return Path(require_env(environ, "RUNNER_TEMP")) / HANDOFF_DIRECTORY
 
 
 def _report_outcome(environ: Mapping[str, str], summary: str, *, failed: bool) -> int:
@@ -547,15 +619,19 @@ def _report_outcome(environ: Mapping[str, str], summary: str, *, failed: bool) -
     return 1 if failed else 0
 
 
-def _run_stage_command(environ: Mapping[str, str], *, root: Path | None = None) -> int:
+def _run_stage_command(
+    environ: Mapping[str, str],
+    *,
+    root: Path | None = None,
+    source: SourceName = "codm",
+) -> int:
     selected_root = root or Path.cwd()
-    bundle_path, body_path = _handoff_paths(environ)
     outcome = run_stage(
         selected_root,
         environ.get("GITHUB_SHA", ""),
         run_url(environ),
-        bundle_path,
-        body_path,
+        _handoff_directory(environ) / BUNDLE_NAME,
+        source=source,
     )
     if outcome.status != "failed":
         write_github_output(
@@ -575,6 +651,7 @@ def _run_publish_command(
     body_path: Path | None,
     *,
     root: Path | None = None,
+    source: SourceName = "codm",
 ) -> int:
     selected_root = root or Path.cwd()
     outcome = run_publish(
@@ -584,23 +661,141 @@ def _run_publish_command(
         environ.get("BASE_SHA", ""),
         bundle_path,
         body_path,
+        source=source,
     )
     return _report_outcome(environ, outcome.summary, failed=outcome.status == "failed")
+
+
+def _run_guard_command(environ: Mapping[str, str], source: SourceName) -> int:
+    descriptor = SOURCES[source]
+    root = Path.cwd()
+    sha = environ.get("CANDIDATE_SHA", "")
+    base = environ.get("BASE_SHA", "")
+    try:
+        if FULL_SHA.fullmatch(sha) is None or FULL_SHA.fullmatch(base) is None:
+            raise ValueError("invalid checked revision")
+        if git_text(root, "rev-parse", f"{sha}^@") != base:
+            raise ValueError("checked commit does not have the expected single parent")
+        if not _catalog_only_diff(diff_raw_entries(root, base, sha), descriptor):
+            raise ValueError("checked commit is not scoped to the selected source")
+        path = root / descriptor.catalog
+        if regular_file_problem(path) is not None:
+            raise ValueError("workspace catalog is not a regular file")
+        if path.read_bytes() != git_output(root, "show", f"{sha}:{descriptor.catalog}"):
+            raise ValueError("workspace catalog differs from the checked commit")
+        if path.stat().st_mode & 0o111:
+            raise ValueError("workspace catalog is executable")
+    except (OSError, ValueError, HandoffRejected) as error:
+        return _report_outcome(environ, f"guard failed: {error}", failed=True)
+    return 0
+
+
+def _step_result(value: str) -> StepResult:
+    return value if value in STEP_OUTCOMES else "unavailable"
+
+
+def _render_validation(results: Mapping[str, StepResult]) -> str:
+    lines = [f"{step}: {result}" for step, result in results.items()]
+    return "Validation outcomes:\n" + "\n".join(lines) + "\n"
+
+
+def render_pr_body(
+    report: Mapping[str, object],
+    *,
+    base_sha: str,
+    run_url: str,
+    results: Mapping[str, StepResult],
+) -> str:
+    """The escaped PR body: the run, base, changes, diagnostics and results.
+
+    The report section is bounded so the whole body, including the validation
+    results, stays within GitHub's length limit.
+    """
+    validation = _render_validation(results)
+    added, removed, changed = _report_changes(report)
+    report_text = _render_report(
+        base_sha=base_sha,
+        run_url=run_url,
+        added=added,
+        removed=removed,
+        changed=changed,
+        retained_failures=_report_retained_failures(report),
+        diagnostics=_report_diagnostics(report),
+        limit=PR_BODY_LIMIT - len(validation) - 1,
+    )
+    return report_text + "\n" + validation
+
+
+def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
+    """Summarize the run, and write the PR body only when every step succeeded.
+
+    Writing the body here, after the checks, means the write job can only ever
+    receive a body for a candidate that passed them.
+    """
+    descriptor = SOURCES[source]
+    results = {
+        step: _step_result(environ.get(step.upper() + "_RESULT", ""))
+        for step in VALIDATION_STEPS
+    }
+    validation = _render_validation(results)
+    base = environ.get("BASE_SHA", "")
+    if FULL_SHA.fullmatch(base) is None:
+        base = "unavailable (staging did not succeed)"
+    try:
+        report = json.loads(Path(descriptor.report).read_bytes())
+        if not isinstance(report, dict):
+            raise TypeError("malformed report")
+    except (OSError, ValueError, TypeError):
+        summary = f"Source: {source}\nBase SHA: {base}\ngeneration report unavailable\n"
+    else:
+        added, removed, changed = _report_changes(report)
+        summary = _render_report(
+            base_sha=base,
+            run_url=run_url(environ),
+            added=added,
+            removed=removed,
+            changed=changed,
+            retained_failures=_report_retained_failures(report),
+            diagnostics=_report_diagnostics(report),
+            limit=None,
+        )
+        if all(result == "success" for result in results.values()):
+            body_path = _handoff_directory(environ) / BODY_NAME
+            body_path.parent.mkdir(parents=True, exist_ok=True)
+            body_path.write_text(
+                render_pr_body(
+                    report, base_sha=base, run_url=run_url(environ), results=results
+                ),
+                encoding="utf-8",
+            )
+    append_summary(environ, summary + "\n" + validation)
+    return 0
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m scripts.source_proposal")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    subparsers.add_parser("stage")
+    stage_parser = subparsers.add_parser("stage")
+    stage_parser.add_argument("--source", choices=SOURCES, default="codm")
     publish_parser = subparsers.add_parser("publish")
+    publish_parser.add_argument("--source", choices=SOURCES, default="codm")
     publish_parser.add_argument("--bundle", type=Path, default=None)
     publish_parser.add_argument("--body-file", type=Path, default=None)
+    for name in ("guard", "summarize"):
+        command_parser = subparsers.add_parser(name)
+        command_parser.add_argument("--source", choices=SOURCES, default="codm")
     arguments = parser.parse_args(argv)
     environ = os.environ
 
     if arguments.command == "stage":
-        return _run_stage_command(environ)
-    return _run_publish_command(environ, arguments.bundle, arguments.body_file)
+        return _run_stage_command(environ, source=arguments.source)
+    if arguments.command == "guard":
+        return _run_guard_command(environ, arguments.source)
+    if arguments.command == "summarize":
+        return _run_summary_command(environ, arguments.source)
+    return _run_publish_command(
+        environ, arguments.bundle, arguments.body_file, source=arguments.source
+    )
 
 
 if __name__ == "__main__":

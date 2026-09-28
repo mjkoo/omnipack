@@ -30,27 +30,39 @@ def output(owner, field):
     return "${{ " + owner + ".outputs." + field + " }}"
 
 
-@pytest.fixture(params=["nightly.yml", "source-catalog.yml"])
+@pytest.fixture(params=["nightly.yml", "source-maintenance.yml"])
 def workflow(request):
     return yaml.safe_load((WORKFLOWS / request.param).read_text())
 
 
+def triggers(workflow):
+    # PyYAML's YAML 1.1 loader parses the unquoted `on` key as True.
+    return workflow.get("on", workflow.get(True, {}))
+
+
 def test_nightly_refreshes_daily_at_three_in_eastern_time():
-    # Only nightly keeps this schedule, so the shared fixture cannot assert it.
     nightly = yaml.safe_load((WORKFLOWS / "nightly.yml").read_text())
-    triggers = nightly.get("on", nightly.get(True, {}))
-    assert triggers["schedule"] == [
-        {"cron": "0 3 * * *", "timezone": "America/New_York"}
-    ]
+    assert triggers(nightly) == {
+        "schedule": [{"cron": "0 3 * * *", "timezone": "America/New_York"}],
+        "workflow_dispatch": None,
+    }
+    assert nightly["concurrency"]["cancel-in-progress"] is False
+
+
+def test_source_maintenance_runs_only_when_called_for_one_source():
+    # The caller schedules each source and serializes its runs, so the
+    # reusable workflow declares neither a schedule nor its own concurrency.
+    workflow = yaml.safe_load((WORKFLOWS / "source-maintenance.yml").read_text())
+    assert set(triggers(workflow)) == {"workflow_call"}
+    inputs = triggers(workflow)["workflow_call"]["inputs"]
+    assert set(inputs) == {"source"}
+    assert inputs["source"]["required"] is True
+    assert inputs["source"]["type"] == "string"
+    assert "concurrency" not in workflow
 
 
 def test_publication_permissions_and_runtime_boundaries(workflow):
-    # PyYAML's YAML 1.1 loader parses the unquoted `on` key as True.
-    triggers = workflow.get("on", workflow.get(True, {}))
-    assert triggers["schedule"]
-    assert "workflow_dispatch" in triggers
     assert workflow["permissions"] == {}
-    assert workflow["concurrency"]["cancel-in-progress"] is False
     publish = workflow["jobs"]["publish"]
     check = workflow["jobs"][publish["needs"]]
     assert check["permissions"] == {"contents": "read"}
@@ -83,12 +95,18 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
                 fn in step.get("if", "")
                 for fn in ("always()", "failure()", "cancelled()")
             ):
-                assert step in action_steps(check, "actions/upload-artifact")
-                assert step["with"]["if-no-files-found"] == "ignore"
-    assert not any(
-        word in str(check["steps"])
-        for word in ("GH_TOKEN", "GITHUB_TOKEN", "github.token", "secrets.")
-    )
+                if step.get("id") == "summary":
+                    assert step["if"] == "always()"
+                else:
+                    assert step in action_steps(check, "actions/upload-artifact")
+                    assert step["with"]["if-no-files-found"] == "ignore"
+    token_steps = [s for s in check["steps"] if "GITHUB_TOKEN" in s.get("env", {})]
+    assert len(token_steps) == (1 if source else 0)
+    if source:
+        assert token_steps[0]["id"] == "generation"
+        assert token_steps[0]["env"]["GITHUB_TOKEN"] == "${{ github.token }}"
+    assert "GH_TOKEN" not in str(check["steps"])
+    assert "secrets." not in str(check["steps"])
     assert len(action_steps(check, "astral-sh/setup-uv")) == 1
     assert not action_steps(publish, "astral-sh/setup-uv")
     assert all("uv" not in command(step) for step in publish["steps"])
@@ -102,7 +120,7 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
     stage_id = "prepare" if check_name == "prepare" else "stage"
     stage = next(s for s in check["steps"] if s.get("id") == stage_id)
     module = "scripts.nightly" if stage_id == "prepare" else "scripts.source_proposal"
-    assert command(stage) == [
+    expected_stage = [
         "uv",
         "run",
         "--no-sync",
@@ -111,6 +129,9 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
         module,
         stage_id,
     ]
+    if stage_id == "stage":
+        expected_stage += ["--source", "$SOURCE"]
+    assert command(stage) == expected_stage
     assert "if" not in stage
     assert check["outputs"] == {
         k: output(f"steps.{stage_id}", k) for k in ("changed", "sha", "base")
@@ -143,7 +164,7 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
     assert reports == (
         {".build/report.json", ".build/verify.json"}
         if stage_id == "prepare"
-        else {".build/source-generation/codm/report.json"}
+        else {".build/source-generation/${{ inputs.source }}/report.json"}
     )
     assert check["steps"].index(stage) < check["steps"].index(handoff)
     writer = next(s for s in publish["steps"] if "CANDIDATE_SHA" in s.get("env", {}))
@@ -155,6 +176,8 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
         if stage_id == "prepare"
         else ["python3", "-m", "scripts.source_proposal", "publish"]
     )
+    if stage_id == "stage":
+        expected += ["--source", "$SOURCE"]
     expected += ["--bundle", "$RUNNER_TEMP/" + directory + "/candidate.bundle"]
     if stage_id == "stage":
         expected += ["--body-file", "$RUNNER_TEMP/source-handoff/pr-body.md"]
@@ -202,16 +225,26 @@ def test_base_guard_rejects_stale_revision_before_consumption(workflow):
 
 
 def test_source_candidate_validation_finishes_before_handoff():
-    workflow = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())
+    workflow = yaml.safe_load((WORKFLOWS / "source-maintenance.yml").read_text())
     check = workflow["jobs"]["check"]
     commands = [
         ("uv", "sync", "--locked"),
-        ("uv", "run", "--no-sync", "pack", "generate-source", "codm"),
-        ("uv", "run", "--no-sync", "python", "-m", "scripts.source_proposal", "stage"),
+        ("uv", "run", "--no-sync", "pack", "generate-source", "$SOURCE"),
+        (
+            "uv",
+            "run",
+            "--no-sync",
+            "python",
+            "-m",
+            "scripts.source_proposal",
+            "stage",
+            "--source",
+            "$SOURCE",
+        ),
         ("uv", "run", "--no-sync", "pytest"),
         ("uv", "run", "--no-sync", "pack", "build"),
         ("uv", "run", "--no-sync", "pack", "verify"),
-        ("git", "diff", "--quiet", "$SHA", "--", "config/catalogs/codm.json"),
+        ("python3", "-m", "scripts.source_proposal", "guard", "--source", "$SOURCE"),
     ]
     stages = [command_step(check, *words) for words in commands]
     [handoff] = [
@@ -226,4 +259,62 @@ def test_source_candidate_validation_finishes_before_handoff():
         s["if"] == "steps.stage.outputs.changed == 'true'"
         for s in [*stages[3:], handoff]
     )
-    assert stages[-1]["env"] == {"SHA": output("steps.stage", "sha")}
+    assert stages[-1]["env"] == {
+        "CANDIDATE_SHA": output("steps.stage", "sha"),
+        "BASE_SHA": output("steps.stage", "base"),
+    }
+
+
+def test_sources_run_independent_complete_check_publish_chains():
+    caller = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())
+    assert triggers(caller) == {
+        "schedule": [{"cron": "17 4 * * *"}],
+        "workflow_dispatch": None,
+    }
+    assert caller["permissions"] == {}
+    assert "concurrency" not in caller
+    assert set(caller["jobs"]) == {"codm", "quiver"}
+    for source, job in caller["jobs"].items():
+        assert job["uses"] == "./.github/workflows/source-maintenance.yml"
+        assert job["with"] == {"source": source}
+        assert job["concurrency"] == {
+            "group": f"omnipack-reviewed-source-catalog-{source}",
+            "cancel-in-progress": False,
+        }
+        assert "needs" not in job
+        assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
+        assert (
+            job["if"]
+            == "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
+        )
+
+
+def test_source_artifacts_and_actual_validation_outcomes_are_scoped():
+    workflow = yaml.safe_load((WORKFLOWS / "source-maintenance.yml").read_text())
+    assert workflow["env"]["SOURCE"] == "${{ inputs.source }}"
+    check = workflow["jobs"]["check"]
+    assert (
+        check["timeout-minutes"] == workflow["jobs"]["publish"]["timeout-minutes"] == 60
+    )
+    for step in action_steps(check, "actions/upload-artifact"):
+        assert "${{ inputs.source }}" in step["with"]["name"]
+        assert step["with"]["retention-days"] == (14 if step["if"] == "always()" else 1)
+    summary = next(s for s in check["steps"] if s.get("id") == "summary")
+    assert summary["if"] == "always()"
+    for stage, step_id in (
+        ("GENERATION", "generation"),
+        ("STAGING", "stage"),
+        ("TESTS", "tests"),
+        ("BUILD", "build"),
+        ("VERIFY", "verify"),
+        ("GUARD", "guard"),
+    ):
+        assert (
+            summary["env"][stage + "_RESULT"] == "${{ steps." + step_id + ".outcome }}"
+        )
+    handoff = next(
+        s
+        for s in action_steps(check, "actions/upload-artifact")
+        if s["with"]["if-no-files-found"] == "error"
+    )
+    assert check["steps"].index(summary) < check["steps"].index(handoff)

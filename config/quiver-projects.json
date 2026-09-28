@@ -1,0 +1,36 @@
+{
+  "schemaVersion": 1,
+  "projects": {
+    "https://github.com/999sian/melee-pc": {
+      "additionalSettings": {
+        "includePrereleases": true
+      }
+    },
+    "https://github.com/Keriew/augustus": {
+      "category": "PC Ports"
+    },
+    "https://github.com/OpenRCT2/OpenRCT2": {
+      "category": "PC Ports"
+    },
+    "https://github.com/SlickAmogus/silent-hill-decomp": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^(?!.*_OLD[.]apk$).*"
+      }
+    },
+    "https://github.com/bvschaik/julius": {
+      "category": "PC Ports"
+    },
+    "https://github.com/doukutsu-rs/doukutsu-rs": {
+      "category": "PC Ports"
+    },
+    "https://github.com/isledecomp/isle-portable": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^app-release[.]apk$"
+      }
+    },
+    "https://github.com/vcmi/vcmi": {
+      "category": "PC Ports"
+    }
+  },
+  "skips": []
+}

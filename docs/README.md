@@ -6,6 +6,7 @@ Start with [development](development.md) for setup, building packs, and running 
 - [App curation](curation.md): maintained policies, port setup, and shared pack tracking.
 - [Source generation](source-generation.md): reviewed codm project rules, isolated candidates, and the source proposal workflow.
 - [Source reconciliation](source-reconciliation.md): reviewed game sources and installed package identities.
+- [Quiver game ports](quiver-ports.md): source admission, user game data, and Android setup caveats.
 - [MetroidArch](metroidarch.md): dual-screen MetroidArch setup and vetting.
 - [Version detection](version-detection.md): how Obtainium compares installed and upstream versions.
 - [Verification](verification.md): structural checks, diagnostics, and limitations.

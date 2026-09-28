@@ -10,7 +10,13 @@ from urllib.response import addinfourl
 
 import pytest
 
-from omnipack.http import HttpClient, HttpError, HttpResponse, redact_url
+from omnipack.http import (
+    HttpClient,
+    HttpError,
+    HttpResponse,
+    HttpStatusError,
+    redact_url,
+)
 
 if TYPE_CHECKING:
     from urllib.request import Request
@@ -159,6 +165,22 @@ def test_embedded_url_credentials_are_rejected() -> None:
         client.get("https://user:pass@example.com/app")
 
 
+def test_nontransient_status_preserves_attempt_count_after_a_retry() -> None:
+    url = "https://example.com/data"
+    transport = RecordingTransport(
+        [
+            OSError("connection interrupted"),
+            urllib.error.HTTPError(url, 403, "forbidden", Message(), None),
+        ]
+    )
+
+    with pytest.raises(HttpStatusError, match="HTTP 403 after 2 attempts") as caught:
+        HttpClient(transport=transport, sleep=lambda _: None).get(url)
+
+    assert caught.value.status == 403
+    assert len(transport.requests) == 2
+
+
 def test_diagnostic_urls_redact_credentials_and_query_values() -> None:
     assert redact_url("https://user:pass@example.com/app?q=secret&flag=#part") == (
         "https://example.com/app?q=REDACTED&flag=REDACTED#part"
@@ -173,3 +195,19 @@ def test_diagnostic_urls_redact_credentials_and_query_values() -> None:
     message = str(raised.value)
     assert "secret" not in message
     assert "token=REDACTED" in message
+
+
+@pytest.mark.parametrize("status", [400, 401, 410, 422])
+def test_every_nontransient_http_status_is_typed(status: int) -> None:
+    url = "https://example.com/data"
+    transport = RecordingTransport(
+        [urllib.error.HTTPError(url, status, "rejected", Message(), None)]
+    )
+
+    with pytest.raises(
+        HttpStatusError, match=f"returned HTTP {status} after 1 attempts"
+    ) as caught:
+        HttpClient(transport=transport).get(url)
+
+    assert caught.value.status == status
+    assert len(transport.requests) == 1

@@ -101,3 +101,21 @@ def test_cli_report_write_failure_is_concise(
     )
     assert "Traceback" not in error and len(error.splitlines()) == 1
     assert json.loads(path.read_bytes()) == {"prior": "evidence"}
+
+
+def test_cli_prints_each_verification_error(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    inputs(tmp_path)
+    (tmp_path / "README.md").write_text("no catalog markers\n")
+    monkeypatch.chdir(tmp_path)
+    assert cli.main(["verify"]) == 1
+    errors = json.loads((tmp_path / ".build/verify.json").read_bytes())["errors"]
+    lines = capsys.readouterr().err.splitlines()
+    assert errors
+    assert lines == [
+        *(f"{e['stage']}/{e['code']}: {e['message']}" for e in errors),
+        f"verify failed with {len(errors)} error(s)",
+    ]
