@@ -360,31 +360,33 @@ other than the project's own committed entry.
 
 ### Requirement: Catalog changes are checked before PR publication
 
-Before pushing the source-update branch, creating a PR or editing a PR's body,
-the source-maintenance workflow's read-only job SHALL validate the candidate
-catalog's shape, IDs and deterministic rendering, run the project's full test
-suite with the candidate catalog in place, and build and structurally verify
-both pack variants with the candidate catalog and main's configuration. Any
-failure, including stale selectors and package collisions, SHALL block those
-writes. When a successful generation reproduces main's committed catalog,
-closing an open PR from the source-update branch SHALL be the only permitted
-write, and it SHALL require no tests, build or verification. Generated pack
-outputs and the pack README SHALL be diagnostics for this run, not part of the
-proposal. The proposed catalog SHALL be byte-identical to the checked candidate:
-the read-only job SHALL commit the candidate before the checks and confirm
-afterwards that the workspace catalog still matches that commit, and the write
-job SHALL push only that exact commit, identified by its SHA, after confirming
-that its parent is the checked-out main revision and that it changes only the
-committed source catalog, which SHALL be a regular file of mode 100644 in both
-the base revision and the commit. The read-only job SHALL likewise reject a
-generated candidate or a workspace catalog that is not a regular file. The
-reviewed policy SHALL NOT be modified or staged. Diagnostics SHALL identify the
-base revision, catalog changes, skipped links, resolution results, tracking
-outcomes, effective policy, retained failures and pack validation outcome. The
-base revision SHALL appear in the PR body and in the run summary of a run whose
-staging succeeds; a run whose staging fails SHALL summarize that staging failed
-and its reason instead. The pack validation outcome SHALL be the reported
-results of the run's test, build and verification steps.
+Before pushing a source's source-update branch, creating a PR or editing a PR's
+body, the source-maintenance workflow's read-only job SHALL validate that
+source's candidate catalog's shape, IDs and deterministic rendering, run the
+project's full test suite with the candidate catalog in place, and build and
+structurally verify both pack variants with the candidate catalog and main's
+configuration. Any failure, including stale selectors and package collisions,
+SHALL block those writes. When a successful generation reproduces main's
+committed catalog for that source, closing an open PR from that source's
+source-update branch SHALL be the only permitted write, and it SHALL require no
+tests, build or verification. Generated pack outputs and the pack README SHALL
+be diagnostics for this run, not part of the proposal. The proposed catalog
+SHALL be byte-identical to the checked candidate: the read-only job SHALL commit
+the candidate before the checks and confirm afterwards that the workspace
+catalog still matches that commit, and the write job SHALL push only that exact
+commit, identified by its SHA, after confirming that its parent is the
+checked-out main revision and that it changes only that source's committed
+catalog, which SHALL be a regular file of mode 100644 in both the base revision
+and the commit. A source's run SHALL NOT stage or publish another source's
+catalog. The read-only job SHALL likewise reject a generated candidate or a
+workspace catalog that is not a regular file. The reviewed policy SHALL NOT be
+modified or staged. Diagnostics SHALL identify the base revision, catalog
+changes, projects the source's own discovery skipped, resolution results,
+tracking outcomes, effective policy, retained failures and pack validation
+outcome. The base revision SHALL appear in the PR body and in the run summary of
+a run whose staging succeeds; a run whose staging fails SHALL summarize that
+staging failed and its reason instead. The pack validation outcome SHALL be the
+reported results of the run's test, build and verification steps.
 
 #### Scenario: Candidate changes a pinned identity
 
@@ -413,7 +415,12 @@ results of the run's test, build and verification steps.
 
 #### Scenario: Handed-off commit is not the checked commit
 
-- **WHEN** the commit the write job receives differs from the checked SHA, its parent is not the checked-out main revision, or it changes a file other than the source catalog
+- **WHEN** the commit the write job receives differs from the checked SHA, its parent is not the checked-out main revision, or it changes a file other than that source's catalog
+- **THEN** the run fails before any branch push or PR write
+
+#### Scenario: A source's commit touches another source's catalog
+
+- **WHEN** the commit handed off in one source's run changes another supported source's committed catalog
 - **THEN** the run fails before any branch push or PR write
 
 #### Scenario: Catalog is replaced by a symlink or changes mode
@@ -424,27 +431,35 @@ results of the run's test, build and verification steps.
 ### Requirement: One separate workflow maintains source update proposals
 
 A daily scheduled workflow and manual dispatch SHALL operate from main in the
-canonical repository, independently of nightly publication. Runs SHALL be
-serialized without canceling active runs and have a bounded runtime. Ineligible
-refs and forks SHALL perform no remote writes.
+canonical repository, independently of nightly publication. The supported
+sources are codm, whose source-update branch is `automation/codm-catalog`, and
+Quiver, whose source-update branch is `automation/quiver-catalog`. Each
+supported source SHALL have its own dedicated source-update branch, committed
+catalog path and serialization group, and every rule below applies to each
+source separately. A source's runs SHALL be serialized within its own group
+without canceling active runs and SHALL NOT wait on another source's runs; runs
+SHALL have a bounded runtime. Ineligible refs and forks SHALL perform no remote
+writes.
 
-When the checked candidate differs from main's committed catalog, the workflow
-SHALL rebuild one dedicated source-update branch from the main revision that
-triggered the run as a single commit containing only the candidate catalog, replace the branch's
-previous contents, and create or update the one open PR from that branch to
-main. The source-update PR SHALL be an open PR whose head is that branch in the
-canonical repository and whose base is main. A PR from another repository whose
-branch has the same name SHALL be neither edited nor closed. If more than one
-such source-update PR is open, the run SHALL fail before any remote write.
-Content equality SHALL be judged on the branch's whole tree: a branch whose tree
-equals the rebuilt proposal's tree SHALL be left as it is, even when its commits
-differ from the rebuilt commit, and SHALL NOT be pushed again. Commits added to
-that branch by hand SHALL be overwritten by the next push. When
-the candidate equals main's committed catalog, the workflow SHALL make no
-proposal and SHALL close an open source-update PR, without running the tests,
-build or verification. README or policy edits that leave the generated catalog
-unchanged SHALL NOT produce a proposal. No automatic merge, direct-main write,
-failure issue lifecycle or release write SHALL be introduced.
+When a source's checked candidate differs from main's committed catalog for that
+source, the workflow SHALL rebuild that source's source-update branch from the
+main revision that triggered the run as a single commit containing only the
+candidate catalog, replace the branch's previous contents, and create or update
+the one open PR from that branch to main. A source's source-update PR SHALL be
+an open PR whose head is that source's branch in the canonical repository and
+whose base is main. A PR from another repository whose branch has the same name
+SHALL be neither edited nor closed. If more than one source-update PR is open
+for one source, that source's run SHALL fail before any remote write; open PRs
+of other sources SHALL NOT count. Content equality SHALL be judged on the
+branch's whole tree: a branch whose tree equals the rebuilt proposal's tree
+SHALL be left as it is, even when its commits differ from the rebuilt commit,
+and SHALL NOT be pushed again. Commits added to that branch by hand SHALL be
+overwritten by the next push. When the candidate equals main's committed catalog
+for that source, the workflow SHALL make no proposal and SHALL close an open
+source-update PR of that source only, without running the tests, build or
+verification. Upstream discovery-input or policy edits that leave the generated
+catalog unchanged SHALL NOT produce a proposal. No automatic merge, direct-main
+write, failure issue lifecycle or release write SHALL be introduced.
 
 Retention uses main's committed entry, not the open proposal's. A transient
 resolution failure for a project whose update an open proposal carries can
@@ -452,21 +467,21 @@ therefore drop that update from the rebuilt proposal, or close the proposal
 when that update was its only change. The next run that resolves the project
 SHALL propose the update again, updating the open PR or opening a new one.
 
-Each invocation SHALL make one generation and check attempt. A failed branch or
-PR write SHALL fail the run visibly, and the next run SHALL rebuild the branch
-and update the existing PR rather than open another. Before any branch push, PR
-creation, PR edit or PR close, the write job SHALL confirm that main is still
-the run's base revision. If main has advanced, the run SHALL fail visibly
-without those writes, so a rerun of an earlier run cannot close or replace a
-newer proposal, and a later run SHALL rebuild the proposal on the newer main.
-Main advancing after that confirmation SHALL NOT be fenced: the PR SHALL show
-as stale or conflicting until a later run rebuilds it.
+Each invocation SHALL make one generation and check attempt per source. A failed
+branch or PR write SHALL fail that source's run visibly, and the next run SHALL
+rebuild the branch and update the existing PR rather than open another. Before
+any branch push, PR creation, PR edit or PR close, the write job SHALL confirm
+that main is still the run's base revision. If main has advanced, the run SHALL
+fail visibly without those writes, so a rerun of an earlier run cannot close or
+replace a newer proposal, and a later run SHALL rebuild the proposal on the
+newer main. Main advancing after that confirmation SHALL NOT be fenced: the PR
+SHALL show as stale or conflicting until a later run rebuilds it.
 
 #### Scenario: Candidate matches main
 
 - **WHEN** a successful generation produces the committed catalog and main is still the run's base revision
 - **THEN** no tests, build or verification are required, and no branch push, PR creation or PR edit occurs
-- **AND** any open PR from the source-update branch is closed, which is the only write the run makes
+- **AND** any open PR from that source's source-update branch is closed, which is the only write the run makes
 
 #### Scenario: Existing PR has the same candidate
 
@@ -490,7 +505,7 @@ as stale or conflicting until a later run rebuilds it.
 
 #### Scenario: A fork PR shares the branch name
 
-- **WHEN** an open PR from another repository uses the source-update branch name
+- **WHEN** an open PR from another repository uses a source-update branch name
 - **THEN** the workflow neither edits nor closes it, and a changed candidate gets its own PR from the canonical repository's branch
 
 #### Scenario: A retained failure reverts a proposed update
@@ -504,6 +519,11 @@ as stale or conflicting until a later run rebuilds it.
 - **WHEN** the write job of an earlier run is rerun after main has advanced past that run's base revision
 - **THEN** it fails visibly without a branch push or any PR write, so a newer proposal is neither closed nor replaced by the earlier catalog
 
+#### Scenario: Sources keep separate proposals
+
+- **WHEN** codm and Quiver each have a changed candidate, or one source's catalog is unchanged while the other's changed
+- **THEN** each source's run updates only its own branch and PR, neither closes nor counts the other source's PR, and neither run waits on the other's serialization group
+
 ### Requirement: Generation diagnostics and credentials remain scoped
 
 The workflow SHALL grant no permissions at workflow level and SHALL perform no
@@ -512,9 +532,9 @@ tests, building and verification; every step of that job, including checkout
 and runtime setup, SHALL run with a job token limited to reading repository
 contents, and none SHALL receive the write credential. The write credential
 SHALL be available only to the write job, which alone SHALL hold the contents
-and pull-request write access needed for the source-update branch and PR. The
-write job SHALL install no project dependencies and run no generation, tests,
-build or verification: it SHALL check out afresh the main revision that
+and pull-request write access needed for its source's source-update branch and
+PR. The write job SHALL install no project dependencies and run no generation,
+tests, build or verification: it SHALL check out afresh the main revision that
 triggered the run, receive from the read-only job only the checked commit, as
 git objects, and the escaped PR body, and run only a publication script that
 needs no project dependency and no dependency installation step, with repository
@@ -530,11 +550,12 @@ repository configuration. Source text SHALL be handled as data:
 upstream-derived text in the run summary and the PR body SHALL be HTML-escaped
 inside a preformatted block, so it renders as literal text rather than markup.
 Credentials, downloaded APKs and raw HTTP caches SHALL be excluded from
-summaries and artifacts. The current run's generation report SHALL be retained
-as an artifact for 14 days on success and failure when available, and the run
-summary SHALL list retained failures. Missing reports after early failure SHALL
-NOT imply successful validation. Actions SHALL expose failed generation, test,
-validation and PR-operation stages.
+summaries and artifacts. Each source's current generation report SHALL be
+retained as an artifact under a name distinct from other sources' for 14 days on
+success and failure when available, and the run summary SHALL list retained
+failures and skipped projects. Missing reports after early failure SHALL NOT
+imply successful validation. Actions SHALL expose failed generation, test,
+validation and PR-operation stages for each source.
 
 Checks SHALL execute within the source-maintenance workflow, without relying on
 PR events to run them. Each PR body SHALL link the workflow run that checked its
@@ -567,5 +588,5 @@ automatically changing repository settings.
 
 #### Scenario: Discovery is unavailable
 
-- **WHEN** README retrieval or APK generation fails
-- **THEN** Actions reports failure while the committed catalog remains available to nightly
+- **WHEN** a source's own discovery or its APK generation fails
+- **THEN** Actions reports failure while that source's committed catalog remains available to nightly

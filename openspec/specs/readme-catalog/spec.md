@@ -11,7 +11,7 @@ that stays consistent with the published Obtainium app configurations.
 
 The README SHALL present labeled raw main-branch single-screen and dual-screen JSON download links for mjkoo/omnipack immediately below its title, with device guidance. It SHALL provide a prominent ordered installation list before the individual catalog: install Obtainium, download the suitable pack, import the downloaded JSON through Import/Export, and install desired apps in Obtainium. It SHALL distinguish importing configurations from installing apps.
 
-It SHALL explain that individual links require import confirmation and subsequent installation in Obtainium, and identify track-only entries as tracking resources rather than necessarily installable apps. It SHALL credit RJNY's source JSON, BBoi34's two release JSON catalogs, codm2000's project catalog, Obtainium, and individual app developers through a bulleted credits list with direct source links, including the app sources in catalog rows.
+It SHALL explain that individual links require import confirmation and subsequent installation in Obtainium, and identify track-only entries as tracking resources rather than necessarily installable apps. It SHALL credit RJNY's source JSON, BBoi34's two release JSON catalogs, codm2000's project catalog, the Quiver community app catalog (https://github.com/tgeorgiadis/quiver-community-app-catalog), Obtainium, and individual app developers through a bulleted credits list with direct source links, including the app sources in catalog rows.
 
 Development, build, verification, and detailed publishing guidance SHALL be available under docs. The root README SHALL provide a brief Contributing section linking to docs rather than embedding development commands or a documentation index.
 

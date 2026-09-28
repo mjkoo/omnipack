@@ -157,6 +157,15 @@ SHALL be guarded by a check that fails when it drifts. Guarding any outcome in
 this requirement SHALL NOT require maintaining another implementation of
 Obtainium source resolution or regex semantics.
 
+The same configuration-driven acceptance and canonical-rendering checks SHALL
+cover the automation-maintained Quiver catalog. Its entries SHALL be installable
+APK records with well-formed package IDs, supported settings and no track-only
+flag; Quiver generation owns canonical-project and package uniqueness as defined
+in quiver-source-generation. Accepted Quiver catalogs SHALL NOT be subject to a
+hard-coded membership assertion. Reviewed Quiver exceptions and skip rules SHALL
+be hand-maintained configuration, not automation-maintained catalog content.
+Pruning an unwanted Quiver app uses the package deny list, as for any source.
+
 #### Scenario: Upstream refresh changes a curated setting
 
 - **WHEN** a source refresh changes a setting covered by a maintained override
@@ -176,3 +185,13 @@ Obtainium source resolution or regex semantics.
 
 - **WHEN** the committed codm2000 catalog's bytes differ from the canonical rendering of its entries, or an entry's id or settings stop fitting its kind
 - **THEN** a regression check fails and identifies the catalog
+
+#### Scenario: Quiver proposal changes membership
+
+- **WHEN** a Quiver candidate is canonical and valid and composes with reviewed configuration over captured upstream records, builds and verifies
+- **THEN** no check blocks it solely because it adds or removes a project
+
+#### Scenario: Quiver catalog is edited inconsistently
+
+- **WHEN** committed Quiver bytes differ from canonical rendering or a record lacks a valid installable APK identity
+- **THEN** a regression check fails identifying the catalog

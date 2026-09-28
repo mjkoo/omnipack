@@ -365,7 +365,7 @@ per family per variant, honoring a valid explicit pin first, as "Explicit
 selections identify an eligible candidate" defines. Otherwise single
 SHALL consider single-eligible candidates; dual SHALL consider dual-preferred
 eligible candidates when any exist, or all dual-eligible candidates otherwise.
-Within that tier, precedence SHALL be extras, RJNY, BBoi34, then generated.
+Within that tier, precedence SHALL be extras, RJNY, BBoi34, codm2000, then Quiver.
 The winning candidate SHALL be retained whole, not merged with losing entries.
 
 A family having no dual-preferred candidate left after successful ingestion and
@@ -449,6 +449,16 @@ README catalog reproduce every family the build publishes in both variants.
   directing the maintainer to add a `family` rule for each of them
 - **AND** once rules assign both selected entries `app:x`, the build succeeds
   and offline verification pairs them
+
+#### Scenario: Quiver cannot displace an existing baseline source
+
+- **WHEN** a Quiver baseline and an existing-source baseline compete within one family without a pin
+- **THEN** the existing-source candidate wins whole
+
+#### Scenario: Quiver supplies a missing baseline
+
+- **WHEN** Quiver is the only baseline candidate and codm2000 supplies a dual-screen build of the same family from the same or a different repository
+- **THEN** single selects Quiver and dual selects codm2000
 
 ### Requirement: Family selections are reported
 
