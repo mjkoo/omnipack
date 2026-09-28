@@ -102,6 +102,11 @@ def verify(_args: argparse.Namespace) -> int:
         print(f"verify failed: {error}", file=sys.stderr)
         return 1
     if result["status"] != Status.SUCCESS:
+        for error in result["errors"]:
+            print(
+                f"{error['stage']}/{error['code']}: {error['message']}",
+                file=sys.stderr,
+            )
         print(f"verify failed with {len(result['errors'])} error(s)", file=sys.stderr)
         return 1
     return 0
