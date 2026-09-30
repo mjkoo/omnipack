@@ -219,13 +219,29 @@ def test_package_id_correction_joins_a_quiver_candidates_family() -> None:
     result = compose([existing, quiver_app], [], [], policy=parsed)
     for variant in Variant:
         [selected] = result.apps[variant]
-        assert (selected.id, selected.url) == (quiver_app.id, existing.url)
-        assert selected.data["additionalSettings"] == existing.additional_settings
+        assert (selected.id, selected.url) == (quiver_app.id, quiver_app.url)
+        assert selected.data["additionalSettings"] == quiver_app.additional_settings
         [selection] = [
             item for item in result.report.selections if item.variant is variant
         ]
-        assert (selection.source, selection.original_id) == ("bboi", existing.id)
-        assert [item.source for item in selection.considered] == ["quiver"]
+        assert (selection.source, selection.original_id) == ("quiver", quiver_app.id)
+        assert [item.source for item in selection.considered] == ["bboi"]
+
+
+def test_quiver_ranks_between_rjny_and_bboi() -> None:
+    quiver_app = other("org.example.game", "owner/quiver", "quiver", "quiver-generated")
+    for source, origin, winner in (
+        ("bboi", "bboi-standard-asset", "quiver"),
+        ("codm2000", "codm-generated", "quiver"),
+        ("rjny", "rjny-catalog", "rjny"),
+        ("extras", "extras", "extras"),
+    ):
+        rival = other("org.example.game", f"owner/{source}", source, origin)
+        result = compose([rival, quiver_app], [], [], policy=policy())
+        [single] = [
+            item for item in result.report.selections if item.variant is Variant.SINGLE
+        ]
+        assert single.source == winner
 
 
 def test_quiver_only_single_and_codm_dual_preference() -> None:

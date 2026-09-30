@@ -365,7 +365,7 @@ per family per variant, honoring a valid explicit pin first, as "Explicit
 selections identify an eligible candidate" defines. Otherwise single
 SHALL consider single-eligible candidates; dual SHALL consider dual-preferred
 eligible candidates when any exist, or all dual-eligible candidates otherwise.
-Within that tier, precedence SHALL be extras, RJNY, BBoi34, codm2000, then Quiver.
+Within that tier, precedence SHALL be extras, RJNY, Quiver, BBoi34, then codm2000.
 The winning candidate SHALL be retained whole, not merged with losing entries.
 
 A family having no dual-preferred candidate left after successful ingestion and
@@ -450,10 +450,12 @@ README catalog reproduce every family the build publishes in both variants.
 - **AND** once rules assign both selected entries `app:x`, the build succeeds
   and offline verification pairs them
 
-#### Scenario: Quiver cannot displace an existing baseline source
+#### Scenario: Quiver ranks between RJNY and BBoi34
 
-- **WHEN** a Quiver baseline and an existing-source baseline compete within one family without a pin
-- **THEN** the existing-source candidate wins whole
+- **WHEN** a Quiver baseline competes within one family without a pin against a
+  BBoi34 or codm2000 baseline, and separately against an RJNY or extras baseline
+- **THEN** Quiver wins whole over the BBoi34 or codm2000 candidate
+- **AND** the RJNY or extras candidate wins whole over Quiver
 
 #### Scenario: Quiver supplies a missing baseline
 

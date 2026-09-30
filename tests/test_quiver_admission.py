@@ -81,7 +81,7 @@ def test_emerald_family_pairs_new_baseline_with_existing_dual(
     )
 
 
-def test_initial_admission_keeps_preexisting_pack_entries(
+def test_quiver_admission_changes_only_families_quiver_wins(
     current_configuration: CurrentConfiguration,
 ) -> None:
     baseline_policy = {
@@ -122,62 +122,22 @@ def test_initial_admission_keeps_preexisting_pack_entries(
     )
     for variant in Variant:
         before = {
-            app["id"]: app for app in json.loads(render(baseline.apps[variant]))["apps"]
+            app.family: json.loads(render([app]))["apps"][0]
+            for app in baseline.apps[variant]
         }
-        current = _apps(variant, current_configuration)
-        assert not (before.keys() - current.keys())
+        current = {
+            app.family: json.loads(render([app]))["apps"][0]
+            for app in current_configuration.result.apps[variant]
+        }
+        quiver_wins = {
+            selection.family
+            for selection in current_configuration.result.report.selections
+            if selection.variant is variant and selection.source == "quiver"
+        }
+        assert before.keys() <= current.keys()
         assert {
-            package_id: (old, current[package_id])
-            for package_id, old in before.items()
-            if old != current[package_id]
-        } == {}
-
-
-def test_committed_package_id_corrections_onto_quiver_ids_keep_the_packs(
-    current_configuration: CurrentConfiguration,
-) -> None:
-    """Quiver never displaces a candidate corrected onto its package id."""
-    current = current_configuration
-    quiver_ids = {
-        app.id for app in current.candidates if app.provenance.source == "quiver"
-    }
-    corrected = {
-        (
-            rule["match"]["source"],
-            rule["match"]["origin"],
-            rule["match"]["id"],
-            normalize_project_url(rule["match"]["url"]),
-        ): rule["packageId"]
-        for rule in current.policy["candidates"]
-        if rule.get("packageId") in quiver_ids and rule["match"]["source"] != "quiver"
-    }
-    for selection in current.result.report.selections:
-        members = {
-            (
-                item.source,
-                item.origin,
-                item.original_id,
-                normalize_project_url(item.url),
-            )
-            for item in (selection, *selection.considered)
-        }
-        if corrected.keys() & members:
-            assert selection.source != "quiver"
-
-    without_overlaps = compose(
-        [
-            app
-            for app in current.candidates
-            if not (app.provenance.source == "quiver" and app.id in corrected.values())
-        ],
-        json.loads((ROOT / "config/deny.json").read_text()),
-        json.loads((ROOT / "config/overlay.json").read_text()),
-        policy=parse_composition_policy(current.policy),
-    )
-    for variant in Variant:
-        assert render(without_overlaps.apps[variant]) == render(
-            current.result.apps[variant]
-        )
+            family for family in before if before[family] != current[family]
+        } <= quiver_wins
 
 
 def test_quiver_credit_survives_catalog_rendering(
