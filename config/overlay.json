@@ -20,6 +20,15 @@
     }
   },
   {
+    "id": "com.buku313.skate3mobile",
+    "url": "https://github.com/Buku313/Skate3-Mobile",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^(?!.*-debug[.]apk$).*[.]apk$"
+      }
+    }
+  },
+  {
     "id": "com.ctrnative",
     "url": "https://github.com/Simon358/ctr-native-android",
     "patch": {
@@ -87,6 +96,16 @@
     "url": "https://github.com/citron-neo/emulator",
     "patch": {
       "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "org.legoisland.isle",
+    "url": "https://github.com/isledecomp/isle-portable",
+    "patch": {
+      "additionalSettings": {
+        "releaseDateAsVersion": true,
         "versionDetection": false
       }
     }
