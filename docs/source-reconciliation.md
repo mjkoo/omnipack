@@ -12,6 +12,11 @@ reproduction is not required. An unofficial fork, AI-assisted development, or an
 Android Debug certificate subject does not by itself establish maliciousness.
 These observations also do not certify an app as safe.
 
+Closed source is acceptable when an app's provenance is sound. Provenance and
+reach are weighed together: an app whose origin is doubtful and whose
+compromise would reach accounts, credentials or broad device permissions is
+excluded even without evidence of malicious behavior.
+
 The review checked repository lineage and release history, community references,
 selected asset hashes, APK manifest identities, permissions, SDK/ABI metadata,
 and signing certificates. All 19 inspected candidates for the original 18-app
@@ -49,7 +54,7 @@ unknown-code or future publisher-compromise risk.
 - **MetroidArch replaces the retired Super Metroid port in dual.** The successor
   provides a real second-screen companion interface and passes the accepted
   reputation/basic-vetting standard. Normal RetroArch remains in both packs.
-  The two reviewed retired catalog IDs remain excluded. MetroidArch uses a new
+  The reviewed retired Super Metroid catalog IDs remain excluded. MetroidArch uses a new
   package and needs separate writable-directory setup; see [setup and vetting](metroidarch.md).
 - **Gen1Recomp uses its canonical repository.** The old
   `bryanthaboi/pokemon-gen1-recomp-project` URL redirects to
@@ -84,6 +89,19 @@ date.
   `com.underdecoded.gen2recomped` while an Obtainium entry predating the pack
   used `com.underdecodedhd.gen2recomp`, and a denial keyed on the effective id
   removes the entry without resolving which id the APK declares.
+- **GameHub Lite is excluded (observed 2026-09-28 UTC).**
+  [Producdevity/gamehub-lite](https://github.com/Producdevity/gamehub-lite),
+  carried from RJNY as `gamehub.lite`, is denied in both packs. It is a
+  community patch that turns GameHub 5.1.0, a closed-source app from GameSir's
+  parent company, into a build with its analytics and tracking libraries
+  removed; the repository declares no license. What installs is still a
+  modified closed-source binary whose remaining behavior cannot be audited,
+  and the app signs into Steam and other game stores, so a compromise would
+  reach those accounts. No malicious behavior is claimed. The open-source
+  [GameNative](https://github.com/utkarshdalal/GameNative) (GPL-3.0) covers
+  the same use and stays in both packs. By contrast, NetherSX2 remains:
+  it is also a patch of a closed-source emulator, but with a long community
+  record and no account access.
 
 The remaining reviewed sources stay as listed below. Community links corroborate
 use and reputation; they are not endorsements by the original game publishers.
@@ -188,6 +206,7 @@ observation about the selected official release, not a claim about future assets
 | Other retained identity corrections | IDs listed above | Correct tracking definitions; no reinstall is implied |
 | Gen1Recomp URL rename | `com.theboisclub.pokemonred` | Canonical source URL; same inspected APK |
 | Gen2Recomped exclusion | `com.underdecoded.gen2recomped` | Dropped from both packs; re-import stops tracking it but removes no existing Obtainium entry or installed app |
+| GameHub Lite exclusion | `gamehub.lite` | Dropped from both packs; re-import removes no existing Obtainium entry or installed app, so uninstall it manually and sign out of linked store accounts if it was used |
 
 Re-import is not a deletion or synchronization protocol. Removing an entry from
 an export does not uninstall its Android package or necessarily remove its

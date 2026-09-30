@@ -120,6 +120,13 @@ though the inspected APK reports 9.0.2. Vita3K's build number is distinct
 from its APK version. Date tags, commit hashes, hotfix markers and Cmod's
 labels likewise require preserving source identity.
 
+LEGO Island Portable (isle-portable) publishes every build under one rolling
+`continuous` tag, so it sets `releaseDateAsVersion: true` with
+`versionDetection: false`; Obtainium treats the two as mutually exclusive.
+Skate 3 Mobile releases carry a debug APK beside the release APK, and the
+debug build is listed first; its filter `^(?!.*-debug[.]apk$).*[.]apk$`
+excludes it.
+
 ## Manifest evidence
 
 Each link identifies the inspected primary APK asset. Configured ids, observed
