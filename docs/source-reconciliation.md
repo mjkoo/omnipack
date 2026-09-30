@@ -153,6 +153,9 @@ reports. Package/family uniqueness is enforced after correction.
 | Crash Bandicoot | `com.matteo842.crashbandicoot` | `io.github.matteo842.crashlauncher.runtime` |
 | Elder Scrolls 3 Morrowind (OpenMW-DS) | `com.joshdaniels.openmwds` | `org.openmw.ds` |
 | Crash Team Racing (Simon single-screen) | `com.simon358.ctrnative` | `com.ctrnative` |
+| KartPad | `com.chrissotraidis.kartpad` | `dev.kartpad.android` |
+| Silent Hill Decomp | `com.slickamogus.silenthill` | `com.silenthill.port` |
+| Zelda: Twilight Princess (Dusklight) | `com.twilitrealm.dusklight` | `dev.twilitrealm.dusk` |
 
 ## CTR release and manifest evidence
 

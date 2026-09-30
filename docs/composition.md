@@ -53,9 +53,8 @@ A valid pin comes first: it selects the one candidate it names ahead of
 dual-screen replacement and source precedence. Nothing else makes the dual pack
 select a baseline build over an available dual-screen build. Among builds of one
 kind, source precedence is extras, RJNY, Quiver, BBoi, then codm-generated
-entries. A tie
-between different candidates at the winning rank fails and needs a pin or a
-policy correction.
+entries. A tie between different candidates at the winning rank fails and needs
+a pin or a policy correction.
 
 To keep a family's baseline build in dual in place of its dual-screen build, pin
 the baseline build for dual. This works even when the two share a package id, as

@@ -40,7 +40,10 @@ from Quiver, with display names kept by overlay. The curated Julius, VCMI,
 Minish Cap and Gen1Recomp extras still win. Quiver exception filters
 apply to Quiver candidates; the winning source's settings apply whole. Dual
 selection prefers dual-screen builds before precedence, so Dusklight, CTR and
-Emerald keep their dual-screen sources.
+Emerald keep their dual-screen sources. BBoi's KartPad, Silent Hill and
+Dusklight standard entries carry package ID corrections to their inspected
+manifests, so they group with Quiver's entries instead of shipping as
+duplicates.
 Different package IDs can be grouped through explicit reviewed family rules;
 titles alone never determine a family.
 
