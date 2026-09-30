@@ -22,5 +22,9 @@
   {
     "id": "com.underdecoded.gen2recomped",
     "reason": "Redundant with the curated Gen1Recomp entry, whose upstream covers Gold, Silver and Crystal, and a thinner provenance record: an unofficial fork whose added components are source-available, with redistribution and forking restricted."
+  },
+  {
+    "id": "gamehub.lite",
+    "reason": "Community patch of GameSir's closed-source GameHub with doubtful provenance, and a compromise would reach the Steam and other store accounts it signs into; GameNative is the open-source alternative."
   }
 ]

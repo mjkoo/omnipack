@@ -3,7 +3,7 @@
 MetroidArch is included only in the dual-screen pack as **MetroidArch (Super
 Metroid)**. It is a community RetroArch fork with its own frontend, two patched
 cores, and a second-screen map/equipment/ammo interface. Normal RetroArch stays
-in both packs. The two reviewed retired Super Metroid catalog IDs stay denied;
+in both packs. The reviewed retired Super Metroid catalog IDs stay denied;
 future changed catalog identities require review.
 
 ## What the pack configures

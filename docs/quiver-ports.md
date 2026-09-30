@@ -29,7 +29,7 @@ access. Back up saves before changing between forks or uninstalling an app.
 | [doukutsu-rs](https://github.com/doukutsu-rs/doukutsu-rs) | Supported Cave Story freeware or Cave Story+ data | The engine does not include game data. Copy the supported files using the project's Android instructions. |
 | [Yakumo](https://github.com/TeamGDB/Yakumo) | Supported Monster Hunter Portable 3rd HD NPJB-40001 image | Alpha Android arm64 build using Vulkan 1.1. Allow space for data import; physical-device coverage is limited. |
 | [EmeraldRecomp](https://github.com/mstan/EmeraldRecomp) | Supported USA Pokemon Emerald ROM and GBA BIOS | Early Android port. The dual-screen pack keeps the existing preferred Emerald dual-screen build. |
-| [LEGO Island Portable](https://github.com/isledecomp/isle-portable) | LEGO Island 1.1 English data | Upstream continuous builds are developer-oriented. The reviewed filter selects `app-release.apk`, since the debug APK uses a different signing key. This source is not the owner's pending custom-fork request. |
+| [LEGO Island Portable](https://github.com/isledecomp/isle-portable) | LEGO Island 1.1 English data | Upstream continuous builds are developer-oriented. The reviewed filter selects `app-release.apk`, since the debug APK uses a different signing key. Its single rolling `continuous` tag is tracked by release date (`releaseDateAsVersion`), so each new build still registers as an update. This source stands in until the owner's fork is adopted; see [project context](project-context.md). |
 
 ## Existing preferences
 

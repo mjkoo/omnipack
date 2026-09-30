@@ -17,9 +17,10 @@ revision; it does not replace the raw-main downloads or automatically re-import
 configuration changes.
 
 The original curation request also called for the owner's fork of
-`isledecomp/isle-portable`. Its repository URL was not supplied. This remains
-a pending request, not an instruction to add the upstream project or guess a
-fork URL. Cinderbox, the other explicit addition, is already configured.
+`isledecomp/isle-portable`, at <https://github.com/mjkoo/isle-portable>. It
+is to be adopted once it has a reasonably functional release; until then the
+upstream project ships in both packs through Quiver. Cinderbox, the other
+explicit addition, is already configured.
 
 `RJNY/Obtainium-Emulation-Pack` is an independent upstream and retains its
 name in source configuration, app provenance, fixtures, and attribution.
