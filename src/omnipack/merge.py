@@ -27,7 +27,7 @@ from omnipack.overlay import (
     parse_overlay,
 )
 
-_PRECEDENCE = {"quiver": -1, "codm2000": 0, "bboi": 1, "rjny": 2, "extras": 3}
+_PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
 
 
 class CompositionError(ValueError):

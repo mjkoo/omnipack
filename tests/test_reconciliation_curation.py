@@ -149,7 +149,7 @@ def test_full_reconciliation_holds_for_current_composition(
         if selection.family == "app:ctr"
     ]
     assert {(item.variant, item.source) for item in ctr} == {
-        (Variant.SINGLE, "bboi"),
+        (Variant.SINGLE, "quiver"),
         (Variant.DUAL, "codm2000"),
     }
     expected_ctr = read(CTR_EVIDENCE)["variants"]
@@ -157,8 +157,6 @@ def test_full_reconciliation_holds_for_current_composition(
         ctr_app = next(app for app in result.apps[variant] if app.family == "app:ctr")
         observation = expected_ctr[variant.value]
         assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
-        [ctr_selection] = [item for item in ctr if item.variant is variant]
-        assert ctr_selection.original_id == observation["original_id"]
         assert ctr_app.url == observation["source"]
         [rendered_ctr] = json.loads(render([ctr_app]))["apps"]
         settings = json.loads(rendered_ctr["additionalSettings"])

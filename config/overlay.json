@@ -32,6 +32,7 @@
     "id": "com.ctrnative",
     "url": "https://github.com/Simon358/ctr-native-android",
     "patch": {
+      "name": "Crash Team Racing",
       "additionalSettings": {
         "versionDetection": false
       }
@@ -56,6 +57,20 @@
     }
   },
   {
+    "id": "com.jrickey.battleship",
+    "url": "https://github.com/JRickey/BattleShip",
+    "patch": {
+      "name": "Super Smash Bros. (BattleShip)"
+    }
+  },
+  {
+    "id": "com.silenthill.port",
+    "url": "https://github.com/SlickAmogus/silent-hill-decomp",
+    "patch": {
+      "name": "Silent Hill Decomp"
+    }
+  },
+  {
     "id": "com.winlator.cmod",
     "url": "https://github.com/coffincolors/winlator",
     "patch": {
@@ -74,6 +89,20 @@
     }
   },
   {
+    "id": "dev.kartpad.android",
+    "url": "https://github.com/chrissotraidis/kartpad",
+    "patch": {
+      "name": "Mario Kart Wii (KartPad)"
+    }
+  },
+  {
+    "id": "dev.twilitrealm.dusk",
+    "url": "https://github.com/TwilitRealm/dusklight",
+    "patch": {
+      "name": "Zelda: Twilight Princess (Dusklight)"
+    }
+  },
+  {
     "id": "info.cemu.cemu",
     "url": "https://github.com/SSimco/Cemu",
     "patch": {
@@ -89,6 +118,13 @@
       "additionalSettings": {
         "releaseTitleAsVersion": false
       }
+    }
+  },
+  {
+    "id": "io.github.matteo842.crashlauncher.runtime",
+    "url": "https://github.com/Matteo842/CrashBandicoot-Launcher",
+    "patch": {
+      "name": "Crash Bandicoot"
     }
   },
   {

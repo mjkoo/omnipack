@@ -51,7 +51,8 @@
         "url": "https://github.com/TwilitRealm/dusklight"
       },
       "family": "app:dusklight",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app, with different package identities: the standard build serves single and the dual asset is preferred for dual."
+      "packageId": "dev.twilitrealm.dusk",
+      "rationale": "The standard build carries the package identity declared by its inspected Dusklight v2.0.2 APK. Quiver's verified entry for the same repository serves single, and the dual asset is preferred for dual."
     },
     {
       "match": {
@@ -137,12 +138,12 @@
     {
       "match": {"source":"bboi","origin":"bboi-standard-asset","id":"com.chrissotraidis.kartpad","url":"https://github.com/chrissotraidis/kartpad"},
       "packageId": "dev.kartpad.android",
-      "rationale": "Use the package identity declared by the inspected KartPad Android release while retaining the existing BBoi source settings."
+      "rationale": "Use the package identity declared by the inspected KartPad Android release, which groups this BBoi entry with the Quiver candidate for the same app."
     },
     {
       "match": {"source":"bboi","origin":"bboi-standard-asset","id":"com.slickamogus.silenthill","url":"https://github.com/SlickAmogus/silent-hill-decomp"},
       "packageId": "com.silenthill.port",
-      "rationale": "Use the package identity declared by the inspected Silent Hill Android release while retaining the existing BBoi source settings."
+      "rationale": "Use the package identity declared by the inspected Silent Hill Android release, which groups this BBoi entry with the Quiver candidate for the same app."
     }
   ],
   "pins": [
