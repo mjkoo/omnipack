@@ -6,7 +6,11 @@ import json
 from pathlib import Path
 
 from omnipack.catalog import generate_catalog, replace_catalog, split_catalog
-from omnipack.composition_policy import parse_composition_policy
+from omnipack.composition_policy import (
+    apply_composition_policy,
+    parse_composition_policy,
+    rendered_key,
+)
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.quiver_generation import generate_quiver
@@ -88,14 +92,32 @@ def test_initial_admission_keeps_preexisting_pack_entries(
             if rule["match"]["source"] != "quiver"
         ],
     }
+    candidates = current_configuration.candidates
+    baseline_candidates = [
+        app for app in candidates if app.provenance.source != "quiver"
+    ]
+    # An overlay record patching an app only Quiver supplies has no target
+    # before admission.
+    corrected = apply_composition_policy(
+        parse_composition_policy(current_configuration.policy), candidates
+    )
+    quiver_only = {
+        rendered_key(app.id, app.url)
+        for app in corrected
+        if app.provenance.source == "quiver"
+    } - {
+        rendered_key(app.id, app.url)
+        for app in corrected
+        if app.provenance.source != "quiver"
+    }
     baseline = compose(
-        [
-            app
-            for app in current_configuration.candidates
-            if app.provenance.source != "quiver"
-        ],
+        baseline_candidates,
         json.loads((ROOT / "config/deny.json").read_text()),
-        json.loads((ROOT / "config/overlay.json").read_text()),
+        [
+            record
+            for record in json.loads((ROOT / "config/overlay.json").read_text())
+            if rendered_key(record["id"], record["url"]) not in quiver_only
+        ],
         policy=parse_composition_policy(baseline_policy),
     )
     for variant in Variant:

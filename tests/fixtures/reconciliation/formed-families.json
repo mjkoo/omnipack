@@ -593,14 +593,6 @@
       "github.com/ashnar2602/x360-mobile---official"
     ]
   ],
-  "package:gamehub.lite": [
-    [
-      "rjny",
-      "rjny-catalog",
-      "gamehub.lite",
-      "github.com/producdevity/gamehub-lite"
-    ]
-  ],
   "package:info.cemu.cemu": [
     [
       "rjny",
