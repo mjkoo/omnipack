@@ -232,7 +232,6 @@ def test_quiver_ranks_between_rjny_and_bboi() -> None:
     quiver_app = other("org.example.game", "owner/quiver", "quiver", "quiver-generated")
     for source, origin, winner in (
         ("bboi", "bboi-standard-asset", "quiver"),
-        ("codm2000", "codm-generated", "quiver"),
         ("rjny", "rjny-catalog", "rjny"),
         ("extras", "extras", "extras"),
     ):

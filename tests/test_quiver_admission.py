@@ -34,13 +34,6 @@ QUIVER_EMERALD = "https://github.com/mstan/EmeraldRecomp"
 CODM_EMERALD = "https://github.com/Goldoire/pokeemerald-dualscreen"
 
 
-def _apps(variant: Variant, current: CurrentConfiguration) -> dict[str, dict]:
-    return {
-        app["id"]: app
-        for app in json.loads(render(current.result.apps[variant]))["apps"]
-    }
-
-
 def test_emerald_family_pairs_new_baseline_with_existing_dual(
     current_configuration: CurrentConfiguration,
 ) -> None:

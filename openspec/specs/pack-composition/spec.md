@@ -453,8 +453,8 @@ README catalog reproduce every family the build publishes in both variants.
 #### Scenario: Quiver ranks between RJNY and BBoi34
 
 - **WHEN** a Quiver baseline competes within one family without a pin against a
-  BBoi34 or codm2000 baseline, and separately against an RJNY or extras baseline
-- **THEN** Quiver wins whole over the BBoi34 or codm2000 candidate
+  BBoi34 baseline, and separately against an RJNY or extras baseline
+- **THEN** Quiver wins whole over the BBoi34 candidate
 - **AND** the RJNY or extras candidate wins whole over Quiver
 
 #### Scenario: Quiver supplies a missing baseline
