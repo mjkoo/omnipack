@@ -33,13 +33,14 @@ access. Back up saves before changing between forks or uninstalling an app.
 
 ## Existing preferences
 
-Quiver also discovers entries already supplied by higher-ranked sources. Those
-candidates remain available to composition; adding Quiver does not replace the
-reviewed Minish Cap, CTR, Gen1Recomp, BattleShip, Crash Bandicoot, Julius or VCMI
-choices. Live BBoi KartPad and Silent Hill also keep their existing settings,
-with package IDs corrected to the inspected Android manifests. Quiver exception
-filters apply to Quiver candidates; higher-ranked source settings win whole.
-Dusklight and Emerald retain their preferred dual-screen sources.
+Quiver ranks below extras and RJNY and above BBoi and codm, so its
+manifest-verified entries win over BBoi's for the same app: CTR (single),
+BattleShip, Crash Bandicoot, KartPad, Silent Hill and Dusklight (single) come
+from Quiver, with display names kept by overlay. The curated Julius, VCMI,
+Minish Cap and Gen1Recomp extras still win. Quiver exception filters
+apply to Quiver candidates; the winning source's settings apply whole. Dual
+selection prefers dual-screen builds before precedence, so Dusklight, CTR and
+Emerald keep their dual-screen sources.
 Different package IDs can be grouped through explicit reviewed family rules;
 titles alone never determine a family.
 
