@@ -22,9 +22,10 @@ for generation, acceptance and output review.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
   and add a [setup note](curation.md#port-setup) for required user files or components.
-- **Change codm discovery:** edit the reviewed rule under its normalized project
-  key in `config/codm-projects.json`. The upstream README supplies the projects;
-  this policy is not an independent additions list. See
+- **Change generated-source discovery:** edit the reviewed rule under its
+  normalized project key in `config/codm-projects.json` or
+  `config/quiver-projects.json`. The upstream discovery list supplies the
+  projects; this policy is not an independent additions list. See
   [policy fields](source-generation.md#inputs-and-policy), then generate and
   accept a candidate as described below before building.
 - **Patch selected settings:** add an `{id, url, patch}` record to
@@ -56,14 +57,15 @@ for generation, acceptance and output review.
 
 For every manual edit affecting pack contents:
 
-1. For codm policy edits, run `uv run pack generate-source codm`. Inspect that
-   invocation's `.build/source-generation/codm/report.json` and candidate
+1. For a codm or Quiver policy edit, run `uv run pack generate-source <source>`
+   with `codm` or `quiver`. Inspect that invocation's
+   `.build/source-generation/<source>/report.json` and candidate
    `catalog.json`, including retained failures and intended project changes.
    Accept only a successful, reviewed candidate; a failed run has none to accept.
    Copy it deliberately:
 
    ```sh
-   cp .build/source-generation/codm/catalog.json config/catalogs/codm.json
+   cp .build/source-generation/<source>/catalog.json config/catalogs/<source>.json
    ```
 
    Ordinary extras, overlay, denial, family and pin edits skip generation.
@@ -93,7 +95,7 @@ For every manual edit affecting pack contents:
    winner in `selections`.
 5. Run `uv run pack verify` and the usual development checks (`just check-all`).
    Include every changed `dist/single-screen.json`, `dist/dual-screen.json` and
-   generated README in the same PR as the input edit, plus the accepted codm
+   generated README in the same PR as the input edit, plus the accepted source
    catalog when applicable. Green CI is structural evidence, not proof that
    every edited input reached the outputs or that overlay values were applied.
 
@@ -102,11 +104,11 @@ source generation where applicable and `uv run pack build`, then re-review.
 Resolve conflicts in the two pack files and between README's
 `<!-- omnipack:catalog:start -->` and `<!-- omnipack:catalog:end -->` markers
 by rebuilding, never by hand. Merge README prose outside those markers by hand
-and re-read it; the build preserves those bytes. For a codm catalog conflict,
+and re-read it; the build preserves those bytes. For a source catalog conflict,
 take main's catalog as the base, rerun generation, inspect the new candidate and
 diagnostics, copy it using the acceptance recipe above, then build. Never
 hand-resolve the catalog or keep main's catalog as the final resolution of a
-policy edit. Nightly writes only the packs and README, not the codm catalog.
+policy edit. Nightly writes only the packs and README, never a source catalog.
 
 The [automated source proposal](source-generation.md#proposal-workflow) is the
 catalog-only exception: its builds are checks, and nightly rebuilds outputs
@@ -116,9 +118,10 @@ adds no CI gate.
 ## Build the packs
 
 Run `uv run pack build` from the repository root. It fetches the configured
-pack sources, including the committed codm catalog, and writes both import files
-to `dist/` and regenerates the README catalog after validating their serialized
-bytes offline. It does not fetch the codm README or release APKs. Keep exactly
+pack sources, including the committed codm and Quiver catalogs, and writes both
+import files to `dist/` and regenerates the README catalog after validating their
+serialized bytes offline. It does not fetch the codm README, the Quiver index or
+release APKs. Keep exactly
 one standalone pair of catalog markers in README; the build preserves all bytes
 outside them. The build fetches public catalogs without credentials and never
 reads `config/http.json`. Only source generation reads it, so that an optional
@@ -144,7 +147,7 @@ report unchanged. Standalone evidence is written to `.build/verify.json`.
 Run `uv run pack report` to display build and verification results, recorded
 non-blocking build diagnostics,
 observation times, and whether verification matches its fingerprinted inputs.
-Edits outside that set, such as extras, sources, the codm catalog or codm policy,
+Edits outside that set, such as extras, sources, source catalogs or their policy,
 leave evidence reported as current until a rebuild changes the outputs.
 A matching fingerprint does not establish current upstream health.
 

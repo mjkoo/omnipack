@@ -292,6 +292,6 @@ rollback; if a tracker is intentionally retired, users must remove its
 Obtainium entry by hand, since removing it from a later import does not
 guarantee on-device deletion.
 
-See [reviewed codm source generation](source-generation.md) for the separate
-workflow that proposes changes to the committed codm source catalog; nightly
+See [reviewed source generation](source-generation.md) for the separate
+workflow that proposes changes to the committed codm and Quiver catalogs; nightly
 publishing never writes that catalog or any other configuration.

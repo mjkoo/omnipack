@@ -1,4 +1,4 @@
-"""Validation and normalization for reviewed codm project treatment."""
+"""Validation and normalization for reviewed generated-source project rules."""
 
 from __future__ import annotations
 

@@ -241,9 +241,9 @@ update Obtainium's recorded source version. Replacing an asset under an unchange
 source version is not detectable through source-version comparison.
 
 Generic whole-pack live resolution, effective-version format lint and
-upstream-health publication gating are retired. The explicit codm source
-generator still resolves reviewed APK projects before their catalog changes are
-accepted; normal builds consume that committed catalog. Structural checks retain
+upstream-health publication gating are retired. The codm and Quiver source
+generators still resolve reviewed APK projects before their catalog changes are
+accepted; normal builds consume those committed catalogs. Structural checks retain
 setting types without evaluating patterns, versions or release availability.
 Investigate changed source behavior in Obtainium and record new observations
 with their dates and provenance.

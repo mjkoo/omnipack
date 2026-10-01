@@ -4,7 +4,7 @@ Start with [development](development.md) for setup, building packs, and running 
 
 - [Pack composition](composition.md): device variants, selection, exclusions, and overlays.
 - [App curation](curation.md): maintained policies, port setup, and shared pack tracking.
-- [Source generation](source-generation.md): reviewed codm project rules, isolated candidates, and the source proposal workflow.
+- [Source generation](source-generation.md): reviewed codm and Quiver project rules, isolated candidates, and the source proposal workflow.
 - [Source reconciliation](source-reconciliation.md): reviewed game sources and installed package identities.
 - [Quiver game ports](quiver-ports.md): source admission, user game data, and Android setup caveats.
 - [MetroidArch](metroidarch.md): dual-screen MetroidArch setup and vetting.

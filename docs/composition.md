@@ -28,6 +28,7 @@ Each source alone decides which kind a build is:
 - BBoi by asset: standard-asset records are baseline builds for both packs, and
   dual-asset records are dual-screen builds;
 - codm2000 entries are always dual-screen builds;
+- Quiver entries are always baseline builds for both packs;
 - RJNY by its export flags: an entry in both exports is a baseline build for both
   packs, an entry only in the dual-screen export is a dual-screen build, and an
   entry only in the standard export is a baseline build that upstream keeps out
@@ -43,8 +44,8 @@ Source records from every catalog and extras must not carry top-level `family`,
 with the source, entry and field identified. Composition policy in
 `config/composition.json` owns app families, package identities and per-pack
 selection; editing that policy does not repair an invalid source record.
-Validation applies before codm suppression, while RJNY entries excluded from
-export are dropped before normalization. Other unmodeled fields pass through
+RJNY entries excluded from export are dropped before normalization, so they are
+not validated. Other unmodeled fields pass through
 unchanged. The extras adapter consumes `dualScreen` to set eligibility, so it
 never reaches that extra's rendered record; on upstream records it is an
 ordinary unmodeled field.
@@ -67,10 +68,9 @@ same package id; it wins single by source precedence while Sam's BBoi dual
 build wins dual. Every configured build in these three families carries its
 family's shared package id, so denying it removes that app from both packs.
 
-A committed codm entry is dropped at ingestion when a higher-precedence candidate
-that its own source makes eligible for dual covers the same project, so a baseline
-build kept out of dual does not suppress it. Appearing in codm does not make a
-higher-source candidate a dual-screen build.
+Every entry in a committed generated catalog joins the candidate set; a codm
+entry competes with other builds of its family through the rules above, and
+appearing in codm does not make another source's candidate a dual-screen build.
 
 ## Candidate policy
 
@@ -81,8 +81,9 @@ higher-source candidate a dual-screen build.
 from the build's source.
 
 A match names original `source`, `origin`, `id`, and project `url`. Sources are
-`rjny`, `bboi`, `extras`, and `codm2000`. Their origins are `rjny-catalog`,
-`bboi-standard-asset` or `bboi-dual-asset`, `extras`, and `codm-generated`.
+`rjny`, `bboi`, `extras`, `codm2000` and `quiver`. Their origins are
+`rjny-catalog`, `bboi-standard-asset` or `bboi-dual-asset`, `extras`,
+`codm-generated` and `quiver-generated`.
 Project URLs use the shared normalization rule. Corrections match original
 identity once and never trigger another rule through a corrected package id.
 
@@ -172,8 +173,8 @@ in each pack, the other available candidates it was chosen over, and one reason:
 `pin`, `dual-preferred`, `ordinary-fallback` (dual with no available dual-screen
 build), or `source` (single-screen precedence). `denylistRemovals` and
 `staleExclusions` list what each denial removed or failed to match.
-`sourceAdmissions` lists each committed codm entry the build admitted, with its
-id, URL and whether it is an APK or track-only entry, and `offlineVerification`
+`sourceAdmissions` lists each committed codm and Quiver entry the build
+admitted, with its source, id, URL and whether it is an APK or track-only entry, and `offlineVerification`
 holds the offline gate's status and findings. Selection records use snake_case
 field names:
 
