@@ -479,7 +479,7 @@ def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
         (release(8, assets=[]), "latest release has no eligible APK assets"),
         (
             HttpStatusError(API, 404),
-            f"{PROJECT} has no latest stable release",
+            "no latest stable release",
         ),
     ],
     ids=["desktop-only", "no-release"],

@@ -1,4 +1,4 @@
-"""Quiver catalog discovery and release lookup.
+"""Quiver catalog discovery.
 
 Discovery keeps list provenance and resolves GitHub renames, while candidate
 rendering and accepted-entry retention belong to the generation command.
@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpError, HttpStatusError
-from omnipack.package_id import NoEligibleApk, resolve_release_assets
+from omnipack.package_id import resolve_release_assets
 from omnipack.project_policy import (
     PolicyError,
     ProjectRule,
@@ -472,10 +472,10 @@ def resolve_quiver_apk(
     filtered_assets: list[dict[str, Any]],
     project: str,
 ) -> str:
-    """Resolve APK identity, naming the project when no direct APK is eligible.
+    """Resolve APK identity, recording filtered asset names whatever the outcome.
 
     APK names excluded by the reviewed filename filter are appended to
-    `filtered_assets` whatever the outcome.
+    `filtered_assets`.
     """
     diagnostics: dict[str, Any] = {}
     try:
@@ -486,7 +486,5 @@ def resolve_quiver_apk(
             diagnostics,
             project,
         )
-    except NoEligibleApk as error:
-        raise NoEligibleApk(f"{project} has no eligible direct APK") from error
     finally:
         filtered_assets.extend(diagnostics.get("filteredAssets", ()))

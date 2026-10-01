@@ -95,7 +95,7 @@ def lookup_release(
             settings.get("includePrereleases")
             or settings.get("filterReleaseTitlesByRegEx")
         ):
-            raise NoRelease(f"{project} has no latest stable release") from error
+            raise NoRelease("no latest stable release") from error
         raise
 
 
