@@ -9,11 +9,8 @@ import pytest
 
 from omnipack.http import HttpResponse
 from omnipack.project_policy import PolicyError, parse_project_policy
-from omnipack.source_generation import (
-    generate_codm,
-    parse_project_table,
-    select_release,
-)
+from omnipack.source_generation import generate_codm, parse_project_table
+from omnipack.source_release import select_release
 
 
 def test_project_parser_ignores_links_outside_project_tables() -> None:
@@ -188,6 +185,8 @@ class MappingHttp:
     ) -> HttpResponse:
         self.urls.append(url)
         value = self.values[url]
+        if isinstance(value, Exception):
+            raise value
         body = value if isinstance(value, bytes) else json.dumps(value).encode()
         return HttpResponse(url, 200, Message(), body)
 

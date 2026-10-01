@@ -9,22 +9,21 @@ from pathlib import Path
 from typing import Any, Literal, NotRequired, TypedDict
 
 from omnipack.http import HttpError
+from omnipack.package_id import NoEligibleApk
 from omnipack.quiver_catalog import load_quiver_catalog, render_quiver_entry
 from omnipack.quiver_source import (
-    NoApk,
-    NoRelease,
     QuiverLookupFailure,
     QuiverRule,
     discover_quiver,
     discovery_name,
     load_quiver_config,
-    lookup_quiver_release,
     parse_quiver_policy,
     resolve_quiver_apk,
 )
 from omnipack.report_model import Status
 from omnipack.source_catalog import render_catalog, validate_ids
 from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
+from omnipack.source_release import NoRelease, lookup_release
 from omnipack.urls import normalize_project_url
 
 
@@ -163,7 +162,7 @@ def generate_quiver(root: Path, *, http: GenerationHttp | None = None) -> Quiver
                 )
                 continue
             try:
-                release = lookup_quiver_release(client, project.key, project.rule)
+                release = lookup_release(client, project.key, project.rule.project)
                 identifier = resolve_quiver_apk(
                     client, release, project.rule, report["filteredAssets"], project.key
                 )
@@ -185,7 +184,7 @@ def generate_quiver(root: Path, *, http: GenerationHttp | None = None) -> Quiver
                 ):
                     entries.append(existing)
                     report["retainedFailures"].append(detail)
-                elif existing is None and isinstance(error, (NoApk, NoRelease)):
+                elif existing is None and isinstance(error, (NoEligibleApk, NoRelease)):
                     report["noAndroid"].append(detail)
                 else:
                     report["unresolved"].append(detail)

@@ -79,19 +79,17 @@ project from current release data on each invocation under its effective policy.
 Release selection and APK inspection SHALL use the supported GitHub selection,
 bounds, portable settings and all-selected-APK agreement rules defined by
 "Release APKs determine package IDs automatically" in readme-source-generation,
-except for the Quiver-specific no-release and no-APK outcomes below.
+and its no-Android skip, as "Resolution failures keep only unchanged committed
+entries" there defines it for every generated source.
 
-For a project without a committed entry, a successful check finding no permitted
-release or no eligible direct APK SHALL produce a reported skip, not a tracker.
-For such a project, a conclusive repository-metadata absence (HTTP 404 or 451
-on the repository lookup) SHALL produce a reported unavailable-repository skip,
-distinct from the no-Android skip. Any other failed lookup, including network,
-authentication and rate-limit errors, or an unreadable/ambiguous selected APK
-SHALL be an unresolved failure, not a no-Android conclusion. No-release SHALL
-require successful repository identification and a conclusive release absence
-under the supported selection policy. For a project with a committed entry, no
-permitted release or no eligible APK SHALL instead follow the retention rule.
-Generation SHALL NOT execute downloaded APKs or generate track-only entries.
+For a project without a committed entry, a conclusive repository-metadata
+absence (HTTP 404 or 451 on the repository lookup) SHALL produce a reported
+unavailable-repository skip, distinct from the no-Android skip. No-release SHALL
+require successful repository identification. Any other failed lookup SHALL be
+an unresolved failure, not a no-Android conclusion. For a project with a
+committed entry, no permitted release or no eligible APK SHALL instead follow
+the retention rule. Generation SHALL NOT execute downloaded APKs or generate
+track-only entries.
 
 A skip rule SHALL be keyed by a row's listed normalized GitHub URL or, for an
 unsupported row, by its literal `repository` value together with its

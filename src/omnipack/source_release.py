@@ -6,14 +6,15 @@ import re
 from datetime import datetime
 from typing import Any
 
+from omnipack.http import HttpStatusError
 from omnipack.project_policy import ProjectRule
 from omnipack.source_http import GenerationHttp
 
 MAX_RELEASES = 100
 
 
-class NoPermittedRelease(ValueError):
-    """A successful bounded release list had no permitted release."""
+class NoRelease(ValueError):
+    """A successful lookup established that policy permits no release."""
 
 
 def _release_api(project: str, listed: bool) -> str:
@@ -74,8 +75,28 @@ def select_release(
             continue
         candidates.append((timestamp, release_id, release))
     if not candidates:
-        raise NoPermittedRelease("no permitted release in the bounded 100-release scan")
+        raise NoRelease("no permitted release in the bounded 100-release scan")
     return max(candidates, key=lambda item: (item[0], item[1]))[2]
+
+
+def lookup_release(
+    http: GenerationHttp, project: str, rule: ProjectRule
+) -> dict[str, Any]:
+    """Select a release, raising `NoRelease` only for a conclusive absence.
+
+    A missing latest release is conclusive only when the rule selects the
+    latest stable release; every other request failure propagates unchanged.
+    """
+    settings = rule.additional_settings
+    try:
+        return select_release(http, project, rule)
+    except HttpStatusError as error:
+        if error.status == 404 and not (
+            settings.get("includePrereleases")
+            or settings.get("filterReleaseTitlesByRegEx")
+        ):
+            raise NoRelease(f"{project} has no latest stable release") from error
+        raise
 
 
 def _publication_time(release: dict[str, Any]) -> datetime:

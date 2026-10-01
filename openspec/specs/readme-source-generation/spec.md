@@ -326,10 +326,17 @@ earlier runs. A project that fails to resolve SHALL keep its entry from main's
 committed catalog, reported as a retained failure, only when the current policy
 would render that same entry for the committed APK package ID, or the rule's
 tracker ID, and the committed URL. The current rule is the authority for a
-tracker's identity, so a changed tracker ID is a changed effective policy. Any other failure,
-including one for a project without a committed entry or for a project whose
-effective policy changed, SHALL fail the whole generation, and no candidate
-catalog SHALL be offered. Later runs SHALL retry every failure without
+tracker's identity, so a changed tracker ID is a changed effective policy.
+For an APK project without a committed entry, a successful check establishing
+that no release is permitted, or that the selected release has no eligible
+direct APK, SHALL produce a reported no-Android skip, not a tracker and not a
+failure; a missing latest release is conclusive only when the rule selects the
+latest stable release. Any other lookup failure, including network,
+authentication and rate-limit errors, or an unreadable or disagreeing selected
+APK, SHALL NOT be a no-Android conclusion. Any other failure, including one for
+a project without a committed entry or for a project whose effective policy
+changed, SHALL fail the whole generation, and no candidate catalog SHALL be
+offered. Later runs SHALL retry every failure without
 maintainer action. No package ID SHALL be invented, or taken from any entry
 other than the project's own committed entry.
 
@@ -345,8 +352,13 @@ other than the project's own committed entry.
 
 #### Scenario: New project fails
 
-- **WHEN** a project without a committed entry cannot be resolved while others succeed
+- **WHEN** a project without a committed entry cannot be resolved while others succeed, for a reason other than a conclusive no-Android result
 - **THEN** generation fails with no candidate catalog and no proposal
+
+#### Scenario: New project has no Android release
+
+- **WHEN** an APK project without a committed entry has no permitted release, or its selected release holds only non-APK assets
+- **THEN** it is reported as a no-Android skip, it adds no entry and no change, and generation continues
 
 #### Scenario: Failed project later resolves
 
