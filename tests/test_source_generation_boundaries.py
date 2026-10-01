@@ -6,13 +6,11 @@ from pathlib import Path
 import pytest
 
 from omnipack.cli import main
+from omnipack.http import HttpStatusError
 from omnipack.project_policy import PolicyError, default_apk_rule, parse_project_policy
-from omnipack.source_generation import (
-    generate_codm,
-    parse_project_table,
-    select_release,
-)
+from omnipack.source_generation import generate_codm, parse_project_table
 from omnipack.source_http import HttpConfig, SourceHttpClient
+from omnipack.source_release import select_release
 from tests.test_package_id import AssetTransport, apk
 from tests.test_source_generation import JsonHttp, MappingHttp, tracking_root
 
@@ -436,12 +434,11 @@ def test_retained_entry_survives_an_unchanged_or_reformatted_policy(tmp_path):
     assert result["changes"] == {"added": [], "removed": [], "changed": []}
 
 
-@pytest.mark.parametrize("mode", ["new", "policy-change", "kind-change"])
+@pytest.mark.parametrize("mode", ["policy-change", "kind-change"])
 def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
     source = setup(tmp_path)
     assert run(tmp_path, source)[0]["status"] == "success"
-    if mode != "new":
-        accept(tmp_path)
+    accept(tmp_path)
     if mode == "policy-change":
         (tmp_path / "config/codm-projects.json").write_text(
             json.dumps(
@@ -476,6 +473,53 @@ def test_failed_apk_resolution_membership_and_fallback(tmp_path, mode):
     assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
 
 
+@pytest.mark.parametrize(
+    ("rel", "message"),
+    [
+        (release(8, assets=[]), "latest release has no eligible APK assets"),
+        (
+            HttpStatusError(API, 404),
+            "no latest stable release",
+        ),
+    ],
+    ids=["desktop-only", "no-release"],
+)
+def test_new_project_without_android_release_is_a_reported_skip(tmp_path, rel, message):
+    source = setup(tmp_path)
+    result, _ = run(tmp_path, source, rel)
+    assert result["status"] == "success"
+    assert result["noAndroid"] == [{"url": PROJECT, "message": message}]
+    assert result["apk"] == []
+    assert result["changes"] == {"added": [], "removed": [], "changed": []}
+    catalog = json.loads(
+        (tmp_path / ".build/source-generation/codm/catalog.json").read_bytes()
+    )
+    assert catalog["apps"] == []
+
+
+def test_new_project_lookup_failure_is_not_a_skip(tmp_path):
+    source = setup(tmp_path)
+    result, _ = run(tmp_path, source, HttpStatusError(API, 403))
+    assert result["status"] == "failed"
+    assert result["noAndroid"] == []
+    assert not (tmp_path / ".build/source-generation/codm/catalog.json").exists()
+
+
+def test_new_track_only_project_without_release_still_fails(tmp_path):
+    source = setup(
+        tmp_path,
+        {
+            "kind": "track-only",
+            "trackerId": "123",
+            "rationale": "mod",
+            "installation": "Install Host from https://github.com/example/host",
+        },
+    )
+    result, _ = run(tmp_path, source, HttpStatusError(API, 404))
+    assert result["status"] == "failed"
+    assert result["noAndroid"] == []
+
+
 def test_retries_never_accept_partial_resolutions(tmp_path):
     source = setup(tmp_path)
     readme = README + b"| [Other](https://github.com/other/app) | app |\n"
@@ -487,11 +531,11 @@ def test_retries_never_accept_partial_resolutions(tmp_path):
             ASSET: apk("org.example.app"),
             other: release(
                 8,
-                assets=[]
-                if not recovered
-                else [{"name": "other.apk", "browser_download_url": ASSET + "?other"}],
+                assets=[
+                    {"name": "other.apk", "browser_download_url": ASSET + "?other"}
+                ],
             ),
-            ASSET + "?other": apk("org.example.other"),
+            ASSET + "?other": apk("org.example.other") if recovered else b"not an apk",
         }
         http = MappingHttp(values)
         result = generate_codm(tmp_path, http=http)
@@ -569,7 +613,8 @@ def test_heimdall_newest_matching_release_never_searches_older_apk(tmp_path):
         {source: README, listed: releases, ASSET: apk("org.example.app")}
     )
     result = generate_codm(tmp_path, http=http)
-    assert result["status"] == "failed"
+    assert result["status"] == "success"
+    assert [item["url"] for item in result["noAndroid"]] == [PROJECT]
     assert ASSET not in http.urls
     assert (
         result["effectivePolicy"][PROJECT]["additionalSettings"][
@@ -775,8 +820,12 @@ def test_cli_real_generation_preserves_inputs_and_cleans_failed_candidates(
                 API: release(),
                 ASSET: apk("org.example.app"),
                 "https://api.github.com/repos/new-project/app/releases/latest": release(
-                    8, assets=[]
+                    8,
+                    assets=[
+                        {"name": "new.apk", "browser_download_url": ASSET + "?new"}
+                    ],
                 ),
+                ASSET + "?new": b"not an apk",
             }
         )
         monkeypatch.setattr(

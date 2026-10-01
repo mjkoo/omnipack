@@ -97,8 +97,13 @@ def test_failed_release_lookup_never_asks_the_other_endpoint(
         HttpConfig({}), transport=transport, retries=1, sleep=lambda _: None
     )
     result = generate_codm(tmp_path, http=http)
-    assert result["status"] == "failed"
-    assert [item["url"] for item in result["unresolved"]] == [PROJECT]
+    if endpoint == API:
+        # A missing latest stable release conclusively means no Android release.
+        assert result["status"] == "success"
+        assert [item["url"] for item in result["noAndroid"]] == [PROJECT]
+    else:
+        assert result["status"] == "failed"
+        assert [item["url"] for item in result["unresolved"]] == [PROJECT]
     assert [request.full_url for request, _ in transport.requests] == [
         source,
         endpoint,

@@ -12,7 +12,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpError
-from omnipack.package_id import resolve_release_assets
+from omnipack.package_id import NoEligibleApk, resolve_release_assets
 from omnipack.project_policy import (
     ProjectRule,
     default_apk_rule,
@@ -22,7 +22,7 @@ from omnipack.project_policy import (
 from omnipack.report_model import Status
 from omnipack.source_catalog import render_catalog, rendered_entry, validate_ids
 from omnipack.source_http import GenerationHttp, HttpConfig, SourceHttpClient
-from omnipack.source_release import _release_id, select_release
+from omnipack.source_release import NoRelease, _release_id, lookup_release
 from omnipack.sources import load_json
 from omnipack.urls import normalize_project_url
 
@@ -175,6 +175,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
         "apk": [],
         "tracking": [],
         "retainedFailures": [],
+        "noAndroid": [],
     }
     try:
         sources = load_json(root / "config/sources.json", "sources")
@@ -209,7 +210,7 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
             rule = policy.projects.get(project, default_apk_rule())
             report.setdefault("effectivePolicy", {})[project] = rule.canonical()
             try:
-                release = select_release(client, project, rule)
+                release = lookup_release(client, project, rule)
                 release_id = _release_id(release)
                 if rule.kind == "track-only":
                     assert rule.tracker_id is not None
@@ -246,6 +247,12 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
                     report["retainedFailures"].append(
                         {"url": project, "message": str(error)}
                     )
+                elif (
+                    accepted is None
+                    and rule.kind == "apk"
+                    and isinstance(error, (NoRelease, NoEligibleApk))
+                ):
+                    report["noAndroid"].append({"url": project, "message": str(error)})
                 else:
                     failed = True
                     report.setdefault("unresolved", []).append(
@@ -257,9 +264,9 @@ def generate_codm(root: Path, *, http: GenerationHttp | None = None) -> dict[str
             _write_report(output, report)
             return report
         catalog_bytes = render_catalog(entries)
-        common = set(parsed.projects) & set(accepted_by_url)
+        common = set(rendered_by_project) & set(accepted_by_url)
         changes = {
-            "added": sorted(set(parsed.projects) - set(accepted_by_url)),
+            "added": sorted(set(rendered_by_project) - set(accepted_by_url)),
             "removed": sorted(set(accepted_by_url) - set(parsed.projects)),
             "changed": sorted(
                 project

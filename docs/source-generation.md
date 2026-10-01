@@ -32,6 +32,15 @@ can be retained fails the whole run and offers no candidate catalog. A later run
 failure automatically; there is no maintainer action to acknowledge or retry
 one.
 
+The exception is a new APK project with no Android release. When its check
+conclusively finds no permitted release (including a missing latest release
+under the default stable selection) or a selected release with no eligible
+direct APK, both sources report it as a `noAndroid` skip: it adds no entry and
+the run continues. Transport, authentication, rate-limit and unreadable-APK
+errors are not evidence that a project has no Android release and still fail
+the run. A desktop-only or mod-only repository listed upstream therefore does
+not block the source's catalog refresh.
+
 A run in which every project's lookup fails, for example under a GitHub API
 rate limit, is not a visible failure when every project already has a
 matching committed entry and its policy and display name are unchanged: every one is then
@@ -51,11 +60,9 @@ platform metadata; only a fresh release and APK check decides a project. Support
 canonical repository aliases are collapsed, preserving row provenance. Unsupported
 rows, such as GitLab repositories, are reported without GitHub requests.
 
-For a new Quiver project, an identified repository with no permitted release or
-eligible direct APK is a `noAndroid` skip. A repository metadata response of HTTP
-404 or 451 is a distinct `unavailableRepositories` outcome. Transport,
-authentication, rate-limit and unreadable-APK errors are resolution failures,
-not evidence that a project has no Android release. Accepted entries with unchanged
+For a new Quiver project, a repository metadata response of HTTP 404 or 451 is
+an `unavailableRepositories` outcome, distinct from the `noAndroid` skip
+described under retained failures. Accepted entries with unchanged
 policy and display name can be retained on these failures or missing artifacts.
 An accepted repository returning 404 or 451 is removed, as is an accepted entry
 no discovered row names. Fresh entries use the current canonical repository URL,
@@ -156,15 +163,17 @@ remains the build and structural-verification report viewer and does not
 cover source generation.
 
 For codm, generation fails with no `catalog.json` written if the README tables are
-malformed or empty, any eligible project is unaccounted for, a new APK or
-tracker cannot be resolved, eligible APKs disagree, an ID collides, or a
+malformed or empty, any eligible project is unaccounted for, a new APK project
+fails for any reason other than a `noAndroid` skip, a new tracker cannot be
+resolved, eligible APKs disagree, an ID collides, or a
 project's effective policy changed and its fresh resolution failed. Partial
 catalogs are never written.
 
 Heimdall illustrates the distinction between generator and client behavior.
 The generator selects the newest release matching its reviewed title rule
-and fails if that release has no eligible readable APK; it never searches an
-older release. The generated Obtainium entry sets
+and never searches an older release when that release has no eligible APK: an
+accepted entry is retained if its policy is unchanged, and a new project is a
+`noAndroid` skip. The generated Obtainium entry sets
 `fallbackToOlderReleases: true`, allowing the client to search older
 matching releases when its selected release lacks an eligible asset.
 Showdown and EmuLnk explicitly set that client option to false.
@@ -361,9 +370,10 @@ caches are excluded from summaries and artifacts.
 Inspect skips, unsupported rows, no-Android outcomes, unavailable repositories,
 retained failures, unresolved projects, effective policy, discovery coverage,
 APK/tracking observations and catalog changes even when the result is unchanged.
-For Quiver these are the `skipped`, `unsupportedRows`, `noAndroid`,
-`unavailableRepositories`, `retainedFailures`, `unresolved`, `effectivePolicy`,
-`coverage`, `apk`, `tracking` and `changes` report fields. Successful retention or
+Both sources report `noAndroid`, `retainedFailures`, `unresolved`,
+`effectivePolicy`, `apk` and `changes`; codm adds `tracking`,
+`unsupportedLinks` and `inactiveRules`, and Quiver adds `skipped`,
+`unsupportedRows`, `unavailableRepositories` and `coverage`. Successful retention or
 a reasoned skip is not a fresh APK check. The run summary also records the actual
 validation outcomes and explicitly marks checks skipped for unchanged candidates.
 

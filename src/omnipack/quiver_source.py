@@ -1,4 +1,4 @@
-"""Quiver catalog discovery and release lookup.
+"""Quiver catalog discovery.
 
 Discovery keeps list provenance and resolves GitHub renames, while candidate
 rendering and accepted-entry retention belong to the generation command.
@@ -15,7 +15,7 @@ from typing import Any
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpError, HttpStatusError
-from omnipack.package_id import NoEligibleApk, resolve_release_assets
+from omnipack.package_id import resolve_release_assets
 from omnipack.project_policy import (
     PolicyError,
     ProjectRule,
@@ -24,7 +24,6 @@ from omnipack.project_policy import (
     repository_url,
 )
 from omnipack.source_http import GenerationHttp
-from omnipack.source_release import NoPermittedRelease, select_release
 
 MAX_CATALOG_BYTES = 2_000_000
 _PAIR = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
@@ -466,33 +465,6 @@ def discover_quiver(
     )
 
 
-class NoRelease(ValueError):
-    """An identified repository has no release permitted by current policy."""
-
-
-class NoApk(ValueError):
-    """A selected release contains no eligible direct APK asset."""
-
-
-def lookup_quiver_release(
-    http: GenerationHttp, canonical: str, rule: QuiverRule
-) -> dict[str, Any]:
-    """Select a discovered repository's release, distinguishing absence from errors."""
-    settings = rule.project.additional_settings
-    try:
-        release = select_release(http, canonical, rule.project)
-    except HttpStatusError as error:
-        if error.status == 404 and not (
-            settings.get("includePrereleases")
-            or settings.get("filterReleaseTitlesByRegEx")
-        ):
-            raise NoRelease(f"{canonical} has no latest stable release") from error
-        raise
-    except NoPermittedRelease as error:
-        raise NoRelease(f"{canonical} has no permitted release") from error
-    return release
-
-
 def resolve_quiver_apk(
     http: GenerationHttp,
     release: dict[str, Any],
@@ -500,10 +472,10 @@ def resolve_quiver_apk(
     filtered_assets: list[dict[str, Any]],
     project: str,
 ) -> str:
-    """Resolve APK identity, exposing only a conclusive empty selection as a skip.
+    """Resolve APK identity, recording filtered asset names whatever the outcome.
 
     APK names excluded by the reviewed filename filter are appended to
-    `filtered_assets` whatever the outcome.
+    `filtered_assets`.
     """
     diagnostics: dict[str, Any] = {}
     try:
@@ -514,7 +486,5 @@ def resolve_quiver_apk(
             diagnostics,
             project,
         )
-    except NoEligibleApk as error:
-        raise NoApk(f"{project} has no eligible direct APK") from error
     finally:
         filtered_assets.extend(diagnostics.get("filteredAssets", ()))

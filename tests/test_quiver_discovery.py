@@ -12,20 +12,19 @@ from urllib.response import addinfourl
 import pytest
 
 from omnipack.http import HttpError, HttpResponse, HttpStatusError
+from omnipack.package_id import NoEligibleApk
 from omnipack.project_policy import default_apk_rule
 from omnipack.quiver_source import (
     Category,
-    NoApk,
-    NoRelease,
     QuiverPolicy,
     QuiverRule,
     discover_quiver,
     load_quiver_config,
-    lookup_quiver_release,
     parse_quiver_policy,
     resolve_quiver_apk,
 )
 from omnipack.source_http import HttpConfig, SourceHttpClient
+from omnipack.source_release import NoRelease, lookup_release
 from tests.test_package_id import AssetTransport, malformed_manifest, release
 
 INDEX = "https://raw.githubusercontent.com/o/catalog/main/index.json"
@@ -258,11 +257,13 @@ def test_release_outcomes_distinguish_absence_from_failure() -> None:
     latest = API + "/releases/latest"
     http = FakeHttp({latest: HttpStatusError(latest, 404)})
     with pytest.raises(NoRelease):
-        lookup_quiver_release(http, "github.com/o/repo", rule)
+        lookup_release(http, "github.com/o/repo", rule.project)
     assert http.urls == [latest]
     with pytest.raises(HttpError):
-        lookup_quiver_release(
-            FakeHttp({latest: HttpStatusError(latest, 403)}), "github.com/o/repo", rule
+        lookup_release(
+            FakeHttp({latest: HttpStatusError(latest, 403)}),
+            "github.com/o/repo",
+            rule.project,
         )
 
 
@@ -296,13 +297,13 @@ def test_release_request_failures_do_not_become_no_release(
     ).rule_for("github.com/o/repo")
     http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
     with pytest.raises(HttpError):
-        lookup_quiver_release(http, "github.com/o/repo", rule)
+        lookup_release(http, "github.com/o/repo", rule.project)
     assert requests == [endpoint]
 
 
 def test_no_eligible_apk_is_typed() -> None:
     release = {"assets": [{"name": "desktop.zip"}]}
-    with pytest.raises(NoApk):
+    with pytest.raises(NoEligibleApk):
         resolve_quiver_apk(
             FakeHttp({}),
             release,
@@ -317,7 +318,7 @@ def test_no_eligible_apk_is_typed() -> None:
     [b"PK\x05\x06", malformed_manifest("utf8")],
     ids=["truncated-zip", "malformed-manifest"],
 )
-def test_unreadable_selected_apk_is_an_error_not_no_apk(body: bytes) -> None:
+def test_unreadable_selected_apk_is_an_error_not_no_eligible_apk(body: bytes) -> None:
     asset = "https://objects.example/app.apk"
     transport = AssetTransport({asset: body})
     http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
@@ -331,11 +332,11 @@ def test_unreadable_selected_apk_is_an_error_not_no_apk(body: bytes) -> None:
             "github.com/o/repo",
         )
 
-    assert not isinstance(caught.value, NoApk)
+    assert not isinstance(caught.value, NoEligibleApk)
     assert any(request.method == "GET" for request, _ in transport.requests)
 
 
-def test_apk_transport_failure_is_an_error_not_no_apk() -> None:
+def test_apk_transport_failure_is_an_error_not_no_eligible_apk() -> None:
     asset = "https://objects.example/app.apk"
     transport = AssetTransport({asset: OSError("connection interrupted")})
     http = SourceHttpClient(HttpConfig({}), transport=transport, retries=0)
@@ -349,7 +350,7 @@ def test_apk_transport_failure_is_an_error_not_no_apk() -> None:
             "github.com/o/repo",
         )
 
-    assert not isinstance(caught.value, NoApk)
+    assert not isinstance(caught.value, NoEligibleApk)
     assert isinstance(caught.value.__cause__, HttpError)
     assert [request.method for request, _ in transport.requests] == ["HEAD", "GET"]
 
