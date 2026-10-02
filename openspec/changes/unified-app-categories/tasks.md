@@ -20,4 +20,4 @@
 ## 5. Docs and review
 
 - [x] 5.1 Document the taxonomy, the map and the resolution order in `docs/composition.md`. Replace the overlay category guidance in `docs/development.md` and `docs/curation.md` with the map. Verify the docs link check passes in `just check-all`.
-- [ ] 5.2 Review the branch for correctness, completeness and idiomatic code, and fix the findings. Verify with a final `just check-all` and `openspec validate unified-app-categories --strict`.
+- [x] 5.2 Review the branch for correctness, completeness and idiomatic code, and fix the findings. Verify with a final `just check-all` and `openspec validate unified-app-categories --strict`.
