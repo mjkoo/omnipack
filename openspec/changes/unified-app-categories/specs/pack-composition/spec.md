@@ -21,7 +21,12 @@ in every variant:
   to the set, other than Track Only, in their source order, and SHALL carry no
   category when none remain.
 
-A selected family left without a category and a map key naming no selected
+An entry is uncategorized when its final category list, after this
+assignment, is empty; a track-only entry is therefore never uncategorized.
+Because each variant selects its own winner, uncategorized SHALL be decided per
+selected entry: a family SHALL be recorded as uncategorized when the selected
+entry of any variant ends with no category, together with exactly the variants
+where that happened. An uncategorized entry and a map key naming no selected
 family SHALL NOT fail the build.
 
 #### Scenario: A mapped family overrides its source category
@@ -39,13 +44,30 @@ family SHALL NOT fail the build.
 
 #### Scenario: An unmapped source category outside the set is dropped
 
-- **WHEN** an unmapped family's selected build carries Dual Screen and Emulator
+- **WHEN** an unmapped family's selected entry, whose final settings are not
+  track-only, carries Dual Screen and Emulator from its source
 - **THEN** its entry carries Emulator only
 
 #### Scenario: An unmapped entry with no allowed category builds
 
-- **WHEN** an unmapped family's selected build carries no category from the set
-- **THEN** the build succeeds and the entry carries no category
+- **WHEN** an unmapped family's selected entry, whose final settings are not
+  track-only, carries no category from the set
+- **THEN** the build succeeds, the entry carries no category, and its family is
+  recorded as uncategorized for that variant
+
+#### Scenario: An unmapped track-only entry without source categories is categorized
+
+- **WHEN** an unmapped family's selected entry has final settings carrying
+  `trackOnly: true` and its source supplies no category
+- **THEN** the entry carries exactly Track Only and its family is not recorded
+  as uncategorized
+
+#### Scenario: Only one variant's entry ends without a category
+
+- **WHEN** an unmapped family's single-screen entry keeps an allowed source
+  category and its dual-screen entry's source supplies only Dual Screen
+- **THEN** the dual-screen entry carries no category, and the family is
+  recorded as uncategorized naming the dual variant only
 
 #### Scenario: A category outside the set fails policy loading
 

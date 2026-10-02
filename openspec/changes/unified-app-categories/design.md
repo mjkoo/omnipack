@@ -47,11 +47,21 @@ The composition policy (`config/composition.json`) already owns family names
    dropped. This keeps one rule, following the RJNY convention that every
    tracker is tagged Track Only.
 6. **Report shape.** The report gets two lists:
-   - `uncategorizedFamilies`: selected families left with no category, with
-     the variants that select them.
+   - `uncategorizedFamilies`: families whose selected entry in some variant
+     ends with an empty final category list, each naming exactly the variants
+     where that happened. Single and dual pick winners independently, so the
+     check is per selected entry: a family whose single-screen entry keeps a
+     category but whose dual-screen entry ends with none is listed for dual
+     only. A track-only entry always carries Track Only, so it is never
+     uncategorized, whatever its source supplied.
    - `staleCategoryAssignments`: map keys naming no selected family.
 
-   `pack report` renders both, using the same pattern as `staleExclusions`.
+   Both fields are required, so the build report schema version is bumped with
+   them. A report written before the change then fails the schema check and
+   `pack report` directs the user to regenerate it with `pack build`, instead
+   of rejecting it as malformed. `pack report` renders both lists, using the
+   same pattern as `staleExclusions`, and a report whose only non-blocking
+   outcomes are these lists still displays them.
 
 ## Seed map
 
@@ -81,6 +91,10 @@ the track-only rule.
 1. Land the code, then the seeded map. Remove the two overlay category patches
    in the same commit, because the protected-field check would otherwise fail
    the build.
-2. Rebuild the packs and check the report's uncategorized list is empty and
-   that the only pack diffs are categories and the settings colour map.
+2. Rebuild the packs and check the report's uncategorized list is empty.
+   Check that no entry is added or removed and package ids are unchanged; that,
+   matching entries by id, only `categories` changes; and that otherwise only
+   entry order and the settings colour map differ. Rendering orders entries by
+   primary category, then name, then package id, so a re-categorized entry is
+   expected to move.
 3. Rollback is a revert of the change, which restores the previous outputs.
