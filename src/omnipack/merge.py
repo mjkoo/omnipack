@@ -373,17 +373,17 @@ def _assign_categories(
             settings = app.data.get("additionalSettings")
             mapped = policy.categories.get(app.family)
             if isinstance(settings, dict) and settings.get("trackOnly") is True:
-                categories = [Category.TRACK_ONLY]
+                categories = [Category.TRACK_ONLY.value]
             elif mapped is not None:
-                categories = [mapped]
+                categories = [mapped.value]
                 applied.add(app.family)
             else:
                 categories = [
-                    Category(item)
+                    item
                     for item in app.data["categories"]
                     if isinstance(item, str) and item in _SOURCE_CATEGORIES
                 ]
-            app.data["categories"] = [str(item) for item in categories]
+            app.data["categories"] = categories
     return applied
 
 
