@@ -17,9 +17,9 @@ Run commands from the repository root:
 | `uv run pack build` | Ingest and compose sources, validate rendered bytes, then publish both packs and the catalog as a recoverable unit |
 
 Unsupported arguments fail before verification starts and leave existing evidence
-untouched. The separate `pack generate-source codm` operation resolves only the
-explicitly configured codm source candidate; it does not extend structural
-verification or change committed files.
+untouched. The separate `pack generate-source codm|quiver` operation resolves
+that source's discovered projects under its reviewed policy into a candidate
+catalog; it does not extend structural verification or change committed files.
 
 Standalone verification writes schema 4 evidence to `.build/verify.json`, separately
 from the build report. It reads every input once, checks and fingerprints exactly
@@ -37,7 +37,7 @@ nonzero exit and a stderr diagnostic.
 
 Verification never rebuilds or changes the packs, README, configuration or
 `.build/report.json`. Building performs source ingestion but does not discover
-package IDs; codm discovery belongs to source generation.
+package IDs; codm and Quiver discovery belong to source generation.
 
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. A verification report with any schema other than the

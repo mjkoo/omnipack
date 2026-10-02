@@ -1,4 +1,4 @@
-"""Transactional README source catalog generation."""
+"""Transactional codm catalog generation from the codm README project tables."""
 
 from __future__ import annotations
 
