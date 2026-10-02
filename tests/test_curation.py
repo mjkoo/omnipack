@@ -11,7 +11,7 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import compose
-from omnipack.model import Variant
+from omnipack.model import Category, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.urls import normalize_project_url
@@ -205,3 +205,15 @@ def test_maintained_version_override_survives_refreshed_source_settings(
                 )
                 observed.add(key)
     assert observed == protected
+
+
+def test_current_composition_categorizes_every_entry_from_the_taxonomy(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    result = current_configuration.result
+    assert result.report.uncategorized == []
+    assert result.report.stale_category_assignments == []
+    for values in result.apps.values():
+        for app in values:
+            assert app.data["categories"]
+            assert set(app.data["categories"]) <= set(Category)
