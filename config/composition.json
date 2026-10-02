@@ -160,7 +160,33 @@
     {"family":"package:su.xash.engine.test","variant":"dual","match":{"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},"rationale":"Keep the maintained rolling Xash3D selection policy."}
   ],
   "categories": {
+    "app:ctr": "Decomps/Recomps",
+    "app:dusklight": "Decomps/Recomps",
+    "app:openmw": "PC Ports",
+    "app:pokemon-emerald": "Decomps/Recomps",
+    "package:app.wayfinder": "Utilities",
+    "package:com.andreyvelsk.skyrimwebmonitor": "Utilities",
+    "package:com.aure.banjorecomp": "Decomps/Recomps",
+    "package:com.balatro.dualscreen": "PC Ports",
+    "package:com.chimeragaming.pixelnavigator": "Utilities",
+    "package:com.chimeragaming.pokemonzmap": "Utilities",
+    "package:com.cylonid.nativealpha": "Utilities",
+    "package:com.darkaxt.dualdex": "Utilities",
+    "package:com.digitaladventure.dw2003": "Utilities",
+    "package:com.dishii.zelda3": "Decomps/Recomps",
+    "package:com.enrpau.dualscreendex": "Utilities",
+    "package:com.exojosh.minecraftsecondscreen": "Utilities",
     "package:com.jakobkhansen.silksong": "PC Ports",
-    "package:igawa6.dualsouls": "PC Ports"
+    "package:com.kalenjohnson.chronoduo": "Utilities",
+    "package:com.mastercook777.heimdall": "Utilities",
+    "package:com.stormpanda.megingiard": "Utilities",
+    "package:com.thor.mph": "Decomps/Recomps",
+    "package:dev.adrian.showdown": "Utilities",
+    "package:dev.picori.tmc": "Decomps/Recomps",
+    "package:dev.zomboidds.companion": "Utilities",
+    "package:igawa6.dualsouls": "PC Ports",
+    "package:io.github.hm64recomp": "Decomps/Recomps",
+    "package:io.github.tomba2recomp": "Decomps/Recomps",
+    "package:org.pkforge.app": "Utilities"
   }
 }

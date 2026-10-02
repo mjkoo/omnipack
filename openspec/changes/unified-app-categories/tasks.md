@@ -13,7 +13,7 @@
 
 ## 4. Configuration and outputs
 
-- [ ] 4.1 Seed the remaining `config/composition.json` `categories` keys from the design's seed map (the two PC Ports keys moved from the overlay in 2.1 are already present). Verify that `uv run pack build` succeeds and that the rebuilt report's uncategorized list and stale category assignments list are both empty, so no seed key is mistyped or names a family that is not selected.
+- [x] 4.1 Seed the remaining `config/composition.json` `categories` keys from the design's seed map (the two PC Ports keys moved from the overlay in 2.1 are already present). Verify that `uv run pack build` succeeds and that the rebuilt report's uncategorized list and stale category assignments list are both empty, so no seed key is mistyped or names a family that is not selected.
 - [ ] 4.2 Rebuild `dist/` and README from one upstream snapshot: build back to back at the commit before the change and at the change commit, or compose one captured ingestion under both configurations, and compare those two outputs. Verify that between them no entry is added or removed, package ids are unchanged, per entry matched by id only `categories` changes, and otherwise only entry order and the settings colour map differ (rendering orders by primary category, so re-categorized entries may move). Commit the change commit's rebuilt `dist/` and README, and verify that `uv run pack verify` passes. Upstream drift since the last committed nightly is expected and outside this check, since RJNY is read from its main branch and BBoi from its latest release asset.
 - [ ] 4.3 Update current-config tests and fixtures whose expected categories changed with the seeded map and rebuild. Verify `just check-all` passes.
 
