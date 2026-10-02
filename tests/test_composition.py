@@ -18,11 +18,12 @@ from omnipack.merge import (
     CompositionResult,
     ConsideredCandidate,
     StaleExclusion,
+    UncategorizedFamily,
 )
 from omnipack.merge import (
     compose as compose_apps,
 )
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Category, Provenance, SourceType, Variant
 from omnipack.urls import normalize_project_url
 
 
@@ -37,6 +38,7 @@ def app(
     original_id: str | None = None,
     origin: str | None = None,
     additional_settings: dict[str, object] | None = None,
+    categories: tuple[str, ...] = (),
 ) -> App:
     url = url or f"https://example.com/{source}/{package_id}"
     origins = {
@@ -50,7 +52,7 @@ def app(
         url,
         name or f"{source} {package_id}",
         SourceType.HTML,
-        (),
+        categories,
         Provenance(source, url),
         eligibility=eligibility,
         origin=origin or origins[source],
@@ -86,11 +88,27 @@ def pin_policy(
         (Pin(family, variant, pinned_selector, "test"),),
         projections,
         {(family, variant): key},
+        {},
     )
 
 
 def ids(result: CompositionResult, variant: Variant) -> set[str]:
     return {item.id for item in result.apps[variant]}
+
+
+def category_policy(categories: dict[str, Category]) -> CompositionPolicy:
+    return CompositionPolicy((), (), {}, {}, categories)
+
+
+def final_categories(result: CompositionResult) -> dict[tuple[str, Variant], list[str]]:
+    return {
+        (item.id, variant): item.data["categories"]
+        for variant, values in result.apps.items()
+        for item in values
+    }
+
+
+TRACK_ONLY: dict[str, object] = {"trackOnly": True}
 
 
 def compose(
@@ -111,7 +129,7 @@ def compose(
                     CandidateRule(candidate_selector(candidate), "test", family=family)
                 )
                 projections[rendered_key(candidate.id, candidate.url)] = family
-        policy = CompositionPolicy(tuple(rules), (), projections, {})
+        policy = CompositionPolicy(tuple(rules), (), projections, {}, {})
     return compose_apps(
         candidates,
         denylist,
@@ -551,6 +569,7 @@ def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
         "family",
         "packageId",
         "variant",
+        "categories",
     ],
 )
 def test_overlay_rejects_assigning_or_deleting_identity_and_composition_fields(
@@ -619,6 +638,7 @@ def test_denials_and_shared_identity_see_the_corrected_package_id() -> None:
         ),
         (),
         {rendered_key("taken.pkg", corrected.url): "app:x"},
+        {},
         {},
     )
     denied = compose(
@@ -1017,3 +1037,179 @@ def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
         ("app:x", Variant.SINGLE, "rjny", "source"),
         ("app:x", Variant.DUAL, "bboi", "dual-preferred"),
     ]
+
+
+def test_mapped_family_carries_its_category_in_every_variant() -> None:
+    result = compose(
+        [app("x", categories=("Dual Screen",))],
+        [],
+        [],
+        policy=category_policy({"package:x": Category.PC_PORTS}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["PC Ports"],
+        ("x", Variant.DUAL): ["PC Ports"],
+    }
+
+
+def test_explicit_family_key_categorizes_both_of_its_package_ids() -> None:
+    single = app("x.single", eligibility=frozenset({Variant.SINGLE}))
+    dual = app(
+        "x.dual",
+        "bboi",
+        categories=("Dual Screen",),
+        eligibility=frozenset({Variant.DUAL}),
+    )
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [family_rule(single, "app:x"), family_rule(dual, "app:x")],
+            "pins": [],
+            "categories": {"app:x": "PC Ports"},
+        }
+    )
+    result = compose([single, dual], [], [], policy=policy)
+    assert final_categories(result) == {
+        ("x.single", Variant.SINGLE): ["PC Ports"],
+        ("x.dual", Variant.DUAL): ["PC Ports"],
+    }
+    assert result.report.stale_category_assignments == []
+
+
+@pytest.mark.parametrize("mapped", [False, True])
+@pytest.mark.parametrize("source", [(), ("Utilities", "Dual Screen")])
+def test_track_only_entry_carries_exactly_track_only(
+    mapped: bool, source: tuple[str, ...]
+) -> None:
+    tracker = app("1", categories=source, additional_settings=TRACK_ONLY)
+    categories = {"package:1": Category.EMULATOR} if mapped else {}
+    result = compose([tracker], [], [], policy=category_policy(categories))
+    assert final_categories(result) == {
+        ("1", Variant.SINGLE): ["Track Only"],
+        ("1", Variant.DUAL): ["Track Only"],
+    }
+    assert result.report.uncategorized_families == []
+
+
+def test_unmapped_entry_keeps_allowed_source_categories_in_source_order() -> None:
+    result = compose(
+        [
+            app("x", categories=("Dual Screen", "Frontend", "Track Only", "Emulator")),
+            app("y", categories=("Dual Screen", "Emulator")),
+        ],
+        [],
+        [],
+        policy=category_policy({}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Frontend", "Emulator"],
+        ("x", Variant.DUAL): ["Frontend", "Emulator"],
+        ("y", Variant.SINGLE): ["Emulator"],
+        ("y", Variant.DUAL): ["Emulator"],
+    }
+
+
+def test_unmapped_entry_with_no_allowed_category_builds_without_one() -> None:
+    result = compose(
+        [app("x", categories=("Dual Screen",)), app("y")],
+        [],
+        [],
+        policy=category_policy({}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): [],
+        ("x", Variant.DUAL): [],
+        ("y", Variant.SINGLE): [],
+        ("y", Variant.DUAL): [],
+    }
+    both = (Variant.SINGLE, Variant.DUAL)
+    assert result.report.uncategorized_families == [
+        UncategorizedFamily("package:x", both),
+        UncategorizedFamily("package:y", both),
+    ]
+
+
+def test_each_variant_assigns_its_own_winner_s_categories() -> None:
+    single = app("x", categories=("Emulator",), eligibility=frozenset({Variant.SINGLE}))
+    dual = app(
+        "x", "bboi", categories=("Dual Screen",), eligibility=frozenset({Variant.DUAL})
+    )
+    result = compose([single, dual], [], [], policy=category_policy({}))
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Emulator"],
+        ("x", Variant.DUAL): [],
+    }
+    assert result.report.uncategorized_families == [
+        UncategorizedFamily("package:x", (Variant.DUAL,))
+    ]
+
+
+def test_track_only_rule_reads_settings_after_overlays() -> None:
+    candidate = app("x", categories=("Emulator",))
+    result = compose(
+        [candidate],
+        [],
+        overlays((candidate.id, candidate.url, {"additionalSettings": TRACK_ONLY})),
+        policy=category_policy({"package:x": Category.PC_PORTS}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Track Only"],
+        ("x", Variant.DUAL): ["Track Only"],
+    }
+    assert result.report.stale_category_assignments == ["package:x"]
+
+
+def test_non_object_settings_after_overlays_are_not_track_only() -> None:
+    candidate = app("x", categories=("Emulator",), additional_settings=TRACK_ONLY)
+    result = compose(
+        [candidate],
+        [],
+        overlays((candidate.id, candidate.url, {"additionalSettings": "broken"})),
+        policy=category_policy({}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Emulator"],
+        ("x", Variant.DUAL): ["Emulator"],
+    }
+
+
+def test_category_keys_that_set_no_selected_category_are_stale() -> None:
+    result = compose(
+        [
+            app("used", categories=("Dual Screen",)),
+            app("1", additional_settings=TRACK_ONLY),
+            app("denied"),
+        ],
+        [{"id": "denied", "reason": "test"}],
+        [],
+        policy=category_policy(
+            {
+                "package:used": Category.PC_PORTS,
+                "package:1": Category.UTILITIES,
+                "package:denied": Category.EMULATOR,
+                "app:absent": Category.EMULATOR,
+            }
+        ),
+    )
+    assert result.report.stale_category_assignments == [
+        "app:absent",
+        "package:1",
+        "package:denied",
+    ]
+    assert result.report.uncategorized_families == []
+
+
+def test_key_used_in_one_variant_only_is_not_stale() -> None:
+    single = app("x", eligibility=frozenset({Variant.SINGLE}))
+    dual = app("x", "bboi", eligibility=frozenset({Variant.DUAL}))
+    result = compose(
+        [single, dual],
+        [],
+        overlays((dual.id, dual.url, {"additionalSettings": TRACK_ONLY})),
+        policy=category_policy({"package:x": Category.EMULATOR}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Emulator"],
+        ("x", Variant.DUAL): ["Track Only"],
+    }
+    assert result.report.stale_category_assignments == []

@@ -12,10 +12,10 @@ from urllib.response import addinfourl
 import pytest
 
 from omnipack.http import HttpError, HttpResponse, HttpStatusError
+from omnipack.model import Category
 from omnipack.package_id import NoEligibleApk
 from omnipack.project_policy import default_apk_rule
 from omnipack.quiver_source import (
-    Category,
     QuiverPolicy,
     QuiverRule,
     discover_quiver,
@@ -76,6 +76,9 @@ def test_policy_defaults_and_rejects_invalid_rules_before_requests() -> None:
     ):
         with pytest.raises(ValueError):
             parse_quiver_policy({"schemaVersion": 1, "projects": {}, **invalid})
+    for category in ("Emulator", "Track Only"):
+        with pytest.raises(ValueError, match="category must be one of"):
+            policy(projects={"github.com/o/repo": {"category": category}})
 
 
 def test_discovery_collapses_renames_preserves_provenance_and_filter_diagnostic() -> (

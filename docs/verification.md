@@ -42,7 +42,8 @@ package IDs; codm and Quiver discovery belong to source generation.
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. A verification report with any schema other than the
 current one requires regeneration with `pack verify`. Build reports must use
-schema 3; any other build report schema requires regeneration with `pack build`.
+the current schema; any other build report schema requires regeneration with
+`pack build`.
 One available report is enough; missing both, corrupt reports and unsupported
 schemas fail display.
 Displaying a recorded failed operation exits successfully.
@@ -61,7 +62,10 @@ evaluated, so even a malformed pattern can pass structural checks.
 Verification no longer checks that every default key is present, the rendered
 pack settings or category colours, or GitLab project URL rules. Rendering fills
 every default key and derives each category colour from its name, and ingestion
-enforces the GitLab URL rules.
+enforces the GitLab URL rules. Categories are checked only as lists of strings:
+composition, not verification, keeps them inside the
+[category set](composition.md#categories) and gives exactly Track Only to
+track-only entries.
 
 Composition checks pair single-screen and dual-screen entries by package id,
 then by explicit family, and cover package-id and explicit-family uniqueness

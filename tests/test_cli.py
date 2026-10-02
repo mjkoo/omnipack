@@ -410,6 +410,15 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     }
 
 
+# A category key no build can satisfy, so assignment always reports it stale.
+ABSENT_CATEGORY_POLICY = {
+    "schemaVersion": 1,
+    "candidates": [],
+    "pins": [],
+    "categories": {"app:absent": "Emulator"},
+}
+
+
 def test_composition_failure_preserves_collected_diagnostics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -433,6 +442,7 @@ def test_composition_failure_preserves_collected_diagnostics(
                 }
             ],
         ),
+        ("composition.json", ABSENT_CATEGORY_POLICY),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     apps = [
@@ -493,8 +503,44 @@ def test_composition_failure_preserves_collected_diagnostics(
         for variant in Variant
     ]
     assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
+    # The overlay failed before category assignment ran, so neither category
+    # list holds anything, although assignment would have filled both.
+    assert report["uncategorizedFamilies"] == []
+    assert report["staleCategoryAssignments"] == []
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
+
+
+def test_coverage_failure_preserves_collected_category_lists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    (tmp_path / "config/composition.json").write_text(
+        json.dumps(ABSENT_CATEGORY_POLICY),
+        encoding="utf-8",
+    )
+    single_only = App(
+        "single.app",
+        "https://example.test/single",
+        "Single",
+        SourceType.HTML,
+        ("Dual Screen",),
+        Provenance("rjny", "https://example.test/catalog"),
+        eligibility=frozenset({Variant.SINGLE}),
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [single_only]
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "composition"
+    assert "missing app family" in report["error"]
+    assert report["uncategorizedFamilies"] == [
+        {"family": "package:single.app", "variants": ["single"]}
+    ]
+    assert report["staleCategoryAssignments"] == ["app:absent"]
 
 
 @pytest.mark.parametrize("reverse", [False, True])
@@ -684,7 +730,21 @@ def test_missing_local_input_fails_at_ingestion_before_any_fetch(
     ("policy_bytes", "message"),
     [
         (b"{}", "schemaVersion must be integer 1"),
-        (b"not json", "Expecting value: line 1 column 1 (char 0)"),
+        (b"not json", "invalid JSON: Expecting value: line 1 column 1 (char 0)"),
+        (
+            (
+                b'{"schemaVersion": 1, "candidates": [], "pins": [], '
+                b'"categories": {}, "categories": {}}'
+            ),
+            "duplicate JSON key 'categories'",
+        ),
+        (
+            (
+                b'{"schemaVersion": 1, "pins": [], "candidates": [{"match": {}, '
+                b'"rationale": "a", "rationale": "b"}]}'
+            ),
+            "duplicate JSON key 'rationale'",
+        ),
     ],
 )
 def test_malformed_composition_policy_error_names_its_input(

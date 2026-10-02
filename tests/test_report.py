@@ -61,8 +61,9 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
         {"status": "success"},
         {"schemaVersion": 1, "status": "success"},
         {"schemaVersion": 2, "status": "success", "displacements": []},
+        {"schemaVersion": 3, "status": "success"},
     ],
-    ids=["schemaless", "schema-1", "schema-2"],
+    ids=["schemaless", "schema-1", "schema-2", "schema-3"],
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
@@ -243,6 +244,8 @@ def test_malformed_build_report_is_concise_cli_failure(
         "denylistRemovals",
         "staleExclusions",
         "selections",
+        "uncategorizedFamilies",
+        "staleCategoryAssignments",
         "offlineVerification",
     ],
 )
@@ -380,7 +383,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
 ) -> None:
     # The writer's document shape, built literally so the lists can be long.
     document = {
-        "schemaVersion": 3,
+        "schemaVersion": 4,
         "status": "failed" if failed else "success",
         "changes": {
             variant: {
@@ -411,6 +414,11 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             for i in range(40)
         ],
         "selections": [WINNER],
+        "uncategorizedFamilies": [
+            {"family": f"package:bare.{i}", "variants": ["single", "dual"]}
+            for i in range(40)
+        ],
+        "staleCategoryAssignments": [f"app:gone-{i}" for i in range(40)],
         "offlineVerification": {"status": "not-run", "findings": []},
     }
     if failed:
@@ -438,6 +446,8 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             f"Admission: codm2000; URL: https://example.test/{i}; kind: apk; committed id: committed.{i}\n"
             in output
         )
+        assert f"Uncategorized: package:bare.{i}; variants: single, dual\n" in output
+        assert f"Stale category assignment: app:gone-{i}\n" in output
     assert (
         output.index("Selection:")
         < output.index(prefix + ":")
@@ -485,10 +495,17 @@ def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
             "sourceAdmissions",
             {"source": "codm2000", "url": "https://example.test", "kind": "apk"},
         ),
+        ("uncategorizedFamilies", {"family": "package:x"}),
+        ("uncategorizedFamilies", {"family": "package:x", "variants": []}),
+        ("uncategorizedFamilies", {"family": "package:x", "variants": [1]}),
+        ("uncategorizedFamilies", {"family": 7, "variants": ["single"]}),
+        ("uncategorizedFamilies", {"family": "package:x", "variants": ["bogus"]}),
+        ("uncategorizedFamilies", "package:x"),
+        ("staleCategoryAssignments", 7),
     ],
 )
 def test_malformed_diagnostic_elements_raise_report_format_error(
-    tmp_path: Path, field: str, record: dict[str, object]
+    tmp_path: Path, field: str, record: object
 ) -> None:
     from omnipack.report import ReportFormatError
 
@@ -496,6 +513,40 @@ def test_malformed_diagnostic_elements_raise_report_format_error(
     build_report(tmp_path, **fields)
     with pytest.raises(ReportFormatError, match="malformed build"):
         format_reports(tmp_path)
+
+
+def test_stale_category_assignments_must_be_a_list(tmp_path: Path) -> None:
+    from omnipack.report import ReportFormatError
+
+    build_report(tmp_path, staleCategoryAssignments="app:x")
+    with pytest.raises(ReportFormatError, match="staleCategoryAssignments"):
+        format_reports(tmp_path)
+
+
+def test_category_lists_alone_are_displayed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from omnipack.cli import main
+
+    build_report(
+        tmp_path,
+        changes={
+            variant: {"added": [], "removed": []} for variant in ("single", "dual")
+        },
+        uncategorizedFamilies=[{"family": "package:bare", "variants": ["dual"]}],
+        staleCategoryAssignments=["app:gone"],
+    )
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 0
+    assert capsys.readouterr().out == (
+        "Build report\nStatus: success\n"
+        "Uncategorized: package:bare; variants: dual\n"
+        "Stale category assignment: app:gone\n"
+        "Offline verification: not-run\n\n"
+        "Verification report\nNo standalone verification recorded\n"
+    )
 
 
 def test_removed_verification_state_is_rejected(tmp_path: Path) -> None:

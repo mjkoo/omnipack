@@ -15,9 +15,14 @@ for generation, acceptance and output review.
   {"id": "org.example.app", "url": "https://github.com/example/app", "name": "Example", "categories": ["PC Ports"]}
   ```
 
-  `id`, `url` and `name` are required. `categories` is strongly recommended:
-  its first entry sets the generated README catalog heading and sort; missing
-  or empty categories fall back to `Other`. Ordinary extras are baseline
+  `id`, `url` and `name` are required. `categories` is strongly recommended.
+  Only [taxonomy](composition.md#categories) values other than Track Only pass
+  through from an extra's categories, and any other value is dropped; a
+  track-only extra always carries Track Only, and a family in the category map
+  takes the mapped category instead. The README catalog files each row under
+  the first category of its presenting entry, the single-screen one when the
+  app has one, or under `Other` when that entry has none; see
+  [categories](composition.md#categories). Ordinary extras are baseline
   candidates for both packs; optional `"dualScreen": true` makes one dual-only.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
@@ -35,6 +40,12 @@ for generation, acceptance and output review.
   `patch.additionalSettings` is an object whose keys merge into existing
   settings, not a JSON-encoded string. Null deletes allowed fields. Follow the
   [overlay example and protected-field rules](composition.md#denials-and-patches).
+- **Set an app's category:** add a `categories` key for its family to
+  `config/composition.json`, such as `"package:org.example.app": "PC Ports"`.
+  Overlays cannot patch categories. A build report entry under
+  `uncategorizedFamilies` names the family key to add, and one under
+  `staleCategoryAssignments` names a key to remove or correct. See
+  [categories](composition.md#categories).
 - **Deny a package:** append `{"id": "org.example.retired", "reason": "No supported build"}`
   to `config/deny.json`. Use the effective package id, not an original id corrected
   by policy. This removes that id from both packs across all sources, not just
@@ -80,15 +91,16 @@ For every manual edit affecting pack contents:
    diff is the primary evidence, including for overlay-only edits. Review the
    full diff for incidental upstream refreshes rather than hiding them by editing
    generated files. Use `uv run pack report` for supporting `selections`,
-   `denylistRemovals`, `staleExclusions`, `sourceAdmissions` and `changes`,
+   `denylistRemovals`, `staleExclusions`, `sourceAdmissions`,
+   `uncategorizedFamilies`, `staleCategoryAssignments` and `changes`,
    recorded in `.build/report.json`. `changes` contains only package ids added
    or removed relative to files present immediately before the build: settings
    or identity edits retaining the id set produce no entries, and a second build
    can empty it. The command lists all recorded entries, including admitted
    committed candidates with their source, project URL, entry kind and committed
-   id. Empty categories print nothing; an unavailable comparison is labeled
-   unavailable, and a failed build's comparison describes candidates that were
-   not published.
+   id. A diagnostic kind with nothing recorded prints nothing; an unavailable
+   comparison is labeled unavailable, and a failed build's comparison describes
+   candidates that were not published.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
    A new denial's id must appear in `denylistRemovals` and be absent from
@@ -128,11 +140,12 @@ build preserves all bytes outside them. The build fetches public catalogs withou
 reads `config/http.json`. Only source generation reads it, so that an optional
 `GITHUB_TOKEN` authenticates its requests to `api.github.com`.
 
-The JSON diagnostics are in `.build/report.json` (schema 3), including each
+The JSON diagnostics are in `.build/report.json` (schema 4), including each
 family's selection with the candidates it was chosen over and the selection
 reason, original and effective package ids, denylist removals and stale
-exclusions, admitted committed candidates with their identities, and the package
-ids added and removed since the previous output. A failed build returns a
+exclusions, uncategorized families and stale category assignments, admitted
+committed candidates with their identities, and the package ids added and
+removed since the previous output. A failed build returns a
 nonzero status and preserves the previous packs and README.
 
 ## Verify and inspect

@@ -18,7 +18,7 @@ from omnipack.composition_policy import (
     pair_entries,
     rendered_key,
 )
-from omnipack.model import App, Variant
+from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import (
     ComposedApp,
     OverlayError,
@@ -78,11 +78,22 @@ class FamilySelection:
     considered: tuple[ConsideredCandidate, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class UncategorizedFamily:
+    """A family whose selected entry ended without a category in `variants`."""
+
+    family: str
+    variants: tuple[Variant, ...]
+
+
 @dataclass(slots=True)
 class CompositionReport:
     removals: list[Removal] = field(default_factory=list)
     stale_exclusions: list[StaleExclusion] = field(default_factory=list)
     selections: list[FamilySelection] = field(default_factory=list)
+    uncategorized_families: list[UncategorizedFamily] = field(default_factory=list)
+    # Category map keys that set no selected entry's category.
+    stale_category_assignments: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -126,6 +137,9 @@ def compose(
             selected[variant] = apply_overlay(selected[variant], patches)
     except OverlayError as error:
         raise CompositionError(str(error)) from error
+    applied = _assign_categories(selected, policy)
+    report.uncategorized_families.extend(_uncategorized_families(selected))
+    report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
     _validate_coverage(selected)
     return CompositionResult(selected, report)
 
@@ -339,6 +353,60 @@ def _validate_pairing(
             f"family {single.family!r} selects single-screen {keys[0]!r} and "
             f"dual-screen {keys[1]!r}, which offline verification cannot pair" + remedy
         )
+
+
+def _assign_categories(
+    apps: dict[Variant, list[ComposedApp]], policy: CompositionPolicy
+) -> set[str]:
+    """Give each selected entry its final categories, returning the map keys used.
+
+    A track-only entry carries exactly Track Only, a mapped family its mapped
+    category, and any other entry the source categories in the closed set
+    other than Track Only, in source order. Overlays cannot patch categories,
+    so nothing after this changes them.
+    """
+    applied = {
+        app.family
+        for values in apps.values()
+        for app in values
+        if app.family in policy.categories and not _track_only(app.data)
+    }
+    for variant in Variant:
+        apps[variant] = [_categorized(app, policy) for app in apps[variant]]
+    return applied
+
+
+def _categorized(app: ComposedApp, policy: CompositionPolicy) -> ComposedApp:
+    mapped = policy.categories.get(app.family)
+    if _track_only(app.data):
+        categories = [Category.TRACK_ONLY.value]
+    elif mapped is not None:
+        categories = [mapped.value]
+    else:
+        categories = [
+            item for item in app.data["categories"] if item in ASSIGNABLE_CATEGORIES
+        ]
+    return ComposedApp(app.family, {**app.data, "categories": categories})
+
+
+def _track_only(data: dict[str, Any]) -> bool:
+    """Whether an entry's final settings mark it track-only."""
+    settings = data.get("additionalSettings")
+    return isinstance(settings, dict) and settings.get("trackOnly") is True
+
+
+def _uncategorized_families(
+    apps: dict[Variant, list[ComposedApp]],
+) -> list[UncategorizedFamily]:
+    variants: dict[str, list[Variant]] = {}
+    for variant in Variant:
+        for app in apps[variant]:
+            if not app.data["categories"]:
+                variants.setdefault(app.family, []).append(variant)
+    return [
+        UncategorizedFamily(family, tuple(found))
+        for family, found in sorted(variants.items())
+    ]
 
 
 def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:

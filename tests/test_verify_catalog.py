@@ -41,7 +41,7 @@ STALE_README = (
     b"<!-- omnipack:catalog:start -->\nwrong\n<!-- omnipack:catalog:end -->\n"
 )
 INVALID_POLICIES = [
-    pytest.param(b"{not json", "invalid_json", id="invalid-json"),
+    pytest.param(b"{not json", "invalid_composition_config", id="invalid-json"),
     pytest.param(
         b'{"schemaVersion":2,"candidates":[],"pins":[]}\n',
         "invalid_composition_config",
@@ -139,3 +139,34 @@ def test_readme_mutation_during_verification_fingerprints_the_captured_bytes(
         "sha256": hashlib.sha256(captured_readme).hexdigest(),
     }
     assert "Evidence: stale" in format_reports(tmp_path)
+
+
+@pytest.mark.parametrize(
+    ("policy", "key"),
+    [
+        (
+            (
+                b'{"schemaVersion": 1, "candidates": [], "pins": [], '
+                b'"categories": {}, "categories": {}}'
+            ),
+            "categories",
+        ),
+        (
+            (
+                b'{"schemaVersion": 1, "pins": [], "candidates": [{"match": {}, '
+                b'"rationale": "a", "rationale": "b"}]}'
+            ),
+            "rationale",
+        ),
+    ],
+)
+def test_verify_rejects_a_repeated_policy_key_naming_it(
+    tmp_path: Path, policy: bytes, key: str
+) -> None:
+    copy_inputs(tmp_path)
+    (tmp_path / "config/composition.json").write_bytes(policy)
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "failed"
+    assert [(error["code"], error["message"]) for error in result["errors"]] == [
+        ("invalid_composition_config", f"duplicate JSON key {key!r}")
+    ]

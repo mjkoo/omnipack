@@ -14,7 +14,9 @@ apps it accompanied. Export exclusion does not guarantee deletion on a device.
 ### Tracking omnipack itself
 
 Both packs include the same track-only GitHub entry, **omnipack updates**
-(`809443320`). It follows the numeric title of the owned `continuous` prerelease.
+(`809443320`). Like every track-only entry it carries the Track Only
+[category](composition.md#categories). It follows the numeric title of the owned
+`continuous` prerelease.
 Publishing a changed verified pair uploads both JSON assets before editing the
 shared revision and digest record. Served digests are checked before deciding
 to leave, repair or advance the release; repair uploads both assets without

@@ -5,7 +5,10 @@ import json
 from pathlib import Path
 from typing import Any
 
-from omnipack.composition_policy import parse_composition_policy
+from omnipack.composition_policy import (
+    load_composition_policy,
+    parse_composition_policy,
+)
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App, Variant
 from omnipack.package_id import _is_valid_package_id
@@ -82,7 +85,9 @@ def compose_captured_baseline() -> CompositionResult:
         [*higher, *generated],
         load_json(PRE_MIGRATION / "deny.json"),
         load_json(PRE_MIGRATION / "overlay.json"),
-        policy=parse_composition_policy(load_json(PRE_MIGRATION / "composition.json")),
+        policy=load_composition_policy(
+            (PRE_MIGRATION / "composition.json").read_bytes()
+        ),
     )
 
 
