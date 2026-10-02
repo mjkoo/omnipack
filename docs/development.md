@@ -25,9 +25,11 @@ for generation, acceptance and output review.
 - **Change generated-source discovery:** edit the reviewed rule under its
   normalized project key in `config/codm-projects.json` or
   `config/quiver-projects.json`. The upstream discovery list supplies the
-  projects; this policy is not an independent additions list. See
-  [policy fields](source-generation.md#inputs-and-policy), then generate and
-  accept a candidate as described below before building.
+  projects; this policy is not an independent additions list. See the
+  [codm](source-generation.md#inputs-and-policy) and
+  [Quiver](source-generation.md#quiver-discovery-skips-and-removals) policy
+  fields, then generate and accept a candidate as described below before
+  building.
 - **Patch selected settings:** add an `{id, url, patch}` record to
   `config/overlay.json`, using the selected effective id and project URL.
   `patch.additionalSettings` is an object whose keys merge into existing
@@ -121,9 +123,8 @@ Run `uv run pack build` from the repository root. It fetches the configured
 pack sources, including the committed codm and Quiver catalogs, and writes both
 import files to `dist/` and regenerates the README catalog after validating their
 serialized bytes offline. It does not fetch the codm README, the Quiver index or
-release APKs. Keep exactly
-one standalone pair of catalog markers in README; the build preserves all bytes
-outside them. The build fetches public catalogs without credentials and never
+release APKs. Keep exactly one standalone pair of catalog markers in README; the
+build preserves all bytes outside them. The build fetches public catalogs without credentials and never
 reads `config/http.json`. Only source generation reads it, so that an optional
 `GITHUB_TOKEN` authenticates its requests to `api.github.com`.
 

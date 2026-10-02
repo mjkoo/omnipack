@@ -293,5 +293,5 @@ Obtainium entry by hand, since removing it from a later import does not
 guarantee on-device deletion.
 
 See [reviewed source generation](source-generation.md) for the separate
-workflow that proposes changes to the committed codm and Quiver catalogs; nightly
-publishing never writes that catalog or any other configuration.
+workflow that proposes changes to the committed codm and Quiver catalogs;
+nightly publishing never writes those catalogs or any other configuration.

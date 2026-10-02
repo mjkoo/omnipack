@@ -18,8 +18,8 @@ Run commands from the repository root:
 
 Unsupported arguments fail before verification starts and leave existing evidence
 untouched. The separate `pack generate-source codm|quiver` operation resolves
-only the reviewed projects of that source into a candidate catalog; it does not
-extend structural verification or change committed files.
+that source's discovered projects under its reviewed policy into a candidate
+catalog; it does not extend structural verification or change committed files.
 
 Standalone verification writes schema 4 evidence to `.build/verify.json`, separately
 from the build report. It reads every input once, checks and fingerprints exactly

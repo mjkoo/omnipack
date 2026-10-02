@@ -45,10 +45,9 @@ with the source, entry and field identified. Composition policy in
 `config/composition.json` owns app families, package identities and per-pack
 selection; editing that policy does not repair an invalid source record.
 RJNY entries excluded from export are dropped before normalization, so they are
-not validated. Other unmodeled fields pass through
-unchanged. The extras adapter consumes `dualScreen` to set eligibility, so it
-never reaches that extra's rendered record; on upstream records it is an
-ordinary unmodeled field.
+not validated. Other unmodeled fields pass through unchanged. The extras adapter
+consumes `dualScreen` to set eligibility, so it never reaches that extra's
+rendered record; on upstream records it is an ordinary unmodeled field.
 
 A valid pin comes first: it selects the one candidate it names ahead of
 dual-screen replacement and source precedence. Nothing else makes the dual pack
@@ -68,9 +67,8 @@ same package id; it wins single by source precedence while Sam's BBoi dual
 build wins dual. Every configured build in these three families carries its
 family's shared package id, so denying it removes that app from both packs.
 
-Every entry in a committed generated catalog joins the candidate set; a codm
-entry competes with other builds of its family through the rules above, and
-appearing in codm does not make another source's candidate a dual-screen build.
+Every entry in a committed generated catalog joins the candidate set and
+competes with the other builds of its family through the rules above.
 
 ## Candidate policy
 
@@ -174,9 +172,9 @@ in each pack, the other available candidates it was chosen over, and one reason:
 build), or `source` (single-screen precedence). `denylistRemovals` and
 `staleExclusions` list what each denial removed or failed to match.
 `sourceAdmissions` lists each committed codm and Quiver entry the build
-admitted, with its source, id, URL and whether it is an APK or track-only entry, and `offlineVerification`
-holds the offline gate's status and findings. Selection records use snake_case
-field names:
+admitted, with its source, id, URL and whether it is an APK or track-only entry,
+and `offlineVerification` holds the offline gate's status and findings.
+Selection records use snake_case field names:
 
 ```json
 {
