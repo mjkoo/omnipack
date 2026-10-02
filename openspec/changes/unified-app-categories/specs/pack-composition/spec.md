@@ -27,8 +27,10 @@ assignment, is empty; a track-only entry is therefore never uncategorized.
 Because each variant selects its own winner, uncategorized SHALL be decided per
 selected entry: a family SHALL be recorded as uncategorized when the selected
 entry of any variant ends with no category, together with exactly the variants
-where that happened. An uncategorized entry and a map key naming no selected
-family SHALL NOT fail the build.
+where that happened. A map key is a stale category assignment when it set no
+selected entry's category: a key naming no family any variant selects, and a
+key whose family's selected entries are all track-only, are both stale. An
+uncategorized entry and a stale category assignment SHALL NOT fail the build.
 
 #### Scenario: A mapped family overrides its source category
 
@@ -88,10 +90,18 @@ family SHALL NOT fail the build.
   entry's source tags it Track Only
 - **THEN** the map value fails policy loading, and the source tag is dropped
 
-#### Scenario: A family key that names nothing selected builds
+#### Scenario: A family key that names nothing selected is stale
 
 - **WHEN** the map names a family that no variant selects
-- **THEN** the build succeeds
+- **THEN** the build succeeds and the key is recorded as a stale category
+  assignment
+
+#### Scenario: A family key whose selected entries are all track-only is stale
+
+- **WHEN** the map names a family whose selected entry in every variant that
+  selects it has final settings carrying `trackOnly: true`
+- **THEN** each of those entries carries exactly Track Only, the build
+  succeeds, and the key is recorded as a stale category assignment
 
 ## MODIFIED Requirements
 

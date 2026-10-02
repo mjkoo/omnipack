@@ -13,7 +13,9 @@ the build. The system SHALL write a build report recording:
   and are therefore stale exclusions;
 - the families with a selected entry left without a category, each recorded
   with exactly the variants whose selected entry ended with an empty final
-  category list, and the category map keys that named no selected family;
+  category list, and the stale category assignments: the category map keys
+  that set no selected entry's category, whether the key names no selected
+  family or a family whose selected entries are all track-only;
 - source ingestion failures.
 
 Resolution-attempt diagnostics SHALL belong to source generation, not routine
@@ -27,8 +29,11 @@ and a failed build's report SHALL record the stage that was running and the
 error that stopped it. If composition has not completed, the report SHALL set
 `changes` to null because no complete candidate output exists to compare;
 this SHALL NOT be interpreted as an empty pack. The report SHALL preserve the
-selections, denylist removals and stale exclusions collected before a
-composition failure. Once composition completes, the report SHALL compare its
+selections, denylist removals, stale exclusions and category lists collected
+before a later failure. When composition fails before category assignment
+runs, the report SHALL record the uncategorized families and stale category
+assignments empty, as it does stale exclusions, and its recorded failure and
+stage SHALL tell the reader that the check did not complete. Once composition completes, the report SHALL compare its
 candidate apps with the previous output even if a later stage fails. The
 previous output a report compares against is the contents of the import files
 as they stood before the build, so the system SHALL read them before it
@@ -70,9 +75,10 @@ change.
 - **THEN** the entry carries Track Only and the report does not list its family
   as uncategorized
 
-#### Scenario: A category map key matches nothing
+#### Scenario: A category map key sets no category
 
-- **WHEN** the category map names a family that no variant selects
+- **WHEN** the category map names a family that no variant selects, or a family
+  whose selected entries are all track-only
 - **THEN** the report lists that key as a stale category assignment
 
 #### Scenario: The build fails before it writes output
@@ -144,9 +150,9 @@ non-blocking outcome the build report records: the apps added and removed since
 the previous output, the denylist entries that excluded a candidate, the
 denylist entries that matched no candidate, the admitted codm2000 candidates
 with their committed identities, the families with a selected entry left
-without a category together with the variants concerned, and the category map
-keys that named no selected family. A non-blocking outcome the build report records
-SHALL NOT be withheld from display, a category the run recorded nothing in SHALL
+without a category together with the variants concerned, and the stale
+category assignments. A non-blocking outcome the build report records
+SHALL NOT be withheld from display, a diagnostic kind the run recorded nothing in SHALL
 contribute nothing to the output, and every recorded entry SHALL be listed in
 full on each run rather than summarized, sampled or elided, so a long
 diagnostics section is the expected steady state. A null candidate comparison
@@ -185,8 +191,7 @@ removed since the previous output.
 
 - **WHEN** a valid build report records apps added or removed, a denial that
   excluded a candidate, a denial that matched no candidate, an admitted
-  codm2000 candidate, an uncategorized family, or a category map key that named
-  no selected family
+  codm2000 candidate, an uncategorized family, or a stale category assignment
 - **THEN** `pack report` displays each of them with the variant, package id,
   family, reason, source, project URL, entry kind or committed identity the
   report holds for it, displays the candidate comparison with each package id
