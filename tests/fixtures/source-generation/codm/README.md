@@ -12,7 +12,12 @@ reproduction. The index binds them by hash. They keep their original content,
 including documentation paths that predate later moves, except where a
 configuration field was retired: current parsing reads these files, so a
 retired field leaves them in the same change that retires it, and the index
-hash is rebound. The rendered goldens stay byte-identical.
+hash is rebound. The rendered goldens stay byte-identical, except where a
+change deliberately alters what composition renders: then they are re-rendered
+in that change and rebound, and only the altered fields and the resulting entry
+order may differ. Category assignment from the closed taxonomy did this,
+moving the two overlay category patches into the policy's category map and
+dropping categories outside the taxonomy.
 
 `pre-migration-captures/` holds those source catalogs byte for byte. The live
 inputs under `../../reconciliation/` are refreshed as upstream moves, so the

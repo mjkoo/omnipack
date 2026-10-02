@@ -31,7 +31,7 @@
     },
     {
       "file": "config/composition.json",
-      "sha256": "b9aca1bcef981b7d968d3136c35aee8049d885ab85c1373fae1f5f2d0c6be7f1"
+      "sha256": "05c97f85ea4d370876171b16325441515328d5106ebe883722355acc0010ad1f"
     },
     {
       "file": "config/deny.json",
@@ -39,7 +39,7 @@
     },
     {
       "file": "config/overlay.json",
-      "sha256": "93f01e45d2c395f35829a8db83b1321cfbb9e4594c9078e5faf2b3cffedf13fc"
+      "sha256": "7f70718c9d86e7a43e47cf1fb0302cf9758a8a2e0bc70696cb24c90f0a07f8cb"
     }
   ],
   "outputs": [
@@ -47,13 +47,13 @@
       "variant": "single",
       "file": "single-screen.golden",
       "appCount": 92,
-      "sha256": "f55841cc37706d93256f67b679c9b61eaf52f9fe05f61bf285cb3d0c8626f56f"
+      "sha256": "9d3da5859cb2eb4b373036534c69eeb0908289b9b9480c5f4631b9010a972b17"
     },
     {
       "variant": "dual",
       "file": "dual-screen.golden",
       "appCount": 109,
-      "sha256": "77f39d1ff147b542c393ce33920876998e78bf6eeb3cfe6eaf421a053c1aa11d"
+      "sha256": "3c2211bd30c5c1336d9ceb997d0e72ddc0fc5c8a71fcb34224bdd37b556ae109"
     }
   ],
   "familyWinners": {

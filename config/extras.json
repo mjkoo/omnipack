@@ -173,7 +173,7 @@
     "url": "https://github.com/mjkoo/omnipack",
     "name": "omnipack updates",
     "author": "mjkoo",
-    "categories": ["Utilities"],
+    "categories": ["Track Only"],
     "additionalSettings": {
       "includePrereleases": true,
       "fallbackToOlderReleases": true,

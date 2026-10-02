@@ -22,7 +22,7 @@ from omnipack.merge import (
 from omnipack.merge import (
     compose as compose_apps,
 )
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Category, Provenance, SourceType, Variant
 from omnipack.urls import normalize_project_url
 
 
@@ -37,6 +37,7 @@ def app(
     original_id: str | None = None,
     origin: str | None = None,
     additional_settings: dict[str, object] | None = None,
+    categories: tuple[str, ...] = (),
 ) -> App:
     url = url or f"https://example.com/{source}/{package_id}"
     origins = {
@@ -50,7 +51,7 @@ def app(
         url,
         name or f"{source} {package_id}",
         SourceType.HTML,
-        (),
+        categories,
         Provenance(source, url),
         eligibility=eligibility,
         origin=origin or origins[source],
@@ -551,6 +552,7 @@ def test_duplicate_overlay_selector_and_nonobject_patch_fail() -> None:
         "family",
         "packageId",
         "variant",
+        "categories",
     ],
 )
 def test_overlay_rejects_assigning_or_deleting_identity_and_composition_fields(
@@ -1017,3 +1019,103 @@ def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
         ("app:x", Variant.SINGLE, "rjny", "source"),
         ("app:x", Variant.DUAL, "bboi", "dual-preferred"),
     ]
+
+
+def category_policy(categories: dict[str, Category]) -> CompositionPolicy:
+    return CompositionPolicy((), (), {}, {}, categories)
+
+
+def final_categories(result: CompositionResult) -> dict[tuple[str, Variant], list[str]]:
+    return {
+        (item.id, variant): item.data["categories"]
+        for variant, values in result.apps.items()
+        for item in values
+    }
+
+
+TRACK_ONLY: dict[str, object] = {"trackOnly": True}
+
+
+def test_mapped_family_carries_its_category_in_every_variant() -> None:
+    result = compose(
+        [app("x", categories=("Dual Screen",))],
+        [],
+        [],
+        policy=category_policy({"package:x": Category.PC_PORTS}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["PC Ports"],
+        ("x", Variant.DUAL): ["PC Ports"],
+    }
+
+
+@pytest.mark.parametrize("mapped", [False, True])
+@pytest.mark.parametrize("source", [(), ("Utilities", "Dual Screen")])
+def test_track_only_entry_carries_exactly_track_only(
+    mapped: bool, source: tuple[str, ...]
+) -> None:
+    tracker = app("1", categories=source, additional_settings=TRACK_ONLY)
+    categories = {"package:1": Category.EMULATOR} if mapped else {}
+    result = compose([tracker], [], [], policy=category_policy(categories))
+    assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
+
+
+def test_unmapped_entry_keeps_allowed_source_categories_in_source_order() -> None:
+    result = compose(
+        [
+            app("x", categories=("Dual Screen", "Frontend", "Track Only", "Emulator")),
+            app("y", categories=("Dual Screen", "Emulator")),
+        ],
+        [],
+        [],
+        policy=category_policy({}),
+    )
+    categories = final_categories(result)
+    assert categories[("x", Variant.SINGLE)] == ["Frontend", "Emulator"]
+    assert categories[("y", Variant.DUAL)] == ["Emulator"]
+
+
+def test_unmapped_entry_with_no_allowed_category_builds_without_one() -> None:
+    result = compose(
+        [app("x", categories=("Dual Screen",)), app("y")],
+        [],
+        [],
+        policy=category_policy({}),
+    )
+    assert set(map(tuple, final_categories(result).values())) == {()}
+
+
+def test_each_variant_assigns_its_own_winner_s_categories() -> None:
+    single = app("x", categories=("Emulator",), eligibility=frozenset({Variant.SINGLE}))
+    dual = app(
+        "x", "bboi", categories=("Dual Screen",), eligibility=frozenset({Variant.DUAL})
+    )
+    result = compose([single, dual], [], [], policy=category_policy({}))
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Emulator"],
+        ("x", Variant.DUAL): [],
+    }
+
+
+def test_track_only_rule_reads_settings_after_overlays() -> None:
+    candidate = app("x", categories=("Emulator",))
+    result = compose(
+        [candidate],
+        [],
+        overlays(
+            (candidate.id, candidate.url, {"additionalSettings": {"trackOnly": True}})
+        ),
+        policy=category_policy({"package:x": Category.PC_PORTS}),
+    )
+    assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
+
+
+def test_non_object_settings_after_overlays_are_not_track_only() -> None:
+    candidate = app("x", categories=("Emulator",), additional_settings=TRACK_ONLY)
+    result = compose(
+        [candidate],
+        [],
+        overlays((candidate.id, candidate.url, {"additionalSettings": "broken"})),
+        policy=category_policy({}),
+    )
+    assert set(map(tuple, final_categories(result).values())) == {("Emulator",)}

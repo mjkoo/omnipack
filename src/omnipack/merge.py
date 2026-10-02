@@ -18,7 +18,7 @@ from omnipack.composition_policy import (
     pair_entries,
     rendered_key,
 )
-from omnipack.model import App, Variant
+from omnipack.model import App, Category, Variant
 from omnipack.overlay import (
     ComposedApp,
     OverlayError,
@@ -28,6 +28,8 @@ from omnipack.overlay import (
 )
 
 _PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
+# The source categories an entry that is neither track-only nor mapped keeps.
+_SOURCE_CATEGORIES = frozenset(Category) - {Category.TRACK_ONLY}
 
 
 class CompositionError(ValueError):
@@ -126,6 +128,7 @@ def compose(
             selected[variant] = apply_overlay(selected[variant], patches)
     except OverlayError as error:
         raise CompositionError(str(error)) from error
+    _assign_categories(selected, policy)
     _validate_coverage(selected)
     return CompositionResult(selected, report)
 
@@ -339,6 +342,36 @@ def _validate_pairing(
             f"family {single.family!r} selects single-screen {keys[0]!r} and "
             f"dual-screen {keys[1]!r}, which offline verification cannot pair" + remedy
         )
+
+
+def _assign_categories(
+    apps: dict[Variant, list[ComposedApp]], policy: CompositionPolicy
+) -> set[str]:
+    """Give each selected entry its final categories, returning the map keys used.
+
+    A track-only entry carries exactly Track Only, a mapped family its mapped
+    category, and any other entry the source categories in the closed set
+    other than Track Only, in source order. Overlays cannot patch categories,
+    so nothing after this changes them.
+    """
+    applied: set[str] = set()
+    for values in apps.values():
+        for app in values:
+            settings = app.data.get("additionalSettings")
+            mapped = policy.categories.get(app.family)
+            if isinstance(settings, dict) and settings.get("trackOnly") is True:
+                categories = [Category.TRACK_ONLY]
+            elif mapped is not None:
+                categories = [mapped]
+                applied.add(app.family)
+            else:
+                categories = [
+                    Category(item)
+                    for item in app.data["categories"]
+                    if isinstance(item, str) and item in _SOURCE_CATEGORIES
+                ]
+            app.data["categories"] = [str(item) for item in categories]
+    return applied
 
 
 def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:

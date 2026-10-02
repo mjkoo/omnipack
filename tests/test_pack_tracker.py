@@ -57,7 +57,7 @@ def test_tracker_keeps_its_curated_identity_and_notification_settings(
         entry = next(e for e in document["apps"] if e["id"] == TRACKER_ID)
         assert entry["name"] == "omnipack updates"
         assert entry["url"] == "https://github.com/mjkoo/omnipack"
-        assert entry["categories"] == ["Utilities"]
+        assert entry["categories"] == ["Track Only"]
         assert entry["overrideSource"] == "GitHub"
         # A revision is read from the release title alone, so neither the latest
         # endpoint nor an asset date may decide the version.

@@ -96,6 +96,7 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
             "family",
             "packageId",
             "variant",
+            "categories",
         }.intersection(patch)
         if protected:
             raise OverlayError(

@@ -141,5 +141,9 @@
     {"family":"package:com.github.bvschaik.julius","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.github.bvschaik.julius","url":"https://github.com/bvschaik/julius"},"rationale":"Keep the maintained Julius selection policy."},
     {"family":"package:su.xash.engine.test","variant":"single","match":{"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},"rationale":"Keep the maintained rolling Xash3D selection policy."},
     {"family":"package:su.xash.engine.test","variant":"dual","match":{"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},"rationale":"Keep the maintained rolling Xash3D selection policy."}
-  ]
+  ],
+  "categories": {
+    "package:com.jakobkhansen.silksong": "PC Ports",
+    "package:igawa6.dualsouls": "PC Ports"
+  }
 }
