@@ -27,7 +27,7 @@ from omnipack.report_model import (
 )
 from omnipack.sources import IngestionReport
 
-BUILD_SCHEMA_VERSION = 3
+BUILD_SCHEMA_VERSION = 4
 
 
 class ReportFormatError(ValueError):
@@ -65,6 +65,8 @@ def write_report(
         "denylistRemovals": [_record(item) for item in records.removals],
         "staleExclusions": [_record(item) for item in records.stale_exclusions],
         "selections": [_record(item) for item in records.selections],
+        "uncategorizedFamilies": [_record(item) for item in records.uncategorized],
+        "staleCategoryAssignments": list(records.stale_category_assignments),
         "offlineVerification": offline_verification or not_run_verdict(),
     }
     if error is not None:
@@ -126,6 +128,19 @@ def format_reports(root: Path) -> str:
             if not _strings(item, ("id", "reason")):
                 raise ReportFormatError("malformed build stale exclusion")
             lines.append(f"Stale exclusion: {item['id']}; reason: {item['reason']}")
+        for item in build["uncategorizedFamilies"]:
+            variants = item.get("variants")
+            if not _strings(item, ("family",)) or not (
+                isinstance(variants, list)
+                and variants
+                and all(isinstance(variant, str) for variant in variants)
+            ):
+                raise ReportFormatError("malformed build uncategorized family")
+            lines.append(
+                f"Uncategorized: {item['family']}; variants: {', '.join(variants)}"
+            )
+        for key in build["staleCategoryAssignments"]:
+            lines.append(f"Stale category assignment: {key}")
         for item in build["sourceAdmissions"]:
             if not _strings(item, ("source", "url", "kind", "id")):
                 raise ReportFormatError("malformed build source admission")
@@ -236,6 +251,8 @@ _BUILD_FIELDS = frozenset(
         "denylistRemovals",
         "staleExclusions",
         "selections",
+        "uncategorizedFamilies",
+        "staleCategoryAssignments",
         "offlineVerification",
     }
 )
@@ -245,6 +262,7 @@ _BUILD_RECORD_FIELDS = (
     "denylistRemovals",
     "staleExclusions",
     "selections",
+    "uncategorizedFamilies",
 )
 
 
@@ -290,6 +308,9 @@ def _validate_build_report(value: dict[str, Any]) -> None:
             isinstance(item, dict) for item in records
         ):
             raise ReportFormatError(f"malformed build report {key}")
+    stale = value["staleCategoryAssignments"]
+    if not isinstance(stale, list) or not all(isinstance(key, str) for key in stale):
+        raise ReportFormatError("malformed build report staleCategoryAssignments")
     offline = value["offlineVerification"]
     if (
         not isinstance(offline, dict)

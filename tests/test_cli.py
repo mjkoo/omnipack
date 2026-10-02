@@ -433,6 +433,15 @@ def test_composition_failure_preserves_collected_diagnostics(
                 }
             ],
         ),
+        (
+            "composition.json",
+            {
+                "schemaVersion": 1,
+                "candidates": [],
+                "pins": [],
+                "categories": {"app:absent": "Emulator"},
+            },
+        ),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     apps = [
@@ -493,8 +502,51 @@ def test_composition_failure_preserves_collected_diagnostics(
         for variant in Variant
     ]
     assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
+    # The overlay failed before category assignment ran, so neither category
+    # list holds anything, although assignment would have filled both.
+    assert report["uncategorizedFamilies"] == []
+    assert report["staleCategoryAssignments"] == []
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
+
+
+def test_coverage_failure_preserves_collected_category_lists(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    (tmp_path / "config/composition.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "candidates": [],
+                "pins": [],
+                "categories": {"app:absent": "Emulator"},
+            }
+        ),
+        encoding="utf-8",
+    )
+    single_only = App(
+        "single.app",
+        "https://example.test/single",
+        "Single",
+        SourceType.HTML,
+        ("Dual Screen",),
+        Provenance("rjny", "https://example.test/catalog"),
+        eligibility=frozenset({Variant.SINGLE}),
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [single_only]
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "composition"
+    assert "missing app family" in report["error"]
+    assert report["uncategorizedFamilies"] == [
+        {"family": "package:single.app", "variants": ["single"]}
+    ]
+    assert report["staleCategoryAssignments"] == ["app:absent"]
 
 
 @pytest.mark.parametrize("reverse", [False, True])

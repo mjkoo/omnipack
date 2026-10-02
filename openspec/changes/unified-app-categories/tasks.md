@@ -9,7 +9,7 @@
 
 ## 3. Report
 
-- [ ] 3.1 Record `uncategorizedFamilies` (each family with its variants) and `staleCategoryAssignments` in the build report, bumping the build report schema version together with the two new fields, and render both lists in `pack report`. Verify with report and CLI tests, including that a failed build before composition still writes a valid report, that a build failing before category assignment records both category lists empty alongside the recorded failure and stage while preserving the stale exclusions collected before the failure, that category lists collected before a later failure are preserved, that a report at the previous schema version produces the `pack build` regeneration diagnostic, and that a report whose only non-blocking outcomes are category lists displays them.
+- [x] 3.1 Record `uncategorizedFamilies` (each family with its variants) and `staleCategoryAssignments` in the build report, bumping the build report schema version together with the two new fields, and render both lists in `pack report`. Verify with report and CLI tests, including that a failed build before composition still writes a valid report, that a build failing before category assignment records both category lists empty alongside the recorded failure and stage while preserving the stale exclusions collected before the failure, that category lists collected before a later failure are preserved, that a report at the previous schema version produces the `pack build` regeneration diagnostic, and that a report whose only non-blocking outcomes are category lists displays them.
 
 ## 4. Configuration and outputs
 
