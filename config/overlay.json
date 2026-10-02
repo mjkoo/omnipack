@@ -9,6 +9,13 @@
     }
   },
   {
+    "id": "app.wayfinder",
+    "url": "https://github.com/Thor-Wayfinder/thor-wayfinder",
+    "patch": {
+      "name": "Wayfinder"
+    }
+  },
+  {
     "id": "com.aure.banjorecomp",
     "url": "https://github.com/AurelioB/BanjoRecomp-Android",
     "patch": {
