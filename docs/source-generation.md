@@ -74,7 +74,8 @@ blocks the run visibly.
 exceptions in `projects`, and reasoned discovery `skips`. An omitted project rule
 uses stable APK discovery. Exceptions may set a port name, a category
 (`Decomps/Recomps`, the default, or `PC Ports`), prerelease selection or supported
-filename/release filters. Quiver supports APK entries only.
+filename/release filters. A family's key in the composition
+[category map](composition.md#categories) overrides that category. Quiver supports APK entries only.
 All selected APK manifests must be readable and agree on one package ID. Upstream
 `project` names the port; the game title and upstream asset filters do not control
 admission or consumer filtering. Duplicate upstream filter disagreement is a

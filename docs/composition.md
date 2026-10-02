@@ -73,7 +73,10 @@ competes with the other builds of its family through the rules above.
 ## Candidate policy
 
 `config/composition.json` requires integer `schemaVersion: 1`, `candidates` and
-`pins` arrays. Unknown fields and invalid selectors fail. Candidate rules require
+`pins` arrays, and accepts an optional [`categories`](#categories) object.
+Unknown fields and invalid selectors fail, and so does a JSON object key repeated
+anywhere in the file, which `pack build`, `pack verify` and the offline gate all
+reject naming the key rather than letting one occurrence win. Candidate rules require
 `match` and a nonempty rationale; the optional changes are `family` and
 `packageId`. A rule cannot set eligibility or dual preference, which come only
 from the build's source.
@@ -118,6 +121,53 @@ build's rule, or another rule at its effective id and URL, assigns an `app:`
 family, a pin naming a different family fails when the policy loads; any other
 pin names the family its candidate forms, which the build checks.
 
+## Categories
+
+Every category in a pack comes from one fixed set, spelled as RJNY and BBoi
+spell them so that imported categories merge with the ones users already have:
+Emulator, PC Emulation, Decomps/Recomps, PC Ports, Frontend, Utilities,
+Streaming and Track Only.
+
+The policy's optional `categories` object maps a family name, `package:<id>` or
+`app:<name>`, to one category from the set other than Track Only:
+
+```json
+"categories": {
+  "app:ctr": "Decomps/Recomps",
+  "package:igawa6.dualsouls": "PC Ports"
+}
+```
+
+A value outside those seven categories, a non-string value, or a key that is not
+a family name fails policy loading with the key identified.
+
+After overlays apply, every selected entry in each pack gets its categories in
+this order:
+
+1. An entry whose final settings carry `trackOnly: true` carries exactly Track
+   Only, whatever its source or the map says.
+2. Otherwise, an entry whose family the map names carries exactly the mapped
+   category.
+3. Otherwise, the entry keeps the categories its source supplied that belong to
+   the set, other than Track Only, in source order. Anything else, such as
+   BBoi's Dual Screen, is dropped, and an entry left with none carries no
+   category.
+
+The map is keyed by family, so a mapping survives a fork switch and covers both
+packs. Only map an app whose source categories are missing or wrong; most
+sources already use the set's spellings. Overlays cannot set categories.
+
+Neither outcome below fails the build; the build report lists both, and
+`pack report` displays them:
+
+- `uncategorizedFamilies`: each family whose selected entry ended with no
+  category, naming exactly the packs where that happened. Each pack selects its
+  own winner, so a family can be uncategorized in dual only. Such an entry
+  renders under "Other" in that pack. Add a `categories` key for the family.
+- `staleCategoryAssignments`: each map key that set no selected entry's
+  category, because no pack selects that family or every selected entry of it
+  is track-only. Remove or correct the key, for example after a family rename.
+
 ## Denials and patches
 
 Each denylist record contains exactly an effective package `id` and a `reason`,
@@ -134,9 +184,10 @@ entry fail, so a fork switch must deliberately update its patches.
 
 Patches retain recursive JSON Merge Patch, including null deletion of allowed
 fields. The protected fields are exactly `id`, `url`, `overrideSource`, `family`,
-`packageId` and `variant`; patches cannot assign or delete them, including by
-null deletion. Every other field is patchable. Whole-app removal uses the
-denylist. A non-array overlay fails with an array-shape error.
+`packageId`, `variant` and `categories`; patches cannot assign or delete them,
+including by null deletion. Every other field is patchable. Whole-app removal
+uses the denylist, and categories use the [category map](#categories). A
+non-array overlay fails with an array-shape error.
 
 Valid denylist and overlay records are arrays whose selectors are explicit:
 
@@ -165,20 +216,23 @@ Otherwise the build fails naming the family and both entries, asking for a
 
 ## Build report
 
-Build reports use schema 3. `changes` lists the package ids added and removed in
+Build reports use schema 4. `changes` lists the package ids added and removed in
 each pack since the previous output. `selections` records every family's winner
 in each pack, the other available candidates it was chosen over, and one reason:
 `pin`, `dual-preferred`, `ordinary-fallback` (dual with no available dual-screen
 build), or `source` (single-screen precedence). `denylistRemovals` and
 `staleExclusions` list what each denial removed or failed to match.
 `sourceAdmissions` lists each committed codm and Quiver entry the build
-admitted, with its source, id, URL and whether it is an APK or track-only entry,
-and `offlineVerification` holds the offline gate's status and findings.
+admitted, with its source, id, URL and whether it is an APK or track-only entry.
+`uncategorizedFamilies` and `staleCategoryAssignments` are the
+[category outcomes](#categories); a build that fails before categories are
+assigned records both empty, while its stage and error say the check did not
+run. `offlineVerification` holds the offline gate's status and findings.
 Selection records use snake_case field names:
 
 ```json
 {
-  "schemaVersion": 3,
+  "schemaVersion": 4,
   "status": "success",
   "changes": {"single": {"added": ["org.example.app"], "removed": []}, "dual": {"added": ["org.example.app"], "removed": []}},
   "selections": [{
@@ -194,7 +248,7 @@ Selection records use snake_case field names:
 The example is abridged; the other build fields remain present in the full
 report. A considered candidate records its identity, not why it lost; compare a
 losing candidate's settings with the winner's by reading the source catalogs.
-`pack report` reads only schema 3 build reports; an older report must be
+`pack report` reads only schema 4 build reports; an older report must be
 regenerated with `pack build`.
 
 Offline verification pairs entries without provenance, as described above. It
