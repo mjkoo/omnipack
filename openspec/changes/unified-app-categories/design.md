@@ -88,9 +88,14 @@ the track-only rule.
 
 ## Migration Plan
 
-1. Land the code, then the seeded map. Remove the two overlay category patches
-   in the same commit, because the protected-field check would otherwise fail
-   the build.
+1. Land category assignment first. Then, in one commit, add `categories` to the
+   overlay's protected fields, strip only the `categories` key from the two
+   overlay records that carry it (`igawa6.dualsouls` and
+   `com.jakobkhansen.silksong`, keeping their other patched fields such as
+   `name` and `additionalSettings.about`), and map both families to PC Ports,
+   because the protected-field check would otherwise fail `pack build`,
+   `pack verify` and the committed-configuration tests. Seed the remaining
+   map keys afterwards.
 2. Rebuild the packs and check the report's uncategorized list is empty.
    Check that no entry is added or removed and package ids are unchanged; that,
    matching entries by id, only `categories` changes; and that otherwise only

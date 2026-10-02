@@ -15,7 +15,7 @@ categories stop depending on which source supplied a build.
   Track Only.
 - `config/composition.json` gains an optional `categories` object that maps an
   app family (`package:<id>` or `app:<name>`) to one category from the set.
-  An unknown category fails policy loading.
+  An unknown category or a family key listed twice fails policy loading.
 - After overlays apply, each selected entry gets its categories:
   - A track-only entry gets exactly "Track Only".
   - Otherwise, a mapped family gets its mapped category.
@@ -26,8 +26,9 @@ categories stop depending on which source supplied a build.
   category in any variant, naming those variants, and any map keys that name
   no selected family.
 - **BREAKING (owner config):** overlay patches can no longer set `categories`.
-  The two existing category patches move into the map, which is seeded so
-  every selected entry resolves to a category.
+  The two existing category patches move into the map in the same commit that
+  protects the field, and the map is then seeded so every selected entry
+  resolves to a category.
 - The omnipack notification tracker changes from Utilities to Track Only,
   following the track-only rule.
 - Retired:

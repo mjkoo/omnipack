@@ -7,8 +7,9 @@ Decomps/Recomps, PC Ports, Frontend, Utilities, Streaming and Track Only. The
 composition policy SHALL accept an optional `categories` object mapping a
 family name to one category of that set other than Track Only, which only
 track-only entries carry; a value outside those categories, a non-string value,
-or a key that is not a `package:` or `app:` family name SHALL fail policy
-loading with the key identified.
+a key that is not a `package:` or `app:` family name, or a family key that
+appears more than once in the object SHALL fail policy loading with the key
+identified, rather than one occurrence silently taking effect.
 
 After overlays apply, the system SHALL assign each selected entry's categories
 in every variant:
@@ -73,6 +74,13 @@ family SHALL NOT fail the build.
 
 - **WHEN** the map assigns a family a category that is not in the set
 - **THEN** policy loading fails with that family identified
+
+#### Scenario: A family key repeated in the map fails policy loading
+
+- **WHEN** the `categories` object lists the same family key twice, whether
+  with the same or different categories
+- **THEN** policy loading fails with that family key identified, and no entry
+  is categorized from either occurrence
 
 #### Scenario: Track Only is reserved for track-only entries
 
