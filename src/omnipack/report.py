@@ -28,6 +28,7 @@ from omnipack.report_model import (
 from omnipack.sources import IngestionReport
 
 BUILD_SCHEMA_VERSION = 4
+_VARIANT_VALUES = frozenset(variant.value for variant in Variant)
 
 
 class ReportFormatError(ValueError):
@@ -130,14 +131,13 @@ def format_reports(root: Path) -> str:
             if not _strings(item, ("id", "reason")):
                 raise ReportFormatError("malformed build stale exclusion")
             lines.append(f"Stale exclusion: {item['id']}; reason: {item['reason']}")
-        known_variants = {variant.value for variant in Variant}
         for item in build["uncategorizedFamilies"]:
             variants = item.get("variants")
             if not _strings(item, ("family",)) or not (
                 isinstance(variants, list)
                 and variants
                 and all(
-                    isinstance(variant, str) and variant in known_variants
+                    isinstance(variant, str) and variant in _VARIANT_VALUES
                     for variant in variants
                 )
             ):
@@ -296,7 +296,7 @@ def _validate_build_report(value: dict[str, Any]) -> None:
     changes = value["changes"]
     if changes is not None and not (
         isinstance(changes, dict)
-        and set(changes) == {variant.value for variant in Variant}
+        and set(changes) == _VARIANT_VALUES
         and all(
             isinstance(item, dict)
             and set(item) == {"added", "removed"}
