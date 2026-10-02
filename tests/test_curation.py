@@ -217,3 +217,5 @@ def test_current_composition_categorizes_every_entry_from_the_taxonomy(
         for app in values:
             assert app.data["categories"]
             assert set(app.data["categories"]) <= set(Category)
+            track_only = app.data["additionalSettings"].get("trackOnly") is True
+            assert (app.data["categories"] == [Category.TRACK_ONLY]) == track_only

@@ -67,7 +67,8 @@ def build_current_configuration() -> CurrentConfiguration:
         *quiver.fetch(ROOT, sources["quiver"]),
     ]
     candidates = [*higher, *generated]
-    policy = load_json(ROOT / "config/composition.json")
+    composition = (ROOT / "config/composition.json").read_bytes()
+    policy = json.loads(composition)
     denials = load_json(ROOT / "config/deny.json")
     overlay = load_json(ROOT / "config/overlay.json")
     catalog = load_json(ROOT / sources["codm"]["catalog"])
@@ -75,7 +76,7 @@ def build_current_configuration() -> CurrentConfiguration:
         candidates,
         denials,
         overlay,
-        policy=load_composition_policy((ROOT / "config/composition.json").read_bytes()),
+        policy=load_composition_policy(composition),
     )
     return CurrentConfiguration(
         extras,

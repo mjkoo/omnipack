@@ -410,6 +410,15 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     }
 
 
+# A category key no build can satisfy, so assignment always reports it stale.
+ABSENT_CATEGORY_POLICY = {
+    "schemaVersion": 1,
+    "candidates": [],
+    "pins": [],
+    "categories": {"app:absent": "Emulator"},
+}
+
+
 def test_composition_failure_preserves_collected_diagnostics(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -433,15 +442,7 @@ def test_composition_failure_preserves_collected_diagnostics(
                 }
             ],
         ),
-        (
-            "composition.json",
-            {
-                "schemaVersion": 1,
-                "candidates": [],
-                "pins": [],
-                "categories": {"app:absent": "Emulator"},
-            },
-        ),
+        ("composition.json", ABSENT_CATEGORY_POLICY),
     ):
         (config / name).write_text(json.dumps(value), encoding="utf-8")
     apps = [
@@ -515,14 +516,7 @@ def test_coverage_failure_preserves_collected_category_lists(
 ) -> None:
     write_config(tmp_path)
     (tmp_path / "config/composition.json").write_text(
-        json.dumps(
-            {
-                "schemaVersion": 1,
-                "candidates": [],
-                "pins": [],
-                "categories": {"app:absent": "Emulator"},
-            }
-        ),
+        json.dumps(ABSENT_CATEGORY_POLICY),
         encoding="utf-8",
     )
     single_only = App(

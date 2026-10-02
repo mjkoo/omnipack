@@ -515,6 +515,14 @@ def test_malformed_diagnostic_elements_raise_report_format_error(
         format_reports(tmp_path)
 
 
+def test_stale_category_assignments_must_be_a_list(tmp_path: Path) -> None:
+    from omnipack.report import ReportFormatError
+
+    build_report(tmp_path, staleCategoryAssignments="app:x")
+    with pytest.raises(ReportFormatError, match="staleCategoryAssignments"):
+        format_reports(tmp_path)
+
+
 def test_category_lists_alone_are_displayed(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,

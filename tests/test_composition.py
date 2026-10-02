@@ -96,6 +96,21 @@ def ids(result: CompositionResult, variant: Variant) -> set[str]:
     return {item.id for item in result.apps[variant]}
 
 
+def category_policy(categories: dict[str, Category]) -> CompositionPolicy:
+    return CompositionPolicy((), (), {}, {}, categories)
+
+
+def final_categories(result: CompositionResult) -> dict[tuple[str, Variant], list[str]]:
+    return {
+        (item.id, variant): item.data["categories"]
+        for variant, values in result.apps.items()
+        for item in values
+    }
+
+
+TRACK_ONLY: dict[str, object] = {"trackOnly": True}
+
+
 def compose(
     candidates: list[App],
     denylist: list[dict[str, str]],
@@ -1024,21 +1039,6 @@ def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
     ]
 
 
-def category_policy(categories: dict[str, Category]) -> CompositionPolicy:
-    return CompositionPolicy((), (), {}, {}, categories)
-
-
-def final_categories(result: CompositionResult) -> dict[tuple[str, Variant], list[str]]:
-    return {
-        (item.id, variant): item.data["categories"]
-        for variant, values in result.apps.items()
-        for item in values
-    }
-
-
-TRACK_ONLY: dict[str, object] = {"trackOnly": True}
-
-
 def test_mapped_family_carries_its_category_in_every_variant() -> None:
     result = compose(
         [app("x", categories=("Dual Screen",))],
@@ -1052,6 +1052,30 @@ def test_mapped_family_carries_its_category_in_every_variant() -> None:
     }
 
 
+def test_explicit_family_key_categorizes_both_of_its_package_ids() -> None:
+    single = app("x.single", eligibility=frozenset({Variant.SINGLE}))
+    dual = app(
+        "x.dual",
+        "bboi",
+        categories=("Dual Screen",),
+        eligibility=frozenset({Variant.DUAL}),
+    )
+    policy = parse_composition_policy(
+        {
+            "schemaVersion": 1,
+            "candidates": [family_rule(single, "app:x"), family_rule(dual, "app:x")],
+            "pins": [],
+            "categories": {"app:x": "PC Ports"},
+        }
+    )
+    result = compose([single, dual], [], [], policy=policy)
+    assert final_categories(result) == {
+        ("x.single", Variant.SINGLE): ["PC Ports"],
+        ("x.dual", Variant.DUAL): ["PC Ports"],
+    }
+    assert result.report.stale_category_assignments == []
+
+
 @pytest.mark.parametrize("mapped", [False, True])
 @pytest.mark.parametrize("source", [(), ("Utilities", "Dual Screen")])
 def test_track_only_entry_carries_exactly_track_only(
@@ -1060,7 +1084,10 @@ def test_track_only_entry_carries_exactly_track_only(
     tracker = app("1", categories=source, additional_settings=TRACK_ONLY)
     categories = {"package:1": Category.EMULATOR} if mapped else {}
     result = compose([tracker], [], [], policy=category_policy(categories))
-    assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
+    assert final_categories(result) == {
+        ("1", Variant.SINGLE): ["Track Only"],
+        ("1", Variant.DUAL): ["Track Only"],
+    }
     assert result.report.uncategorized_families == []
 
 
@@ -1074,9 +1101,12 @@ def test_unmapped_entry_keeps_allowed_source_categories_in_source_order() -> Non
         [],
         policy=category_policy({}),
     )
-    categories = final_categories(result)
-    assert categories[("x", Variant.SINGLE)] == ["Frontend", "Emulator"]
-    assert categories[("y", Variant.DUAL)] == ["Emulator"]
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Frontend", "Emulator"],
+        ("x", Variant.DUAL): ["Frontend", "Emulator"],
+        ("y", Variant.SINGLE): ["Emulator"],
+        ("y", Variant.DUAL): ["Emulator"],
+    }
 
 
 def test_unmapped_entry_with_no_allowed_category_builds_without_one() -> None:
@@ -1086,7 +1116,12 @@ def test_unmapped_entry_with_no_allowed_category_builds_without_one() -> None:
         [],
         policy=category_policy({}),
     )
-    assert set(map(tuple, final_categories(result).values())) == {()}
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): [],
+        ("x", Variant.DUAL): [],
+        ("y", Variant.SINGLE): [],
+        ("y", Variant.DUAL): [],
+    }
     both = (Variant.SINGLE, Variant.DUAL)
     assert result.report.uncategorized_families == [
         UncategorizedFamily("package:x", both),
@@ -1114,12 +1149,14 @@ def test_track_only_rule_reads_settings_after_overlays() -> None:
     result = compose(
         [candidate],
         [],
-        overlays(
-            (candidate.id, candidate.url, {"additionalSettings": {"trackOnly": True}})
-        ),
+        overlays((candidate.id, candidate.url, {"additionalSettings": TRACK_ONLY})),
         policy=category_policy({"package:x": Category.PC_PORTS}),
     )
-    assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Track Only"],
+        ("x", Variant.DUAL): ["Track Only"],
+    }
+    assert result.report.stale_category_assignments == ["package:x"]
 
 
 def test_non_object_settings_after_overlays_are_not_track_only() -> None:
@@ -1130,7 +1167,10 @@ def test_non_object_settings_after_overlays_are_not_track_only() -> None:
         overlays((candidate.id, candidate.url, {"additionalSettings": "broken"})),
         policy=category_policy({}),
     )
-    assert set(map(tuple, final_categories(result).values())) == {("Emulator",)}
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Emulator"],
+        ("x", Variant.DUAL): ["Emulator"],
+    }
 
 
 def test_category_keys_that_set_no_selected_category_are_stale() -> None:

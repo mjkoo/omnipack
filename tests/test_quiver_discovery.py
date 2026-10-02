@@ -65,8 +65,6 @@ def test_policy_defaults_and_rejects_invalid_rules_before_requests() -> None:
     for invalid in (
         {"projects": {"github.com/o/repo": {"kind": "apk"}}},
         {"projects": {"github.com/o/repo": {"category": "Emulators"}}},
-        {"projects": {"github.com/o/repo": {"category": "Emulator"}}},
-        {"projects": {"github.com/o/repo": {"category": "Track Only"}}},
         {"projects": {"github.com/o/repo": {"name": " "}}},
         {
             "projects": {
@@ -78,6 +76,9 @@ def test_policy_defaults_and_rejects_invalid_rules_before_requests() -> None:
     ):
         with pytest.raises(ValueError):
             parse_quiver_policy({"schemaVersion": 1, "projects": {}, **invalid})
+    for category in ("Emulator", "Track Only"):
+        with pytest.raises(ValueError, match="category must be one of"):
+            policy(projects={"github.com/o/repo": {"category": category}})
 
 
 def test_discovery_collapses_renames_preserves_provenance_and_filter_diagnostic() -> (
