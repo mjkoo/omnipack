@@ -4,7 +4,7 @@
     "url": "https://github.com/utkarshdalal/GameNative",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^gamenative-v[0-9.]+[.]apk$"
+        "apkFilterRegEx": "^(?!.*-legacy-xr[.]apk$).*[.]apk$"
       }
     }
   },
@@ -106,7 +106,7 @@
     "url": "https://github.com/moonlight-stream/moonlight-android",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^app-nonRoot-release[.]apk$"
+        "apkFilterRegEx": "^(?!app-root-).*[.]apk$"
       }
     }
   },
@@ -115,7 +115,7 @@
     "url": "https://github.com/Baggio94/SleepManager",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^SleepManager-[0-9.]+[.]apk$"
+        "apkFilterRegEx": "^(?!SleepManager-Helper-).*[.]apk$"
       }
     }
   },
@@ -159,7 +159,7 @@
     "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^vanilla-build[.]apk$",
+        "apkFilterRegEx": "vanilla",
         "versionDetection": false
       }
     }
@@ -190,7 +190,7 @@
     "url": "https://github.com/Ashnar2602/X360-Mobile---OFFICIAL",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^x360-mobile-[0-9.]+[.]apk$"
+        "apkFilterRegEx": "^(?!x360-companion-).*[.]apk$"
       }
     }
   },
@@ -231,7 +231,7 @@
     "url": "https://github.com/citron-neo/emulator",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^app-mainline-release[.]apk$",
+        "apkFilterRegEx": "^(?!.*8[.]Elite).*[.]apk$",
         "versionDetection": false
       }
     }

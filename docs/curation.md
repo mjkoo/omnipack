@@ -125,7 +125,8 @@ LEGO Island Portable (isle-portable) publishes every build under one rolling
 `versionDetection: false`; Obtainium treats the two as mutually exclusive.
 Silent Hill Decomp replaces the assets of one long-lived `crossplatform-beta`
 release without republishing it, so it also sets
-`useLatestAssetDateAsReleaseDate: true`.
+`useLatestAssetDateAsReleaseDate: true`. That date covers every asset, so an
+upload of only another platform's build also registers as an update.
 
 Where a release carries APKs for different apps or a different device's build
 beside the intended one, an overlay filter selects the intended asset by name.
@@ -136,7 +137,19 @@ declare their own packages), GameNative keeps the non-XR build, and Citron
 keeps the mainline build rather than the Snapdragon 8 Elite build. Releases
 whose APKs are alternative builds of one app for different Android versions,
 regions or preferences, such as ARMSX2, Citra MMJ and Simpsons Hit and Run,
-keep every alternative, so Obtainium asks which one to install.
+keep every alternative, so Obtainium asks which one to install. Filters exclude
+the unwanted asset rather than spell out the wanted name, so an upstream rename
+surfaces as an install prompt instead of a silent fallback to an older release.
+
+Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) carries a package ID
+correction to `com.winlator.vanilla` and selects the asset whose name contains
+`vanilla`. Its [releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
+ship three builds: the vanilla build declares `com.winlator.vanilla`, the package
+RJNY's `bionic-vanilla` filter installed through v3.1.h, while the Ludashi and
+Redmagic builds declare other apps' package names (`com.ludashi.benchmark` and
+`com.tencent.ig`) to trigger vendor performance profiles. The v3.1.h, v4.0 and
+v4.1 vanilla APKs share one signing certificate and versionCode 20, so the
+vanilla build continues an existing installation.
 
 ## Manifest evidence
 
@@ -226,16 +239,6 @@ corrects Symphony and Shipwright plus the other reviewed installed identities,
 replaces Ghostship with its official Android release, and removes retired Super
 Metroid. Its reputation-plus-basic-vetting policy retains Symphony and OpenMW-DS.
 An identity correction does not itself require replacing an installed APK.
-
-Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) carries a package ID
-correction to `com.winlator.vanilla` and selects `vanilla-build.apk`. Its
-[releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases) ship three
-builds: the vanilla build declares `com.winlator.vanilla`, the package RJNY's
-`bionic-vanilla` filter installed through v3.1.h, while the Ludashi and Redmagic
-builds declare other apps' package names (`com.ludashi.benchmark` and
-`com.tencent.ig`) to trigger vendor performance profiles. The v3.1.h, v4.0 and
-v4.1 vanilla APKs share one signing certificate and versionCode 20, so the
-vanilla build continues an existing installation.
 
 [XenDroid releases](https://github.com/rfandango/XenDroid/releases) exposed
 XenDroid-c4f6863 during refresh; its inspected manifest has the matching hash

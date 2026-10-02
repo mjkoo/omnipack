@@ -34,8 +34,8 @@ SOURCE_IDS = {
 }
 NUMERIC_IDS = {"com.aure.banjorecomp", "com.sergiomanzur.sotnrecomp"}
 APK_FILTERS = {
-    "org.citron.citron_emu": "^app-mainline-release[.]apk$",
-    "com.winlator.ludashi": "^vanilla-build[.]apk$",
+    "org.citron.citron_emu": "^(?!.*8[.]Elite).*[.]apk$",
+    "com.winlator.ludashi": "vanilla",
 }
 
 

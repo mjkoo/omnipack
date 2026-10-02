@@ -156,6 +156,7 @@ reports. Package/family uniqueness is enforced after correction.
 | KartPad | `com.chrissotraidis.kartpad` | `dev.kartpad.android` |
 | Silent Hill Decomp | `com.slickamogus.silenthill` | `com.silenthill.port` |
 | Zelda: Twilight Princess (Dusklight) | `com.twilitrealm.dusklight` | `dev.twilitrealm.dusk` |
+| Winlator-Ludashi | `com.winlator.ludashi` | `com.winlator.vanilla` |
 
 ## CTR release and manifest evidence
 
