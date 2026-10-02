@@ -9,7 +9,7 @@ from typing import Any
 
 import pytest
 
-from omnipack.composition_policy import parse_composition_policy
+from omnipack.composition_policy import load_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App
 from omnipack.sources import bboi, codm, quiver, rjny
@@ -75,7 +75,7 @@ def build_current_configuration() -> CurrentConfiguration:
         candidates,
         denials,
         overlay,
-        policy=parse_composition_policy(policy),
+        policy=load_composition_policy((ROOT / "config/composition.json").read_bytes()),
     )
     return CurrentConfiguration(
         extras,

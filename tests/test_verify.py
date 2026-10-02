@@ -17,7 +17,7 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     assert "complete" not in result
     assert result["mode"] == "offline"
     assert result["schemaVersion"] == 4
-    assert result["verifier"] == {"version": "2.0.0", "scope": "structural"}
+    assert result["verifier"] == {"version": "2.1.0", "scope": "structural"}
     assert set(result["inputs"]) == {
         "single",
         "dual",

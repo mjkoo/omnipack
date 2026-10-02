@@ -65,6 +65,8 @@ def test_policy_defaults_and_rejects_invalid_rules_before_requests() -> None:
     for invalid in (
         {"projects": {"github.com/o/repo": {"kind": "apk"}}},
         {"projects": {"github.com/o/repo": {"category": "Emulators"}}},
+        {"projects": {"github.com/o/repo": {"category": "Emulator"}}},
+        {"projects": {"github.com/o/repo": {"category": "Track Only"}}},
         {"projects": {"github.com/o/repo": {"name": " "}}},
         {
             "projects": {

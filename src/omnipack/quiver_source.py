@@ -10,11 +10,11 @@ import json
 import re
 from collections.abc import Iterable
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Any
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpError, HttpStatusError
+from omnipack.model import Category
 from omnipack.package_id import resolve_release_assets
 from omnipack.project_policy import (
     PolicyError,
@@ -24,6 +24,7 @@ from omnipack.project_policy import (
     repository_url,
 )
 from omnipack.source_http import GenerationHttp
+from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 
 MAX_CATALOG_BYTES = 2_000_000
 _PAIR = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+\Z")
@@ -51,11 +52,8 @@ def load_quiver_config(value: object) -> QuiverConfig:
     return QuiverConfig(index, catalog, policy)
 
 
-class Category(StrEnum):
-    """Pack categories a Quiver entry may be filed under."""
-
-    DECOMPS = "Decomps/Recomps"
-    PC_PORTS = "PC Ports"
+QUIVER_CATEGORIES = (Category.DECOMPS, Category.PC_PORTS)
+"""The pack categories a Quiver entry may be filed under."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -106,7 +104,9 @@ class QuiverPolicy:
 def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
     if isinstance(data, bytes):
         try:
-            data = json.loads(data, object_pairs_hook=_unique_policy_object)
+            data = json.loads(data, object_pairs_hook=reject_duplicate_keys)
+        except DuplicateKeyError as error:
+            raise PolicyError(f"quiver policy has a {error}") from error
         except (UnicodeDecodeError, json.JSONDecodeError) as error:
             raise PolicyError(f"quiver policy is not valid JSON: {error}") from error
     if not isinstance(data, dict) or set(data) - {"schemaVersion", "projects", "skips"}:
@@ -129,12 +129,12 @@ def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
             raise PolicyError(f"duplicate normalized quiver project URL {url}")
         if set(raw_rule) - {"name", "category", "additionalSettings"}:
             raise PolicyError(f"{url}: unsupported quiver project rule field")
-        try:
-            categories[url] = Category(raw_rule.get("category", Category.DECOMPS))
-        except ValueError as error:
+        category = raw_rule.get("category", Category.DECOMPS)
+        if category not in QUIVER_CATEGORIES:
             raise PolicyError(
-                f"{url}: category must be one of {[str(c) for c in Category]}"
-            ) from error
+                f"{url}: category must be one of {[str(c) for c in QUIVER_CATEGORIES]}"
+            )
+        categories[url] = Category(category)
         project_rules[url] = {
             "kind": "apk",
             **{k: v for k, v in raw_rule.items() if k != "category"},
@@ -195,15 +195,6 @@ def _skip_key(skip: QuiverSkip) -> tuple[str, ...]:
             return (url,)
         case RepositorySkip(repository=repository, repository_source=source):
             return (repository, source or "")
-
-
-def _unique_policy_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise PolicyError(f"duplicate quiver policy JSON key {key!r}")
-        result[key] = value
-    return result
 
 
 @dataclass(frozen=True, slots=True)

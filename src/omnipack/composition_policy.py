@@ -5,10 +5,11 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, replace
+from dataclasses import dataclass, field, replace
 from typing import Any
 
-from omnipack.model import App, Variant
+from omnipack.model import App, Category, Variant
+from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 from omnipack.urls import normalize_project_url
 
 RenderedKey = tuple[str, str]
@@ -32,6 +33,9 @@ _SOURCE_ORIGINS = {
     "codm2000": frozenset({"codm-generated"}),
     "quiver": frozenset({"quiver-generated"}),
 }
+
+
+_FAMILY = re.compile(r"(?:app|package):[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 class CompositionPolicyError(ValueError):
@@ -74,6 +78,8 @@ class CompositionPolicy:
     # builds end up with. Identity-only rules project nothing.
     projections: dict[RenderedKey, str]
     projected_pins: dict[PinKey, RenderedKey]
+    # The one category each named family carries unless its entry is track-only.
+    categories: dict[str, Category] = field(default_factory=dict)
 
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
@@ -230,7 +236,7 @@ def _pairing(
 
 def parse_composition_policy(document: object) -> CompositionPolicy:
     root = _object(document, "composition policy")
-    _fields(root, {"schemaVersion", "candidates", "pins"}, "policy")
+    _fields(root, {"schemaVersion", "candidates", "pins", "categories"}, "policy")
     if type(root.get("schemaVersion")) is not int or root["schemaVersion"] != 1:
         raise CompositionPolicyError("schemaVersion must be integer 1")
     candidates_raw = _array(root.get("candidates"), "candidates")
@@ -277,17 +283,22 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
                 f"with projected family {projected!r}"
             )
         projected_pins[key] = pinned
-    return CompositionPolicy(rules, pins, projections, projected_pins)
+    categories = _parse_categories(root.get("categories", {}))
+    return CompositionPolicy(rules, pins, projections, projected_pins, categories)
 
 
 def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
-    """Decode policy JSON and apply the same strict shared interpretation."""
+    """Decode policy JSON and apply the same strict shared interpretation.
+
+    This is the one decoder of the policy file, so every command that loads it
+    rejects a repeated object key rather than letting one occurrence win.
+    """
     try:
-        document = json.loads(data)
+        document = json.loads(data, object_pairs_hook=reject_duplicate_keys)
+    except DuplicateKeyError as error:
+        raise CompositionPolicyError(str(error)) from error
     except (json.JSONDecodeError, UnicodeDecodeError) as error:
-        raise CompositionPolicyError(
-            f"composition policy is invalid JSON: {error}"
-        ) from error
+        raise CompositionPolicyError(f"invalid JSON: {error}") from error
     return parse_composition_policy(document)
 
 
@@ -475,6 +486,24 @@ def _parse_rule(value: object, index: int) -> CandidateRule:
     return CandidateRule(selector, rationale, family, package_id)
 
 
+def _parse_categories(value: object) -> dict[str, Category]:
+    record = _object(value, "categories")
+    assignable = [category for category in Category if category != Category.TRACK_ONLY]
+    result: dict[str, Category] = {}
+    for key, category in record.items():
+        if _FAMILY.fullmatch(key) is None:
+            raise CompositionPolicyError(
+                f"categories key {key!r} is not an app: or package: family name"
+            )
+        if category not in assignable:
+            raise CompositionPolicyError(
+                f"categories[{key!r}] must be one of "
+                f"{[str(item) for item in assignable]}, not {category!r}"
+            )
+        result[key] = Category(category)
+    return result
+
+
 def _parse_pin(value: object, index: int) -> Pin:
     record = _object(value, f"pins[{index}]")
     _fields(record, {"family", "variant", "match", "rationale"}, f"pins[{index}]")
@@ -515,10 +544,7 @@ def _selector(value: object, label: str) -> CandidateSelector:
 def _family(value: object, *, explicit_only: bool) -> str:
     family = _text(value, "family")
     prefixes = ("app:",) if explicit_only else ("app:", "package:")
-    if (
-        not family.startswith(prefixes)
-        or re.fullmatch(r"(?:app|package):[A-Za-z0-9][A-Za-z0-9._-]*", family) is None
-    ):
+    if not family.startswith(prefixes) or _FAMILY.fullmatch(family) is None:
         expected = "app:" if explicit_only else "app: or package:"
         raise CompositionPolicyError(f"family must use a nonempty {expected} namespace")
     return family

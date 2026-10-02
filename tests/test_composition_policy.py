@@ -17,7 +17,7 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import _import_data
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Category, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import render
 
@@ -648,3 +648,51 @@ def test_repeated_ids_and_families_leave_their_entries_unpaired() -> None:
             ("dup",), {"app:x": (key("a"), key("b"))}
         )
     assert find_repeats(parsed, dual) == Repeats((), {})
+
+
+def test_category_map_assigns_one_category_per_family() -> None:
+    parsed = parse_composition_policy(
+        policy(categories={"app:ctr": "Decomps/Recomps", "package:org.x": "PC Ports"})
+    )
+    assert parsed.categories == {
+        "app:ctr": Category.DECOMPS,
+        "package:org.x": Category.PC_PORTS,
+    }
+    assert parse_composition_policy(policy()).categories == {}
+
+
+@pytest.mark.parametrize(
+    ("categories", "message"),
+    [
+        ({"app:x": "Dual Screen"}, r"categories\['app:x'\].*'Dual Screen'"),
+        ({"app:x": "Track Only"}, r"categories\['app:x'\].*'Track Only'"),
+        ({"app:x": ["PC Ports"]}, r"categories\['app:x'\]"),
+        ({"app:x": None}, r"categories\['app:x'\]"),
+        ({"x": "PC Ports"}, r"categories key 'x' is not"),
+        ({"app:": "PC Ports"}, r"categories key 'app:' is not"),
+        ({"pkg:x": "PC Ports"}, r"categories key 'pkg:x' is not"),
+        (["app:x"], "categories must be an object"),
+    ],
+)
+def test_invalid_category_map_fails_with_the_key_identified(
+    categories: object, message: str
+) -> None:
+    with pytest.raises(CompositionPolicyError, match=message):
+        parse_composition_policy(policy(categories=categories))
+
+
+@pytest.mark.parametrize("second", ["PC Ports", "Emulator"])
+def test_family_key_repeated_in_the_category_map_fails(second: str) -> None:
+    document = (
+        '{"schemaVersion": 1, "candidates": [], "pins": [], "categories": '
+        f'{{"app:x": "PC Ports", "app:x": "{second}"}}}}'
+    )
+    with pytest.raises(CompositionPolicyError, match="duplicate JSON key 'app:x'"):
+        load_composition_policy(document)
+
+
+def test_key_repeated_anywhere_in_the_policy_fails() -> None:
+    document = json.dumps(policy(candidates=[rule()]))
+    repeated = document.replace('"rationale":', '"rationale": "first", "rationale":', 1)
+    with pytest.raises(CompositionPolicyError, match="duplicate JSON key 'rationale'"):
+        load_composition_policy(repeated)

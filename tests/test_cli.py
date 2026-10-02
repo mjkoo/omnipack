@@ -684,7 +684,21 @@ def test_missing_local_input_fails_at_ingestion_before_any_fetch(
     ("policy_bytes", "message"),
     [
         (b"{}", "schemaVersion must be integer 1"),
-        (b"not json", "Expecting value: line 1 column 1 (char 0)"),
+        (b"not json", "invalid JSON: Expecting value: line 1 column 1 (char 0)"),
+        (
+            (
+                b'{"schemaVersion": 1, "candidates": [], "pins": [], '
+                b'"categories": {}, "categories": {}}'
+            ),
+            "duplicate JSON key 'categories'",
+        ),
+        (
+            (
+                b'{"schemaVersion": 1, "pins": [], "candidates": [{"match": {}, '
+                b'"rationale": "a", "rationale": "b"}]}'
+            ),
+            "duplicate JSON key 'rationale'",
+        ),
     ],
 )
 def test_malformed_composition_policy_error_names_its_input(

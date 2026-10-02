@@ -10,6 +10,7 @@ from urllib.parse import urlsplit
 
 from omnipack.model import SourceType
 from omnipack.sources.common import derived_source_type
+from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 from omnipack.urls import normalize_project_url
 
 
@@ -115,22 +116,15 @@ def default_apk_rule() -> ProjectRule:
     return ProjectRule("apk", None, {})
 
 
-def _unique_object(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
-    result: dict[str, Any] = {}
-    for key, value in pairs:
-        if key in result:
-            raise PolicyError(f"duplicate project policy JSON key {key!r}")
-        result[key] = value
-    return result
-
-
 def parse_project_policy(data: bytes | object) -> ProjectPolicy:
     try:
         document = (
-            json.loads(data, object_pairs_hook=_unique_object)
+            json.loads(data, object_pairs_hook=reject_duplicate_keys)
             if isinstance(data, bytes)
             else data
         )
+    except DuplicateKeyError as error:
+        raise PolicyError(f"project policy has a {error}") from error
     except (UnicodeDecodeError, json.JSONDecodeError) as error:
         raise PolicyError(f"project policy is not valid JSON: {error}") from error
     if not isinstance(document, dict) or set(document) != {"schemaVersion", "projects"}:

@@ -30,7 +30,7 @@ from omnipack.report_model import (
 )
 
 SCHEMA_VERSION = 4
-VERIFIER_VERSION = "2.0.0"
+VERIFIER_VERSION = "2.1.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),

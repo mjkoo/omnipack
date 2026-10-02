@@ -79,7 +79,7 @@ def validate_offline(inputs: OfflineInputs) -> tuple[Finding, ...]:
     }
     deny = _decode_snapshot(inputs.deny, "deny", findings)
     overlay = _decode_snapshot(inputs.overlay, "overlay", findings)
-    composition = _decode_snapshot(inputs.composition, "composition", findings)
+    composition = _snapshot_bytes(inputs.composition, "composition", findings)
     for variant, document in documents.items():
         _validate_document(variant, document, findings)
     _validate_composition(deny, overlay, composition, documents, findings)
@@ -91,14 +91,24 @@ def missing_input(name: str) -> Finding:
     return Finding("input", "input_missing", f"{name} input is missing")
 
 
-def _decode_snapshot(value: bytes | None, name: str, findings: list[Finding]) -> object:
+def _snapshot_bytes(
+    value: bytes | None, name: str, findings: list[Finding]
+) -> bytes | None:
+    """The snapshot's bytes, or None after recording why there are none."""
     if value is None:
         findings.append(missing_input(name))
-        return _INVALID
+        return None
     if not isinstance(value, bytes):
         findings.append(
             Finding("input", "input_unreadable", f"{name} input is not bytes")
         )
+        return None
+    return value
+
+
+def _decode_snapshot(value: bytes | None, name: str, findings: list[Finding]) -> object:
+    value = _snapshot_bytes(value, name, findings)
+    if value is None:
         return _INVALID
     try:
         decoded = json.loads(
@@ -414,19 +424,19 @@ def _validate_additional(
 def _validate_composition(
     deny: object,
     overlay: object,
-    composition: object,
+    composition: bytes | None,
     documents: dict[str, object],
     findings: list[Finding],
 ) -> None:
-    if composition is _INVALID:
+    if composition is None:
         return
     from omnipack.composition_policy import (
         CompositionPolicyError,
         RenderedKey,
         entry_family,
         find_repeats,
+        load_composition_policy,
         pair_entries,
-        parse_composition_policy,
         rendered_key,
     )
     from omnipack.merge import CompositionError, parse_exclusions
@@ -434,7 +444,7 @@ def _validate_composition(
     from omnipack.overlay import OverlayError, parse_overlay
 
     try:
-        policy = parse_composition_policy(composition)
+        policy = load_composition_policy(composition)
         if not isinstance(deny, list):
             raise CompositionError("denylist must be a list")
         exclusions = parse_exclusions(deny)

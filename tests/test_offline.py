@@ -90,6 +90,46 @@ def test_missing_snapshots_are_reported(field: str) -> None:
     assert "input_missing" in codes(validate_offline(snapshots))
 
 
+REPEATED_POLICY_KEYS = [
+    pytest.param(
+        b'{"schemaVersion": 1, "candidates": [], "pins": [], '
+        b'"categories": {}, "categories": {}}',
+        "categories",
+        id="categories",
+    ),
+    pytest.param(
+        b'{"schemaVersion": 1, "candidates": [], "pins": [], "categories": '
+        b'{"app:x": "PC Ports", "app:x": "PC Ports"}}',
+        "app:x",
+        id="family-same-category",
+    ),
+    pytest.param(
+        b'{"schemaVersion": 1, "candidates": [], "pins": [], "categories": '
+        b'{"app:x": "PC Ports", "app:x": "Emulator"}}',
+        "app:x",
+        id="family-different-category",
+    ),
+    pytest.param(
+        b'{"schemaVersion": 1, "pins": [], "candidates": [{"match": {}, '
+        b'"rationale": "a", "rationale": "b"}]}',
+        "rationale",
+        id="rule-rationale",
+    ),
+]
+
+
+@pytest.mark.parametrize(("policy", "key"), REPEATED_POLICY_KEYS)
+def test_repeated_policy_key_is_a_config_finding_naming_the_key(
+    policy: bytes, key: str
+) -> None:
+    snapshots = inputs()
+    object.__setattr__(snapshots, "composition", policy)
+    findings = validate_offline(snapshots)
+    assert [(item.code, item.message) for item in findings] == [
+        ("invalid_composition_config", f"duplicate JSON key {key!r}")
+    ]
+
+
 @pytest.mark.parametrize(
     ("document", "code"),
     [

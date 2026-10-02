@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import Enum, StrEnum
 from typing import Any
 
 
@@ -20,6 +20,23 @@ class SourceType(str, Enum):
     GITHUB = "GitHub"
     HTML = "HTML"
     GITLAB = "GitLab"
+
+
+class Category(StrEnum):
+    """The closed set of categories a rendered pack entry may carry.
+
+    The spellings are RJNY's and BBoi's, so imported categories merge with
+    the ones users already have. Only track-only entries carry Track Only.
+    """
+
+    EMULATOR = "Emulator"
+    PC_EMULATION = "PC Emulation"
+    DECOMPS = "Decomps/Recomps"
+    PC_PORTS = "PC Ports"
+    FRONTEND = "Frontend"
+    UTILITIES = "Utilities"
+    STREAMING = "Streaming"
+    TRACK_ONLY = "Track Only"
 
 
 @dataclass(frozen=True, slots=True)
