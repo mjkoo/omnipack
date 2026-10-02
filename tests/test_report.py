@@ -498,6 +498,8 @@ def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
         ("uncategorizedFamilies", {"family": "package:x"}),
         ("uncategorizedFamilies", {"family": "package:x", "variants": []}),
         ("uncategorizedFamilies", {"family": "package:x", "variants": [1]}),
+        ("uncategorizedFamilies", {"family": 7, "variants": ["single"]}),
+        ("uncategorizedFamilies", {"family": "package:x", "variants": ["bogus"]}),
         ("uncategorizedFamilies", "package:x"),
         ("staleCategoryAssignments", 7),
     ],

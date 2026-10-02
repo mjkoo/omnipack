@@ -130,12 +130,16 @@ def format_reports(root: Path) -> str:
             if not _strings(item, ("id", "reason")):
                 raise ReportFormatError("malformed build stale exclusion")
             lines.append(f"Stale exclusion: {item['id']}; reason: {item['reason']}")
+        known_variants = {variant.value for variant in Variant}
         for item in build["uncategorizedFamilies"]:
             variants = item.get("variants")
             if not _strings(item, ("family",)) or not (
                 isinstance(variants, list)
                 and variants
-                and all(isinstance(variant, str) for variant in variants)
+                and all(
+                    isinstance(variant, str) and variant in known_variants
+                    for variant in variants
+                )
             ):
                 raise ReportFormatError("malformed build uncategorized family")
             lines.append(
