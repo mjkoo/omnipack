@@ -17,9 +17,11 @@ for generation, acceptance and output review.
 
   `id`, `url` and `name` are required. `categories` is strongly recommended:
   its first entry sets the generated README catalog heading and sort; missing
-  or empty categories fall back to `Other`. Only [taxonomy](composition.md#categories)
-  values reach a pack; any other value is dropped, and a track-only extra
-  always carries Track Only. Ordinary extras are baseline
+  or empty categories fall back to `Other`. Only
+  [taxonomy](composition.md#categories) values other than Track Only pass
+  through from an extra's categories, and any other value is dropped; a
+  track-only extra always carries Track Only, and a family in the category map
+  takes the mapped category instead. Ordinary extras are baseline
   candidates for both packs; optional `"dualScreen": true` makes one dual-only.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
@@ -137,11 +139,12 @@ build preserves all bytes outside them. The build fetches public catalogs withou
 reads `config/http.json`. Only source generation reads it, so that an optional
 `GITHUB_TOKEN` authenticates its requests to `api.github.com`.
 
-The JSON diagnostics are in `.build/report.json` (schema 3), including each
+The JSON diagnostics are in `.build/report.json` (schema 4), including each
 family's selection with the candidates it was chosen over and the selection
 reason, original and effective package ids, denylist removals and stale
-exclusions, admitted committed candidates with their identities, and the package
-ids added and removed since the previous output. A failed build returns a
+exclusions, uncategorized families and stale category assignments, admitted
+committed candidates with their identities, and the package ids added and
+removed since the previous output. A failed build returns a
 nonzero status and preserves the previous packs and README.
 
 ## Verify and inspect

@@ -138,8 +138,9 @@ The policy's optional `categories` object maps a family name, `package:<id>` or
 }
 ```
 
-A value outside those seven categories, a non-string value, or a key that is not
-a family name fails policy loading with the key identified.
+A value that is not one of the seven categories other than Track Only, a
+non-string value, or a key that is not a family name fails policy loading with
+the key identified.
 
 After overlays apply, every selected entry in each pack gets its categories in
 this order:
@@ -163,7 +164,10 @@ Neither outcome below fails the build; the build report lists both, and
 - `uncategorizedFamilies`: each family whose selected entry ended with no
   category, naming exactly the packs where that happened. Each pack selects its
   own winner, so a family can be uncategorized in dual only. Such an entry
-  renders under "Other" in that pack. Add a `categories` key for the family.
+  carries no category in that pack, and the README catalog lists it under
+  "Other" only when it is the family's presenting entry, which is the
+  single-screen one when the family has one. Add a `categories` key for the
+  family.
 - `staleCategoryAssignments`: each map key that set no selected entry's
   category, because no pack selects that family or every selected entry of it
   is track-only. Remove or correct the key, for example after a family rename.

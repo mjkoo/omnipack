@@ -42,7 +42,8 @@ package IDs; codm and Quiver discovery belong to source generation.
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. A verification report with any schema other than the
 current one requires regeneration with `pack verify`. Build reports must use
-schema 3; any other build report schema requires regeneration with `pack build`.
+the current schema; any other build report schema requires regeneration with
+`pack build`.
 One available report is enough; missing both, corrupt reports and unsupported
 schemas fail display.
 Displaying a recorded failed operation exits successfully.
