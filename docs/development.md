@@ -15,13 +15,13 @@ for generation, acceptance and output review.
   {"id": "org.example.app", "url": "https://github.com/example/app", "name": "Example", "categories": ["PC Ports"]}
   ```
 
-  `id`, `url` and `name` are required. `categories` is strongly recommended:
-  its first entry sets the generated README catalog heading and sort; missing
-  or empty categories fall back to `Other`. Only
-  [taxonomy](composition.md#categories) values other than Track Only pass
+  `id`, `url` and `name` are required. `categories` is strongly recommended.
+  Only [taxonomy](composition.md#categories) values other than Track Only pass
   through from an extra's categories, and any other value is dropped; a
   track-only extra always carries Track Only, and a family in the category map
-  takes the mapped category instead. Ordinary extras are baseline
+  takes the mapped category instead. The first category the entry ends up with
+  sets the generated README catalog heading and sort; an entry left with none
+  falls back to `Other`. Ordinary extras are baseline
   candidates for both packs; optional `"dualScreen": true` makes one dual-only.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
