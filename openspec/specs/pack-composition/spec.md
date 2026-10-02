@@ -144,7 +144,10 @@ the valid range, and it SHALL contain no whitespace. Failure SHALL identify that
 field and the offending value. Corrections SHALL NOT recursively match other
 rules. Unmatched or ambiguous selectors, duplicate selectors, invalid targets,
 unknown fields and inconsistent rules SHALL fail with the affected selector
-identified.
+identified. A JSON object key repeated anywhere in the composition policy, at
+any nesting level, SHALL fail policy loading with the repeated key identified,
+in every command that loads the policy, rather than one occurrence silently
+taking effect.
 
 Candidates SHALL form families transitively from shared identity once identity
 corrections and exclusions apply, over the candidates that survive exclusions
@@ -309,6 +312,13 @@ selection reason it computes into Obtainium app records.
   with a candidate assigned another explicit family
 - **THEN** the build fails with both families and the joining candidates identified
 
+#### Scenario: A key outside the category map is repeated
+
+- **WHEN** an object in the composition policy outside `categories`, such as a
+  candidate rule, repeats a key such as `rationale`
+- **THEN** policy loading fails with that key identified in `pack build`,
+  `pack verify` and the offline gate alike, and neither occurrence takes effect
+
 ### Requirement: Each variant is composed independently
 
 The system SHALL compose the single-screen and dual-screen variants
@@ -326,7 +336,7 @@ The system SHALL normalize candidates, apply identity and family rules, remove
 excluded candidates, form families from shared identity over the surviving
 candidates eligible for at least one variant, validate explicit selections, select by family and target, check
 that each family's selected entries pair, validate overlay targets, apply
-overlays, and check family coverage. Each package id SHALL occur at most once
+overlays, assign categories, and check family coverage. Each package id SHALL occur at most once
 per variant because candidates sharing an effective package id form one family
 and overlays cannot change `id`; no separate uniqueness stage runs, and the
 offline gate reports any repeat. Exclusions SHALL
@@ -334,8 +344,8 @@ observe corrected package identities before selection and SHALL NOT be
 re-applied after overlays. Because a removed candidate belongs to no formed
 family, its exclusion SHALL be reported under `package:<its own effective id>`,
 or under its explicit family when a rule assigns one. Overlays SHALL NOT assign
-or delete `id`, `url`, `overrideSource`, `family`, `packageId` or `variant`,
-including by null deletion. Failures SHALL preserve the previous output pair
+or delete `id`, `url`, `overrideSource`, `family`, `packageId`, `variant` or
+`categories`, including by null deletion. Failures SHALL preserve the previous output pair
 and diagnostics already collected.
 
 #### Scenario: An overlay cannot move an entry onto a denylisted package id
@@ -554,12 +564,12 @@ SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
 The protected patch fields SHALL be exactly `id`, `url`, `overrideSource`,
-`family`, `packageId` and `variant`: a patch SHALL NOT contain any of them with
+`family`, `packageId`, `variant` and `categories`: a patch SHALL NOT contain any of them with
 any value, including null. Every other key SHALL be patchable, and all other
 unpatched data SHALL remain unchanged. Shared settings for distinct project URLs
 SHALL require explicit records for each project; a common package id SHALL NOT
 make a patch transfer to another fork. Whole-app removal SHALL remain the
-denylist's responsibility.
+denylist's responsibility, and categories SHALL remain the category map's.
 
 #### Scenario: Overlay changes a setting
 
@@ -579,7 +589,7 @@ denylist's responsibility.
 #### Scenario: Protected field is assigned or deleted
 
 - **WHEN** a patch contains `id`, `url`, `overrideSource`, `family`,
-  `packageId` or `variant`, with any value including null
+  `packageId`, `variant` or `categories`, with any value including null
 - **THEN** the build fails naming the selector and forbidden field
 
 #### Scenario: Overlay record carries an unknown field
@@ -648,6 +658,109 @@ candidates SHALL NOT satisfy overlay targets.
 
 - **WHEN** a selector's id is absent from both selected outputs
 - **THEN** the build fails with the stale id-and-URL selector
+
+### Requirement: Selected entries carry categories from one closed taxonomy
+
+Every category in a rendered pack SHALL be one of Emulator, PC Emulation,
+Decomps/Recomps, PC Ports, Frontend, Utilities, Streaming and Track Only. The
+composition policy SHALL accept an optional `categories` object mapping a
+family name to one category of that set other than Track Only, which only
+track-only entries carry; a value outside those categories, a non-string value,
+a key that is not a `package:` or `app:` family name, or a family key that
+appears more than once in the object SHALL fail policy loading with the key
+identified, rather than one occurrence silently taking effect.
+
+After overlays apply, the system SHALL assign each selected entry's categories
+in every variant:
+
+- an entry whose final settings carry `trackOnly: true` SHALL carry exactly
+  Track Only;
+- otherwise an entry whose family the map names SHALL carry exactly the mapped
+  category;
+- otherwise the entry SHALL keep the categories its source supplied that belong
+  to the set, other than Track Only, in their source order, and SHALL carry no
+  category when none remain.
+
+An entry is uncategorized when its final category list, after this
+assignment, is empty; a track-only entry is therefore never uncategorized.
+Because each variant selects its own winner, uncategorized SHALL be decided per
+selected entry: a family SHALL be recorded as uncategorized when the selected
+entry of any variant ends with no category, together with exactly the variants
+where that happened. A map key is a stale category assignment when it set no
+selected entry's category: a key naming no family any variant selects, and a
+key whose family's selected entries are all track-only, are both stale. An
+uncategorized entry and a stale category assignment SHALL NOT fail the build.
+
+#### Scenario: A mapped family overrides its source category
+
+- **WHEN** the map assigns a family PC Ports and the selected build's source
+  tags it Dual Screen
+- **THEN** that family's entry carries exactly PC Ports in every variant that
+  selects it
+
+#### Scenario: A track-only entry is Track Only
+
+- **WHEN** a selected entry's final settings carry `trackOnly: true`, whatever
+  its source categories or map value
+- **THEN** it carries exactly Track Only
+
+#### Scenario: An unmapped source category outside the set is dropped
+
+- **WHEN** an unmapped family's selected entry, whose final settings are not
+  track-only, carries Dual Screen and Emulator from its source
+- **THEN** its entry carries Emulator only
+
+#### Scenario: An unmapped entry with no allowed category builds
+
+- **WHEN** an unmapped family's selected entry, whose final settings are not
+  track-only, carries no category from the set
+- **THEN** the build succeeds, the entry carries no category, and its family is
+  recorded as uncategorized for that variant
+
+#### Scenario: An unmapped track-only entry without source categories is categorized
+
+- **WHEN** an unmapped family's selected entry has final settings carrying
+  `trackOnly: true` and its source supplies no category
+- **THEN** the entry carries exactly Track Only and its family is not recorded
+  as uncategorized
+
+#### Scenario: Only one variant's entry ends without a category
+
+- **WHEN** an unmapped family's single-screen entry keeps an allowed source
+  category and its dual-screen entry's source supplies only Dual Screen
+- **THEN** the dual-screen entry carries no category, and the family is
+  recorded as uncategorized naming the dual variant only
+
+#### Scenario: A category outside the set fails policy loading
+
+- **WHEN** the map assigns a family a category that is not in the set
+- **THEN** policy loading fails with that family identified
+
+#### Scenario: A family key repeated in the map fails policy loading
+
+- **WHEN** the `categories` object lists the same family key twice, whether
+  with the same or different categories
+- **THEN** policy loading fails with that family key identified, and no entry
+  is categorized from either occurrence
+
+#### Scenario: Track Only is reserved for track-only entries
+
+- **WHEN** the map assigns a family Track Only, or an unmapped installable
+  entry's source tags it Track Only
+- **THEN** the map value fails policy loading, and the source tag is dropped
+
+#### Scenario: A family key that names nothing selected is stale
+
+- **WHEN** the map names a family that no variant selects
+- **THEN** the build succeeds and the key is recorded as a stale category
+  assignment
+
+#### Scenario: A family key whose selected entries are all track-only is stale
+
+- **WHEN** the map names a family whose selected entry in every variant that
+  selects it has final settings carrying `trackOnly: true`
+- **THEN** each of those entries carries exactly Track Only, the build
+  succeeds, and the key is recorded as a stale category assignment
 
 ### Requirement: Every single-screen family has a dual-screen selection
 
