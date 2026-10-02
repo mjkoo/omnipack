@@ -138,7 +138,7 @@ def compose(
     except OverlayError as error:
         raise CompositionError(str(error)) from error
     applied = _assign_categories(selected, policy)
-    report.uncategorized_families.extend(_uncategorized(selected))
+    report.uncategorized_families.extend(_uncategorized_families(selected))
     report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
     _validate_coverage(selected)
     return CompositionResult(selected, report)
@@ -365,22 +365,23 @@ def _assign_categories(
     other than Track Only, in source order. Overlays cannot patch categories,
     so nothing after this changes them.
     """
-    applied: set[str] = set()
+    applied = {
+        app.family
+        for values in apps.values()
+        for app in values
+        if app.family in policy.categories and not _track_only(app.data)
+    }
     for variant in Variant:
-        apps[variant] = [_categorized(app, policy, applied) for app in apps[variant]]
+        apps[variant] = [_categorized(app, policy) for app in apps[variant]]
     return applied
 
 
-def _categorized(
-    app: ComposedApp, policy: CompositionPolicy, applied: set[str]
-) -> ComposedApp:
-    settings = app.data.get("additionalSettings")
+def _categorized(app: ComposedApp, policy: CompositionPolicy) -> ComposedApp:
     mapped = policy.categories.get(app.family)
-    if isinstance(settings, dict) and settings.get("trackOnly") is True:
+    if _track_only(app.data):
         categories = [Category.TRACK_ONLY.value]
     elif mapped is not None:
         categories = [mapped.value]
-        applied.add(app.family)
     else:
         categories = [
             item for item in app.data["categories"] if item in ASSIGNABLE_CATEGORIES
@@ -388,7 +389,13 @@ def _categorized(
     return ComposedApp(app.family, {**app.data, "categories": categories})
 
 
-def _uncategorized(
+def _track_only(data: dict[str, Any]) -> bool:
+    """Whether an entry's final settings mark it track-only."""
+    settings = data.get("additionalSettings")
+    return isinstance(settings, dict) and settings.get("trackOnly") is True
+
+
+def _uncategorized_families(
     apps: dict[Variant, list[ComposedApp]],
 ) -> list[UncategorizedFamily]:
     variants: dict[str, list[Variant]] = {}
