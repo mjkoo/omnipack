@@ -231,8 +231,8 @@ resolver randomly chose the wrong repository.
 
 Maintained provenance-aware corrections, explicit official-source pins, and
 package denials now preserve the decisions through refreshes. The bounded
-review does not correct unrelated known catalog issues such as Winlator-Ludashi.
-See [curation](curation.md) for that remaining identity/asset selection caveat and
+review did not cover Winlator-Ludashi, whose identity and asset selection
+[curation](curation.md) records separately. See
 [verification](verification.md) for the runtime check's limits.
 
 The [captured regression evidence](../tests/fixtures/reconciliation/README.md)

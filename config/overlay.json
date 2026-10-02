@@ -1,5 +1,14 @@
 [
   {
+    "id": "app.gamenative",
+    "url": "https://github.com/utkarshdalal/GameNative",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^gamenative-v[0-9.]+[.]apk$"
+      }
+    }
+  },
+  {
     "id": "com.aure.banjorecomp",
     "url": "https://github.com/AurelioB/BanjoRecomp-Android",
     "patch": {
@@ -7,6 +16,13 @@
         "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
         "matchGroupToUse": "0"
       }
+    }
+  },
+  {
+    "id": "com.balatro.dualscreen",
+    "url": "https://github.com/rosbean/balatro-dualscreen",
+    "patch": {
+      "name": "Balatro Dual Screen"
     }
   },
   {
@@ -29,6 +45,13 @@
     }
   },
   {
+    "id": "com.chimeragaming.pokemonzmap",
+    "url": "https://github.com/ChimeraGaming/FanmakePokemonMaps_Android",
+    "patch": {
+      "name": "Fanmake Pokémon Maps"
+    }
+  },
+  {
     "id": "com.ctrnative",
     "url": "https://github.com/Simon358/ctr-native-android",
     "patch": {
@@ -42,9 +65,17 @@
     "id": "com.ctrnative",
     "url": "https://github.com/igawa6/ctr-native-android",
     "patch": {
+      "name": "Crash Team Racing",
       "additionalSettings": {
         "versionDetection": false
       }
+    }
+  },
+  {
+    "id": "com.darkaxt.dualdex",
+    "url": "https://github.com/Darkaxt/DualScreenDex",
+    "patch": {
+      "name": "DualDex"
     }
   },
   {
@@ -64,10 +95,54 @@
     }
   },
   {
+    "id": "com.kalenjohnson.chronoduo",
+    "url": "https://github.com/kalenjohnson/chrono-duo",
+    "patch": {
+      "name": "ChronoDuo"
+    }
+  },
+  {
+    "id": "com.limelight",
+    "url": "https://github.com/moonlight-stream/moonlight-android",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^app-nonRoot-release[.]apk$"
+      }
+    }
+  },
+  {
+    "id": "com.med.sleepmanager",
+    "url": "https://github.com/Baggio94/SleepManager",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^SleepManager-[0-9.]+[.]apk$"
+      }
+    }
+  },
+  {
+    "id": "com.pokeemerald.dualscreen",
+    "url": "https://github.com/Goldoire/pokeemerald-dualscreen",
+    "patch": {
+      "name": "Pokémon Emerald Dual Screen"
+    }
+  },
+  {
     "id": "com.silenthill.port",
     "url": "https://github.com/SlickAmogus/silent-hill-decomp",
     "patch": {
-      "name": "Silent Hill Decomp"
+      "name": "Silent Hill Decomp",
+      "additionalSettings": {
+        "releaseDateAsVersion": true,
+        "useLatestAssetDateAsReleaseDate": true,
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "id": "com.stormpanda.megingiard",
+    "url": "https://github.com/stormpanda/megingiard",
+    "patch": {
+      "name": "Megingiard"
     }
   },
   {
@@ -80,10 +155,11 @@
     }
   },
   {
-    "id": "com.winlator.ludashi",
+    "id": "com.winlator.vanilla",
     "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
     "patch": {
       "additionalSettings": {
+        "apkFilterRegEx": "^vanilla-build[.]apk$",
         "versionDetection": false
       }
     }
@@ -96,10 +172,26 @@
     }
   },
   {
+    "id": "dev.melee.game",
+    "url": "https://github.com/999sian/melee-pc",
+    "patch": {
+      "name": "Melee PC"
+    }
+  },
+  {
     "id": "dev.twilitrealm.dusk",
     "url": "https://github.com/TwilitRealm/dusklight",
     "patch": {
       "name": "Zelda: Twilight Princess (Dusklight)"
+    }
+  },
+  {
+    "id": "emu.x360mobile.com",
+    "url": "https://github.com/Ashnar2602/X360-Mobile---OFFICIAL",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^x360-mobile-[0-9.]+[.]apk$"
+      }
     }
   },
   {
@@ -128,10 +220,18 @@
     }
   },
   {
+    "id": "io.github.tomba2recomp",
+    "url": "https://github.com/igawa6/Tomba2RecompDS",
+    "patch": {
+      "name": "Tomba! 2 Recompiled"
+    }
+  },
+  {
     "id": "org.citron.citron_emu",
     "url": "https://github.com/citron-neo/emulator",
     "patch": {
       "additionalSettings": {
+        "apkFilterRegEx": "^app-mainline-release[.]apk$",
         "versionDetection": false
       }
     }
@@ -140,6 +240,7 @@
     "id": "org.legoisland.isle",
     "url": "https://github.com/isledecomp/isle-portable",
     "patch": {
+      "name": "LEGO Island Portable",
       "additionalSettings": {
         "releaseDateAsVersion": true,
         "versionDetection": false

@@ -17,10 +17,9 @@ Ghostship ZIP and member observation used by the reconciliation curation tests.
 The historical configured Symphony, Simon CTR, Shipwright and Ludashi identities
 disagreed with their APK manifests: respectively `com.blacklabelhq.sotn`,
 `com.ctrnative`, `com.dishii.soh` and `com.winlator.vanilla`. The reconciliation
-fixtures cover the maintained identity corrections. Ludashi instead keeps its
-configured identity and allows the ID change. When observed on 2026-09-09, its
-unchanged APK filter selected `bionic-vanilla.apk` from `v3.1.h`; the newer
-`v4.0` release used different names and was skipped.
+fixtures cover the maintained identity corrections, including Ludashi's, whose
+v4.1 `vanilla-build.apk` declares the same `com.winlator.vanilla` package as
+v3.1.h's `bionic-vanilla.apk`.
 
 ## Ports
 

@@ -33,6 +33,10 @@ SOURCE_IDS = {
     "xyz.blacksheep.mjolnir",
 }
 NUMERIC_IDS = {"com.aure.banjorecomp", "com.sergiomanzur.sotnrecomp"}
+APK_FILTERS = {
+    "org.citron.citron_emu": "^app-mainline-release[.]apk$",
+    "com.winlator.ludashi": "^vanilla-build[.]apk$",
+}
 
 
 def read(path):
@@ -125,6 +129,8 @@ def test_policies_preserve_existing_entries_and_settings():
             new = actual[corrected_id]
             old_settings = json.loads(old["additionalSettings"])
             expected = deepcopy(old_settings)
+            if old["id"] in APK_FILTERS:
+                expected["apkFilterRegEx"] = APK_FILTERS[old["id"]]
             if old["id"] in SOURCE_IDS:
                 expected["versionDetection"] = False
             elif old["id"] in NUMERIC_IDS:

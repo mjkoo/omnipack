@@ -525,7 +525,7 @@
       "github.com/coffincolors/winlator"
     ]
   ],
-  "package:com.winlator.ludashi": [
+  "package:com.winlator.vanilla": [
     [
       "rjny",
       "rjny-catalog",

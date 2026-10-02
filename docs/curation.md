@@ -123,9 +123,20 @@ labels likewise require preserving source identity.
 LEGO Island Portable (isle-portable) publishes every build under one rolling
 `continuous` tag, so it sets `releaseDateAsVersion: true` with
 `versionDetection: false`; Obtainium treats the two as mutually exclusive.
-Skate 3 Mobile releases carry a debug APK beside the release APK, and the
-debug build is listed first; its filter `^(?!.*-debug[.]apk$).*[.]apk$`
-excludes it.
+Silent Hill Decomp replaces the assets of one long-lived `crossplatform-beta`
+release without republishing it, so it also sets
+`useLatestAssetDateAsReleaseDate: true`.
+
+Where a release carries APKs for different apps or a different device's build
+beside the intended one, an overlay filter selects the intended asset by name.
+Skate 3 Mobile's filter `^(?!.*-debug[.]apk$).*[.]apk$` excludes the debug
+build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
+and SleepManager keep the main app rather than their companion apps (which
+declare their own packages), GameNative keeps the non-XR build, and Citron
+keeps the mainline build rather than the Snapdragon 8 Elite build. Releases
+whose APKs are alternative builds of one app for different Android versions,
+regions or preferences, such as ARMSX2, Citra MMJ and Simpsons Hit and Run,
+keep every alternative, so Obtainium asks which one to install.
 
 ## Manifest evidence
 
@@ -146,6 +157,7 @@ source versions and manifest values are also retained in the
 | `org.vita3k.emulator` | `4093` | `org.vita3k.emulator` | `0.2.1` | 21 | [APK](https://github.com/Vita3K/Vita3K-builds/releases/download/4093/vita3k-4093-257464af-android.apk) |
 | `xendroid.compose` | `XenDroid-0b11201` | `xendroid.compose` | `0b11201` | 1 | [APK](https://github.com/rfandango/XenDroid/releases/download/XenDroid-0b11201/XenDroid_Release_0b11201.apk) |
 | `com.winlator.ludashi` | `v3.1.h` | `com.winlator.vanilla` | `3.1` | 20 | [APK](https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v3.1.h/bionic-vanilla.apk) |
+| `com.winlator.ludashi` | `v4.1` | `com.winlator.vanilla` | `4.1` | 20 | [APK](https://github.com/StevenMXZ/Winlator-Ludashi/releases/download/v4.1/vanilla-build.apk) |
 | `com.winlator.cmod` | `cmod_v13.1` | `com.winlator.cmod` | `Cmod-v13.1` | 20 | [APK](https://github.com/coffincolors/winlator/releases/download/cmod_v13.1/Winlator-Cmod-v13.1.1.apk) |
 | `info.cemu.cemu` | `CEMU Android v0.5.2: Graphic Packs Custom Root Fix` | `info.cemu.cemu` | `0.5.2` | 52 | [APK](https://github.com/SapphireRhodonite/Cemu/releases/download/0.5.2/Cemu.DualScreen.0.5.2.apk) |
 | `xyz.blacksheep.mjolnir` | `v0.2.7a-hotfix` | `xyz.blacksheep.mjolnir` | `0.2.7a` | 20 | [APK](https://github.com/blacksheepmvp/mjolnir/releases/download/v0.2.7a-hotfix/Mjolnir-v0.2.7a-hotfix.apk) |
@@ -215,15 +227,15 @@ replaces Ghostship with its official Android release, and removes retired Super
 Metroid. Its reputation-plus-basic-vetting policy retains Symphony and OpenMW-DS.
 An identity correction does not itself require replacing an installed APK.
 
-Ludashi (`com.winlator.ludashi`) remains outside that bounded reconciliation.
-Its inspected APK declares `com.winlator.vanilla`; the configured identity is
-still unresolved. Structural verification cannot repair that mismatch or
-establish successful device acceptance.
-
-[Ludashi releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
-include v4.0, but the existing APK filter still selects bionic-vanilla.apk from
-v3.1.h through the older-release fallback. The newer release uses renamed
-assets and is not selected by that filter.
+Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) carries a package ID
+correction to `com.winlator.vanilla` and selects `vanilla-build.apk`. Its
+[releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases) ship three
+builds: the vanilla build declares `com.winlator.vanilla`, the package RJNY's
+`bionic-vanilla` filter installed through v3.1.h, while the Ludashi and Redmagic
+builds declare other apps' package names (`com.ludashi.benchmark` and
+`com.tencent.ig`) to trigger vendor performance profiles. The v3.1.h, v4.0 and
+v4.1 vanilla APKs share one signing certificate and versionCode 20, so the
+vanilla build continues an existing installation.
 
 [XenDroid releases](https://github.com/rfandango/XenDroid/releases) exposed
 XenDroid-c4f6863 during refresh; its inspected manifest has the matching hash
