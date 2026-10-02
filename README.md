@@ -24,9 +24,10 @@ It needs separate writable directories to avoid sharing saves and remaps with Re
 The catalog below also provides individual app configurations. An **Add to
 Obtainium** link opens an import confirmation; after confirming, install the app
 from Obtainium. Some entries only track releases: they provide update
-notifications and may not have an installable app. Most are under **Track
-Only**, but others appear elsewhere, such as **omnipack updates** under
-**Utilities**.
+notifications and may not have an installable app. They are listed under
+**Track Only**, including **omnipack updates**. A row is filed by its
+single-screen entry when the app has one, so an app that is track-only only in
+the dual-screen pack is listed by its installable single-screen build.
 
 Packs refresh daily, scheduled for 3:00 AM Eastern. Obtainium checks updates for
 apps you import, but not for the collection itself. The **omnipack updates**

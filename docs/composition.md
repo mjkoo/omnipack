@@ -138,7 +138,7 @@ The policy's optional `categories` object maps a family name, `package:<id>` or
 }
 ```
 
-A value that is not one of the seven categories other than Track Only, a
+A value that is not one of the categories above other than Track Only, a
 non-string value, or a key that is not a family name fails policy loading with
 the key identified.
 
@@ -156,7 +156,9 @@ this order:
 
 The map is keyed by family, so a mapping survives a fork switch and covers both
 packs. Only map an app whose source categories are missing or wrong; most
-sources already use the set's spellings. Overlays cannot set categories.
+sources already use the set's spellings. codm2000 entries carry no source
+category, so each one the packs select needs a map key. Overlays cannot set
+categories.
 
 Neither outcome below fails the build; the build report lists both, and
 `pack report` displays them:
@@ -262,7 +264,10 @@ coverage. It also checks pins, denied packages, coverage, and overlay targets.
 It does
 not check eligibility, which rendered entries cannot reveal, and it cannot prove
 source provenance, ranking, presence of losing upstream candidates, or that patch
-values were applied. Composition policy bytes participate in input fingerprints;
+values were applied. It checks only that each entry's categories are a list of
+strings, not that they come from the [category set](#categories) or that Track
+Only matches `trackOnly`; composition enforces both. Composition policy bytes
+participate in input fingerprints;
 changed inputs or a different supported verifier identity make evidence stale.
 A verification report with any schema other than the current one requires
 regeneration with `pack verify`.

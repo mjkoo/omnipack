@@ -19,9 +19,10 @@ for generation, acceptance and output review.
   Only [taxonomy](composition.md#categories) values other than Track Only pass
   through from an extra's categories, and any other value is dropped; a
   track-only extra always carries Track Only, and a family in the category map
-  takes the mapped category instead. The first category the entry ends up with
-  sets the generated README catalog heading and sort; an entry left with none
-  falls back to `Other`. Ordinary extras are baseline
+  takes the mapped category instead. The README catalog files each row under
+  the first category of its presenting entry, the single-screen one when the
+  app has one, or under `Other` when that entry has none; see
+  [categories](composition.md#categories). Ordinary extras are baseline
   candidates for both packs; optional `"dualScreen": true` makes one dual-only.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
