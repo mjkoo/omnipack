@@ -15,8 +15,9 @@ categories stop depending on which source supplied a build.
   Track Only.
 - `config/composition.json` gains an optional `categories` object that maps an
   app family (`package:<id>` or `app:<name>`) to one category from the set
-  other than Track Only. An unknown category or a family key listed twice
-  fails policy loading, in every command that loads the policy.
+  other than Track Only. An unknown category fails policy loading, and so does
+  any JSON object key repeated anywhere in the policy, a family key listed
+  twice included, in every command that loads the policy.
 - The set is defined once in code and shared with Quiver's project policy,
   which keeps accepting the same values.
 - After overlays apply, each selected entry gets its categories:
@@ -56,6 +57,7 @@ None.
 - `pack-composition`:
   - A new requirement covers category assignment from the closed set and the
     family map.
+  - Composition-policy loading rejects any repeated JSON object key.
   - The stage order gains category assignment after overlays.
   - The overlay protected fields gain `categories`.
 - `pack-cli`: the build report records families with a selected entry left

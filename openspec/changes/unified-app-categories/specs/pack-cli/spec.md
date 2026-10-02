@@ -31,9 +31,11 @@ error that stopped it. If composition has not completed, the report SHALL set
 this SHALL NOT be interpreted as an empty pack. The report SHALL preserve the
 selections, denylist removals, stale exclusions and category lists collected
 before a later failure. When composition fails before category assignment
-runs, the report SHALL record the uncategorized families and stale category
-assignments empty, as it does stale exclusions, and its recorded failure and
-stage SHALL tell the reader that the check did not complete. Once composition completes, the report SHALL compare its
+runs, only the uncategorized families and stale category assignments SHALL be
+recorded empty, because assignment has not run, while stale exclusions and
+other diagnostics collected before the failure SHALL remain preserved, and the
+recorded failure and stage SHALL tell the reader that the check did not
+complete. Once composition completes, the report SHALL compare its
 candidate apps with the previous output even if a later stage fails. The
 previous output a report compares against is the contents of the import files
 as they stood before the build, so the system SHALL read them before it

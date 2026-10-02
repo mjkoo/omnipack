@@ -66,10 +66,11 @@ The composition policy (`config/composition.json`) already owns family names
      wins over the map. Assignment tracks which keys it applied; the unused
      keys are stale.
 
-   When composition fails before category assignment runs, both lists are
-   recorded empty, as stale exclusions are, and the report's recorded failure
-   and stage tell the reader the check did not complete. Lists collected
-   before a later failure are preserved.
+   When composition fails before category assignment runs, only the two
+   category lists are empty, because assignment has not run; stale exclusions
+   and other diagnostics collected before the failure remain preserved. The
+   report's recorded failure and stage tell the reader the check did not
+   complete. Category lists collected before a later failure are preserved.
 
    Both fields are required, so the build report schema version is bumped with
    them. A report written before the change then fails the schema check and
@@ -81,8 +82,8 @@ The composition policy (`config/composition.json`) already owns family names
    with plain `json.loads`: `pack build` through the generic source decoder
    and then `parse_composition_policy`, `pack verify` through
    `load_composition_policy`, and the offline gate through its generic
-   snapshot decoder. A repeated `categories` key would silently keep the last
-   occurrence. `load_composition_policy` becomes the single decoder, and
+   snapshot decoder. A repeated key, in `categories` or anywhere else in the
+   policy, would silently keep the last occurrence. `load_composition_policy` becomes the single decoder, and
    `pack build` and the offline gate call it. It rejects duplicate object keys
    through one shared duplicate-rejecting `object_pairs_hook` helper, which
    also replaces the two hooks that exist separately today for project policy
@@ -132,10 +133,20 @@ Every commit keeps `pack build`, `pack verify` and the tests green.
    check fails on the overlay or the tracker test disagrees with the build.
 3. Collect uncategorized families and stale category assignments.
 4. Add both report fields with the schema version bump, and render them.
-5. Seed the remaining map keys, rebuild the packs and check the report's
-   uncategorized list is empty. Check that no entry is added or removed and
-   package ids are unchanged; that, matching entries by id, only `categories`
-   changes; and that otherwise only entry order and the settings colour map
-   differ. Rendering orders entries by primary category, then name, then
-   package id, so a re-categorized entry is expected to move.
-6. Rollback is a revert of the change, which restores the previous outputs.
+5. Seed the remaining map keys, rebuild the packs and check that the rebuilt
+   report's uncategorized list and stale category assignments list are both
+   empty. The uncategorized list alone cannot catch a mistyped seed key: the
+   family it was meant for falls back to its source category, which may still
+   be allowed, so only the stale list exposes the key.
+6. Compare two builds from one upstream snapshot: build back to back at the
+   commit before the change and at the change commit, or compose one captured
+   ingestion under both configurations. Between those two outputs, check that
+   no entry is added or removed and package ids are unchanged; that, matching
+   entries by id, only `categories` changes; and that otherwise only entry
+   order and the settings colour map differ. Rendering orders entries by
+   primary category, then name, then package id, so a re-categorized entry is
+   expected to move. Commit the change commit's rebuilt `dist/` and README.
+   RJNY is read from its main branch and BBoi from its latest release asset,
+   so upstream drift since the last committed nightly is expected and outside
+   this check.
+7. Rollback is a revert of the change, which restores the previous outputs.
