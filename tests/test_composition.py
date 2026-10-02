@@ -18,6 +18,7 @@ from omnipack.merge import (
     CompositionResult,
     ConsideredCandidate,
     StaleExclusion,
+    UncategorizedFamily,
 )
 from omnipack.merge import (
     compose as compose_apps,
@@ -1083,6 +1084,11 @@ def test_unmapped_entry_with_no_allowed_category_builds_without_one() -> None:
         policy=category_policy({}),
     )
     assert set(map(tuple, final_categories(result).values())) == {()}
+    both = (Variant.SINGLE, Variant.DUAL)
+    assert result.report.uncategorized == [
+        UncategorizedFamily("package:x", both),
+        UncategorizedFamily("package:y", both),
+    ]
 
 
 def test_each_variant_assigns_its_own_winner_s_categories() -> None:
@@ -1095,6 +1101,9 @@ def test_each_variant_assigns_its_own_winner_s_categories() -> None:
         ("x", Variant.SINGLE): ["Emulator"],
         ("x", Variant.DUAL): [],
     }
+    assert result.report.uncategorized == [
+        UncategorizedFamily("package:x", (Variant.DUAL,))
+    ]
 
 
 def test_track_only_rule_reads_settings_after_overlays() -> None:
@@ -1119,3 +1128,53 @@ def test_non_object_settings_after_overlays_are_not_track_only() -> None:
         policy=category_policy({}),
     )
     assert set(map(tuple, final_categories(result).values())) == {("Emulator",)}
+
+
+def test_unmapped_track_only_entry_without_source_categories_is_categorized() -> None:
+    result = compose(
+        [app("1", additional_settings=TRACK_ONLY)], [], [], policy=category_policy({})
+    )
+    assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
+    assert result.report.uncategorized == []
+
+
+def test_category_keys_that_set_no_selected_category_are_stale() -> None:
+    result = compose(
+        [
+            app("used", categories=("Dual Screen",)),
+            app("1", additional_settings=TRACK_ONLY),
+            app("denied"),
+        ],
+        [{"id": "denied", "reason": "test"}],
+        [],
+        policy=category_policy(
+            {
+                "package:used": Category.PC_PORTS,
+                "package:1": Category.UTILITIES,
+                "package:denied": Category.EMULATOR,
+                "app:absent": Category.EMULATOR,
+            }
+        ),
+    )
+    assert result.report.stale_category_assignments == [
+        "app:absent",
+        "package:1",
+        "package:denied",
+    ]
+    assert result.report.uncategorized == []
+
+
+def test_key_used_in_one_variant_only_is_not_stale() -> None:
+    single = app("x", eligibility=frozenset({Variant.SINGLE}))
+    dual = app("x", "bboi", eligibility=frozenset({Variant.DUAL}))
+    result = compose(
+        [single, dual],
+        [],
+        overlays((dual.id, dual.url, {"additionalSettings": TRACK_ONLY})),
+        policy=category_policy({"package:x": Category.EMULATOR}),
+    )
+    assert final_categories(result) == {
+        ("x", Variant.SINGLE): ["Emulator"],
+        ("x", Variant.DUAL): ["Track Only"],
+    }
+    assert result.report.stale_category_assignments == []

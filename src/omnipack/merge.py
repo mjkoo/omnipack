@@ -80,11 +80,22 @@ class FamilySelection:
     considered: tuple[ConsideredCandidate, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class UncategorizedFamily:
+    """A family whose selected entry ended without a category in `variants`."""
+
+    family: str
+    variants: tuple[Variant, ...]
+
+
 @dataclass(slots=True)
 class CompositionReport:
     removals: list[Removal] = field(default_factory=list)
     stale_exclusions: list[StaleExclusion] = field(default_factory=list)
     selections: list[FamilySelection] = field(default_factory=list)
+    uncategorized: list[UncategorizedFamily] = field(default_factory=list)
+    # Category map keys that set no selected entry's category.
+    stale_category_assignments: list[str] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -128,7 +139,9 @@ def compose(
             selected[variant] = apply_overlay(selected[variant], patches)
     except OverlayError as error:
         raise CompositionError(str(error)) from error
-    _assign_categories(selected, policy)
+    applied = _assign_categories(selected, policy)
+    report.uncategorized.extend(_uncategorized(selected))
+    report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
     _validate_coverage(selected)
     return CompositionResult(selected, report)
 
@@ -372,6 +385,20 @@ def _assign_categories(
                 ]
             app.data["categories"] = [str(item) for item in categories]
     return applied
+
+
+def _uncategorized(
+    apps: dict[Variant, list[ComposedApp]],
+) -> list[UncategorizedFamily]:
+    variants: dict[str, list[Variant]] = {}
+    for variant in Variant:
+        for app in apps[variant]:
+            if not app.data["categories"]:
+                variants.setdefault(app.family, []).append(variant)
+    return [
+        UncategorizedFamily(family, tuple(found))
+        for family, found in sorted(variants.items())
+    ]
 
 
 def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:
