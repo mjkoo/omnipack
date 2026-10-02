@@ -668,9 +668,9 @@ def test_category_map_assigns_one_category_per_family() -> None:
         ({"app:x": "Track Only"}, r"categories\['app:x'\].*'Track Only'"),
         ({"app:x": ["PC Ports"]}, r"categories\['app:x'\]"),
         ({"app:x": 7}, r"categories\['app:x'\]"),
-        ({"x": "PC Ports"}, r"categories key 'x' is not"),
-        ({"app:": "PC Ports"}, r"categories key 'app:' is not"),
-        ({"pkg:x": "PC Ports"}, r"categories key 'pkg:x' is not"),
+        ({"x": "PC Ports"}, r"categories key 'x' must use a nonempty"),
+        ({"app:": "PC Ports"}, r"categories key 'app:' must use a nonempty"),
+        ({"pkg:x": "PC Ports"}, r"categories key 'pkg:x' must use a nonempty"),
         (["app:x"], "categories must be an object"),
     ],
 )

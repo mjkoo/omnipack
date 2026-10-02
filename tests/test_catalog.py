@@ -56,6 +56,7 @@ def policy(*projections: tuple[str, str, str]) -> CompositionPolicy:
             for package_id, url, family in projections
         },
         {},
+        {},
     )
 
 

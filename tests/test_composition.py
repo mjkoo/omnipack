@@ -88,6 +88,7 @@ def pin_policy(
         (Pin(family, variant, pinned_selector, "test"),),
         projections,
         {(family, variant): key},
+        {},
     )
 
 
@@ -113,7 +114,7 @@ def compose(
                     CandidateRule(candidate_selector(candidate), "test", family=family)
                 )
                 projections[rendered_key(candidate.id, candidate.url)] = family
-        policy = CompositionPolicy(tuple(rules), (), projections, {})
+        policy = CompositionPolicy(tuple(rules), (), projections, {}, {})
     return compose_apps(
         candidates,
         denylist,
@@ -622,6 +623,7 @@ def test_denials_and_shared_identity_see_the_corrected_package_id() -> None:
         ),
         (),
         {rendered_key("taken.pkg", corrected.url): "app:x"},
+        {},
         {},
     )
     denied = compose(

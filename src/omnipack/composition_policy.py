@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Sequence
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, replace
 from typing import Any
 
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
@@ -79,7 +79,7 @@ class CompositionPolicy:
     projections: dict[RenderedKey, str]
     projected_pins: dict[PinKey, RenderedKey]
     # The one category each named family carries unless its entry is track-only.
-    categories: dict[str, Category] = field(default_factory=dict)
+    categories: dict[str, Category]
 
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
@@ -476,7 +476,9 @@ def _parse_rule(value: object, index: int) -> CandidateRule:
     selector = _selector(record.get("match"), f"candidates[{index}].match")
     rationale = _text(record.get("rationale"), f"candidates[{index}].rationale")
     family = (
-        _family(record["family"], explicit_only=True) if "family" in record else None
+        _family(record["family"], "family", explicit_only=True)
+        if "family" in record
+        else None
     )
     package_id = (
         _text(record["packageId"], f"candidates[{index}].packageId")
@@ -490,10 +492,7 @@ def _parse_categories(value: object) -> dict[str, Category]:
     record = _object(value, "categories")
     result: dict[str, Category] = {}
     for key, category in record.items():
-        if _FAMILY.fullmatch(key) is None:
-            raise CompositionPolicyError(
-                f"categories key {key!r} is not an app: or package: family name"
-            )
+        _family(key, f"categories key {key!r}", explicit_only=False)
         if category not in ASSIGNABLE_CATEGORIES:
             raise CompositionPolicyError(
                 f"categories[{key!r}] must be one of "
@@ -506,7 +505,7 @@ def _parse_categories(value: object) -> dict[str, Category]:
 def _parse_pin(value: object, index: int) -> Pin:
     record = _object(value, f"pins[{index}]")
     _fields(record, {"family", "variant", "match", "rationale"}, f"pins[{index}]")
-    family = _family(record.get("family"), explicit_only=False)
+    family = _family(record.get("family"), "family", explicit_only=False)
     try:
         variant = Variant(record.get("variant"))
     except (TypeError, ValueError) as error:
@@ -540,12 +539,15 @@ def _selector(value: object, label: str) -> CandidateSelector:
     )
 
 
-def _family(value: object, *, explicit_only: bool) -> str:
-    family = _text(value, "family")
-    prefixes = ("app:",) if explicit_only else ("app:", "package:")
-    if not family.startswith(prefixes) or _FAMILY.fullmatch(family) is None:
+def _family(value: object, label: str, *, explicit_only: bool) -> str:
+    family = _text(value, label)
+    if _FAMILY.fullmatch(family) is None or (
+        explicit_only and not family.startswith("app:")
+    ):
         expected = "app:" if explicit_only else "app: or package:"
-        raise CompositionPolicyError(f"family must use a nonempty {expected} namespace")
+        raise CompositionPolicyError(
+            f"{label} must use a nonempty {expected} namespace"
+        )
     return family
 
 
