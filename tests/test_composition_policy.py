@@ -667,7 +667,7 @@ def test_category_map_assigns_one_category_per_family() -> None:
         ({"app:x": "Dual Screen"}, r"categories\['app:x'\].*'Dual Screen'"),
         ({"app:x": "Track Only"}, r"categories\['app:x'\].*'Track Only'"),
         ({"app:x": ["PC Ports"]}, r"categories\['app:x'\]"),
-        ({"app:x": None}, r"categories\['app:x'\]"),
+        ({"app:x": 7}, r"categories\['app:x'\]"),
         ({"x": "PC Ports"}, r"categories key 'x' is not"),
         ({"app:": "PC Ports"}, r"categories key 'app:' is not"),
         ({"pkg:x": "PC Ports"}, r"categories key 'pkg:x' is not"),

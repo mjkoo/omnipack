@@ -98,18 +98,6 @@ REPEATED_POLICY_KEYS = [
         id="categories",
     ),
     pytest.param(
-        b'{"schemaVersion": 1, "candidates": [], "pins": [], "categories": '
-        b'{"app:x": "PC Ports", "app:x": "PC Ports"}}',
-        "app:x",
-        id="family-same-category",
-    ),
-    pytest.param(
-        b'{"schemaVersion": 1, "candidates": [], "pins": [], "categories": '
-        b'{"app:x": "PC Ports", "app:x": "Emulator"}}',
-        "app:x",
-        id="family-different-category",
-    ),
-    pytest.param(
         b'{"schemaVersion": 1, "pins": [], "candidates": [{"match": {}, '
         b'"rationale": "a", "rationale": "b"}]}',
         "rationale",

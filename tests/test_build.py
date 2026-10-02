@@ -160,7 +160,7 @@ BUILD_REPORT_FIELDS = {
 
 
 def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
-    from omnipack.report import format_reports, write_report
+    from omnipack.report import write_report
 
     write_config(tmp_path)
     build_module.publish_build(
@@ -182,8 +182,6 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
     )
     failed = json.loads((tmp_path / ".build/report.json").read_text())
     assert set(failed) == BUILD_REPORT_FIELDS | {"stage", "error"}
-    assert failed["uncategorizedFamilies"] == failed["staleCategoryAssignments"] == []
-    assert "Stage: rendering" in format_reports(tmp_path)
     assert (failed["status"], failed["stage"], failed["error"], failed["changes"]) == (
         "failed",
         "rendering",

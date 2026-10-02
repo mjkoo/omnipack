@@ -1059,6 +1059,7 @@ def test_track_only_entry_carries_exactly_track_only(
     categories = {"package:1": Category.EMULATOR} if mapped else {}
     result = compose([tracker], [], [], policy=category_policy(categories))
     assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
+    assert result.report.uncategorized_families == []
 
 
 def test_unmapped_entry_keeps_allowed_source_categories_in_source_order() -> None:
@@ -1128,14 +1129,6 @@ def test_non_object_settings_after_overlays_are_not_track_only() -> None:
         policy=category_policy({}),
     )
     assert set(map(tuple, final_categories(result).values())) == {("Emulator",)}
-
-
-def test_unmapped_track_only_entry_without_source_categories_is_categorized() -> None:
-    result = compose(
-        [app("1", additional_settings=TRACK_ONLY)], [], [], policy=category_policy({})
-    )
-    assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
-    assert result.report.uncategorized_families == []
 
 
 def test_category_keys_that_set_no_selected_category_are_stale() -> None:
