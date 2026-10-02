@@ -39,6 +39,12 @@ class Category(StrEnum):
     TRACK_ONLY = "Track Only"
 
 
+# Only track-only entries carry Track Only, so every other entry draws from these.
+ASSIGNABLE_CATEGORIES = tuple(
+    category for category in Category if category != Category.TRACK_ONLY
+)
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Where an entry came from, for the build report."""

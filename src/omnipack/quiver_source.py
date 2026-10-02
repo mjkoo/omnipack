@@ -52,8 +52,8 @@ def load_quiver_config(value: object) -> QuiverConfig:
     return QuiverConfig(index, catalog, policy)
 
 
-QUIVER_CATEGORIES = (Category.DECOMPS, Category.PC_PORTS)
-"""The pack categories a Quiver entry may be filed under."""
+# The pack categories a Quiver entry may be filed under.
+_QUIVER_CATEGORIES = (Category.DECOMPS, Category.PC_PORTS)
 
 
 @dataclass(frozen=True, slots=True)
@@ -130,9 +130,9 @@ def parse_quiver_policy(data: bytes | object) -> QuiverPolicy:
         if set(raw_rule) - {"name", "category", "additionalSettings"}:
             raise PolicyError(f"{url}: unsupported quiver project rule field")
         category = raw_rule.get("category", Category.DECOMPS)
-        if category not in QUIVER_CATEGORIES:
+        if category not in _QUIVER_CATEGORIES:
             raise PolicyError(
-                f"{url}: category must be one of {[str(c) for c in QUIVER_CATEGORIES]}"
+                f"{url}: category must be one of {[str(c) for c in _QUIVER_CATEGORIES]}"
             )
         categories[url] = Category(category)
         project_rules[url] = {

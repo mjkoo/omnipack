@@ -10,7 +10,6 @@ class DuplicateKeyError(ValueError):
 
     def __init__(self, key: str) -> None:
         super().__init__(f"duplicate JSON key {key!r}")
-        self.key = key
 
 
 def reject_duplicate_keys(pairs: list[tuple[str, Any]]) -> dict[str, Any]:

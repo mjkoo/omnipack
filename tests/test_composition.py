@@ -1085,7 +1085,7 @@ def test_unmapped_entry_with_no_allowed_category_builds_without_one() -> None:
     )
     assert set(map(tuple, final_categories(result).values())) == {()}
     both = (Variant.SINGLE, Variant.DUAL)
-    assert result.report.uncategorized == [
+    assert result.report.uncategorized_families == [
         UncategorizedFamily("package:x", both),
         UncategorizedFamily("package:y", both),
     ]
@@ -1101,7 +1101,7 @@ def test_each_variant_assigns_its_own_winner_s_categories() -> None:
         ("x", Variant.SINGLE): ["Emulator"],
         ("x", Variant.DUAL): [],
     }
-    assert result.report.uncategorized == [
+    assert result.report.uncategorized_families == [
         UncategorizedFamily("package:x", (Variant.DUAL,))
     ]
 
@@ -1135,7 +1135,7 @@ def test_unmapped_track_only_entry_without_source_categories_is_categorized() ->
         [app("1", additional_settings=TRACK_ONLY)], [], [], policy=category_policy({})
     )
     assert set(map(tuple, final_categories(result).values())) == {("Track Only",)}
-    assert result.report.uncategorized == []
+    assert result.report.uncategorized_families == []
 
 
 def test_category_keys_that_set_no_selected_category_are_stale() -> None:
@@ -1161,7 +1161,7 @@ def test_category_keys_that_set_no_selected_category_are_stale() -> None:
         "package:1",
         "package:denied",
     ]
-    assert result.report.uncategorized == []
+    assert result.report.uncategorized_families == []
 
 
 def test_key_used_in_one_variant_only_is_not_stale() -> None:

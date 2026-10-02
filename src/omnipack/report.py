@@ -65,7 +65,9 @@ def write_report(
         "denylistRemovals": [_record(item) for item in records.removals],
         "staleExclusions": [_record(item) for item in records.stale_exclusions],
         "selections": [_record(item) for item in records.selections],
-        "uncategorizedFamilies": [_record(item) for item in records.uncategorized],
+        "uncategorizedFamilies": [
+            _record(item) for item in records.uncategorized_families
+        ],
         "staleCategoryAssignments": list(records.stale_category_assignments),
         "offlineVerification": offline_verification or not_run_verdict(),
     }

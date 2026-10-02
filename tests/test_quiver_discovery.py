@@ -12,10 +12,10 @@ from urllib.response import addinfourl
 import pytest
 
 from omnipack.http import HttpError, HttpResponse, HttpStatusError
+from omnipack.model import Category
 from omnipack.package_id import NoEligibleApk
 from omnipack.project_policy import default_apk_rule
 from omnipack.quiver_source import (
-    Category,
     QuiverPolicy,
     QuiverRule,
     discover_quiver,

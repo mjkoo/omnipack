@@ -18,7 +18,7 @@ from omnipack.composition_policy import (
     pair_entries,
     rendered_key,
 )
-from omnipack.model import App, Category, Variant
+from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import (
     ComposedApp,
     OverlayError,
@@ -28,8 +28,6 @@ from omnipack.overlay import (
 )
 
 _PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
-# The source categories an entry that is neither track-only nor mapped keeps.
-_SOURCE_CATEGORIES = frozenset(Category) - {Category.TRACK_ONLY}
 
 
 class CompositionError(ValueError):
@@ -93,7 +91,7 @@ class CompositionReport:
     removals: list[Removal] = field(default_factory=list)
     stale_exclusions: list[StaleExclusion] = field(default_factory=list)
     selections: list[FamilySelection] = field(default_factory=list)
-    uncategorized: list[UncategorizedFamily] = field(default_factory=list)
+    uncategorized_families: list[UncategorizedFamily] = field(default_factory=list)
     # Category map keys that set no selected entry's category.
     stale_category_assignments: list[str] = field(default_factory=list)
 
@@ -140,7 +138,7 @@ def compose(
     except OverlayError as error:
         raise CompositionError(str(error)) from error
     applied = _assign_categories(selected, policy)
-    report.uncategorized.extend(_uncategorized(selected))
+    report.uncategorized_families.extend(_uncategorized(selected))
     report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
     _validate_coverage(selected)
     return CompositionResult(selected, report)
@@ -368,23 +366,26 @@ def _assign_categories(
     so nothing after this changes them.
     """
     applied: set[str] = set()
-    for values in apps.values():
-        for app in values:
-            settings = app.data.get("additionalSettings")
-            mapped = policy.categories.get(app.family)
-            if isinstance(settings, dict) and settings.get("trackOnly") is True:
-                categories = [Category.TRACK_ONLY.value]
-            elif mapped is not None:
-                categories = [mapped.value]
-                applied.add(app.family)
-            else:
-                categories = [
-                    item
-                    for item in app.data["categories"]
-                    if isinstance(item, str) and item in _SOURCE_CATEGORIES
-                ]
-            app.data["categories"] = categories
+    for variant in Variant:
+        apps[variant] = [_categorized(app, policy, applied) for app in apps[variant]]
     return applied
+
+
+def _categorized(
+    app: ComposedApp, policy: CompositionPolicy, applied: set[str]
+) -> ComposedApp:
+    settings = app.data.get("additionalSettings")
+    mapped = policy.categories.get(app.family)
+    if isinstance(settings, dict) and settings.get("trackOnly") is True:
+        categories = [Category.TRACK_ONLY.value]
+    elif mapped is not None:
+        categories = [mapped.value]
+        applied.add(app.family)
+    else:
+        categories = [
+            item for item in app.data["categories"] if item in ASSIGNABLE_CATEGORIES
+        ]
+    return ComposedApp(app.family, {**app.data, "categories": categories})
 
 
 def _uncategorized(

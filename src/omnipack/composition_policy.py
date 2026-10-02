@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field, replace
 from typing import Any
 
-from omnipack.model import App, Category, Variant
+from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 from omnipack.urls import normalize_project_url
 
@@ -488,17 +488,16 @@ def _parse_rule(value: object, index: int) -> CandidateRule:
 
 def _parse_categories(value: object) -> dict[str, Category]:
     record = _object(value, "categories")
-    assignable = [category for category in Category if category != Category.TRACK_ONLY]
     result: dict[str, Category] = {}
     for key, category in record.items():
         if _FAMILY.fullmatch(key) is None:
             raise CompositionPolicyError(
                 f"categories key {key!r} is not an app: or package: family name"
             )
-        if category not in assignable:
+        if category not in ASSIGNABLE_CATEGORIES:
             raise CompositionPolicyError(
                 f"categories[{key!r}] must be one of "
-                f"{[str(item) for item in assignable]}, not {category!r}"
+                f"{[str(item) for item in ASSIGNABLE_CATEGORIES]}, not {category!r}"
             )
         result[key] = Category(category)
     return result

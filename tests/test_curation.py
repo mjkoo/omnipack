@@ -211,7 +211,7 @@ def test_current_composition_categorizes_every_entry_from_the_taxonomy(
     current_configuration: CurrentConfiguration,
 ) -> None:
     result = current_configuration.result
-    assert result.report.uncategorized == []
+    assert result.report.uncategorized_families == []
     assert result.report.stale_category_assignments == []
     for values in result.apps.values():
         for app in values:
