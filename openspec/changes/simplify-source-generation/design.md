@@ -27,8 +27,6 @@ Today's generation state that moves elsewhere:
 
 - Changing the proposal workflow's job split, permissions or publication
   checks beyond the diagnostics it reports.
-- Supporting hosts the packs do not already render (anything other than
-  GitHub and GitLab).
 
 ## Decisions
 
@@ -55,19 +53,32 @@ whichever source wins, where a policy rule applied only to the generated
 entry. The migration checks, for each moved setting, which source's entry the
 overlay now patches, and records any URL where that is not the generated one.
 
-### GitHub and GitLab only, everything else reported
+### Every listed link becomes an entry; Obtainium decides what it can track
 
-The packs render `overrideSource` GitHub, GitLab or HTML. A repository URL on
-GitHub or GitLab maps directly; Quiver's `repositorySource` says which. HTML
-tracking needs per-page configuration a list cannot supply, so other hosts
-(itch.io, Modrinth, Google Play and Nexus Mods links in the codm README today)
-are reported as unsupported. Extending the set is a change to what the packs
-render, not to generation.
+The pack imposes nothing on an app that Obtainium does not. Obtainium has
+dedicated sources for about thirty hosts (itch.io, Codeberg, F-Droid,
+IzzyOnDroid, SourceForge and others) and detects the source from the URL when
+an app declares none. So generation emits every listed link, declares
+GitHub or GitLab only where the URL makes that unambiguous, and otherwise
+leaves the source type unset. A link Obtainium cannot use (today: a Google Play
+page, a Modrinth mod page and a Nexus Mods page in the codm README) ships as an
+entry that fails in Obtainium until the owner denies its URL, if they choose. Keeping a
+host list in generation was rejected because it would copy Obtainium's source
+table and go stale.
+
+The same principle removes the pack's own source-type allowlist: ingestion no
+longer fails a declared or missing type it holds no defaults for, rendering
+fills defaults only for GitHub, GitLab and HTML and passes other entries'
+settings through, and verification type-checks settings only where defaults
+exist. The cost is that an entry of another type shows only the setting
+controls its settings carry, until Obtainium fills them; whether Obtainium
+fills missing keys on import is checked on a device before the change lands.
 
 ### Names come from the listing
 
 A codm Project table link's text and a Quiver row's `project` are the
-upstream curator's name for the app; the repository name is the fallback.
+upstream curator's name for the app; the URL's last path segment is the
+fallback.
 Several listings of one URL with different names take the first in
 case-insensitive order, so the result does not depend on list order. An
 overlay `name` patch overrides it.
@@ -75,7 +86,7 @@ overlay `name` patch overrides it.
 ### Failure is limited to unreadable discovery
 
 With no per-project requests there are no per-project failures. A discovery
-that cannot be read, is malformed, or lists nothing renderable fails, because
+that cannot be read, is malformed, or lists nothing fails, because
 a candidate built from it would propose removing every entry. A repository
 that moved or vanished upstream is simply listed differently, and the
 proposal's added and removed lists show it.
@@ -89,9 +100,13 @@ it meanwhile, as for any URL alias.
 
 ## Risks / Trade-offs
 
-- [A listed repository has no Android release] → its entry ships and fails in
-  Obtainium at install; a denial for its URL removes it. Generation no longer
-  screens this.
+- [A listed link has no Android release, or is a page Obtainium cannot track]
+  → its entry ships and fails in Obtainium; a denial for its URL removes it.
+  Generation no longer screens this.
+- [Obtainium does not fill missing settings keys for an entry of a source type
+  the pack holds no defaults for] → its setting controls stay hidden until
+  set; a device check on the AYN Thor, with the owner's approval, establishes
+  the behavior before the change lands.
 - [Names change to the upstream curator's wording] → the first rebuild shows
   every changed name in the proposal; an overlay `name` patch restores one.
 - [Generated entries carry placeholder ids] → the repeated-package-id report

@@ -14,22 +14,28 @@ has to turn an upstream list into Obtainium entries.
 - **BREAKING** One generator serves every generated source. It reads the
   source's upstream list (the codm README's Project tables, the Quiver index and
   lists) and makes no other request: no repository API, release or APK.
-- **BREAKING** Each GitHub or GitLab repository a source lists becomes one
-  minimal entry: listed URL, matching `overrideSource`, the listing's name or
-  the repository name, the owner as author, default settings, no categories,
-  and an Obtainium placeholder id (the first twelve hex characters of the
-  SHA-256 of the normalized URL), which Obtainium replaces with the APK's
-  package id on first install. Listings on other hosts are reported as
-  unsupported. Quiver's GitLab ports join the pack.
+- **BREAKING** Every link a source lists becomes one minimal entry, whatever
+  its host: listed URL, `overrideSource` GitHub or GitLab where the URL makes
+  that unambiguous and unset otherwise (Obtainium detects it), the listing's
+  name or the URL's last segment, default settings, no categories, and an
+  Obtainium placeholder id (the first twelve hex characters of the SHA-256 of
+  the normalized URL), which Obtainium replaces with the APK's package id on
+  first install. Quiver's six GitLab ports and codm's four other-host links
+  (itch.io, Google Play, Modrinth, Nexus Mods) join the candidates; the owner
+  decides whether to deny a link Obtainium cannot use.
+- **BREAKING** The pack stops limiting source types to GitHub, GitLab and HTML:
+  ingestion keeps any declared type and leaves an undeclared non-GitHub,
+  non-GitLab type unset, rendering fills default settings only for the types it
+  holds defaults for, and verification type-checks settings only there.
 - **BREAKING** Generation fails only when its discovery input cannot be read,
-  is malformed, or lists nothing the packs can render. No per-project outcome
+  is malformed, or lists nothing. No per-project outcome
   fails or blocks a run.
 - **BREAKING** `config/codm-projects.json`, `config/quiver-projects.json` and
   `config/http.json` are deleted. Their nine per-app settings move to overlay
   records keyed by URL (Kanto Gear's track-only treatment included), and
   Quiver's categories move to the composition category map.
 - `pack generate-source <source>` writes a candidate catalog and a report of
-  the source, inputs, error, unsupported listings and catalog changes. The
+  the source, inputs, error, skipped Quiver rows and catalog changes. The
   proposal workflow's PR body and run summary carry the same.
 - Retired: release selection, APK download and manifest reading, APK agreement
   checks, repository rename lookups, project policy and its track-only kind,
@@ -60,7 +66,12 @@ generation test modules deleted and replaced by about 400 lines.
   identify admitted generated entries by id and URL.
 - `source-ingestion`: committed codm and Quiver entries carry placeholder ids
   and no reviewed settings; GitLab entries may come from generated catalogs;
-  no request carries credentials.
+  any source type is accepted and an undeclared one may stay unset; no request
+  carries credentials.
+- `pack-rendering`: default settings are filled only for source types with
+  defaults.
+- `pack-verification`: no source-type allowlist; settings are type-checked only
+  where defaults exist.
 - `pack-curation`: generated catalogs are held only to validity, composition
   and canonical bytes.
 - `nightly-publishing`: no project policy file remains to protect.
@@ -77,7 +88,8 @@ generation test modules deleted and replaced by about 400 lines.
   its placeholder id.
 - Published packs: every generated entry's id changes to a placeholder and its
   settings to defaults plus overlays; names may change to the upstream
-  listing's; Quiver's six GitLab ports are added. Repeated-package-id reports
+  listing's; Quiver's six GitLab ports and codm's four other-host links are
+  added. Repeated-package-id reports
   no longer see generated entries.
 - Workflow: `source-catalog.yml` needs no API token for generation.
 - Docs: `docs/source-generation.md`, `docs/quiver-ports.md`,

@@ -9,7 +9,7 @@ when generation succeeds and nonzero when it fails. A failed invocation SHALL
 leave no candidate catalog, so an earlier run's candidate is never offered as
 current. The report SHALL be written on success and failure alike and SHALL
 record the source, its inputs, the error when generation failed, the
-unsupported listings, and, on success, the entries added to and removed from
+skipped listings, and, on success, the entries added to and removed from
 the committed catalog. The command SHALL NOT write committed files, pack
 outputs, git history or PRs, and SHALL keep no state between invocations.
 
@@ -26,11 +26,10 @@ outputs, git history or PRs, and SHALL keep no state between invocations.
 - **THEN** the second exits nonzero, its report records the error, and no
   candidate catalog remains under the build directory
 
-#### Scenario: Unsupported listings are reported
+#### Scenario: Skipped listings are reported
 
-- **WHEN** a source lists a project on a host the packs do not render
-- **THEN** the command succeeds and its report lists that listing as
-  unsupported
+- **WHEN** a Quiver row names a forge generation cannot form a URL for
+- **THEN** the command succeeds and its report lists that row as skipped
 
 ## MODIFIED Requirements
 

@@ -17,13 +17,15 @@ For Quiver, generation SHALL read the configured index and every list it
 references, and SHALL fail when the index or a referenced list is unavailable
 or not the shape the source publishes; a list location outside the configured
 index's host and directory SHALL fail generation as a malformed index. A
-Quiver row names its project by its `repository` and `repositorySource`, and
-its `project` field is the row's name.
+Quiver row names its project by its `repository` and `repositorySource`, which
+generation turns into the forge's project URL, and its `project` field is the
+row's name; a row whose `repositorySource` names a forge generation cannot form
+a URL for is reported and skipped, without failing generation.
 
 Generation SHALL make no request other than reading these inputs: it SHALL NOT
 query a repository host's API, read release metadata or download or inspect
-APKs. A discovery that fails, or that lists no project the packs can render,
-SHALL fail generation without writing a candidate catalog, so it never
+APKs. A discovery that fails, or that lists no project at all, SHALL fail
+generation without writing a candidate catalog, so it never
 proposes removing every entry. Nothing else SHALL fail generation.
 
 #### Scenario: A README link outside the Project tables
@@ -43,30 +45,32 @@ proposes removing every entry. Nothing else SHALL fail generation.
 - **THEN** it requests only that source's upstream inputs, and no repository
   API, release or APK
 
-#### Scenario: Every listing is unsupported
+#### Scenario: Discovery lists nothing
 
-- **WHEN** a source's discovery succeeds but lists only projects on hosts the
-  packs do not render
+- **WHEN** a source's discovery succeeds but lists no project
 - **THEN** generation fails without writing a candidate catalog
 
 ### Requirement: Each listed project becomes a minimal Obtainium entry
 
-Generation SHALL emit one entry per normalized project URL a source lists, for
-every GitHub or GitLab repository URL, collapsing several listings of one
-normalized URL into one entry. A listing on any other host SHALL be reported as
-unsupported and SHALL NOT fail generation. Each entry SHALL carry:
+Generation SHALL emit one entry per normalized URL a source lists, whatever
+its host, collapsing several listings of one normalized URL into one entry. It
+SHALL NOT judge whether Obtainium can track a URL; an entry Obtainium cannot
+use is removed by a denial for its URL. Each entry SHALL carry:
 
-- the project URL as listed, with `overrideSource` GitHub or GitLab to match
-  its host;
+- the URL as listed;
+- `overrideSource` GitHub for a github.com repository URL and GitLab for a
+  gitlab.com project URL, and no `overrideSource` otherwise, so Obtainium
+  detects the source from the URL;
 - the name the listing gives (a codm link's text, a Quiver row's `project`),
-  or else the repository name from the URL; when listings of one URL give
+  or else the last path segment of the URL; when listings of one URL give
   different names, the first in case-insensitive order;
-- the repository owner from the URL as its author;
+- the repository owner as its author for a GitHub or GitLab URL, and an empty
+  author otherwise;
 - as its id, the first twelve lowercase hexadecimal characters of the SHA-256
   of its normalized URL, a form Obtainium treats as a placeholder it replaces
   with the APK's package id on first install;
-- no categories and the default settings for its source type, with no
-  release, asset or version selection beyond those defaults.
+- no categories and no settings beyond those the source type's defaults
+  supply.
 
 Generation SHALL NOT read any per-project policy: a setting an app needs, such
 as an APK filter, prerelease inclusion or track-only treatment, SHALL be
@@ -82,10 +86,10 @@ proposal shows as a removal.
 - **WHEN** a Quiver row names a GitLab repository
 - **THEN** the candidate holds an entry for it with `overrideSource` GitLab
 
-#### Scenario: A non-repository link is listed
+#### Scenario: A link on another host is listed
 
 - **WHEN** a codm Project table links an itch.io page
-- **THEN** the link is reported as unsupported and generation succeeds
+- **THEN** the candidate holds an entry for that URL with no `overrideSource`
 
 #### Scenario: Two listings name one repository
 
@@ -131,7 +135,7 @@ catalog, which SHALL be a regular file of mode 100644 in both the base revision
 and the commit. A source's run SHALL NOT stage or publish another source's
 catalog. The read-only job SHALL likewise reject a generated candidate or a
 workspace catalog that is not a regular file. Diagnostics SHALL identify the
-base revision, catalog changes, unsupported listings and pack validation
+base revision, catalog changes, skipped listings and pack validation
 outcome. The base revision SHALL appear in the PR body and in the run summary of
 a run whose staging succeeds; a run whose staging fails SHALL summarize that
 staging failed and its reason instead. The pack validation outcome SHALL be the
@@ -286,7 +290,7 @@ Credentials and raw HTTP caches SHALL be excluded from
 summaries and artifacts. Each source's current generation report SHALL be
 retained as an artifact under a name distinct from other sources' for 14 days on
 success and failure when available, and the run summary SHALL list catalog
-changes and unsupported listings. Missing reports after early failure SHALL NOT
+changes and skipped listings. Missing reports after early failure SHALL NOT
 imply successful validation. Actions SHALL expose failed generation, test,
 validation and PR-operation stages for each source.
 
@@ -303,10 +307,10 @@ automatically changing repository settings.
 - **WHEN** a proposal is opened or updated
 - **THEN** its body links the run whose test, build and verification results cover its content, and no automatic merge occurs
 
-#### Scenario: Unsupported listings are visible
+#### Scenario: Skipped listings are visible
 
-- **WHEN** a source lists a project on a host the packs do not render
-- **THEN** the run summary lists that listing
+- **WHEN** a Quiver row names a forge generation cannot form a URL for
+- **THEN** the run summary lists that row
 
 #### Scenario: Checks run without the write credential
 

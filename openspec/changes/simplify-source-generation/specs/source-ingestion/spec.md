@@ -1,5 +1,63 @@
 ## ADDED Requirements
 
+### Requirement: An entry's source type is declared, derived or left to Obtainium
+
+Obtainium reads a per-app source type, and detects one from the URL when an
+app declares none. An entry SHALL keep the source type its record declares,
+whatever its source. When a record declares none, the system SHALL derive one
+only for URLs whose type is unambiguous: a github.com repository takes GitHub
+and a gitlab.com project takes GitLab. Any other entry without a declaration
+SHALL carry no source type, leaving detection to Obtainium. The system SHALL
+NOT fail an entry for the source type it declares or lacks; a malformed
+declaration, one that is not a string, SHALL fail the build with the entry and
+value identified.
+
+Native GitLab entries SHALL follow the URL, identity and discovery boundary in
+"Public GitLab entries keep native source identity". Explicit per-app settings
+SHALL override hydrated defaults. A native GitLab entry SHALL be hydrated with
+the defaults defined for GitLab, never those defined for HTML.
+
+#### Scenario: Upstream record declares a source type
+
+- **WHEN** an upstream entry's record declares the HTML source type
+- **THEN** the ingested entry carries the HTML source type
+
+#### Scenario: An entry with no upstream record derives its source type
+
+- **WHEN** an extras entry or a committed codm2000 entry that omits
+  `overrideSource` addresses a github.com repository
+- **THEN** it carries the GitHub source type, while an entry addressing an
+  itch.io page carries no source type
+
+#### Scenario: Explicit GitLab declaration takes precedence over URL inference
+
+- **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
+- **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
+
+#### Scenario: Native GitLab URL is outside the supported boundary
+
+- **WHEN** an entry declares GitLab with a non-HTTPS URL, a host other than gitlab.com or no namespace/project path
+- **THEN** the build fails with the entry and invalid URL identified
+
+#### Scenario: A committed codm2000 entry declares its source type
+
+- **WHEN** a committed codm2000 entry addressing a github.com repository declares
+  the HTML source type
+- **THEN** the ingested entry carries the HTML source type rather than the type
+  its URL would derive
+
+
+#### Scenario: A record declares a source type the pack has no defaults for
+
+- **WHEN** an upstream record declares `overrideSource: Codeberg`
+- **THEN** the build keeps the entry with that source type and does not fail
+
+#### Scenario: An upstream record declares no source type
+
+- **WHEN** an RJNY or BBoi34 record carries no `overrideSource` and its URL is
+  not a github.com repository or a gitlab.com project
+- **THEN** the entry carries no source type and the build does not fail
+
 ### Requirement: Committed codm entries are dual-screen candidates
 
 The system SHALL ingest the committed codm2000 catalog as Obtainium JSON,
@@ -185,3 +243,9 @@ generated provenance in reports without claiming a fresh APK check.
 **Reason**: Generated codm entries no longer carry manifest package ids, track-only resource ids or reviewed discovery settings.
 
 **Migration**: Replaced by "Committed codm entries are dual-screen candidates".
+
+### Requirement: Every entry carries a supported source type
+
+**Reason**: The pack no longer limits entries to the source types it holds default settings for; Obtainium supports and detects many more.
+
+**Migration**: Replaced by "An entry's source type is declared, derived or left to Obtainium".
