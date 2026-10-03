@@ -26,7 +26,10 @@ has to turn an upstream list into Obtainium entries.
 - **BREAKING** The pack stops limiting source types to GitHub, GitLab and HTML:
   ingestion keeps any declared type and leaves an undeclared non-GitHub,
   non-GitLab type unset, rendering fills default settings only for the types it
-  holds defaults for, and verification type-checks settings only there.
+  holds defaults for, and verification type-checks settings only there. The
+  GitLab URL boundary (gitlab.com only, a bare project path) is removed, so a
+  self-hosted GitLab project is accepted as Obtainium's GitLab source accepts
+  it.
 - **BREAKING** Generation fails only when its discovery input cannot be read,
   is malformed, or lists nothing. No per-project outcome
   fails or blocks a run.

@@ -70,7 +70,9 @@ The same principle removes the pack's own source-type allowlist: ingestion no
 longer fails a declared or missing type it holds no defaults for, rendering
 fills defaults only for GitHub, GitLab and HTML and passes other entries'
 settings through, and verification type-checks settings only where defaults
-exist. The cost is that an entry of another type shows only the setting
+exist; the GitLab URL boundary, which accepted only a bare gitlab.com project
+path, goes too, since Obtainium's GitLab source reads self-hosted instances.
+The cost is that an entry of another type shows only the setting
 controls its settings carry, until Obtainium fills them; whether Obtainium
 fills missing keys on import is checked on a device before the change lands.
 

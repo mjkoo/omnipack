@@ -1,5 +1,26 @@
 ## ADDED Requirements
 
+### Requirement: GitLab entries keep their declared source type
+
+An entry from any source that declares `overrideSource: GitLab`, or whose URL
+is a gitlab.com project and that declares nothing, SHALL keep the GitLab
+source type, its URL as written and its explicit settings, and SHALL be
+hydrated with the defaults defined for GitLab, never those defined for HTML.
+The system SHALL NOT restrict a GitLab entry's host, path, port or query.
+
+#### Scenario: A GitLab extra reaches both exports
+
+- **WHEN** an explicit GitLab extra is selected in both variants
+- **THEN** both outputs and individual import links retain native GitLab
+  identity and compatible settings
+
+#### Scenario: A self-hosted GitLab project is declared
+
+- **WHEN** an extras entry declares GitLab with the URL of a project on a
+  self-hosted GitLab instance
+- **THEN** the build keeps the entry with the GitLab source type and its URL
+  unchanged
+
 ### Requirement: An entry's source type is declared, derived or left to Obtainium
 
 Obtainium reads a per-app source type, and detects one from the URL when an
@@ -12,8 +33,9 @@ NOT fail an entry for the source type it declares or lacks; a malformed
 declaration, one that is not a string, SHALL fail the build with the entry and
 value identified.
 
-Native GitLab entries SHALL follow the URL, identity and discovery boundary in
-"Public GitLab entries keep native source identity". Explicit per-app settings
+An entry declaring GitLab SHALL keep the URL as written, so a project on any
+GitLab instance, gitlab.com or self-hosted, reaches the pack as Obtainium's
+GitLab source reads it. Explicit per-app settings
 SHALL override hydrated defaults. A native GitLab entry SHALL be hydrated with
 the defaults defined for GitLab, never those defined for HTML.
 
@@ -33,11 +55,6 @@ the defaults defined for GitLab, never those defined for HTML.
 
 - **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
 - **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
-
-#### Scenario: Native GitLab URL is outside the supported boundary
-
-- **WHEN** an entry declares GitLab with a non-HTTPS URL, a host other than gitlab.com or no namespace/project path
-- **THEN** the build fails with the entry and invalid URL identified
 
 #### Scenario: A committed codm2000 entry declares its source type
 
@@ -132,10 +149,7 @@ candidates it governs.
 
 This normalized form is the system's comparison identity, and it SHALL decide
 only whether two spellings mean one project. It SHALL NOT decide whether a URL
-is acceptable to a source adapter: an adapter that reads a URL as written does
-so at an earlier stage, before normalization, so a URL that compares equal to
-an acceptable one MAY still be rejected there. The two notions of "the same
-host" are therefore distinct stages, and neither follows from the other.
+is acceptable: no stage rejects an entry for its URL's host or path.
 
 #### Scenario: Two spellings of one project
 
@@ -173,30 +187,6 @@ host" are therefore distinct stages, and neither follows from the other.
   explicit port
 - **THEN** they are different projects on every host, github.com included,
   because the normalized form retains an explicit port wherever it appears
-
-### Requirement: Public GitLab entries keep native source identity
-
-The system SHALL accept explicit extras and generated catalog entries with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when its scheme is `https` and its host is `gitlab.com`, each compared without regard to case, with no `www.` prefix and no port, carrying no credentials, and whose path holds between two and twenty-one nonempty components naming a project and its namespaces, each read with its case and encoding exactly as written while empty components and a trailing slash are ignored, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project.
-
-This acceptance boundary is an earlier and separate stage from normalized
-comparison: the native adapter reads the project path out of the URL as the
-entry spells it, before any normalization is applied, so a URL that compares
-equal to an acceptable one MAY still be rejected here. A `www.gitlab.com`
-spelling compares equal to the canonical one, because comparison drops a leading
-`www.`, and is nonetheless not a native GitLab project URL; an explicit port is
-rejected here and, being retained in the normalized form, also makes a different
-project under comparison. Acceptance SHALL therefore be decided on the URL as
-written rather than on its comparison identity.
-
-#### Scenario: A GitLab extra reaches both exports
-
-- **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is selected in both variants
-- **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
-
-#### Scenario: A GitLab URL carries more than a project path
-
-- **WHEN** an entry declares GitLab with a gitlab.com URL whose host is spelled with a `www.` prefix, or that carries a query, a fragment, credentials, an explicit port, a reserved `-` path component or more path components than a project and its namespaces
-- **THEN** the build fails with the entry and the invalid URL identified, rather than reading a project path out of it
 
 ### Requirement: Committed Quiver entries are baseline builds with generated provenance
 
@@ -249,3 +239,9 @@ generated provenance in reports without claiming a fresh APK check.
 **Reason**: The pack no longer limits entries to the source types it holds default settings for; Obtainium supports and detects many more.
 
 **Migration**: Replaced by "An entry's source type is declared, derived or left to Obtainium".
+
+### Requirement: Public GitLab entries keep native source identity
+
+**Reason**: Obtainium's GitLab source also reads self-hosted instances and URLs beyond a bare gitlab.com project path; the pack no longer rejects them.
+
+**Migration**: Replaced by "GitLab entries keep their declared source type".
