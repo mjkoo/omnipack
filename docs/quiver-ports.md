@@ -41,13 +41,12 @@ Minish Cap and Gen1Recomp extras still win. Quiver exception filters
 apply to Quiver candidates; the winning source's settings apply whole. Dual
 selection prefers dual-screen builds before precedence, so Dusklight, CTR and
 Emerald keep their dual-screen sources. BBoi's KartPad, Silent Hill and
-Dusklight standard entries carry package ID corrections to their inspected
-manifests, so they group with Quiver's entries instead of shipping as
-duplicates.
-Different package IDs can be grouped through explicit reviewed family rules;
-titles alone never determine a family.
+Dusklight standard entries list the same repositories as Quiver's, so they
+group with Quiver's entries by project URL instead of shipping as duplicates.
+Builds at different repositories can be grouped through explicit reviewed family
+rules; package ids and titles alone never determine a family.
 
 For existing fork and signer details, see [source reconciliation](source-reconciliation.md).
 For discovery settings and maintenance, see [source generation](source-generation.md).
 A discovery skip pauses Quiver inspection and retains a matching accepted entry;
-a package denial excludes an unwanted package across every source and both packs.
+a project denial excludes an unwanted project across every source and both packs.

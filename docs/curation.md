@@ -3,7 +3,7 @@
 ## Pack tracking entries
 
 The RJNY/Obtainium-Emulation-Pack tracking entry (`904332840`) is excluded from
-both exports through `config/deny.json`. RJNY remains an app catalog source,
+both exports by a denial of its project URL in `config/deny.json`. RJNY remains an app catalog source,
 and its attribution and fixture provenance are retained. This exclusion survives
 upstream refreshes and removes the tracker from the individual app catalog too.
 
@@ -56,7 +56,7 @@ live publication acceptance.
 [Quiver port setup](quiver-ports.md) lists required game data and known setup
 limitations for the additional baseline ports. Discovery skips pause a particular
 Quiver lookup and retain matching accepted entries. To exclude an app from both
-packs regardless of source, use its package ID in `config/deny.json`.
+packs regardless of source, deny its project URL in `config/deny.json`.
 
 ## Port setup
 
@@ -143,9 +143,9 @@ keep every alternative, so Obtainium asks which one to install. Filters exclude
 the unwanted asset rather than spell out the wanted name, so an upstream rename
 surfaces as an install prompt instead of a silent fallback to an older release.
 
-Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) carries a package ID
-correction to `com.winlator.vanilla` and selects the asset whose name contains
-`vanilla`. Its [releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
+Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) ships as
+`com.winlator.vanilla` through an overlay `id` patch on its project URL and
+selects the asset whose name contains `vanilla`. Its [releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
 ship three builds: the vanilla build declares `com.winlator.vanilla`, the package
 RJNY's `bionic-vanilla` filter installed through v3.1.h, while the Ludashi and
 Redmagic builds declare other apps' package names (`com.ludashi.benchmark` and
@@ -153,13 +153,55 @@ Redmagic builds declare other apps' package names (`com.ludashi.benchmark` and
 v4.1 vanilla APKs share one signing certificate and versionCode 20, so the
 vanilla build continues an existing installation.
 
+## Wrong package ids
+
+A source sometimes lists an app under a package id that differs from the one its
+APK declares. Obtainium saves every imported record under its `id`, never
+matching by URL, and after installing an APK that declares another id it
+re-saves the installed app under the APK's id. So while an entry's shipped id
+differs from its APK's, every pack import after installation adds a
+never-installed duplicate beside the installed app, or Obtainium reports an id
+error. Pack re-import is the normal update flow, so the duplicate recurs.
+
+When Obtainium shows such a duplicate or an id error, fix the entry by hand with
+a `patch.id` record on the app's project URL in `config/overlay.json`, setting it
+to the id the installed APK declares, exactly as a name or an APK filter is
+fixed:
+
+```json
+{"url": "https://github.com/example/app", "patch": {"id": "org.example.app"}}
+```
+
+No tooling reads APKs to find these ids; the symptom on a device is the signal.
+The patch changes only the rendered id. Families, denials, pins and overlay
+matching still use the source's id and URL. An `id` patch is refused at a URL
+whose rules split it into several families.
+
+Every published pack app carries `allowIdChange: true`, so an entry whose id is
+still wrong installs and adopts its APK's id instead of failing. Pack entries
+therefore do not keep Obtainium's id-change protection: Obtainium clears the
+flag only when an install actually changes the stored id, and every import or
+re-import of the pack sets it back to `true`. If an upstream build later
+declares a different package id, Obtainium adopts it rather than reporting an
+id change.
+
+Two limitations are accepted. An overlay record applies to every selected entry
+at its URL, so a setting meant for only one of several families at a split URL
+belongs in that build's source rather than the overlay. And an `id` patch cannot
+fix a family whose single-screen and dual-screen selections at one URL are
+different APKs with different real ids: one of them keeps a wrong id, and its
+symptom is the recurring duplicate after each re-import. No current family has
+this shape.
+
 ## Manifest evidence
 
-Each link identifies the inspected primary APK asset. Configured ids, observed
+Each link identifies the inspected primary APK asset. Source ids, observed
 source versions and manifest values are also retained in the
-[regression evidence](../tests/fixtures/curation/README.md).
+[regression evidence](../tests/fixtures/curation/README.md). Where an APK
+package differs from the source id, the pack ships the APK's package through an
+overlay `id` patch on that project URL.
 
-| Configured id | Source version | APK package | APK versionName | APK versionCode | Primary asset |
+| Source id | Source version | APK package | APK versionName | APK versionCode | Primary asset |
 | --- | --- | --- | --- | --- | --- |
 | `com.aure.banjorecomp` | `android-v0.1.1` | `com.aure.banjorecomp` | `0.1.1` | 101 | [APK](https://github.com/AurelioB/BanjoRecomp-Android/releases/download/android-v0.1.1/BanjoRecompiled-v0.1.1-Android-ARM64.apk) |
 | `com.sergiomanzur.sotnrecomp` | `android-v0.10.1b` | `com.blacklabelhq.sotn` | `0.10.1` | 12 | [APK](https://github.com/sergiomanzur/SymphonyRecomp/releases/download/android-v0.10.1b/SymphonyRecomp-Android-Beta-0.10.1.apk) |
@@ -240,7 +282,7 @@ sources. The later [installed-source reconciliation](source-reconciliation.md)
 corrects Symphony and Shipwright plus the other reviewed installed identities,
 replaces Ghostship with its official Android release, and removes retired Super
 Metroid. Its reputation-plus-basic-vetting policy retains Symphony and OpenMW-DS.
-An identity correction does not itself require replacing an installed APK.
+An `id` correction does not itself require replacing an installed APK.
 
 [XenDroid releases](https://github.com/rfandango/XenDroid/releases) exposed
 XenDroid-c4f6863 during refresh; its inspected manifest has the matching hash

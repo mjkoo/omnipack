@@ -87,7 +87,7 @@ date.
   the acceptance standard above, made without downloading or inspecting an APK.
   It also settles the open identity question: the packs used
   `com.underdecoded.gen2recomped` while an Obtainium entry predating the pack
-  used `com.underdecodedhd.gen2recomp`, and a denial keyed on the effective id
+  used `com.underdecodedhd.gen2recomp`, and a denial of the project URL
   removes the entry without resolving which id the APK declares.
 - **GameHub Lite is excluded (observed 2026-09-28 UTC).**
   [Producdevity/gamehub-lite](https://github.com/Producdevity/gamehub-lite),
@@ -131,9 +131,11 @@ use and reputation; they are not endorsements by the original game publishers.
 
 These are corrections to Obtainium's configured tracking ID. They name the
 package already present inside the inspected APK; they do not rename an Android
-installation or require reinstalling an identical APK. Composition rules match
-original source provenance and preserve that original catalog identity in build
-reports. Package/family uniqueness is enforced after correction.
+installation or require reinstalling an identical APK. Each is an overlay `id`
+patch on the project URL whose entry the packs select, so it changes only the
+rendered id; selection, families and build reports keep the catalog's id. A
+correction for a project the packs do not select, such as BBoi's Pokémon
+Red/Blue build, which the curated extra outranks, is not configured.
 
 | App | Original catalog ID | Verified APK ID |
 | --- | --- | --- |
@@ -230,8 +232,8 @@ existing Simon installation. These are limits in our curation and acceptance
 process as well as upstream metadata quality, not evidence that the conflict
 resolver randomly chose the wrong repository.
 
-Maintained provenance-aware corrections, explicit official-source pins, and
-package denials now preserve the decisions through refreshes. The bounded
+Maintained provenance-aware overlay `id` patches, explicit official-source pins,
+and project denials now preserve the decisions through refreshes. The bounded
 review did not cover Winlator-Ludashi, whose identity and asset selection
 [curation](curation.md) records separately. See
 [verification](verification.md) for the runtime check's limits.

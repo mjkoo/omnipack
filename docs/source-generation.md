@@ -88,9 +88,10 @@ to the entry a skip or a retained failure already kept is not resolved again; th
 report lists it under that skip or retained failure. A literal unsupported-row
 skip may instead name `repository` and `repositorySource`. Every skip needs a
 reason. Neither kind prunes apps from this source or any other source. Use the
-package deny list in `config/deny.json` for permanent exclusion from both packs:
-package denial applies globally, including after a repository rename. A denied
-package can remain in a source candidate catalog while composition excludes it.
+project deny list in `config/deny.json` for permanent exclusion from both packs:
+a denial applies to every source listing that project URL, though a repository
+rename escapes it until the new URL is denied too. A denied project can remain
+in a source candidate catalog while composition excludes it.
 
 ### Retained failures and an open proposal
 

@@ -1,11 +1,11 @@
 # Curation observations
 
 `baseline-apps.json` captures the affected entries from the pre-curation packs.
-The curation regression applies the maintained overlays and identity
-corrections to them and checks that only the intended settings change.
+The curation regression applies the maintained overlays, including their `id`
+patches, to them and checks that only the intended settings change.
 
 `ctr.json` records two independent 2026-09-10 CTR release and APK observations.
-Each variant retains its repository, original and effective identity, full source
+Each variant retains its repository, source and manifest identity, full source
 tag, selected asset metadata, decoded manifest values, byte size and SHA-256.
 The APK identities were decoded from separately downloaded binaries, and each
 download byte-matched its corresponding prior capture. The hashes identify dated
@@ -17,7 +17,7 @@ Ghostship ZIP and member observation used by the reconciliation curation tests.
 The historical configured Symphony, Simon CTR, Shipwright and Ludashi identities
 disagreed with their APK manifests: respectively `com.blacklabelhq.sotn`,
 `com.ctrnative`, `com.dishii.soh` and `com.winlator.vanilla`. The curation
-regression applies their maintained corrections to the baseline entries;
+regression applies their overlay `id` patches to the baseline entries;
 Ludashi's v4.1 `vanilla-build.apk` declares the same `com.winlator.vanilla`
 package as v3.1.h's `bionic-vanilla.apk`.
 
