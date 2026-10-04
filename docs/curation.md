@@ -200,8 +200,9 @@ this shape.
 Each link identifies the inspected primary APK asset. Source ids, observed
 source versions and manifest values are also retained in the
 [regression evidence](../tests/fixtures/curation/README.md). Where an APK
-package differs from the source id, the pack ships the APK's package through an
-overlay `id` patch on that project URL.
+package differs from the source id, the pack ships the APK's package, either
+because the selected entry's source already lists it or through an overlay `id`
+patch on that project URL.
 
 | Source id | Source version | APK package | APK versionName | APK versionCode | Primary asset |
 | --- | --- | --- | --- | --- | --- |

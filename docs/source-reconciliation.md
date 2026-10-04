@@ -132,10 +132,12 @@ use and reputation; they are not endorsements by the original game publishers.
 
 These are corrections to Obtainium's configured tracking ID. They name the
 package already present inside the inspected APK; they do not rename an Android
-installation or require reinstalling an identical APK. Each is an overlay `id`
-patch on the project URL whose entry the packs select, so it changes only the
-rendered id; selection, families and the build report's selections keep the
-catalog's id. A correction for a project the packs do not select is not
+installation or require reinstalling an identical APK. Where the entry the packs
+select already lists the APK's package, as Quiver's entries for Crash
+Bandicoot, Simon's CTR, KartPad, Silent Hill and Dusklight do, nothing needs
+configuring. Every other correction is an overlay `id` patch on the project URL
+whose entry the packs select, so it changes only the rendered id; selection,
+families and the build report's selections keep the catalog's id. A correction for a project the packs do not select is not
 configured: BBoi's Pokémon Red/Blue Recomp build lists
 `com.bryanthaboi.pokemonredblue` while its APK declares
 `com.theboisclub.pokemonred`, but the curated extra outranks it.

@@ -214,7 +214,9 @@ family instead; and each correction whose URL carries a selected entry moves int
 `config/overlay.json` as a `patch.id` record on that URL, merged into the
 existing record when the URL already has one, since two records with one URL
 fail. A correction whose candidate is never selected renders nothing today, and
-a record matching no selected entry fails as stale, so it is not carried over.
+a record matching no selected entry fails as stale, so it is not carried over;
+nor is one whose selected entry already lists the corrected id, since the patch
+would change nothing.
 The effective-id concept and the original-versus-effective report columns are
 deleted: the selection report names the source id, and the rendered pack the
 patched one.
@@ -328,8 +330,8 @@ Code and configuration change together on one branch, since the old and new
 key spellings are not interchangeable:
 
 1. `config/composition.json`: remove `packageId` from every rule, after
-   carrying each correction whose URL carries a selected entry into
-   `config/overlay.json` (step 3). Of the 18 rules that carried nothing else,
+   carrying each correction whose URL carries a selected entry that does not
+   already list the corrected id into `config/overlay.json` (step 3). Of the 18 rules that carried nothing else,
    delete 16 and give the remaining two, the BBoi `tmc-android` standard and
    dual rules, `family: app:minish-cap`; add one for the extras Picori entry;
    add `app:melonds` and `app:melonds-nightly` rules for RJNY's two melonDS
