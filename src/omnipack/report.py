@@ -26,8 +26,9 @@ from omnipack.report_model import (
     not_run_verdict,
 )
 from omnipack.sources import IngestionReport
+from omnipack.urls import normalize_project_url
 
-BUILD_SCHEMA_VERSION = 4
+BUILD_SCHEMA_VERSION = 5
 _VARIANT_VALUES = frozenset(variant.value for variant in Variant)
 
 
@@ -37,7 +38,7 @@ class ReportFormatError(ValueError):
 
 def write_report(
     root: Path,
-    previous: Mapping[Variant, set[str]],
+    previous: Mapping[Variant, set[tuple[str, str]]],
     composition: CompositionResult | None,
     ingestion: IngestionReport,
     *,
@@ -50,11 +51,18 @@ def write_report(
     if composition is not None:
         changes = {}
         for variant in Variant:
-            current = {app.id for app in composition.apps[variant]}
+            current = {
+                (app.id, normalize_project_url(app.url))
+                for app in composition.apps[variant]
+            }
             before = previous.get(variant, set())
             changes[variant.value] = {
-                "added": sorted(current - before),
-                "removed": sorted(before - current),
+                "added": [
+                    {"id": id_, "url": url} for id_, url in sorted(current - before)
+                ],
+                "removed": [
+                    {"id": id_, "url": url} for id_, url in sorted(before - current)
+                ],
             }
         composition_report = composition.report
     records = composition_report or CompositionReport()
@@ -66,6 +74,9 @@ def write_report(
         "denylistRemovals": [_record(item) for item in records.removals],
         "staleExclusions": [_record(item) for item in records.stale_exclusions],
         "selections": [_record(item) for item in records.selections],
+        "repeatedIds": [_record(item) for item in records.repeated_ids],
+        "singleOnlyFamilies": [_record(item) for item in records.single_only_families],
+        "sameRankTies": [_record(item) for item in records.same_rank_ties],
         "uncategorizedFamilies": [
             _record(item) for item in records.uncategorized_families
         ],
@@ -116,21 +127,56 @@ def format_reports(root: Path) -> str:
                 else "Change"
             )
             for variant, comparison in changes.items():
-                for direction, ids in comparison.items():
+                for direction, entries in comparison.items():
                     lines.extend(
-                        f"{label}: {variant} {direction}: {id_}" for id_ in ids
+                        f"{label}: {variant} {direction}: {entry['id']}; "
+                        f"URL: {entry['url']}"
+                        for entry in entries
                     )
         for item in build["denylistRemovals"]:
-            if not _strings(item, ("id", "variant", "family", "reason")):
+            families = item.get("families") if isinstance(item, dict) else None
+            if not _strings(item, ("url", "reason")) or not _string_list(families):
                 raise ReportFormatError("malformed build denylist exclusion")
             lines.append(
-                f"Exclusion: {item['variant']} {item['id']}; "
-                f"family: {item['family']}; reason: {item['reason']}"
+                f"Exclusion: {item['url']}; families: {', '.join(families)}; "
+                f"reason: {item['reason']}"
             )
         for item in build["staleExclusions"]:
-            if not _strings(item, ("id", "reason")):
+            if not _strings(item, ("url", "reason")):
                 raise ReportFormatError("malformed build stale exclusion")
-            lines.append(f"Stale exclusion: {item['id']}; reason: {item['reason']}")
+            lines.append(f"Stale exclusion: {item['url']}; reason: {item['reason']}")
+        for item in build["repeatedIds"]:
+            entries = item.get("entries") if isinstance(item, dict) else None
+            if not _strings(item, ("variant", "id")) or not (
+                isinstance(entries, list)
+                and entries
+                and all(_strings(entry, ("family", "url")) for entry in entries)
+            ):
+                raise ReportFormatError("malformed build repeated package id")
+            lines.append(
+                f"Repeated package id: {item['variant']} {item['id']}; entries: "
+                + "; ".join(f"{entry['family']} at {entry['url']}" for entry in entries)
+            )
+        for item in build["singleOnlyFamilies"]:
+            if not _strings(item, ("family", "id", "url")):
+                raise ReportFormatError("malformed build single-only family")
+            lines.append(
+                f"Single-only family: {item['family']}; id: {item['id']}; "
+                f"URL: {item['url']}"
+            )
+        for item in build["sameRankTies"]:
+            tied = item.get("tied") if isinstance(item, dict) else None
+            if (
+                not _strings(item, ("family", "variant"))
+                or not isinstance(tied, list)
+                or not tied
+            ):
+                raise ReportFormatError("malformed build same-rank tie")
+            lines.append(
+                f"Same-rank tie: {item['variant']} {item['family']}; tied: "
+                + " | ".join(_format_selector(selector) for selector in tied)
+                + f"; winner: {_format_selector(item.get('winner'))}"
+            )
         for item in build["uncategorizedFamilies"]:
             variants = item.get("variants")
             if not _strings(item, ("family",)) or not (
@@ -161,6 +207,7 @@ def format_reports(root: Path) -> str:
         offline = build["offlineVerification"]
         lines.append(f"Offline verification: {offline['status']}")
         lines.extend(_format_findings(offline["findings"]))
+        lines.extend(_format_findings(offline["nonfatalFindings"], "Nonfatal finding"))
         sections.append("\n".join(lines))
     else:
         sections.append("Build report\nNo build report recorded")
@@ -185,6 +232,7 @@ def format_reports(root: Path) -> str:
             f"Observed: {observed}",
         ]
         lines.extend(_format_findings(verify["errors"], "Error"))
+        lines.extend(_format_findings(verify["nonfatalFindings"], "Nonfatal finding"))
         sections.append("\n".join(lines))
     else:
         sections.append("Verification report\nNo standalone verification recorded")
@@ -197,24 +245,36 @@ def _strings(item: object, keys: tuple[str, ...]) -> TypeIs[dict[str, Any]]:
     )
 
 
+def _string_list(value: object) -> TypeIs[list[str]]:
+    return (
+        isinstance(value, list)
+        and bool(value)
+        and all(isinstance(item, str) for item in value)
+    )
+
+
 def _format_winner(item: dict[str, Any]) -> str:
-    if not _strings(
-        item, ("original_id", "effective_id", "url", "source", "origin", "reason")
-    ):
+    if not _strings(item, ("id", "url", "source", "origin", "reason")):
         raise ReportFormatError("malformed build selection winner")
     return (
-        f"original id: {item['original_id']}; effective id: {item['effective_id']}; "
-        f"URL: {item['url']}; source: {item['source']}/{item['origin']}"
+        f"id: {item['id']}; URL: {item['url']}; "
+        f"source: {item['source']}/{item['origin']}"
     )
 
 
 def _format_considered(item: object) -> str:
-    if not _strings(item, ("original_id", "url", "source", "origin")):
+    if not _strings(item, ("id", "url", "source", "origin")):
         raise ReportFormatError("malformed build selection considered candidate")
     return (
-        f"original id: {item['original_id']}; URL: {item['url']}; "
+        f"id: {item['id']}; URL: {item['url']}; "
         f"source: {item['source']}/{item['origin']}"
     )
+
+
+def _format_selector(item: object) -> str:
+    if not _strings(item, ("source", "origin", "id", "url")):
+        raise ReportFormatError("malformed build same-rank tie selector")
+    return f"{item['source']}/{item['origin']} {item['id']} at {item['url']}"
 
 
 def _format_verification_mode(value: dict[str, Any]) -> str:
@@ -257,6 +317,9 @@ _BUILD_FIELDS = frozenset(
         "denylistRemovals",
         "staleExclusions",
         "selections",
+        "repeatedIds",
+        "singleOnlyFamilies",
+        "sameRankTies",
         "uncategorizedFamilies",
         "staleCategoryAssignments",
         "offlineVerification",
@@ -268,6 +331,9 @@ _BUILD_RECORD_FIELDS = (
     "denylistRemovals",
     "staleExclusions",
     "selections",
+    "repeatedIds",
+    "singleOnlyFamilies",
+    "sameRankTies",
     "uncategorizedFamilies",
 )
 
@@ -301,8 +367,9 @@ def _validate_build_report(value: dict[str, Any]) -> None:
             isinstance(item, dict)
             and set(item) == {"added", "removed"}
             and all(
-                isinstance(ids, list) and all(isinstance(id_, str) for id_ in ids)
-                for ids in item.values()
+                isinstance(entries, list)
+                and all(_strings(entry, ("id", "url")) for entry in entries)
+                for entries in item.values()
             )
             for item in changes.values()
         )
@@ -321,8 +388,11 @@ def _validate_build_report(value: dict[str, Any]) -> None:
     if (
         not isinstance(offline, dict)
         or offline.get("status") not in OfflineStatus
-        or not isinstance(offline.get("findings"), list)
-        or not all(_valid_finding(item) for item in offline["findings"])
+        or not all(
+            isinstance(offline.get(key), list)
+            and all(_valid_finding(item) for item in offline[key])
+            for key in ("findings", "nonfatalFindings")
+        )
     ):
         raise ReportFormatError("malformed build offline verification")
 
@@ -357,8 +427,10 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
             "status",
             "inputs",
             "errors",
+            "nonfatalFindings",
         }
         or not isinstance(value.get("errors"), list)
+        or not isinstance(value.get("nonfatalFindings"), list)
     ):
         raise ReportFormatError("malformed verification report")
 
@@ -369,6 +441,7 @@ def _validate_verification_report(value: dict[str, Any]) -> None:
         or (value["status"] == Status.FAILED and not value["errors"])
         or not all(_fingerprint(item) for item in inputs.values())
         or not all(_valid_finding(item) for item in value["errors"])
+        or not all(_valid_finding(item) for item in value["nonfatalFindings"])
     ):
         raise ReportFormatError("malformed verification report records")
 
@@ -420,10 +493,7 @@ def _valid_finding(value: object) -> bool:
 
 
 def _record(value: Any) -> dict[str, Any]:
-    result = asdict(value)
-    if "package_id" in result:
-        result["id"] = result.pop("package_id")
-    return _json_value(result)
+    return _json_value(asdict(value))
 
 
 def _json_value(value: Any) -> Any:

@@ -7,9 +7,7 @@ from pathlib import Path
 
 from omnipack.catalog import generate_catalog, replace_catalog, split_catalog
 from omnipack.composition_policy import (
-    apply_composition_policy,
     parse_composition_policy,
-    rendered_key,
 )
 from omnipack.merge import compose
 from omnipack.model import Variant
@@ -89,18 +87,15 @@ def test_quiver_admission_changes_only_families_quiver_wins(
     baseline_candidates = [
         app for app in candidates if app.provenance.source != "quiver"
     ]
-    # An overlay record patching an app only Quiver supplies has no target
+    # An overlay record patching a project only Quiver supplies has no target
     # before admission.
-    corrected = apply_composition_policy(
-        parse_composition_policy(current_configuration.policy), candidates
-    )
     quiver_only = {
-        rendered_key(app.id, app.url)
-        for app in corrected
+        normalize_project_url(app.url)
+        for app in candidates
         if app.provenance.source == "quiver"
     } - {
-        rendered_key(app.id, app.url)
-        for app in corrected
+        normalize_project_url(app.url)
+        for app in candidates
         if app.provenance.source != "quiver"
     }
     baseline = compose(
@@ -109,7 +104,7 @@ def test_quiver_admission_changes_only_families_quiver_wins(
         [
             record
             for record in json.loads((ROOT / "config/overlay.json").read_text())
-            if rendered_key(record["id"], record["url"]) not in quiver_only
+            if normalize_project_url(record["url"]) not in quiver_only
         ],
         policy=parse_composition_policy(baseline_policy),
     )
@@ -154,7 +149,7 @@ def test_quiver_credit_survives_catalog_rendering(
     assert credit in rebuilt
 
 
-def test_discovery_skip_does_not_replace_package_denial(tmp_path: Path) -> None:
+def test_discovery_skip_does_not_replace_project_denial(tmp_path: Path) -> None:
     values = setup(tmp_path, rows=[{"repository": "o/renamed"}])
     package_id = "org.example.game"
     set_policy(
@@ -177,9 +172,13 @@ def test_discovery_skip_does_not_replace_package_denial(tmp_path: Path) -> None:
     )
     unblocked = compose([candidate], [], [], policy=empty_policy)
     assert all(unblocked.apps[variant] for variant in Variant)
+    # A denial of the old URL does not reach the renamed project.
+    old_denial = [{"url": "https://github.com/o/repo", "reason": "Rejected."}]
+    renamed = compose([candidate], old_denial, [], policy=empty_policy)
+    assert all(renamed.apps[variant] for variant in Variant)
     blocked = compose(
         [candidate],
-        [{"id": package_id, "reason": "Rejected after source review."}],
+        [{"url": candidate.url, "reason": "Rejected after source review."}],
         [],
         policy=empty_policy,
     )

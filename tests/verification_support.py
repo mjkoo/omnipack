@@ -33,7 +33,7 @@ def write_verification_inputs(root: Path) -> None:
 def verification_report(**fields: object) -> dict[str, Any]:
     """Return one valid serialized verification report with explicit defaults."""
     document: dict[str, Any] = {
-        "schemaVersion": 4,
+        "schemaVersion": 5,
         "verifier": {"version": "fixture", "scope": "structural"},
         "mode": "offline",
         "startedAt": "2026-09-01T00:00:00+00:00",
@@ -44,6 +44,7 @@ def verification_report(**fields: object) -> dict[str, Any]:
             for name in ("single", "dual", "deny", "overlay", "composition", "readme")
         },
         "errors": [],
+        "nonfatalFindings": [],
     }
     document.update(fields)
     return document

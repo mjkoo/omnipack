@@ -12,9 +12,9 @@ from urllib.parse import quote, urlencode
 from omnipack.composition_policy import (
     CompositionPolicy,
     RenderedKey,
-    find_repeats,
     pair_entries,
     rendered_key,
+    repeated_labels,
 )
 
 START_MARKER = b"<!-- omnipack:catalog:start -->"
@@ -56,14 +56,10 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
                     f"{variant} app {package_id!r} has invalid categories"
                 )
             keyed.append((rendered_key(package_id, url), record))
-        repeats = find_repeats(policy, [key for key, _ in keyed])
-        if repeats.ids:
+        repeats = repeated_labels(policy, [key for key, _ in keyed])
+        if repeats:
             raise CatalogError(
-                f"{variant} contains duplicate package id {repeats.ids[0]!r}"
-            )
-        if repeats.families:
-            raise CatalogError(
-                f"{variant} contains duplicate explicit family {min(repeats.families)!r}"
+                f"{variant} contains more than one entry of family {min(repeats)!r}"
             )
         records[variant] = dict(keyed)
 

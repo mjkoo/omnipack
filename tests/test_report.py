@@ -36,7 +36,7 @@ def build_report(
 
 def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
-    assert run_verification(tmp_path)["schemaVersion"] == 4
+    assert run_verification(tmp_path)["schemaVersion"] == 5
     output = format_reports(tmp_path)
     assert "No build report recorded" in output
     assert "Evidence: current" in output
@@ -62,8 +62,9 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
         {"schemaVersion": 1, "status": "success"},
         {"schemaVersion": 2, "status": "success", "displacements": []},
         {"schemaVersion": 3, "status": "success"},
+        {"schemaVersion": 4, "status": "success", "denylistRemovals": []},
     ],
-    ids=["schemaless", "schema-1", "schema-2", "schema-3"],
+    ids=["schemaless", "schema-1", "schema-2", "schema-3", "schema-4"],
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
@@ -139,7 +140,7 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    assert report["schemaVersion"] == 4
+    assert report["schemaVersion"] == 5
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
@@ -164,7 +165,14 @@ def test_corrupt_verification_report_fails(tmp_path: Path, value: str) -> None:
 
 
 def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
-    build_report(tmp_path, offlineVerification={"status": "success", "findings": []})
+    build_report(
+        tmp_path,
+        offlineVerification={
+            "status": "success",
+            "findings": [],
+            "nonfatalFindings": [],
+        },
+    )
     assert "Offline verification: success" in format_reports(tmp_path)
 
 
@@ -194,6 +202,15 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
             },
             "malformed build package changes",
         ),
+        (
+            {
+                "changes": {
+                    "single": {"added": [], "removed": ["x"]},
+                    "dual": {"added": [{"id": "x"}], "removed": []},
+                }
+            },
+            "malformed build package changes",
+        ),
         ({"sourceAdmissions": None}, "malformed build report sourceAdmissions"),
         (
             {"sourceAdmissions": ["admitted"]},
@@ -201,15 +218,47 @@ def test_current_schema_build_only_is_displayable(tmp_path: Path) -> None:
         ),
         ({"offlineVerification": []}, "malformed build offline verification"),
         (
-            {"offlineVerification": {"status": [], "findings": []}},
+            {
+                "offlineVerification": {
+                    "status": [],
+                    "findings": [],
+                    "nonfatalFindings": [],
+                }
+            },
             "malformed build offline verification",
         ),
         (
-            {"offlineVerification": {"status": "success", "findings": {}}},
+            {
+                "offlineVerification": {
+                    "status": "success",
+                    "findings": {},
+                    "nonfatalFindings": [],
+                }
+            },
             "malformed build offline verification",
         ),
         (
-            {"offlineVerification": {"status": "failed", "findings": [{}]}},
+            {
+                "offlineVerification": {
+                    "status": "failed",
+                    "findings": [{}],
+                    "nonfatalFindings": [],
+                }
+            },
+            "malformed build offline verification",
+        ),
+        (
+            {"offlineVerification": {"status": "success", "findings": []}},
+            "malformed build offline verification",
+        ),
+        (
+            {
+                "offlineVerification": {
+                    "status": "success",
+                    "findings": [],
+                    "nonfatalFindings": [{}],
+                }
+            },
             "malformed build offline verification",
         ),
     ],
@@ -244,6 +293,9 @@ def test_malformed_build_report_is_concise_cli_failure(
         "denylistRemovals",
         "staleExclusions",
         "selections",
+        "repeatedIds",
+        "singleOnlyFamilies",
+        "sameRankTies",
         "uncategorizedFamilies",
         "staleCategoryAssignments",
         "offlineVerification",
@@ -286,7 +338,7 @@ def test_findings_display_location_and_field(tmp_path, monkeypatch, capsys) -> N
     assert path.read_bytes() == before
 
 
-def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
+def test_human_report_shows_winner_reason_and_considered_candidates(
     tmp_path: Path,
 ) -> None:
     from omnipack.merge import CompositionReport, ConsideredCandidate, FamilySelection
@@ -297,8 +349,7 @@ def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
     selection = FamilySelection(
         "app:shared",
         Variant.DUAL,
-        "manifest.wrong",
-        "correct.pkg",
+        "winner.pkg",
         "https://example.test/winner",
         "extras",
         "extras",
@@ -307,7 +358,7 @@ def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
             ConsideredCandidate(
                 "bboi",
                 "bboi-standard-asset",
-                "old.manifest",
+                "other.pkg",
                 "https://example.test/other",
             ),
         ),
@@ -324,12 +375,12 @@ def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
     output = format_reports(tmp_path)
     assert "Status: failed" in output
     assert (
-        "Selection: dual app:shared -> original id: manifest.wrong; "
-        "effective id: correct.pkg; URL: https://example.test/winner; "
+        "Selection: dual app:shared -> id: winner.pkg; "
+        "URL: https://example.test/winner; "
         "source: extras/extras; reason: ordinary-fallback"
     ) in output
     assert (
-        "  Considered: original id: old.manifest; URL: https://example.test/other; "
+        "  Considered: id: other.pkg; URL: https://example.test/other; "
         "source: bboi/bboi-standard-asset"
     ) in output
     assert "lost:" not in output and "eligible:" not in output
@@ -338,8 +389,7 @@ def test_human_report_shows_corrected_winner_reason_and_considered_candidates(
 WINNER = {
     "family": "app:x",
     "variant": "dual",
-    "original_id": "winner",
-    "effective_id": "winner",
+    "id": "winner",
     "url": "https://example.test/winner",
     "source": "extras",
     "origin": "extras",
@@ -354,20 +404,18 @@ WINNER = {
         ({**WINNER, "family": None}, "malformed build family selection"),
         ({**WINNER, "considered": {}}, "malformed build family selection"),
         (
-            {key: value for key, value in WINNER.items() if key != "original_id"},
+            {key: value for key, value in WINNER.items() if key != "id"},
             "malformed build selection winner",
         ),
         (
             {
                 **WINNER,
-                "considered": [
-                    {"source": "rjny", "origin": "rjny-catalog", "original_id": "b"}
-                ],
+                "considered": [{"source": "rjny", "origin": "rjny-catalog", "id": "b"}],
             },
             "malformed build selection considered candidate",
         ),
     ],
-    ids=["no-family", "considered-not-list", "no-original-id", "considered-no-url"],
+    ids=["no-family", "considered-not-list", "no-id", "considered-no-url"],
 )
 def test_malformed_selection_records_are_rejected(
     tmp_path: Path, selection: dict[str, object], message: str
@@ -377,32 +425,47 @@ def test_malformed_selection_records_are_rejected(
         format_reports(tmp_path)
 
 
+def selector(i: int) -> dict[str, str]:
+    return {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": f"tied.{i}",
+        "url": f"example.test/tied/{i}",
+    }
+
+
 @pytest.mark.parametrize("failed", [False, True])
 def test_recorded_build_diagnostics_are_displayed_in_full(
     tmp_path: Path, failed: bool
 ) -> None:
     # The writer's document shape, built literally so the lists can be long.
     document = {
-        "schemaVersion": 4,
+        "schemaVersion": 5,
         "status": "failed" if failed else "success",
         "changes": {
             variant: {
-                direction: [f"{variant}.{direction}.{i}" for i in range(40)]
+                direction: [
+                    {
+                        "id": f"{variant}.{direction}.{i}",
+                        "url": f"example.test/{direction}/{i}",
+                    }
+                    for i in range(40)
+                ]
                 for direction in ("added", "removed")
             }
             for variant in ("single", "dual")
         },
         "denylistRemovals": [
             {
-                "id": f"denied.{i}",
-                "variant": "dual",
-                "family": f"family:{i}",
+                "url": f"example.test/denied/{i}",
                 "reason": f"excluded {i}",
+                "families": [f"app:a{i}", f"example.test/denied/{i}"],
             }
             for i in range(40)
         ],
         "staleExclusions": [
-            {"id": f"stale.{i}", "reason": f"unmatched {i}"} for i in range(40)
+            {"url": f"example.test/stale/{i}", "reason": f"unmatched {i}"}
+            for i in range(40)
         ],
         "sourceAdmissions": [
             {
@@ -414,12 +477,40 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             for i in range(40)
         ],
         "selections": [WINNER],
+        "repeatedIds": [
+            {
+                "variant": "single",
+                "id": f"repeated.{i}",
+                "entries": [
+                    {"family": f"app:r{i}", "url": f"https://example.test/r{i}"},
+                    {"family": "example.test/s", "url": "https://example.test/s"},
+                ],
+            }
+            for i in range(40)
+        ],
+        "singleOnlyFamilies": [
+            {"family": f"app:s{i}", "id": f"single.{i}", "url": f"https://x.test/{i}"}
+            for i in range(40)
+        ],
+        "sameRankTies": [
+            {
+                "family": f"example.test/tie/{i}",
+                "variant": "dual",
+                "tied": [selector(i), selector(i + 100)],
+                "winner": selector(i),
+            }
+            for i in range(40)
+        ],
         "uncategorizedFamilies": [
-            {"family": f"package:bare.{i}", "variants": ["single", "dual"]}
+            {"family": f"example.test/bare/{i}", "variants": ["single", "dual"]}
             for i in range(40)
         ],
         "staleCategoryAssignments": [f"app:gone-{i}" for i in range(40)],
-        "offlineVerification": {"status": "not-run", "findings": []},
+        "offlineVerification": {
+            "status": "not-run",
+            "findings": [],
+            "nonfatalFindings": [],
+        },
     }
     if failed:
         document.update(stage="rendering", error="render failed")
@@ -433,20 +524,39 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
         for direction in ("added", "removed"):
             for i in range(40):
                 assert (
-                    f"{prefix}: {variant} {direction}: {variant}.{direction}.{i}\n"
-                    in output
-                )
+                    f"{prefix}: {variant} {direction}: {variant}.{direction}.{i}; "
+                    f"URL: example.test/{direction}/{i}\n"
+                ) in output
     for i in range(40):
         assert (
-            f"Exclusion: dual denied.{i}; family: family:{i}; reason: excluded {i}\n"
+            f"Exclusion: example.test/denied/{i}; families: app:a{i}, "
+            f"example.test/denied/{i}; reason: excluded {i}\n"
+        ) in output
+        assert (
+            f"Stale exclusion: example.test/stale/{i}; reason: unmatched {i}\n"
             in output
         )
-        assert f"Stale exclusion: stale.{i}; reason: unmatched {i}\n" in output
+        assert (
+            f"Repeated package id: single repeated.{i}; entries: app:r{i} at "
+            f"https://example.test/r{i}; example.test/s at https://example.test/s\n"
+        ) in output
+        assert (
+            f"Single-only family: app:s{i}; id: single.{i}; URL: https://x.test/{i}\n"
+            in output
+        )
+        assert (
+            f"Same-rank tie: dual example.test/tie/{i}; tied: "
+            f"rjny/rjny-catalog tied.{i} at example.test/tied/{i} | "
+            f"rjny/rjny-catalog tied.{i + 100} at example.test/tied/{i + 100}; "
+            f"winner: rjny/rjny-catalog tied.{i} at example.test/tied/{i}\n"
+        ) in output
         assert (
             f"Admission: codm2000; URL: https://example.test/{i}; kind: apk; committed id: committed.{i}\n"
             in output
         )
-        assert f"Uncategorized: package:bare.{i}; variants: single, dual\n" in output
+        assert (
+            f"Uncategorized: example.test/bare/{i}; variants: single, dual\n" in output
+        )
         assert f"Stale category assignment: app:gone-{i}\n" in output
     assert (
         output.index("Selection:")
@@ -459,6 +569,162 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             output.index("Admission:") < output.index("Stage:") < output.index("Error:")
         )
     assert path.read_bytes() == before
+
+
+def only(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    **fields: object,
+) -> str:
+    """Display, through `pack report`, a successful build report holding one
+    kind of diagnostic.
+    """
+    from omnipack.cli import main
+
+    changes = {variant: {"added": [], "removed": []} for variant in ("single", "dual")}
+    document = build_report(tmp_path, changes=changes)
+    (tmp_path / ".build/report.json").write_text(json.dumps({**document, **fields}))
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 0
+    return capsys.readouterr().out
+
+
+def test_a_repeated_package_id_alone_is_displayed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = only(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        repeatedIds=[
+            {
+                "variant": "dual",
+                "id": "shared.pkg",
+                "entries": [
+                    {"family": "github.com/a/app", "url": "https://github.com/a/app"},
+                    {"family": "app:b", "url": "https://github.com/b/app"},
+                ],
+            }
+        ],
+    )
+    assert output.startswith(
+        "Build report\nStatus: success\n"
+        "Repeated package id: dual shared.pkg; entries: github.com/a/app at "
+        "https://github.com/a/app; app:b at https://github.com/b/app\n"
+        "Offline verification: not-run\n"
+    )
+
+
+def test_a_single_only_family_alone_is_displayed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = only(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        singleOnlyFamilies=[
+            {"family": "app:x", "id": "x.pkg", "url": "https://github.com/o/x"}
+        ],
+    )
+    assert output.startswith(
+        "Build report\nStatus: success\n"
+        "Single-only family: app:x; id: x.pkg; URL: https://github.com/o/x\n"
+        "Offline verification: not-run\n"
+    )
+
+
+def test_a_same_rank_tie_alone_is_displayed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = only(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        sameRankTies=[
+            {
+                "family": "example.test/tie/1",
+                "variant": "single",
+                "tied": [selector(1), selector(2)],
+                "winner": selector(2),
+            }
+        ],
+    )
+    assert output.startswith(
+        "Build report\nStatus: success\n"
+        "Same-rank tie: single example.test/tie/1; tied: rjny/rjny-catalog tied.1 "
+        "at example.test/tied/1 | rjny/rjny-catalog tied.2 at example.test/tied/2; "
+        "winner: rjny/rjny-catalog tied.2 at example.test/tied/2\n"
+        "Offline verification: not-run\n"
+    )
+
+
+def test_a_change_of_url_alone_shows_both_urls(tmp_path: Path) -> None:
+    from omnipack.merge import CompositionReport, CompositionResult
+    from omnipack.model import Variant
+    from omnipack.overlay import ComposedApp
+
+    def entry(url: str) -> ComposedApp:
+        return ComposedApp("app:x", {"id": "same.pkg", "url": url})
+
+    moved = CompositionResult(
+        {Variant.SINGLE: [entry("https://github.com/New/App")], Variant.DUAL: []},
+        CompositionReport(),
+    )
+    write_report(
+        tmp_path,
+        {Variant.SINGLE: {("same.pkg", "github.com/old/app")}},
+        moved,
+        IngestionReport(),
+    )
+    recorded = json.loads((tmp_path / ".build/report.json").read_text())
+    assert recorded["changes"]["single"] == {
+        "added": [{"id": "same.pkg", "url": "github.com/new/app"}],
+        "removed": [{"id": "same.pkg", "url": "github.com/old/app"}],
+    }
+    output = format_reports(tmp_path)
+    assert "Change: single added: same.pkg; URL: github.com/new/app\n" in output
+    assert "Change: single removed: same.pkg; URL: github.com/old/app\n" in output
+
+
+def test_nonfatal_findings_are_displayed_from_both_reports(tmp_path: Path) -> None:
+    finding = {
+        "stage": "composition",
+        "code": "single_only_coverage",
+        "message": "family label 'app:x' ('x' at 'github.com/o/x') has no dual",
+        "variant": "single",
+        "entry_id": "x",
+    }
+    repeated = {
+        "stage": "composition",
+        "code": "repeated_package_id",
+        "message": "package id 'p' is carried by more than one entry",
+        "variant": "dual",
+        "entry_id": "p",
+    }
+    build_report(
+        tmp_path,
+        offlineVerification={
+            "status": "success",
+            "findings": [],
+            "nonfatalFindings": [finding, repeated],
+        },
+    )
+    write_verification_report(tmp_path, nonfatalFindings=[finding, repeated])
+    output = format_reports(tmp_path)
+    for value in (finding, repeated):
+        line = (
+            f"Nonfatal finding: [{value['variant']} / {value['entry_id']}] "
+            f"{value['message']}\n"
+        )
+        assert output.count(line) == 2
+    assert "Status: success" in output
 
 
 @pytest.mark.parametrize("unavailable", [False, True])
@@ -489,18 +755,34 @@ def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
 @pytest.mark.parametrize(
     "field,record",
     [
-        ("denylistRemovals", {"id": "denied", "variant": "dual", "family": "family"}),
-        ("staleExclusions", {"id": "stale", "reason": 7}),
+        ("denylistRemovals", {"url": "x.test/a", "reason": "r"}),
+        ("denylistRemovals", {"url": "x.test/a", "reason": "r", "families": []}),
+        ("denylistRemovals", {"id": "denied", "reason": "r", "families": ["a"]}),
+        ("staleExclusions", {"url": "x.test/a", "reason": 7}),
+        ("staleExclusions", {"id": "stale", "reason": "r"}),
+        ("repeatedIds", {"variant": "single", "id": "x", "entries": []}),
+        ("repeatedIds", {"variant": "single", "id": "x", "entries": [{"url": "u"}]}),
+        ("singleOnlyFamilies", {"family": "app:x", "id": "x"}),
+        ("sameRankTies", {"family": "app:x", "variant": "single", "tied": []}),
+        (
+            "sameRankTies",
+            {
+                "family": "app:x",
+                "variant": "single",
+                "tied": [{"source": "rjny"}],
+                "winner": {"source": "rjny"},
+            },
+        ),
         (
             "sourceAdmissions",
             {"source": "codm2000", "url": "https://example.test", "kind": "apk"},
         ),
-        ("uncategorizedFamilies", {"family": "package:x"}),
-        ("uncategorizedFamilies", {"family": "package:x", "variants": []}),
-        ("uncategorizedFamilies", {"family": "package:x", "variants": [1]}),
+        ("uncategorizedFamilies", {"family": "app:x"}),
+        ("uncategorizedFamilies", {"family": "app:x", "variants": []}),
+        ("uncategorizedFamilies", {"family": "app:x", "variants": [1]}),
         ("uncategorizedFamilies", {"family": 7, "variants": ["single"]}),
-        ("uncategorizedFamilies", {"family": "package:x", "variants": ["bogus"]}),
-        ("uncategorizedFamilies", "package:x"),
+        ("uncategorizedFamilies", {"family": "app:x", "variants": ["bogus"]}),
+        ("uncategorizedFamilies", "app:x"),
         ("staleCategoryAssignments", 7),
     ],
 )
@@ -535,14 +817,14 @@ def test_category_lists_alone_are_displayed(
         changes={
             variant: {"added": [], "removed": []} for variant in ("single", "dual")
         },
-        uncategorizedFamilies=[{"family": "package:bare", "variants": ["dual"]}],
+        uncategorizedFamilies=[{"family": "example.test/bare", "variants": ["dual"]}],
         staleCategoryAssignments=["app:gone"],
     )
     monkeypatch.chdir(tmp_path)
     assert main(["report"]) == 0
     assert capsys.readouterr().out == (
         "Build report\nStatus: success\n"
-        "Uncategorized: package:bare; variants: dual\n"
+        "Uncategorized: example.test/bare; variants: dual\n"
         "Stale category assignment: app:gone\n"
         "Offline verification: not-run\n\n"
         "Verification report\nNo standalone verification recorded\n"
@@ -555,11 +837,17 @@ def test_removed_verification_state_is_rejected(tmp_path: Path) -> None:
         format_reports(tmp_path)
 
 
-def test_previous_verification_schema_requires_regeneration(tmp_path: Path) -> None:
-    write_verification_report(tmp_path, schemaVersion=3, complete=True)
+@pytest.mark.parametrize("schema", [3, 4])
+def test_previous_verification_schema_requires_regeneration(
+    tmp_path: Path, schema: int
+) -> None:
+    report = write_verification_report(tmp_path, schemaVersion=schema)
+    del report["nonfatalFindings"]
+    (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     with pytest.raises(
         ValueError,
-        match=r"unsupported verification report schema 3; regenerate with `pack verify`",
+        match=rf"unsupported verification report schema {schema}; "
+        r"regenerate with `pack verify`",
     ):
         format_reports(tmp_path)
 

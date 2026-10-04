@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from omnipack.build import BuildInputs, previous_ids, publish_build
+from omnipack.build import BuildInputs, previous_entries, publish_build
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App
@@ -59,7 +59,7 @@ def build(_args: argparse.Namespace) -> int:
         try:
             write_report(
                 root,
-                previous_ids(root),
+                previous_entries(root),
                 composition,
                 ingestion_report,
                 composition_report=composition_report,

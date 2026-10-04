@@ -13,7 +13,13 @@ from omnipack.catalog import (
     replace_catalog,
     split_catalog,
 )
-from omnipack.composition_policy import CompositionPolicy, rendered_key
+from omnipack.composition_policy import (
+    CandidateRule,
+    CandidateSelector,
+    CompositionPolicy,
+    build_policy,
+)
+from omnipack.urls import normalize_project_url
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -48,15 +54,18 @@ def pack(*apps: dict[str, object], settings: object | None = None) -> bytes:
 
 
 def policy(*projections: tuple[str, str, str]) -> CompositionPolicy:
-    return CompositionPolicy(
-        (),
-        (),
-        {
-            rendered_key(package_id, url): family
+    """A policy whose family rules assign each (id, URL) its family."""
+    return build_policy(
+        [
+            CandidateRule(
+                CandidateSelector(
+                    "rjny", "rjny-catalog", package_id, normalize_project_url(url)
+                ),
+                "test",
+                family,
+            )
             for package_id, url, family in projections
-        },
-        {},
-        {},
+        ]
     )
 
 
@@ -95,9 +104,9 @@ def test_catalog_groups_variants_by_current_family_and_preserves_exact_apps() ->
             (
                 "org.example.standard",
                 "https://example.test/standard?x=1&y=%25#release",
-                "shared",
+                "app:shared",
             ),
-            ("org.example.dual", "https://example.test/dual", "shared"),
+            ("org.example.dual", "https://example.test/dual", "app:shared"),
         ),
     )
 
@@ -187,7 +196,7 @@ def test_source_label_and_category_render_as_text_without_changing_payload() -> 
     assert decoded_apps(catalog) == [hostile]
 
 
-def test_duplicate_explicit_family_in_one_variant_is_rejected() -> None:
+def test_a_family_label_repeated_in_one_variant_is_rejected() -> None:
     first = app("one", "One", "https://example.test/one")
     second = app("two", "Two", "https://example.test/two")
     shared = policy(
@@ -197,19 +206,16 @@ def test_duplicate_explicit_family_in_one_variant_is_rejected() -> None:
 
     with pytest.raises(
         CatalogError,
-        match="^dual-screen contains duplicate explicit family 'app:shared'$",
+        match="^dual-screen contains more than one entry of family 'app:shared'$",
     ):
         generate_catalog(pack(), pack(first, second), shared)
-
-
-def test_duplicate_package_id_in_one_variant_is_rejected() -> None:
-    first = app("one", "One", "https://example.test/one")
-    second = app("one", "One", "https://example.test/two")
-
+    one_url = app("two", "Two", "https://example.test/one")
     with pytest.raises(
-        CatalogError, match="^single-screen contains duplicate package id 'one'$"
+        CatalogError,
+        match="^single-screen contains more than one entry of family "
+        "'example.test/one'$",
     ):
-        generate_catalog(pack(first, second), pack(first), policy())
+        generate_catalog(pack(first, one_url), pack(), policy())
 
 
 def row_programs(catalog: bytes) -> list[tuple[str, int]]:
@@ -235,8 +241,43 @@ def test_same_id_entries_of_different_explicit_families_are_separate_rows() -> N
     assert decoded_apps(catalog) == [dual, single]
 
 
+def test_repositories_sharing_a_package_id_are_separate_rows() -> None:
+    first = app("one", "One", "https://example.test/one")
+    second = app("one", "One", "https://example.test/two")
+    catalog = generate_catalog(pack(first, second), pack(first), policy())
+    # The rows tie on category and name; their labels order them.
+    assert row_programs(catalog) == [("One", 2), ("One", 1)]
+    assert decoded_apps(catalog) == [first, first, second]
+
+
+def test_one_repository_s_entries_pair_by_url() -> None:
+    single = app("stable", "App", "https://example.test/app")
+    dual = app("dual", "App DS", "https://example.test/app/")
+    catalog = generate_catalog(pack(single), pack(dual), policy())
+    assert row_programs(catalog) == [("App", 2)]
+
+
+def test_one_repository_publishing_two_families_has_a_row_per_family() -> None:
+    stable = app("stable", "App", "https://example.test/app")
+    nightly = app("nightly", "App Nightly", "https://example.test/app")
+    split = policy(
+        ("stable", "https://example.test/app", "app:stable"),
+        ("nightly", "https://example.test/app", "app:nightly"),
+    )
+    both = pack(stable, nightly)
+    catalog = generate_catalog(both, both, split)
+    assert row_programs(catalog) == [("App", 2), ("App Nightly", 2)]
+
+
+def test_a_single_only_family_gets_a_row_with_a_hyphen_for_dual() -> None:
+    single = app("single.only", "Lonely", "https://example.test/lonely")
+    catalog = generate_catalog(pack(single), pack(), policy())
+    assert row_programs(catalog) == [("Lonely", 1)]
+    assert catalog.decode().rstrip().splitlines()[-3].endswith(" | - |")
+
+
 @pytest.mark.parametrize("reverse", [False, True])
-def test_package_id_pair_and_a_dual_entry_share_a_label_in_separate_rows(
+def test_labelled_pair_and_a_url_labelled_entry_are_separate_rows(
     reverse: bool,
 ) -> None:
     single = app("a", "Shared", "https://example.test/a")
@@ -250,9 +291,9 @@ def test_package_id_pair_and_a_dual_entry_share_a_label_in_separate_rows(
     if reverse:
         duals.reverse()
     catalog = generate_catalog(pack(single), pack(*duals), projected)
-    # The rows tie on category, name and label; their package ids order them.
-    assert row_programs(catalog) == [("Shared", 1), ("Shared", 2)]
-    assert decoded_apps(catalog) == [projected_dual, single, same_id]
+    # The rows tie on category and name; their labels order them.
+    assert row_programs(catalog) == [("Shared", 2), ("Shared", 1)]
+    assert decoded_apps(catalog) == [single, projected_dual, same_id]
 
 
 @pytest.mark.parametrize(

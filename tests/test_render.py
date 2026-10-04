@@ -11,8 +11,10 @@ from omnipack.render import (
     RenderError,
     hydrate_settings,
     render,
+    render_pack,
 )
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.source_catalog import render_catalog
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -37,7 +39,7 @@ def composed(
     }
     if author is not None:
         data["author"] = author
-    return ComposedApp(f"package:{package_id}", data)
+    return ComposedApp("example.family", data)
 
 
 def document(apps: list[ComposedApp]):
@@ -192,9 +194,53 @@ def test_category_used_in_one_variant_is_absent_from_the_other() -> None:
     assert single == {"Emulator": 0xFFCADE2F}
 
 
-def test_render_rejects_duplicate_package_ids() -> None:
-    with pytest.raises(RenderError, match="duplicate package id.*same"):
-        render([composed("same"), composed("same", name="Other")])
+def test_render_accepts_a_repeated_package_id() -> None:
+    apps = document([composed("same"), composed("same", name="Other")])["apps"]
+    assert [(app["id"], app["name"]) for app in apps] == [
+        ("same", "Example"),
+        ("same", "Other"),
+    ]
+
+
+def test_entries_sharing_category_name_and_id_are_ordered_by_url() -> None:
+    apps = [
+        composed("same", url="https://github.com/zulu/app"),
+        composed("same", url="https://github.com/Alpha/app"),
+        composed("same", url="https://github.com/mike/app"),
+    ]
+    renderings = {render(list(ordering)) for ordering in permutations(apps)}
+    [rendered] = renderings
+    assert [app["url"] for app in json.loads(rendered)["apps"]] == [
+        "https://github.com/Alpha/app",
+        "https://github.com/mike/app",
+        "https://github.com/zulu/app",
+    ]
+
+
+def test_equal_sort_fields_fall_back_to_the_serialized_entry() -> None:
+    first = composed("same", settings={"apkFilterRegEx": "a"})
+    second = composed("same", settings={"apkFilterRegEx": "b"})
+    renderings = {render(list(ordering)) for ordering in permutations([first, second])}
+    assert len(renderings) == 1
+
+
+@pytest.mark.parametrize("value", [None, False, True])
+def test_pack_rendering_lets_every_app_adopt_its_apk_id(value: bool | None) -> None:
+    app = composed()
+    if value is not None:
+        app.data["allowIdChange"] = value
+    [rendered] = json.loads(render_pack([app]))["apps"]
+    assert rendered["allowIdChange"] is True
+
+
+def test_catalog_rendering_does_not_add_allow_id_change() -> None:
+    assert "allowIdChange" not in document([composed()])["apps"][0]
+    root = Path(__file__).resolve().parents[1]
+    for name in ("codm", "quiver"):
+        committed = (root / f"config/catalogs/{name}.json").read_bytes()
+        entries = json.loads(committed)["apps"]
+        assert all("allowIdChange" not in entry for entry in entries)
+        assert render_catalog(entries) == committed
 
 
 def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None:

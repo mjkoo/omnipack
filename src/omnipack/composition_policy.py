@@ -6,9 +6,10 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any
+from typing import Any, cast
 
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
+from omnipack.overlay import OverlayPatch
 from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 from omnipack.urls import normalize_project_url
 
@@ -35,7 +36,7 @@ _SOURCE_ORIGINS = {
 }
 
 
-_FAMILY = re.compile(r"(?:app|package):[A-Za-z0-9][A-Za-z0-9._-]*")
+_EXPLICIT_FAMILY = re.compile(r"app:[A-Za-z0-9][A-Za-z0-9._-]*")
 
 
 class CompositionPolicyError(ValueError):
@@ -59,7 +60,6 @@ class CandidateRule:
     match: CandidateSelector
     rationale: str
     family: str | None = None
-    package_id: str | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -74,26 +74,39 @@ class Pin:
 class CompositionPolicy:
     candidate_rules: tuple[CandidateRule, ...]
     pins: tuple[Pin, ...]
-    # The explicit family each `family` rule assigns, by the rendered key its
-    # builds end up with. Identity-only rules project nothing.
-    projections: dict[RenderedKey, str]
+    # The family every candidate at a URL belongs to, where each family rule
+    # at that URL names the same family.
+    url_families: dict[str, str]
+    # Where family rules at one URL name different families, the family each
+    # rule projects onto its selector's package id there.
+    split_families: dict[str, dict[str, str]]
+    # Each pin's selected package id and normalized URL.
     projected_pins: dict[PinKey, RenderedKey]
     # The one category each named family carries unless its entry is track-only.
     categories: dict[str, Category]
 
+    def family(self, package_id: str, url: str) -> str:
+        """The family of an entry carrying `package_id` at project `url`.
+
+        It is the explicit family the rules project there, otherwise the
+        entry's default family, named by its normalized project URL.
+        """
+        normalized = normalize_project_url(url)
+        whole = self.url_families.get(normalized)
+        if whole is not None:
+            return whole
+        return self.split_families.get(normalized, {}).get(package_id, normalized)
+
+    def url_rule_families(self, url: str) -> tuple[str, ...]:
+        """The distinct families the rules at `url` name, sorted."""
+        normalized = normalize_project_url(url)
+        if normalized in self.url_families:
+            return (self.url_families[normalized],)
+        return tuple(sorted(set(self.split_families.get(normalized, {}).values())))
+
 
 def rendered_key(package_id: str, url: str) -> RenderedKey:
     return package_id, normalize_project_url(url)
-
-
-def default_family(package_id: str) -> str:
-    """The family of an app no explicit family is assigned to."""
-    return f"package:{package_id}"
-
-
-def entry_family(policy: CompositionPolicy, key: RenderedKey) -> str:
-    """The family a rendered entry holds on its own, before any joining."""
-    return policy.projections.get(key, default_family(key[0]))
 
 
 def assigned_family(app: App) -> str:
@@ -107,10 +120,8 @@ def assigned_family(app: App) -> str:
 
 @dataclass(frozen=True, slots=True)
 class Pairing:
-    """A single-screen and a dual-screen entry that pair, or one left unpaired.
-
-    The label is the explicit family either entry projects, otherwise the
-    default family of the package id the entries share.
+    """A single-screen and a dual-screen entry carrying one family label, or one
+    entry no entry of the other variant shares a label with.
     """
 
     label: str
@@ -118,34 +129,18 @@ class Pairing:
     dual: RenderedKey | None
 
 
-@dataclass(frozen=True, slots=True)
-class Repeats:
-    """Package ids and explicit families carried by more than one entry of a pack.
-
-    `families` maps each repeated explicit family to its entries, sorted.
-    """
-
-    ids: tuple[str, ...]
-    families: dict[str, tuple[RenderedKey, ...]]
-
-
-def find_repeats(policy: CompositionPolicy, keys: Sequence[RenderedKey]) -> Repeats:
-    """The package ids and explicit families repeated within one variant."""
-    by_id: dict[str, int] = {}
-    by_family: dict[str, list[RenderedKey]] = {}
+def repeated_labels(
+    policy: CompositionPolicy, keys: Sequence[RenderedKey]
+) -> dict[str, tuple[RenderedKey, ...]]:
+    """The family labels more than one entry of one variant carries, sorted."""
+    by_label: dict[str, list[RenderedKey]] = {}
     for key in keys:
-        by_id[key[0]] = by_id.get(key[0], 0) + 1
-        projection = policy.projections.get(key)
-        if projection is not None:
-            by_family.setdefault(projection, []).append(key)
-    return Repeats(
-        tuple(sorted(package_id for package_id, count in by_id.items() if count > 1)),
-        {
-            family: tuple(sorted(members))
-            for family, members in sorted(by_family.items())
-            if len(members) > 1
-        },
-    )
+        by_label.setdefault(policy.family(*key), []).append(key)
+    return {
+        label: tuple(sorted(members))
+        for label, members in sorted(by_label.items())
+        if len(members) > 1
+    }
 
 
 def pair_entries(
@@ -153,85 +148,95 @@ def pair_entries(
     single: Sequence[RenderedKey],
     dual: Sequence[RenderedKey],
 ) -> tuple[Pairing, ...]:
-    """Pair entries by package id, then by explicit family among the rest.
+    """Pair rendered entries carrying one family label, sorted by label.
 
-    Entries whose projections name different explicit families never pair.
-    Every entry carrying a package id or explicit family repeated within
-    either variant is left out, so no pairing depends on entry order.
+    Every entry carrying a label repeated within either variant is left out,
+    so no pairing depends on entry order.
     """
-    repeats = [find_repeats(policy, keys) for keys in (single, dual)]
-    repeated_ids = {package_id for item in repeats for package_id in item.ids}
-    repeated_families = {family for item in repeats for family in item.families}
-
-    def pairable(key: RenderedKey) -> bool:
-        return (
-            key[0] not in repeated_ids
-            and policy.projections.get(key) not in repeated_families
-        )
-
-    singles = [key for key in single if pairable(key)]
-    duals = [key for key in dual if pairable(key)]
-    matched = _match_by_id(policy, singles, duals)
-    id_paired = set(matched.values())
-    by_family = _match_by_family(
-        policy,
-        [key for key in singles if key not in matched],
-        [key for key in duals if key not in id_paired],
-    )
-    matched |= by_family
-    paired = id_paired | set(by_family.values())
-    return (
-        *(_pairing(policy, key, matched.get(key)) for key in singles),
-        *(_pairing(policy, None, key) for key in duals if key not in paired),
+    repeated = {*repeated_labels(policy, single), *repeated_labels(policy, dual)}
+    singles = {policy.family(*key): key for key in single}
+    duals = {policy.family(*key): key for key in dual}
+    return tuple(
+        Pairing(label, singles.get(label), duals.get(label))
+        for label in sorted((singles.keys() | duals.keys()) - repeated)
     )
 
 
-def _match_by_id(
-    policy: CompositionPolicy, singles: list[RenderedKey], duals: list[RenderedKey]
-) -> dict[RenderedKey, RenderedKey]:
-    """Pair entries sharing a package id unless they project different families."""
-    projection = policy.projections.get
-    dual_by_id = {key[0]: key for key in duals}
-    matched: dict[RenderedKey, RenderedKey] = {}
-    for key in singles:
-        other = dual_by_id.get(key[0])
-        if other is None:
+def build_policy(
+    rules: Sequence[CandidateRule],
+    pins: Sequence[Pin] = (),
+    categories: dict[str, Category] | None = None,
+) -> CompositionPolicy:
+    """Check rules and pins against each other and derive their projections."""
+    selectors: set[tuple[str, str, str, str]] = set()
+    by_url: dict[str, list[CandidateRule]] = {}
+    for rule in rules:
+        if rule.match.key in selectors:
+            raise CompositionPolicyError(
+                f"duplicate candidate selector {_show(rule.match)}"
+            )
+        selectors.add(rule.match.key)
+        if rule.family is not None:
+            by_url.setdefault(rule.match.url, []).append(rule)
+
+    url_families: dict[str, str] = {}
+    split_families: dict[str, dict[str, str]] = {}
+    for url, members in by_url.items():
+        if len({rule.family for rule in members}) == 1:
+            url_families[url] = cast(str, members[0].family)
             continue
-        first, second = projection(key), projection(other)
-        if first is None or second is None or first == second:
-            matched[key] = other
-    return matched
+        by_id: dict[str, CandidateRule] = {}
+        for rule in members:
+            first = by_id.setdefault(rule.match.id, rule)
+            if first.family != rule.family:
+                raise CompositionPolicyError(
+                    f"rules {_show(first.match)} and {_show(rule.match)} project "
+                    f"conflicting families {first.family!r} and {rule.family!r} "
+                    f"onto {rendered_key(rule.match.id, url)!r}"
+                )
+        split_families[url] = {
+            package_id: cast(str, rule.family) for package_id, rule in by_id.items()
+        }
+
+    policy = CompositionPolicy(
+        tuple(rules), tuple(pins), url_families, split_families, {}, categories or {}
+    )
+    pin_keys: set[PinKey] = set()
+    for pin in pins:
+        key = (pin.family, pin.variant)
+        if key in pin_keys:
+            raise CompositionPolicyError(
+                f"multiple pins for family {pin.family!r} target {pin.variant.value!r}"
+            )
+        pin_keys.add(key)
+        pinned = rendered_key(pin.match.id, pin.match.url)
+        # Only an explicit projection is known here. Any other pin names the
+        # family its candidate forms, which composition checks once it forms.
+        projected = policy.family(*pinned)
+        if projected.startswith("app:") and pin.family != projected:
+            raise CompositionPolicyError(
+                f"pin family {pin.family!r} target {pin.variant.value!r} conflicts "
+                f"with projected family {projected!r}"
+            )
+        policy.projected_pins[key] = pinned
+    return policy
 
 
-def _match_by_family(
-    policy: CompositionPolicy, singles: list[RenderedKey], duals: list[RenderedKey]
-) -> dict[RenderedKey, RenderedKey]:
-    """Pair entries projecting the same explicit family."""
-    projection = policy.projections.get
-    dual_by_family = {
-        family: key for key in duals if (family := projection(key)) is not None
-    }
-    return {
-        key: dual_by_family[family]
-        for key in singles
-        if (family := projection(key)) is not None and family in dual_by_family
-    }
+def check_overlay_id_patches(
+    policy: CompositionPolicy, patches: Sequence[OverlayPatch]
+) -> None:
+    """Refuse an `id` patch at a URL whose family rules name different families.
 
-
-def _pairing(
-    policy: CompositionPolicy, single: RenderedKey | None, dual: RenderedKey | None
-) -> Pairing:
-    """Label entries with the explicit family either projects, else their id's.
-
-    Paired entries never project different families, and entries paired
-    without any projection share their package id.
+    Such a patch would give every family there one id, so the rendered entries
+    could no longer be told apart by family.
     """
-    keys = [key for key in (single, dual) if key is not None]
-    explicit = {
-        family for key in keys if (family := policy.projections.get(key)) is not None
-    }
-    label = explicit.pop() if explicit else default_family(keys[0][0])
-    return Pairing(label, single, dual)
+    for patch in patches:
+        families = policy.url_rule_families(patch.url)
+        if "id" in patch.patch and len(families) > 1:
+            raise CompositionPolicyError(
+                f"overlay record for {patch.url!r} patches id at a URL whose "
+                f"rules name families {', '.join(map(repr, families))}"
+            )
 
 
 def parse_composition_policy(document: object) -> CompositionPolicy:
@@ -241,50 +246,10 @@ def parse_composition_policy(document: object) -> CompositionPolicy:
         raise CompositionPolicyError("schemaVersion must be integer 1")
     candidates_raw = _array(root.get("candidates"), "candidates")
     pins_raw = _array(root.get("pins"), "pins")
-
-    rules = tuple(
-        _parse_rule(value, index) for index, value in enumerate(candidates_raw)
-    )
-    selectors: set[tuple[str, str, str, str]] = set()
-    projections: dict[RenderedKey, str] = {}
-    for rule in rules:
-        if rule.match.key in selectors:
-            raise CompositionPolicyError(
-                f"duplicate candidate selector {_show(rule.match)}"
-            )
-        selectors.add(rule.match.key)
-        if rule.family is None:
-            continue
-        key = rendered_key(rule.package_id or rule.match.id, rule.match.url)
-        if projections.setdefault(key, rule.family) != rule.family:
-            raise CompositionPolicyError(
-                f"rendered key {key!r} has conflicting projections"
-            )
-
-    pins = tuple(_parse_pin(value, index) for index, value in enumerate(pins_raw))
-    pin_keys: set[PinKey] = set()
-    projected_pins: dict[PinKey, RenderedKey] = {}
-    for pin in pins:
-        key = (pin.family, pin.variant)
-        if key in pin_keys:
-            raise CompositionPolicyError(
-                f"multiple pins for family {pin.family!r} target {pin.variant.value!r}"
-            )
-        pin_keys.add(key)
-        rule = next((item for item in rules if item.match == pin.match), None)
-        effective_id = rule.package_id if rule and rule.package_id else pin.match.id
-        pinned = rendered_key(effective_id, pin.match.url)
-        # Only an explicit projection is known here. Any other pin names the
-        # family its candidate forms, which composition checks once it forms.
-        projected = projections.get(pinned)
-        if projected is not None and pin.family != projected:
-            raise CompositionPolicyError(
-                f"pin family {pin.family!r} target {pin.variant.value!r} conflicts "
-                f"with projected family {projected!r}"
-            )
-        projected_pins[key] = pinned
+    rules = [_parse_rule(value, index) for index, value in enumerate(candidates_raw)]
+    pins = [_parse_pin(value, index) for index, value in enumerate(pins_raw)]
     categories = _parse_categories(root.get("categories", {}))
-    return CompositionPolicy(rules, pins, projections, projected_pins, categories)
+    return build_policy(rules, pins, categories)
 
 
 def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
@@ -305,144 +270,25 @@ def load_composition_policy(data: str | bytes | bytearray) -> CompositionPolicy:
 def apply_composition_policy(
     policy: CompositionPolicy, candidates: list[App] | tuple[App, ...]
 ) -> tuple[App, ...]:
-    """Apply identity corrections once, requiring every rule selector.
+    """Collapse identical candidates and give each its family, requiring every
+    rule selector to match.
 
-    Each candidate's `family` becomes its own assignment: the explicit family
-    projected at its effective id and URL, or the default family of its effective id.
-    `form_families` later joins the candidates that survive exclusions. Pins
-    are left to composition, which validates them after processing exclusions
-    so that a failed pin still leaves the exclusion diagnostics.
+    A candidate's family depends only on its package id, its URL and the
+    rules, so it is the same whether or not the candidate a rule matches
+    survives exclusions. Pins are left to composition, which validates them
+    after processing exclusions so that a failed pin still leaves the
+    exclusion diagnostics.
     """
     collapsed = _collapse(candidates)
-    by_selector = {candidate_selector(app).key: app for app in collapsed}
-    rules = {rule.match.key: rule for rule in policy.candidate_rules}
-    for selector in rules:
-        if selector not in by_selector:
-            shown = CandidateSelector(*selector)
+    by_selector = {candidate_selector(app).key for app in collapsed}
+    for rule in policy.candidate_rules:
+        if rule.match.key not in by_selector:
             raise CompositionPolicyError(
-                f"selector {_show(shown)} matched no candidate"
+                f"selector {_show(rule.match)} matched no candidate"
             )
-
-    _reject_track_only_conflicts(collapsed, rules)
-
-    result: list[App] = []
-    for app in collapsed:
-        effective_id = _effective_id(app, rules.get(candidate_selector(app).key))
-        family = entry_family(policy, rendered_key(effective_id, app.url))
-        result.append(replace(app, id=effective_id, family=family))
-    return tuple(result)
-
-
-def form_families(candidates: Sequence[App]) -> tuple[App, ...]:
-    """Join candidates transitively by shared effective id or explicit family.
-
-    The caller passes only the candidates that survive exclusions and are
-    eligible for some variant, each carrying its own assignment from
-    `apply_composition_policy`. A family holding an explicit assignment takes
-    that `app:` name; any other holds one effective id and keeps that id's
-    default name. Two explicit families joined through a shared id fail.
-    """
-    parent = list(range(len(candidates)))
-
-    def root(index: int) -> int:
-        while parent[index] != index:
-            parent[index] = parent[parent[index]]
-            index = parent[index]
-        return index
-
-    # A default assignment is named after the id, so joining on the assignment
-    # and on the id together covers both kinds of shared identity.
-    by_id: dict[str, int] = {}
-    by_family: dict[str, int] = {}
-    for index, app in enumerate(candidates):
-        for first in (
-            by_id.setdefault(app.id, index),
-            by_family.setdefault(assigned_family(app), index),
-        ):
-            parent[root(index)] = root(first)
-
-    groups: dict[int, list[int]] = {}
-    for index in range(len(candidates)):
-        groups.setdefault(root(index), []).append(index)
-    names: dict[int, str] = {}
-    for group, members in groups.items():
-        apps = [candidates[index] for index in members]
-        explicit = sorted(
-            {family for app in apps if (family := _explicit_family(app)) is not None}
-        )
-        if len(explicit) > 1:
-            raise CompositionPolicyError(_joined_families_message(explicit, apps))
-        names[group] = explicit[0] if explicit else default_family(apps[0].id)
     return tuple(
-        replace(app, family=names[root(index)]) for index, app in enumerate(candidates)
+        replace(app, family=policy.family(app.id, app.url)) for app in collapsed
     )
-
-
-def _explicit_family(app: App) -> str | None:
-    """The candidate's own explicit assignment, if it has one."""
-    family = assigned_family(app)
-    return None if family == default_family(app.id) else family
-
-
-def _joined_families_message(explicit: list[str], apps: list[App]) -> str:
-    """Name the families and the explicitly assigned candidates joining them.
-
-    A rule-less candidate carries a single id, so families can only meet at an
-    id whose carriers hold two different explicit assignments.
-    """
-    carriers: dict[str, list[App]] = {}
-    for app in apps:
-        if _explicit_family(app) is not None:
-            carriers.setdefault(app.id, []).append(app)
-    joining = sorted(
-        (
-            candidate_selector(app)
-            for members in carriers.values()
-            if len({_explicit_family(app) for app in members}) > 1
-            for app in members
-        ),
-        key=lambda selector: selector.key,
-    )
-    return (
-        f"explicit families {', '.join(map(repr, explicit))} join through a shared "
-        f"package id: {'; '.join(map(_show, joining))}"
-    )
-
-
-def _reject_track_only_conflicts(
-    collapsed: tuple[App, ...],
-    rules: dict[tuple[str, str, str, str], CandidateRule],
-) -> None:
-    """Keep track-only identities out of reach of every rule and other candidate.
-
-    This runs over all candidates before any rule is applied or any exclusion
-    removes one, so a denial cannot hide the offending selector.
-    """
-    reserved = {app.id for app in collapsed if _is_track_only(app)}
-    for app in collapsed:
-        selector = candidate_selector(app)
-        rule = rules.get(selector.key)
-        if _is_track_only(app):
-            if rule is not None and (
-                rule.family is not None or rule.package_id is not None
-            ):
-                raise CompositionPolicyError(
-                    f"track-only candidate {_show(selector)} cannot assign "
-                    "family or packageId"
-                )
-        elif (effective_id := _effective_id(app, rule)) in reserved:
-            raise CompositionPolicyError(
-                f"reserved track-only id {effective_id!r} used by candidate "
-                f"{_show(selector)}"
-            )
-
-
-def _is_track_only(app: App) -> bool:
-    return app.additional_settings.get("trackOnly") is True
-
-
-def _effective_id(app: App, rule: CandidateRule | None) -> str:
-    return (rule.package_id if rule else None) or app.id
 
 
 def _collapse(candidates: list[App] | tuple[App, ...]) -> tuple[App, ...]:
@@ -463,36 +309,30 @@ def candidate_selector(app: App) -> CandidateSelector:
     return CandidateSelector(
         app.provenance.source,
         app.origin,
-        app.original_id,
+        app.id,
         normalize_project_url(app.url),
     )
 
 
 def _parse_rule(value: object, index: int) -> CandidateRule:
-    record = _object(value, f"candidates[{index}]")
-    _fields(
-        record, {"match", "family", "packageId", "rationale"}, f"candidates[{index}]"
-    )
-    selector = _selector(record.get("match"), f"candidates[{index}].match")
-    rationale = _text(record.get("rationale"), f"candidates[{index}].rationale")
+    label = f"candidates[{index}]"
+    record = _object(value, label)
+    _fields(record, {"match", "family", "rationale"}, label)
+    selector = _selector(record.get("match"), f"{label}.match")
+    rationale = _text(record.get("rationale"), f"{label}.rationale")
     family = (
-        _family(record["family"], "family", explicit_only=True)
+        _explicit_family(record["family"], f"{label}.family")
         if "family" in record
         else None
     )
-    package_id = (
-        _text(record["packageId"], f"candidates[{index}].packageId")
-        if "packageId" in record
-        else None
-    )
-    return CandidateRule(selector, rationale, family, package_id)
+    return CandidateRule(selector, rationale, family)
 
 
 def _parse_categories(value: object) -> dict[str, Category]:
     record = _object(value, "categories")
     result: dict[str, Category] = {}
     for key, category in record.items():
-        _family(key, f"categories key {key!r}", explicit_only=False)
+        _family_name(key, f"categories key {key!r}")
         if category not in ASSIGNABLE_CATEGORIES:
             raise CompositionPolicyError(
                 f"categories[{key!r}] must be one of "
@@ -505,7 +345,7 @@ def _parse_categories(value: object) -> dict[str, Category]:
 def _parse_pin(value: object, index: int) -> Pin:
     record = _object(value, f"pins[{index}]")
     _fields(record, {"family", "variant", "match", "rationale"}, f"pins[{index}]")
-    family = _family(record.get("family"), "family", explicit_only=False)
+    family = _family_name(record.get("family"), f"pins[{index}].family")
     try:
         variant = Variant(record.get("variant"))
     except (TypeError, ValueError) as error:
@@ -539,14 +379,33 @@ def _selector(value: object, label: str) -> CandidateSelector:
     )
 
 
-def _family(value: object, label: str, *, explicit_only: bool) -> str:
+def _explicit_family(value: object, label: str) -> str:
     family = _text(value, label)
-    if _FAMILY.fullmatch(family) is None or (
-        explicit_only and not family.startswith("app:")
-    ):
-        expected = "app:" if explicit_only else "app: or package:"
+    if _EXPLICIT_FAMILY.fullmatch(family) is None:
         raise CompositionPolicyError(
-            f"{label} must use a nonempty {expected} namespace"
+            f"{label} must use a nonempty app: namespace, not {family!r}"
+        )
+    return family
+
+
+def _family_name(value: object, label: str) -> str:
+    """An `app:` family, or a default family's normalized project URL.
+
+    A URL must already be in normalized form and carry a host and a path, so a
+    full `https://` URL or an `app:` name typed without its prefix fails
+    instead of naming nothing.
+    """
+    family = _text(value, label)
+    if family.startswith("app:"):
+        return _explicit_family(family, label)
+    try:
+        normalized = normalize_project_url(family)
+    except ValueError:
+        normalized = None
+    if normalized != family or "/" not in family.strip("/"):
+        raise CompositionPolicyError(
+            f"{label} must be an app: family or a normalized project URL "
+            f"with a host and a path, not {family!r}"
         )
     return family
 

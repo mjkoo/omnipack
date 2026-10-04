@@ -277,7 +277,7 @@ def _fetch_codm(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
     return codm.fetch(tmp_path, {"catalog": "catalog.json"})
 
 
-@pytest.mark.parametrize("field", ["family", "packageId", "variant"])
+@pytest.mark.parametrize("field", ["family", "variant"])
 @pytest.mark.parametrize("value", ["assigned", None], ids=["assigned", "null"])
 @pytest.mark.parametrize(
     ("source", "fetch"),
@@ -309,8 +309,10 @@ def test_source_record_rejects_composition_policy_fields(
     message = str(excinfo.value)
     assert message.startswith(f"{source}: entry 'Entry' field {field!r} ")
     assert "cannot come from a source record" in message
-    assert "composition policy in config/composition.json owns app families" in message
-    assert "package identities and per-pack selection" in message
+    assert (
+        "composition policy in config/composition.json owns app families "
+        "and per-pack selection"
+    ) in message
 
 
 def test_rjny_excluded_record_is_not_guarded_but_neither_pack_record_is() -> None:
@@ -354,8 +356,8 @@ def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
         for entry in json.loads(
             render(
                 [
-                    ComposedApp("package:app.entry", _import_data(upstream_app)),
-                    ComposedApp("package:app.extra", _import_data(extra_app)),
+                    ComposedApp("example.test/entry", _import_data(upstream_app)),
+                    ComposedApp("example.test/extra", _import_data(extra_app)),
                 ]
             )
         )["apps"]
@@ -364,6 +366,16 @@ def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
     assert rendered["app.entry"]["dualScreen"] == {"unknown": True}
     assert rendered["app.extra"]["origin"] == "extra-value"
     assert "dualScreen" not in rendered["app.extra"]
+
+
+def test_package_id_field_is_ingested_and_rendered_unchanged() -> None:
+    [upstream_app] = _fetch_rjny([_record_with("packageId", "org.example.declared")])
+    assert upstream_app.raw == {"packageId": "org.example.declared"}
+    [rendered] = json.loads(
+        render([ComposedApp("example.test/entry", _import_data(upstream_app))])
+    )["apps"]
+    assert rendered["packageId"] == "org.example.declared"
+    assert rendered["id"] == upstream_app.id
 
 
 @pytest.mark.parametrize("source", ["extras", "codm2000"])
@@ -728,7 +740,7 @@ def ingest_over_codm_entry(
     )
 
 
-def test_codm_url_overlap_keeps_both_candidates_in_composition(
+def test_codm_url_overlap_keeps_both_candidates_and_composition_selects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -744,10 +756,9 @@ def test_codm_url_overlap_keeps_both_candidates_in_composition(
             {"schemaVersion": 1, "candidates": [], "pins": []}
         ),
     )
-    assert {app.data["id"] for app in result.apps[Variant.DUAL]} == {
-        "app.standard",
-        "app.generated",
-    }
+    # One project URL forms one family, so the dual-screen build replaces the
+    # baseline build in dual.
+    assert {app.data["id"] for app in result.apps[Variant.DUAL]} == {"app.generated"}
     assert {app.data["id"] for app in result.apps[Variant.SINGLE]} == {"app.standard"}
 
 
@@ -855,7 +866,11 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["status"] == "failed"
     assert report["stage"] == "ingestion"
-    assert report["offlineVerification"] == {"status": "not-run", "findings": []}
+    assert report["offlineVerification"] == {
+        "status": "not-run",
+        "findings": [],
+        "nonfatalFindings": [],
+    }
     assert report["changes"] is None
     assert "rjny" in report["error"]
     assert (
@@ -968,7 +983,7 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
     result = compose([extra, fork], [], [], policy=policy)
     assert result.apps[Variant.SINGLE] == []
     [selection] = result.report.selections
-    assert (selection.variant, selection.effective_id, selection.reason) == (
+    assert (selection.variant, selection.id, selection.reason) == (
         Variant.DUAL,
         "com.example.companion",
         "dual-preferred",

@@ -2,7 +2,6 @@ import json
 from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
-from typing import Any
 from urllib.request import Request
 
 import pytest
@@ -112,6 +111,17 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
     }
 
 
+FIXTURE_URLS = {
+    "app.fixture": "example.test/app",
+    "app.generated": "github.com/fixture/generated",
+    "app.retained": "github.com/fixture/retained",
+}
+
+
+def changed(*ids: str) -> list[dict[str, str]]:
+    return [{"id": id_, "url": FIXTURE_URLS[id_]} for id_ in ids]
+
+
 def fixture_transport(
     responses: dict[str, str],
 ) -> Callable[[HttpClient, Request, float], HttpResponse]:
@@ -134,7 +144,11 @@ def test_build_verify_and_report_sequence_records_no_findings(
     assert main(["build"]) == 0
     build_report = json.loads((tmp_path / ".build/report.json").read_text())
     assert build_report["status"] == "success"
-    assert build_report["offlineVerification"] == {"status": "success", "findings": []}
+    assert build_report["offlineVerification"] == {
+        "status": "success",
+        "findings": [],
+        "nonfatalFindings": [],
+    }
     for variant in Variant:
         expected_ids = (
             ["app.fixture"]
@@ -146,18 +160,22 @@ def test_build_verify_and_report_sequence_records_no_findings(
         )
         assert [app["id"] for app in rendered["apps"]] == expected_ids
         assert build_report["changes"][variant.value] == {
-            "added": expected_ids,
+            "added": [{"id": id_, "url": FIXTURE_URLS[id_]} for id_ in expected_ids],
             "removed": [],
         }
     assert not (tmp_path / "dist/report.json").exists()
     assert main(["verify"]) == 0
     verification = json.loads((tmp_path / ".build/verify.json").read_text())
-    assert (verification["status"], verification["errors"]) == ("success", [])
+    assert (
+        verification["status"],
+        verification["errors"],
+        verification["nonfatalFindings"],
+    ) == ("success", [], [])
     capsys.readouterr()
     assert main(["report"]) == 0
     output = capsys.readouterr().out
     for variant in Variant:
-        assert f"Selection: {variant.value} package:app.fixture -> " in output
+        assert f"Selection: {variant.value} example.test/app -> " in output
     assert "Evidence: current" in output
 
 
@@ -185,7 +203,16 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         if existing == "both":
             (tmp_path / "dist/single-screen.json").write_text('{"apps": []}\n')
         (tmp_path / "dist/dual-screen.json").write_text(
-            json.dumps({"apps": [{"id": "app.generated"}]})
+            json.dumps(
+                {
+                    "apps": [
+                        {
+                            "id": "app.generated",
+                            "url": "https://github.com/Fixture/generated",
+                        }
+                    ]
+                }
+            )
         )
     requested: list[str] = []
 
@@ -199,7 +226,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     if invalid_gate:
         from omnipack import build as build_module
 
-        real_render = build_module.render
+        real_render = build_module.render_pack
 
         def invalid_render(apps: list[ComposedApp]) -> str:
             rendered = json.loads(real_render(apps))
@@ -214,7 +241,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
                 rendered["apps"][0]["preferredApkIndex"] = "first"
             return json.dumps(rendered)
 
-        monkeypatch.setattr(build_module, "render", invalid_render)
+        monkeypatch.setattr(build_module, "render_pack", invalid_render)
     evidence = tmp_path / ".build/verify.json"
     evidence.parent.mkdir()
     evidence.write_bytes(b'{"keep":true}\n')
@@ -254,11 +281,14 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         ("apk", "app.generated"),
         ("apk", "app.retained"),
     }
-    assert report["changes"]["single"] == {"added": ["app.fixture"], "removed": []}
+    assert report["changes"]["single"] == {
+        "added": changed("app.fixture"),
+        "removed": [],
+    }
     assert report["changes"]["dual"] == {
-        "added": ["app.fixture", "app.retained"]
+        "added": changed("app.fixture", "app.retained")
         if existing != "none"
-        else ["app.fixture", "app.generated", "app.retained"],
+        else changed("app.fixture", "app.generated", "app.retained"),
         "removed": [],
     }
     assert not (tmp_path / "dist/report.json").exists()
@@ -278,7 +308,7 @@ def test_guarded_extras_field_fails_build_and_preserves_outputs(
                     "id": "app.extra",
                     "url": "https://example.test/extra",
                     "name": "Guarded extra",
-                    "packageId": None,
+                    "family": None,
                 }
             ]
         )
@@ -305,7 +335,7 @@ def test_guarded_extras_field_fails_build_and_preserves_outputs(
     error = capsys.readouterr().err
     assert "extras" in error
     assert "Guarded extra" in error
-    assert "packageId" in error
+    assert "family" in error
     assert "cannot come from a source record" in error
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == "ingestion"
@@ -358,7 +388,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     if stage == "rendering":
         from omnipack import build as build_module
 
-        real_render = build_module.render
+        real_render = build_module.render_pack
         renders = 0
 
         def render(*args):
@@ -368,7 +398,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
                 raise ValueError("injected rendering failure")
             return real_render(*args)
 
-        monkeypatch.setattr(build_module, "render", render)
+        monkeypatch.setattr(build_module, "render_pack", render)
     else:
         real_replace = Path.replace
         failed = False
@@ -400,11 +430,17 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     assert report["offlineVerification"] == {
         "status": "not-run" if stage == "rendering" else "success",
         "findings": [],
+        "nonfatalFindings": [],
     }
     assert report["changes"] == {
         variant.value: {
-            "added": ["current.id"],
-            "removed": ["before.id", "unknown.id"] if existing else [],
+            "added": [{"id": "current.id", "url": "example.test/current"}],
+            "removed": [
+                {"id": "before.id", "url": "example.test/old"},
+                {"id": "unknown.id", "url": "example.test/unknown"},
+            ]
+            if existing
+            else [],
         }
         for variant in Variant
     }
@@ -428,19 +464,13 @@ def test_composition_failure_preserves_collected_diagnostics(
         (
             "deny.json",
             [
-                {"id": "removed.app", "reason": "excluded"},
-                {"id": "stale.app", "reason": "obsolete"},
+                {"url": "https://example.test/removed", "reason": "excluded"},
+                {"url": "https://example.test/stale", "reason": "obsolete"},
             ],
         ),
         (
             "overlay.json",
-            [
-                {
-                    "id": "missing.app",
-                    "url": "https://example.com/missing",
-                    "patch": {"name": "Missing"},
-                }
-            ],
+            [{"url": "https://example.com/missing", "patch": {"name": "Missing"}}],
         ),
         ("composition.json", ABSENT_CATEGORY_POLICY),
     ):
@@ -448,17 +478,17 @@ def test_composition_failure_preserves_collected_diagnostics(
     apps = [
         App(
             package_id,
-            "https://example.test/app",
+            url,
             source,
             SourceType.HTML,
             (),
             Provenance(source, "https://example.test/catalog"),
             eligibility=frozenset(Variant),
         )
-        for package_id, source in (
-            ("collision.app", "rjny"),
-            ("collision.app", "extras"),
-            ("removed.app", "extras"),
+        for package_id, source, url in (
+            ("collision.app", "rjny", "https://example.test/app"),
+            ("collision.app", "extras", "https://example.test/app"),
+            ("removed.app", "extras", "https://example.test/removed"),
         )
     ]
     monkeypatch.setattr(
@@ -471,13 +501,12 @@ def test_composition_failure_preserves_collected_diagnostics(
     assert main(["build"]) == 1
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == "composition"
-    assert "missing.app" in report["error"]
+    assert "example.com/missing" in report["error"]
     assert report["selections"] == [
         {
-            "family": "package:collision.app",
+            "family": "example.test/app",
             "variant": variant.value,
-            "original_id": "collision.app",
-            "effective_id": "collision.app",
+            "id": "collision.app",
             "url": "https://example.test/app",
             "source": "extras",
             "origin": "extras",
@@ -486,7 +515,7 @@ def test_composition_failure_preserves_collected_diagnostics(
                 {
                     "source": "rjny",
                     "origin": "rjny",
-                    "original_id": "collision.app",
+                    "id": "collision.app",
                     "url": "https://example.test/app",
                 }
             ],
@@ -495,56 +524,120 @@ def test_composition_failure_preserves_collected_diagnostics(
     ]
     assert report["denylistRemovals"] == [
         {
-            "id": "removed.app",
-            "variant": variant.value,
+            "url": "example.test/removed",
             "reason": "excluded",
-            "family": "package:removed.app",
+            "families": ["example.test/removed"],
         }
-        for variant in Variant
     ]
-    assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
+    assert report["staleExclusions"] == [
+        {"url": "example.test/stale", "reason": "obsolete"}
+    ]
     # The overlay failed before category assignment ran, so neither category
-    # list holds anything, although assignment would have filled both.
+    # list holds anything, although assignment would have filled both, and the
+    # later coverage and repeated-id checks did not run either.
     assert report["uncategorizedFamilies"] == []
     assert report["staleCategoryAssignments"] == []
+    assert report["singleOnlyFamilies"] == []
+    assert report["repeatedIds"] == []
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
 
 
-def test_coverage_failure_preserves_collected_category_lists(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
     write_config(tmp_path)
     (tmp_path / "config/composition.json").write_text(
         json.dumps(ABSENT_CATEGORY_POLICY),
         encoding="utf-8",
     )
-    single_only = App(
-        "single.app",
-        "https://example.test/single",
-        "Single",
-        SourceType.HTML,
-        ("Dual Screen",),
-        Provenance("rjny", "https://example.test/catalog"),
-        eligibility=frozenset({Variant.SINGLE}),
+
+    def candidate(package_id: str, url: str, variants: set[Variant]) -> App:
+        return App(
+            package_id,
+            url,
+            package_id,
+            SourceType.HTML,
+            ("Dual Screen",),
+            Provenance("rjny", "https://example.test/catalog"),
+            eligibility=frozenset(variants),
+        )
+
+    single_only = candidate(
+        "single.app", "https://example.test/single", {Variant.SINGLE}
     )
+    first = candidate("shared.app", "https://example.test/first", {Variant.DUAL})
+    second = candidate("shared.app", "https://example.test/second", {Variant.DUAL})
     monkeypatch.setattr(
-        cli, "_ingest_for_build", lambda root, inputs, report: [single_only]
+        cli,
+        "_ingest_for_build",
+        lambda root, inputs, report: [single_only, first, second],
     )
     monkeypatch.chdir(tmp_path)
+    readme_before = (tmp_path / "README.md").read_bytes()
 
-    assert main(["build"]) == 1
+    assert main(["build"]) == 0
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["stage"] == "composition"
-    assert "missing app family" in report["error"]
+    assert report["status"] == "success"
+    assert report["singleOnlyFamilies"] == [
+        {
+            "family": "example.test/single",
+            "id": "single.app",
+            "url": "https://example.test/single",
+        }
+    ]
+    assert report["repeatedIds"] == [
+        {
+            "variant": "dual",
+            "id": "shared.app",
+            "entries": [
+                {"family": "example.test/first", "url": "https://example.test/first"},
+                {"family": "example.test/second", "url": "https://example.test/second"},
+            ],
+        }
+    ]
     assert report["uncategorizedFamilies"] == [
-        {"family": "package:single.app", "variants": ["single"]}
+        {"family": family, "variants": [variant]}
+        for family, variant in (
+            ("example.test/first", "dual"),
+            ("example.test/second", "dual"),
+            ("example.test/single", "single"),
+        )
     ]
     assert report["staleCategoryAssignments"] == ["app:absent"]
+    offline = report["offlineVerification"]
+    assert (offline["status"], offline["findings"]) == ("success", [])
+    nonfatal = [(item["variant"], item["code"]) for item in offline["nonfatalFindings"]]
+    assert nonfatal == [
+        ("dual", "repeated_package_id"),
+        ("single", "single_only_coverage"),
+    ]
+    readme = (tmp_path / "README.md").read_bytes()
+    assert readme != readme_before and b"single.app" in readme
+
+    assert main(["verify"]) == 0
+    verification = json.loads((tmp_path / ".build/verify.json").read_text())
+    assert (verification["status"], verification["errors"]) == ("success", [])
+    assert verification["nonfatalFindings"] == offline["nonfatalFindings"]
+
+    capsys.readouterr()
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    assert (
+        "Single-only family: example.test/single; id: single.app; "
+        "URL: https://example.test/single\n"
+    ) in output
+    assert "Repeated package id: dual shared.app; entries: " in output
+    for item in offline["nonfatalFindings"]:
+        line = (
+            f"Nonfatal finding: [{item['variant']} / {item['entry_id']}] "
+            f"{item['message']}\n"
+        )
+        assert output.count(line) == 2
 
 
 @pytest.mark.parametrize("reverse", [False, True])
-def test_winning_tie_reports_original_selectors(
+def test_winning_tie_publishes_one_build_and_reports_the_tie(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -553,20 +646,16 @@ def test_winning_tie_reports_original_selectors(
     write_config(tmp_path)
     candidates = [
         App(
-            "same.package",
+            package_id,
             "https://example.test/project",
             "Candidate",
             SourceType.HTML,
             (),
             Provenance("bboi", "fixture"),
             eligibility=frozenset(Variant),
-            origin=origin,
-            original_id=original,
+            origin="bboi-standard-asset",
         )
-        for origin, original in (
-            ("bboi-standard-asset", "original.standard"),
-            ("bboi-dual-asset", "original.dual"),
-        )
+        for package_id in ("same.stable", "same.nightly")
     ]
     monkeypatch.setattr(
         cli,
@@ -576,21 +665,39 @@ def test_winning_tie_reports_original_selectors(
         ),
     )
     monkeypatch.chdir(tmp_path)
-    assert main(["build"]) == 1
+    assert main(["build"]) == 0
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    expected = (
-        "family 'package:same.package' target 'single' has ambiguous winning candidates: "
-        "source='bboi', origin='bboi-dual-asset', original_id='original.dual', "
-        "url='example.test/project'; "
-        "source='bboi', origin='bboi-standard-asset', original_id='original.standard', "
-        "url='example.test/project'"
-    )
-    assert report["stage"] == "composition"
-    assert report["changes"] is None
-    assert report["error"] == expected
-    assert expected in capsys.readouterr().err
+    tied = [
+        {
+            "source": "bboi",
+            "origin": "bboi-standard-asset",
+            "id": package_id,
+            "url": "example.test/project",
+        }
+        for package_id in ("same.nightly", "same.stable")
+    ]
+    assert report["sameRankTies"] == [
+        {
+            "family": "example.test/project",
+            "variant": variant,
+            "tied": tied,
+            "winner": tied[0],
+        }
+        for variant in ("single", "dual")
+    ]
+    for variant in Variant:
+        published = json.loads(
+            (tmp_path / f"dist/{variant.value}-screen.json").read_text()
+        )
+        assert [app["id"] for app in published["apps"]] == ["same.nightly"]
+    capsys.readouterr()
     assert main(["report"]) == 0
-    assert expected in capsys.readouterr().out
+    assert (
+        "Same-rank tie: single example.test/project; tied: "
+        "bboi/bboi-standard-asset same.nightly at example.test/project | "
+        "bboi/bboi-standard-asset same.stable at example.test/project; "
+        "winner: bboi/bboi-standard-asset same.nightly at example.test/project\n"
+    ) in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(
@@ -612,16 +719,10 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
     edits = {
         "README.md": b"Edited guide\n" + readme_before,
         "config/overlay.json": json.dumps(
-            [
-                {
-                    "id": "app.fixture",
-                    "url": "https://example.test/app",
-                    "patch": {"name": "Edited"},
-                }
-            ]
+            [{"url": "https://example.test/app", "patch": {"name": "Edited"}}]
         ).encode(),
         "config/deny.json": json.dumps(
-            [{"id": "app.fixture", "reason": "edited"}]
+            [{"url": "https://example.test/app", "reason": "edited"}]
         ).encode(),
         "config/composition.json": b"not json",
         "config/sources.json": b"not json",
@@ -770,7 +871,7 @@ def test_malformed_composition_policy_error_names_its_input(
     assert not (tmp_path / "dist").exists()
 
 
-def test_invalid_track_only_policy_preserves_prior_outputs(
+def test_family_rule_on_a_track_only_candidate_builds(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     write_config(tmp_path)
@@ -781,20 +882,12 @@ def test_invalid_track_only_policy_preserves_prior_outputs(
     monkeypatch.setattr(
         cli, "_ingest_for_build", lambda root, inputs, report: [tracker]
     )
-    paths = [
-        tmp_path / "dist" / name for name in ("single-screen.json", "dual-screen.json")
-    ]
-    paths[0].parent.mkdir()
-    before = b'{"apps": []}\n'
-    for path in paths:
-        path.write_bytes(before)
     monkeypatch.chdir(tmp_path)
-    assert main(["build"]) == 1
-    assert all(path.read_bytes() == before for path in paths)
+    assert main(["build"]) == 0
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["stage"] == "composition"
-    assert "track-only" in report["error"]
-    assert "org.example.old" in report["error"]
+    assert {(item["family"], item["id"]) for item in report["selections"]} == {
+        ("app:example", "org.example.old")
+    }
 
 
 def test_build_then_report_displays_diagnostics_without_changing_report(
@@ -804,8 +897,8 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
     (tmp_path / "config/deny.json").write_text(
         json.dumps(
             [
-                {"id": "app.fixture", "reason": "excluded fixture"},
-                {"id": "app.absent", "reason": "unmatched denial"},
+                {"url": "https://example.test/app", "reason": "excluded fixture"},
+                {"url": "https://example.test/absent", "reason": "unmatched denial"},
             ]
         )
     )
@@ -817,164 +910,16 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
     capsys.readouterr()
     assert main(["report"]) == 0
     output = capsys.readouterr().out
-    assert "Change: dual added: app.generated" in output
-    for variant in Variant:
-        assert (
-            f"Exclusion: {variant.value} app.fixture; family: package:app.fixture; reason: excluded fixture"
-            in output
-        )
-    assert "Stale exclusion: app.absent; reason: unmatched denial" in output
+    assert (
+        "Change: dual added: app.generated; URL: github.com/fixture/generated" in output
+    )
+    assert (
+        "Exclusion: example.test/app; families: example.test/app; "
+        "reason: excluded fixture\n"
+    ) in output
+    assert "Stale exclusion: example.test/absent; reason: unmatched denial" in output
     assert (
         "Admission: codm2000; URL: https://github.com/fixture/generated; kind: apk; committed id: app.generated"
         in output
     )
     assert path.read_bytes() == before
-
-
-def selector(app: App) -> dict[str, str]:
-    return {
-        "source": app.provenance.source,
-        "origin": app.origin,
-        "id": app.original_id,
-        "url": app.url,
-    }
-
-
-def family_rules(family: str, *apps: App) -> list[dict[str, object]]:
-    return [
-        {"match": selector(app), "family": family, "rationale": "test"} for app in apps
-    ]
-
-
-def build_candidate(
-    package_id: str,
-    source: str,
-    origin: str,
-    url: str,
-    eligibility: frozenset[Variant] = frozenset(Variant),
-) -> App:
-    return App(
-        package_id,
-        url,
-        f"{source} {package_id}",
-        SourceType.HTML,
-        (),
-        Provenance(source, "https://example.test/catalog"),
-        eligibility=eligibility,
-        origin=origin,
-    )
-
-
-def run_build(
-    root: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    candidates: list[App],
-    rules: list[dict[str, object]],
-) -> tuple[int, dict[str, Any]]:
-    """Build candidates plus one denied and one stale denial under the rules."""
-    write_config(root)
-    removed = build_candidate(
-        "removed.app", "extras", "extras", "https://example.test/removed"
-    )
-    config = root / "config"
-    (config / "composition.json").write_text(
-        json.dumps({"schemaVersion": 1, "candidates": rules, "pins": []})
-    )
-    (config / "deny.json").write_text(
-        json.dumps(
-            [
-                {"id": "removed.app", "reason": "excluded"},
-                {"id": "stale.app", "reason": "obsolete"},
-            ]
-        )
-    )
-    monkeypatch.setattr(
-        cli, "_ingest_for_build", lambda root, inputs, report: [*candidates, removed]
-    )
-    monkeypatch.chdir(root)
-    code = main(["build"])
-    return code, json.loads((root / ".build/report.json").read_text())
-
-
-def assert_denials_preserved(report: dict[str, Any]) -> None:
-    assert report["denylistRemovals"] == [
-        {
-            "id": "removed.app",
-            "variant": variant.value,
-            "reason": "excluded",
-            "family": "package:removed.app",
-        }
-        for variant in Variant
-    ]
-    assert report["staleExclusions"] == [{"id": "stale.app", "reason": "obsolete"}]
-    assert report["changes"] is None
-
-
-def test_joined_explicit_families_report_both_families_and_joining_candidates(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    first = build_candidate("shared", "rjny", "rjny-catalog", "https://example.test/x")
-    second = build_candidate(
-        "shared", "bboi", "bboi-standard-asset", "https://example.test/y"
-    )
-    code, report = run_build(
-        tmp_path,
-        monkeypatch,
-        [first, second],
-        [*family_rules("app:x", first), *family_rules("app:y", second)],
-    )
-    assert code == 1
-    assert report["stage"] == "composition"
-    assert report["error"] == (
-        "explicit families 'app:x', 'app:y' join through a shared package id: "
-        "('bboi', 'bboi-standard-asset', 'shared', 'example.test/y'); "
-        "('rjny', 'rjny-catalog', 'shared', 'example.test/x')"
-    )
-    assert_denials_preserved(report)
-
-
-def selected_builds_joined_by_losers() -> tuple[list[App], list[App], list[App]]:
-    """Rules on losing builds only; the winners join their family by id."""
-    ruled = [
-        build_candidate("a", "rjny", "rjny-catalog", "https://example.test/X"),
-        build_candidate("c", "rjny", "rjny-catalog", "https://example.test/W"),
-    ]
-    winners = [
-        build_candidate("a", "extras", "extras", "https://example.test/Y"),
-        build_candidate(
-            "c",
-            "bboi",
-            "bboi-dual-asset",
-            "https://example.test/V",
-            frozenset({Variant.DUAL}),
-        ),
-    ]
-    return [*ruled, *winners], ruled, winners
-
-
-def test_family_whose_selected_builds_do_not_pair_fails_until_both_project_it(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    candidates, ruled, winners = selected_builds_joined_by_losers()
-    code, report = run_build(
-        tmp_path, monkeypatch, candidates, family_rules("app:x", *ruled)
-    )
-    assert code == 1
-    assert report["stage"] == "composition"
-    assert report["error"] == (
-        "family 'app:x' selects single-screen ('a', 'example.test/Y') and "
-        "dual-screen ('c', 'example.test/V'), which offline verification cannot "
-        "pair; add a family rule assigning 'app:x' to ('a', 'example.test/Y') and "
-        "('c', 'example.test/V')"
-    )
-    assert [
-        (item["family"], item["variant"], item["source"])
-        for item in report["selections"]
-    ] == [("app:x", "single", "extras"), ("app:x", "dual", "bboi")]
-    assert_denials_preserved(report)
-
-    code, report = run_build(
-        tmp_path, monkeypatch, candidates, family_rules("app:x", *ruled, *winners)
-    )
-    assert code == 0, report.get("error")
-    assert report["offlineVerification"] == {"status": "success", "findings": []}

@@ -3,10 +3,11 @@
 from __future__ import annotations
 
 from copy import deepcopy
-from dataclasses import dataclass, field
+from dataclasses import astuple, dataclass, field
 from typing import Any
 
 from omnipack.composition_policy import (
+    CandidateSelector,
     CompositionPolicy,
     CompositionPolicyError,
     Pin,
@@ -14,9 +15,7 @@ from omnipack.composition_policy import (
     apply_composition_policy,
     assigned_family,
     candidate_selector,
-    form_families,
-    pair_entries,
-    rendered_key,
+    check_overlay_id_patches,
 )
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import (
@@ -26,6 +25,8 @@ from omnipack.overlay import (
     apply_overlay,
     parse_overlay,
 )
+from omnipack.render import canonical_serialization
+from omnipack.urls import normalize_project_url
 
 _PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
 
@@ -36,15 +37,16 @@ class CompositionError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Removal:
-    package_id: str
-    variant: Variant
+    """A denial that removed candidates, with the families they belonged to."""
+
+    url: str
     reason: str
-    family: str
+    families: tuple[str, ...]
 
 
 @dataclass(frozen=True, slots=True)
 class StaleExclusion:
-    package_id: str
+    url: str
     reason: str
 
 
@@ -54,7 +56,7 @@ class ConsideredCandidate:
 
     source: str
     origin: str
-    original_id: str
+    id: str
     url: str
 
 
@@ -69,13 +71,53 @@ class FamilySelection:
 
     family: str
     variant: Variant
-    original_id: str
-    effective_id: str
+    id: str
     url: str
     source: str
     origin: str
     reason: str
     considered: tuple[ConsideredCandidate, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class SameRankTie:
+    """A family and variant whose winner was chosen among tied candidates.
+
+    The winner is the tied candidate whose canonical serialized form sorts
+    first, so the choice never depends on input order.
+    """
+
+    family: str
+    variant: Variant
+    tied: tuple[CandidateSelector, ...]
+    winner: CandidateSelector
+
+
+@dataclass(frozen=True, slots=True)
+class SingleOnlyFamily:
+    """A family published in single with no selected build in dual."""
+
+    family: str
+    id: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class RepeatedEntry:
+    family: str
+    url: str
+
+
+@dataclass(frozen=True, slots=True)
+class RepeatedId:
+    """A package id more than one selected entry of a variant carries.
+
+    Obtainium stores imported apps by id, so it keeps only one of them.
+    """
+
+    variant: Variant
+    id: str
+    entries: tuple[RepeatedEntry, ...]
 
 
 @dataclass(frozen=True, slots=True)
@@ -91,9 +133,12 @@ class CompositionReport:
     removals: list[Removal] = field(default_factory=list)
     stale_exclusions: list[StaleExclusion] = field(default_factory=list)
     selections: list[FamilySelection] = field(default_factory=list)
+    same_rank_ties: list[SameRankTie] = field(default_factory=list)
     uncategorized_families: list[UncategorizedFamily] = field(default_factory=list)
     # Category map keys that set no selected entry's category.
     stale_category_assignments: list[str] = field(default_factory=list)
+    single_only_families: list[SingleOnlyFamily] = field(default_factory=list)
+    repeated_ids: list[RepeatedId] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -103,8 +148,10 @@ class CompositionResult:
 
 
 @dataclass(frozen=True, slots=True)
-class _Exclusion:
-    package_id: str
+class Exclusion:
+    """A project denial: every candidate at `url`, a normalized URL, is removed."""
+
+    url: str
     reason: str
 
 
@@ -120,49 +167,53 @@ def compose(
     exclusions = parse_exclusions(denylist)
     try:
         candidates = list(apply_composition_policy(policy, candidates))
-        _check_sources(candidates)
-        denied = _exclude(candidates, exclusions, report)
-        formed = form_families(
-            [item for item in candidates if item.eligibility and id(item) not in denied]
-        )
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
+    _check_sources(candidates)
+    denied = _exclude(candidates, exclusions, report)
+    formed = tuple(
+        item for item in candidates if item.eligibility and id(item) not in denied
+    )
     pinned = _resolve_pins(candidates, formed, policy.pins, denied)
     selected = _select(_families(formed), pinned, report)
-    _validate_pairing(selected, policy)
     try:
         patches = parse_overlay(overlay, "overlay")
+        check_overlay_id_patches(policy, patches)
         _validate_overlay_targets(selected, patches)
         for variant in Variant:
             selected[variant] = apply_overlay(selected[variant], patches)
-    except OverlayError as error:
+    except (OverlayError, CompositionPolicyError) as error:
         raise CompositionError(str(error)) from error
     applied = _assign_categories(selected, policy)
     report.uncategorized_families.extend(_uncategorized_families(selected))
     report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
-    _validate_coverage(selected)
+    report.single_only_families.extend(_single_only_families(selected))
+    report.repeated_ids.extend(_repeated_ids(selected))
     return CompositionResult(selected, report)
 
 
-def parse_exclusions(entries: list[Any]) -> tuple[_Exclusion, ...]:
-    """Parse package denials, each of which applies to both variants."""
-    result: list[_Exclusion] = []
+def parse_exclusions(entries: list[Any]) -> tuple[Exclusion, ...]:
+    """Parse project denials, each of which applies to both variants."""
+    result: list[Exclusion] = []
     for index, entry in enumerate(entries):
+        label = f"denylist[{index}]"
         if not isinstance(entry, dict):
-            raise CompositionError(f"denylist[{index}] must be an object")
-        unknown = set(entry) - {"id", "reason"}
+            raise CompositionError(f"{label} must be an object")
+        unknown = set(entry) - {"url", "reason"}
         if unknown:
-            raise CompositionError(
-                f"denylist[{index}] has unknown field {min(unknown)!r}"
-            )
-        package_id, reason = entry.get("id"), entry.get("reason")
-        if not isinstance(package_id, str) or not package_id.strip():
-            raise CompositionError(f"denylist[{index}].id must be a nonempty string")
+            raise CompositionError(f"{label} has unknown field {min(unknown)!r}")
+        url, reason = entry.get("url"), entry.get("reason")
+        if not isinstance(url, str) or not url.strip():
+            raise CompositionError(f"{label}.url must be a nonempty string")
         if not isinstance(reason, str) or not reason.strip():
+            raise CompositionError(f"{label}.reason must be a nonempty string")
+        try:
+            normalized = normalize_project_url(url)
+        except ValueError as error:
             raise CompositionError(
-                f"denylist[{index}].reason must be a nonempty string"
-            )
-        result.append(_Exclusion(package_id, reason))
+                f"{label}.url is not a project URL: {url!r}"
+            ) from error
+        result.append(Exclusion(normalized, reason))
     return tuple(result)
 
 
@@ -182,32 +233,37 @@ def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:
 
 def _exclude(
     candidates: list[App],
-    exclusions: tuple[_Exclusion, ...],
+    exclusions: tuple[Exclusion, ...],
     report: CompositionReport,
 ) -> dict[int, str]:
     """Record each candidate a denial removes, keyed by candidate.
 
-    A removed candidate belongs to no formed family, so its removals name its
-    own assignment. A denial is stale only when no candidate carries its
-    package id. One whose candidates are eligible for neither pack removes
-    nothing but still applies.
+    A denial is reported once, under its URL, with every family whose
+    candidates it removed. It is stale only when no candidate is at its URL;
+    one whose candidates are eligible for neither pack removes nothing but
+    still applies.
     """
     denied: dict[int, str] = {}
     for rule in exclusions:
-        matched = False
-        for candidate in candidates:
-            if candidate.id != rule.package_id:
-                continue
-            matched = True
-            denied[id(candidate)] = rule.reason
-            family = assigned_family(candidate)
-            for variant in Variant:
-                if variant in candidate.eligibility:
-                    report.removals.append(
-                        Removal(candidate.id, variant, rule.reason, family)
-                    )
+        matched = [
+            candidate
+            for candidate in candidates
+            if normalize_project_url(candidate.url) == rule.url
+        ]
         if not matched:
-            report.stale_exclusions.append(StaleExclusion(rule.package_id, rule.reason))
+            report.stale_exclusions.append(StaleExclusion(rule.url, rule.reason))
+            continue
+        for candidate in matched:
+            denied[id(candidate)] = rule.reason
+        families = sorted(
+            {
+                assigned_family(candidate)
+                for candidate in matched
+                if candidate.eligibility
+            }
+        )
+        if families:
+            report.removals.append(Removal(rule.url, rule.reason, tuple(families)))
     return denied
 
 
@@ -272,26 +328,35 @@ def _select(
                 elif variant is Variant.DUAL:
                     reason = "ordinary-fallback"
                 rank = max(_PRECEDENCE[item.provenance.source] for item in tier)
-                winners = [
-                    item for item in tier if _PRECEDENCE[item.provenance.source] == rank
-                ]
-                identities = {candidate_selector(item).key for item in winners}
-                if len(identities) != 1:
-                    selectors = "; ".join(
-                        f"source={source!r}, origin={origin!r}, original_id={original_id!r}, url={url!r}"
-                        for source, origin, original_id, url in sorted(identities)
-                    )
-                    raise CompositionError(
-                        f"family {family!r} target {variant.value!r} has ambiguous winning candidates: {selectors}"
-                    )
+                winners = sorted(
+                    (
+                        item
+                        for item in tier
+                        if _PRECEDENCE[item.provenance.source] == rank
+                    ),
+                    key=_tie_order,
+                )
                 winner = winners[0]
+                if len(winners) > 1:
+                    report.same_rank_ties.append(
+                        SameRankTie(
+                            family,
+                            variant,
+                            tuple(
+                                sorted(
+                                    (candidate_selector(item) for item in winners),
+                                    key=lambda selector: selector.key,
+                                )
+                            ),
+                            candidate_selector(winner),
+                        )
+                    )
             else:
                 continue
             report.selections.append(
                 FamilySelection(
                     family,
                     variant,
-                    winner.original_id,
                     winner.id,
                     winner.url,
                     winner.provenance.source,
@@ -301,7 +366,7 @@ def _select(
                         ConsideredCandidate(
                             item.provenance.source,
                             item.origin,
-                            item.original_id,
+                            item.id,
                             item.url,
                         )
                         for item in sorted(
@@ -315,44 +380,6 @@ def _select(
     for values in result.values():
         values.sort(key=lambda item: (item.family, item.id, item.url))
     return result
-
-
-def _validate_pairing(
-    apps: dict[Variant, list[ComposedApp]], policy: CompositionPolicy
-) -> None:
-    """Require each family in both variants to pair the way offline checks do.
-
-    Offline verification and the README see only rendered entries, so a
-    family whose selected entries differ in package id must project its
-    explicit family onto both of them.
-    """
-    pairs = pair_entries(
-        policy,
-        [rendered_key(app.id, app.url) for app in apps[Variant.SINGLE]],
-        [rendered_key(app.id, app.url) for app in apps[Variant.DUAL]],
-    )
-    paired = {(pair.single, pair.dual) for pair in pairs}
-    duals = {app.family: app for app in apps[Variant.DUAL]}
-    for single in apps[Variant.SINGLE]:
-        dual = duals.get(single.family)
-        if dual is None:
-            continue
-        keys = rendered_key(single.id, single.url), rendered_key(dual.id, dual.url)
-        if keys in paired:
-            continue
-        unprojected = [
-            key for key in keys if policy.projections.get(key) != single.family
-        ]
-        remedy = (
-            f"; add a family rule assigning {single.family!r} to "
-            + " and ".join(map(repr, unprojected))
-            if unprojected
-            else ""
-        )
-        raise CompositionError(
-            f"family {single.family!r} selects single-screen {keys[0]!r} and "
-            f"dual-screen {keys[1]!r}, which offline verification cannot pair" + remedy
-        )
 
 
 def _assign_categories(
@@ -409,18 +436,34 @@ def _uncategorized_families(
     ]
 
 
-def _validate_coverage(apps: dict[Variant, list[ComposedApp]]) -> None:
+def _single_only_families(
+    apps: dict[Variant, list[ComposedApp]],
+) -> list[SingleOnlyFamily]:
+    """Families selected in single that dual does not select at all.
+
+    Such a family still ships in single; nothing ineligible is copied into dual.
+    """
     dual_families = {app.family for app in apps[Variant.DUAL]}
-    missing = [
-        single.family
-        for single in apps[Variant.SINGLE]
-        if single.family not in dual_families
+    return [
+        SingleOnlyFamily(app.family, app.id, app.url)
+        for app in apps[Variant.SINGLE]
+        if app.family not in dual_families
     ]
-    if missing:
-        raise CompositionError(
-            "dual-screen variant is missing app family/families: "
-            + ", ".join(sorted(missing))
+
+
+def _repeated_ids(apps: dict[Variant, list[ComposedApp]]) -> list[RepeatedId]:
+    """Package ids, after overlays, that several entries of one variant carry."""
+    result: list[RepeatedId] = []
+    for variant in Variant:
+        carriers: dict[str, list[RepeatedEntry]] = {}
+        for app in apps[variant]:
+            carriers.setdefault(app.id, []).append(RepeatedEntry(app.family, app.url))
+        result.extend(
+            RepeatedId(variant, package_id, tuple(sorted(entries, key=astuple)))
+            for package_id, entries in sorted(carriers.items())
+            if len(entries) > 1
         )
+    return result
 
 
 def _validate_overlay_targets(
@@ -428,11 +471,21 @@ def _validate_overlay_targets(
 ) -> None:
     """Require each record to match a selected entry in at least one variant."""
     selected = {
-        rendered_key(app.id, app.url) for values in apps.values() for app in values
+        normalize_project_url(app.url) for values in apps.values() for app in values
     }
-    missing = sorted(item.key for item in patches if item.key not in selected)
+    missing = sorted(item.url for item in patches if item.url not in selected)
     if missing:
         raise OverlayError(f"overlay has no selected target for {missing!r}")
+
+
+def _tie_order(app: App) -> tuple[str, tuple[str, str, str, str]]:
+    """Order tied candidates by their import record as ingested, serialized
+    canonically, so input order never picks the winner.
+
+    Records that serialize identically publish identical entries, and their
+    selectors order them so the recorded winner is stable too.
+    """
+    return canonical_serialization(_import_data(app)), candidate_selector(app).key
 
 
 def _import_data(app: App) -> dict[str, Any]:

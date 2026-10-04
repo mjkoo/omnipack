@@ -2,7 +2,6 @@ from __future__ import annotations
 
 import json
 import shutil
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -12,7 +11,7 @@ from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpResponse
 from omnipack.merge import compose
 from omnipack.model import App, Provenance, SourceType, Variant
-from omnipack.render import render
+from omnipack.render import render, render_pack
 from omnipack.source_catalog import render_catalog
 from omnipack.sources import IngestionReport, SourceError, ingest_all, quiver
 from omnipack.verify import run_verification
@@ -103,7 +102,7 @@ def test_quiver_duplicate_package_id_fails_named(tmp_path: Path) -> None:
         quiver.fetch(tmp_path, {"catalog": "quiver.json"})
 
 
-@pytest.mark.parametrize("field", ["family", "packageId", "variant"])
+@pytest.mark.parametrize("field", ["family", "variant"])
 def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
     write_catalog(tmp_path, [entry("org.example.one", "owner/one", **{field: "x"})])
     with pytest.raises(SourceError, match=field):
@@ -166,66 +165,33 @@ def test_quiver_candidates_reach_composition_with_url_and_package_overlaps(
         "org.example.new",
     ]
     result = compose(candidates, [], [], policy=policy())
-    assert {app.data["id"] for app in result.apps[Variant.SINGLE]} == {
-        "org.example.shared",
-        "org.example.new",
+    # Every project URL is its own family, so a shared package id joins nothing.
+    assert {
+        (app.data["id"], app.data["url"]) for app in result.apps[Variant.SINGLE]
+    } == {
+        ("org.example.shared", "https://github.com/owner/different"),
+        ("org.example.shared", "https://github.com/owner/same"),
+        ("org.example.new", "https://github.com/owner/new"),
     }
-    assert any(
-        item.source == "quiver"
-        for item in result.report.selections
-        if item.effective_id == "org.example.new"
-    )
-    assert any(
-        item.source == "quiver"
-        for selection in result.report.selections
-        for item in selection.considered
-    )
+    assert {
+        item.family for item in result.report.selections if item.source == "quiver"
+    } == {"github.com/owner/same", "github.com/owner/new"}
+    assert [(item.variant, item.id) for item in result.report.repeated_ids] == [
+        (Variant.SINGLE, "org.example.shared"),
+        (Variant.DUAL, "org.example.shared"),
+    ]
 
 
-def test_same_project_different_package_remains_a_separate_family() -> None:
+def test_same_project_different_package_forms_one_family() -> None:
     existing = other("org.example.old", "owner/same", "rjny", "rjny-catalog")
     quiver_app = other("org.example.new", "owner/same", "quiver", "quiver-generated")
     result = compose([existing, quiver_app], [], [], policy=policy())
-    assert all(
-        {app.data["id"] for app in result.apps[variant]}
-        == {"org.example.old", "org.example.new"}
-        for variant in Variant
-    )
-
-
-def test_package_id_correction_joins_a_quiver_candidates_family() -> None:
-    existing = replace(
-        other("org.example.old", "owner/same", "bboi", "bboi-standard-asset"),
-        additional_settings={"includePrereleases": False},
-    )
-    quiver_app = replace(
-        other("org.example.new", "Owner/Same", "quiver", "quiver-generated"),
-        additional_settings={"includePrereleases": True},
-    )
-    parsed = policy(
-        [
-            {
-                "match": {
-                    "source": "bboi",
-                    "origin": "bboi-standard-asset",
-                    "id": existing.id,
-                    "url": existing.url,
-                },
-                "packageId": quiver_app.id,
-                "rationale": "Use the package identity the release declares.",
-            }
-        ]
-    )
-    result = compose([existing, quiver_app], [], [], policy=parsed)
     for variant in Variant:
-        [selected] = result.apps[variant]
-        assert (selected.id, selected.url) == (quiver_app.id, quiver_app.url)
-        assert selected.data["additionalSettings"] == quiver_app.additional_settings
-        [selection] = [
-            item for item in result.report.selections if item.variant is variant
-        ]
-        assert (selection.source, selection.original_id) == ("quiver", quiver_app.id)
-        assert [item.source for item in selection.considered] == ["bboi"]
+        assert [app.data["id"] for app in result.apps[variant]] == ["org.example.old"]
+    assert all(
+        [item.source for item in selection.considered] == ["quiver"]
+        for selection in result.report.selections
+    )
 
 
 def test_quiver_ranks_between_rjny_and_bboi() -> None:
@@ -235,22 +201,12 @@ def test_quiver_ranks_between_rjny_and_bboi() -> None:
         ("rjny", "rjny-catalog", "rjny"),
         ("extras", "extras", "extras"),
     ):
-        rival = other("org.example.game", f"owner/{source}", source, origin)
+        rival = other("org.example.game", "owner/quiver", source, origin)
         result = compose([rival, quiver_app], [], [], policy=policy())
         [single] = [
             item for item in result.report.selections if item.variant is Variant.SINGLE
         ]
         assert single.source == winner
-
-
-def test_quiver_only_single_and_codm_dual_preference() -> None:
-    quiver_app = other("org.example.game", "owner/quiver", "quiver", "quiver-generated")
-    codm = other("org.example.game", "owner/codm", "codm2000", "codm-generated")
-    result = compose([quiver_app, codm], [], [], policy=policy())
-    assert [(app.data["url"]) for app in result.apps[Variant.SINGLE]] == [
-        quiver_app.url
-    ]
-    assert [(app.data["url"]) for app in result.apps[Variant.DUAL]] == [codm.url]
 
 
 def test_same_project_codm_dual_preference() -> None:
@@ -298,7 +254,7 @@ def test_different_package_fork_family_pairs_across_variants() -> None:
 
 def test_quiver_cannot_displace_explicit_family_member_at_same_tier() -> None:
     existing = other("org.example.game", "owner/old", "rjny", "rjny-catalog")
-    new = other("org.example.game", "owner/new", "quiver", "quiver-generated")
+    new = other("org.example.other", "owner/old", "quiver", "quiver-generated")
     parsed = policy(
         [
             {
@@ -332,22 +288,15 @@ def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> Non
         [app.data["id"] for app in result.apps[variant]] == ["org.example.future"]
         for variant in Variant
     )
-    denied = compose(
-        [candidate],
-        [{"id": "org.example.future", "reason": "Rejected after review."}],
-        [],
-        policy=policy(),
-    )
+    denial = [{"url": candidate.url, "reason": "Rejected after review."}]
+    denied = compose([candidate], denial, [], policy=policy())
     assert all(not denied.apps[variant] for variant in Variant)
     (tmp_path / "quiver.json").write_text('{"apps":[]}')
     empty = compose(
-        quiver.fetch(tmp_path, {"catalog": "quiver.json"}),
-        [{"id": "org.example.future", "reason": "Rejected after review."}],
-        [],
-        policy=policy(),
+        quiver.fetch(tmp_path, {"catalog": "quiver.json"}), denial, [], policy=policy()
     )
-    assert [item.package_id for item in empty.report.stale_exclusions] == [
-        "org.example.future"
+    assert [item.url for item in empty.report.stale_exclusions] == [
+        "github.com/newpublisher/future"
     ]
 
 
@@ -401,7 +350,7 @@ def test_current_composition_renders_and_verifies_with_quiver(
         shutil.copyfile(root / f"config/{name}.json", destination)
     packs = {}
     for variant, stem in ((Variant.SINGLE, "single"), (Variant.DUAL, "dual")):
-        data = render(composed.apps[variant]).encode()
+        data = render_pack(composed.apps[variant]).encode()
         packs[variant] = data
         destination = tmp_path / f"dist/{stem}-screen.json"
         destination.parent.mkdir(parents=True, exist_ok=True)

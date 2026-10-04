@@ -16,14 +16,19 @@ from omnipack.composition_policy import (
 )
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
-from omnipack.render import render
+from omnipack.render import render_pack
 from omnipack.report_model import (
     BuildStage,
     FindingRecord,
     OfflineStatus,
     OfflineVerdict,
+    Severity,
 )
 from omnipack.sources import IngestionReport, SourceError
+from omnipack.urls import normalize_project_url
+
+# A rendered entry's package id and normalized project URL.
+EntryKey = tuple[str, str]
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -91,9 +96,11 @@ class BuildInputs:
         )
 
 
-def previous_ids(root: Path) -> dict[Variant, set[str]]:
-    """Read rendered package ids from the output pair before publication begins."""
-    result: dict[Variant, set[str]] = {}
+def previous_entries(root: Path) -> dict[Variant, set[EntryKey]]:
+    """Read each rendered entry's package id and normalized project URL from the
+    output pair before publication begins.
+    """
+    result: dict[Variant, set[EntryKey]] = {}
     for variant, name in OUTPUTS.items():
         path = root / "dist" / name
         if not path.exists():
@@ -105,11 +112,16 @@ def previous_ids(root: Path) -> dict[Variant, set[str]]:
             result[variant] = set()
             continue
         apps = document.get("apps", []) if isinstance(document, dict) else []
-        result[variant] = {
-            item["id"]
-            for item in apps
-            if isinstance(item, dict) and isinstance(item.get("id"), str)
-        }
+        result[variant] = set()
+        for item in apps:
+            if not isinstance(item, dict):
+                continue
+            package_id, url = item.get("id"), item.get("url")
+            if isinstance(package_id, str) and isinstance(url, str):
+                try:
+                    result[variant].add((package_id, normalize_project_url(url)))
+                except ValueError:
+                    continue
     return result
 
 
@@ -125,9 +137,9 @@ def publish_build(
     """Render both variants and their catalog, gate them, and publish together."""
     if on_stage is not None:
         on_stage(BuildStage.RENDERING)
-    before = previous_ids(root)
+    before = previous_entries(root)
     rendered = {
-        variant: render(composition.apps[variant]).encode() for variant in Variant
+        variant: render_pack(composition.apps[variant]).encode() for variant in Variant
     }
     from omnipack.offline import OfflineInputs, validate_offline
     from omnipack.report import write_report
@@ -143,7 +155,14 @@ def publish_build(
             inputs.composition,
         )
     )
-    findings: list[FindingRecord] = [item.to_record() for item in offline_findings]
+    findings: list[FindingRecord] = [
+        item.to_record() for item in offline_findings if item.severity is Severity.ERROR
+    ]
+    nonfatal: list[FindingRecord] = [
+        item.to_record()
+        for item in offline_findings
+        if item.severity is Severity.NONFATAL
+    ]
     from omnipack.catalog import generate_catalog, replace_catalog
 
     readme_rendered = None
@@ -162,6 +181,7 @@ def publish_build(
     verdict: OfflineVerdict = {
         "status": OfflineStatus.FAILED if findings else OfflineStatus.SUCCESS,
         "findings": findings,
+        "nonfatalFindings": nonfatal,
     }
     if on_verification is not None:
         on_verification(verdict)

@@ -19,7 +19,7 @@ from omnipack.sources import IngestionReport
 
 def app(package_id: str) -> ComposedApp:
     return ComposedApp(
-        f"package:{package_id}",
+        f"example.test/{package_id}",
         {
             "id": package_id,
             "url": f"https://example.test/{package_id}",
@@ -35,9 +35,9 @@ def composition(*ids: str) -> CompositionResult:
         {variant: [app(package_id) for package_id in ids] for variant in Variant},
         CompositionReport(
             removals=[
-                Removal("denied.id", Variant.DUAL, "curated", "package:denied.id")
+                Removal("example.test/denied", "curated", ("example.test/denied",))
             ],
-            stale_exclusions=[StaleExclusion("stale.id", "gone")],
+            stale_exclusions=[StaleExclusion("example.test/stale", "gone")],
         ),
     )
 
@@ -67,11 +67,9 @@ def write_config(root: Path) -> None:
 def test_report_compares_with_previous_output_and_keeps_source_details(
     tmp_path: Path,
 ) -> None:
-    write_previous(
-        tmp_path,
-        {"apps": [{"id": "old.id"}, {"id": "kept.id"}]},
-        {"apps": [{"id": "kept.id"}]},
-    )
+    old = {"id": "old.id", "url": "https://example.test/old.id"}
+    kept = {"id": "kept.id", "url": "https://EXAMPLE.test/kept.id/"}
+    write_previous(tmp_path, {"apps": [old, kept]}, {"apps": [kept]})
     write_config(tmp_path)
     admitted = {
         "source": "codm2000",
@@ -87,11 +85,26 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         build_module.BuildInputs.read(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["changes"]["single"] == {"added": ["new.id"], "removed": ["old.id"]}
-    assert report["changes"]["dual"] == {"added": ["new.id"], "removed": []}
+    added = [{"id": "new.id", "url": "example.test/new.id"}]
+    assert report["changes"]["single"] == {
+        "added": added,
+        "removed": [{"id": "old.id", "url": "example.test/old.id"}],
+    }
+    assert report["changes"]["dual"] == {"added": added, "removed": []}
     assert report["sourceAdmissions"] == [admitted]
-    assert report["denylistRemovals"][0]["id"] == "denied.id"
-    assert report["staleExclusions"][0]["id"] == "stale.id"
+    assert report["denylistRemovals"] == [
+        {
+            "url": "example.test/denied",
+            "reason": "curated",
+            "families": ["example.test/denied"],
+        }
+    ]
+    assert report["staleExclusions"] == [
+        {"url": "example.test/stale", "reason": "gone"}
+    ]
+    for variant in ("single", "dual"):
+        published = json.loads((tmp_path / f"dist/{variant}-screen.json").read_text())
+        assert {app["allowIdChange"] for app in published["apps"]} == {True}
 
 
 def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> None:
@@ -134,14 +147,17 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     report = json.loads((tmp_path / ".build/report.json").read_text())
     for variant in Variant:
         assert report["changes"][variant.value] == {
-            "added": ["new.pkg"],
-            "removed": ["old.pkg", "retired.pkg"],
+            "added": [{"id": "new.pkg", "url": "example.test/new"}],
+            "removed": [
+                {"id": "old.pkg", "url": "example.test/old"},
+                {"id": "retired.pkg", "url": "example.test/retired"},
+            ],
         }
         [selection] = [
             item for item in report["selections"] if item["variant"] == variant.value
         ]
         assert selection["family"] == "app:shared"
-        assert selection["effective_id"] == "new.pkg"
+        assert selection["id"] == "new.pkg"
         assert selection["url"] == current_url
 
 
@@ -153,6 +169,9 @@ BUILD_REPORT_FIELDS = {
     "denylistRemovals",
     "staleExclusions",
     "selections",
+    "repeatedIds",
+    "singleOnlyFamilies",
+    "sameRankTies",
     "uncategorizedFamilies",
     "staleCategoryAssignments",
     "offlineVerification",
@@ -170,7 +189,7 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
         build_module.BuildInputs.read(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["schemaVersion"] == 4
+    assert report["schemaVersion"] == 5
     assert set(report) == BUILD_REPORT_FIELDS
     write_report(
         tmp_path,

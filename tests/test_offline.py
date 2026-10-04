@@ -8,6 +8,7 @@ from typing import Any
 import pytest
 
 from omnipack.offline import Finding, OfflineInputs, validate_offline
+from omnipack.report_model import Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 ROOT = Path(__file__).parents[1]
@@ -26,6 +27,7 @@ def app(package_id: str = "org.example.app", source: str = "GitHub") -> dict[str
         "additionalSettings": json.dumps(SETTINGS_DEFAULTS[source]),
         "categories": ["Emulator"],
         "overrideSource": source,
+        "allowIdChange": True,
     }
 
 
@@ -55,6 +57,10 @@ def inputs(
 
 def codes(findings: tuple[Finding, ...]) -> set[str]:
     return {finding.code for finding in findings}
+
+
+def errors(findings: tuple[Finding, ...]) -> tuple[Finding, ...]:
+    return tuple(item for item in findings if item.severity is Severity.ERROR)
 
 
 def located(findings: tuple[Finding, ...]) -> set[tuple[object, ...]]:
@@ -140,12 +146,30 @@ def test_malformed_serialized_documents_are_rejected(
 
 
 def test_independent_variant_errors_are_collected() -> None:
-    duplicate = app("same")
+    nameless = app("same")
+    nameless.pop("name")
     wrong = with_settings(app("other"), trackOnly="yes")
-    findings = validate_offline(inputs([duplicate, deepcopy(duplicate)], [wrong]))
-    assert {("single", "duplicate_id"), ("dual", "wrong_setting_type")} <= {
+    findings = validate_offline(inputs([nameless], [wrong]))
+    assert {("single", "missing_field"), ("dual", "wrong_setting_type")} <= {
         (finding.variant, finding.code) for finding in findings
     }
+
+
+@pytest.mark.parametrize(
+    "value", [None, False, "true"], ids=["absent", "false", "string"]
+)
+def test_every_entry_must_allow_an_id_change(value: object) -> None:
+    entry = app()
+    if value is None:
+        entry.pop("allowIdChange")
+    else:
+        entry["allowIdChange"] = value
+    assert (
+        "single",
+        "org.example.app",
+        "allowIdChange",
+        "invalid_allow_id_change",
+    ) in (located(validate_offline(inputs([entry], []))))
 
 
 @pytest.mark.parametrize(
@@ -237,19 +261,20 @@ def test_raw_ids_survive_other_entry_errors(field: str) -> None:
         inputs(
             [malformed, deepcopy(malformed)],
             [deepcopy(malformed)],
-            overlay=[{"id": "present", "url": "https://example.com/app", "patch": {}}],
-            deny=[{"id": "present", "reason": "excluded"}],
+            overlay=[{"url": "https://example.com/app", "patch": {}}],
+            deny=[{"url": "https://example.com/app", "reason": "excluded"}],
         )
     )
     assert {
-        ("single", "duplicate_id"),
+        ("single", "repeated_family_label"),
+        ("single", "repeated_package_id"),
         ("single", "denied_output_present"),
         ("dual", "denied_output_present"),
     } <= {(finding.variant, finding.code) for finding in findings}
-    assert not {"stale_overlay", "dual_coverage_gap"} & codes(findings)
+    assert not {"stale_overlay", "single_only_coverage"} & codes(findings)
 
     missing_dual = validate_offline(inputs([malformed], []))
-    assert "dual_coverage_gap" in codes(missing_dual)
+    assert "single_only_coverage" in codes(missing_dual)
 
 
 def test_entry_lacking_a_default_key_passes_when_every_other_check_passes() -> None:
@@ -295,34 +320,21 @@ def test_nested_html_steps_and_headers_are_validated(
     ("kwargs", "code"),
     [
         (
-            {"overlay": [{"id": "x", "url": "https://example.com/app", "patch": None}]},
+            {"overlay": [{"url": "https://example.com/app", "patch": None}]},
             "invalid_composition_config",
         ),
         (
-            {
-                "overlay": [
-                    {
-                        "id": "x",
-                        "url": "https://example.com/app",
-                        "patch": {"id": "changed"},
-                    }
-                ]
-            },
+            {"overlay": [{"url": "https://example.com/app", "patch": {"url": "x"}}]},
             "invalid_composition_config",
         ),
         (
-            {
-                "overlay": [
-                    {
-                        "id": "missing",
-                        "url": "https://example.com/missing",
-                        "patch": {"name": "x"},
-                    }
-                ]
-            },
+            {"overlay": [{"url": "https://example.com/missing", "patch": {"x": 1}}]},
             "stale_overlay",
         ),
-        ({"deny": [{"id": "org.example.app", "reason": "x"}]}, "denied_output_present"),
+        (
+            {"deny": [{"url": "https://EXAMPLE.com/app/", "reason": "x"}]},
+            "denied_output_present",
+        ),
     ],
 )
 def test_local_composition_constraints(kwargs: dict[str, Any], code: str) -> None:
@@ -334,74 +346,61 @@ def test_overlay_target_may_exist_in_only_one_variant() -> None:
         inputs(
             [],
             [app()],
-            overlay=[
-                {
-                    "id": "org.example.app",
-                    "url": "https://example.com/app",
-                    "patch": {"name": "x"},
-                }
-            ],
+            overlay=[{"url": "https://example.com/app", "patch": {"name": "x"}}],
         )
     )
     assert findings == ()
 
 
 def test_unknown_denial_field_is_reported() -> None:
-    entry = {"id": "org.example.app", "reason": "excluded", "unexpected": True}
+    entry = {"url": "https://example.com/app", "reason": "excluded", "id": "x"}
     assert "invalid_composition_config" in codes(validate_offline(inputs(deny=[entry])))
 
 
-def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_gap() -> None:
-    assert validate_offline(inputs(deny=[{"id": "stale", "reason": "gone"}])) == ()
+def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_finding() -> None:
+    stale = [{"url": "https://example.com/stale", "reason": "gone"}]
+    assert validate_offline(inputs(deny=stale)) == ()
     findings = validate_offline(
-        inputs([app("single")], [], deny=[{"id": "dual", "reason": "excluded"}])
+        inputs(
+            [app("single")],
+            [],
+            deny=[{"url": "https://example.com/dual", "reason": "excluded"}],
+        )
     )
-    assert codes(findings) == {"dual_coverage_gap"}
+    assert [(item.code, item.severity) for item in findings] == [
+        ("single_only_coverage", Severity.NONFATAL)
+    ]
+
+
+def rule(entry: dict[str, Any], family: str) -> dict[str, Any]:
+    return {
+        "match": {
+            "source": "extras",
+            "origin": "extras",
+            "id": entry["id"],
+            "url": entry["url"],
+        },
+        "family": family,
+        "rationale": "fixture",
+    }
 
 
 def test_family_projection_and_pin_are_distinct() -> None:
+    single = app("single.pkg")
+    dual = app("dual.pkg")
+    dual["url"] = "https://example.com/dual/"
     policy = {
         "schemaVersion": 1,
-        "candidates": [
-            {
-                "match": {
-                    "source": "extras",
-                    "origin": "extras",
-                    "id": "old",
-                    "url": "https://example.com/app",
-                },
-                "family": "app:shared",
-                "packageId": "single.pkg",
-                "rationale": "fixture",
-            },
-            {
-                "match": {
-                    "source": "extras",
-                    "origin": "extras",
-                    "id": "dual.pkg",
-                    "url": "https://example.com/dual",
-                },
-                "family": "app:shared",
-                "rationale": "fixture",
-            },
-        ],
+        "candidates": [rule(single, "app:shared"), rule(dual, "app:shared")],
         "pins": [
             {
                 "family": "app:shared",
                 "variant": "dual",
-                "match": {
-                    "source": "extras",
-                    "origin": "extras",
-                    "id": "dual.pkg",
-                    "url": "https://example.com/dual",
-                },
+                "match": rule(dual, "app:shared")["match"],
                 "rationale": "fixture",
             }
         ],
     }
-    single = app("single.pkg")
-    dual = app("dual.pkg")
-    dual["url"] = "https://example.com/dual/"
     assert validate_offline(inputs([single], [dual], composition=policy)) == ()
     missing = validate_offline(inputs([], [], composition=policy))
     [mismatch] = [item for item in missing if item.code == "pin_mismatch"]
@@ -412,24 +411,88 @@ def test_family_projection_and_pin_are_distinct() -> None:
             [],
             [],
             composition=policy,
-            deny=[{"id": "dual.pkg", "reason": "retired"}],
+            deny=[{"url": dual["url"], "reason": "retired"}],
         )
     )
     assert "pin_mismatch" in codes(denied)
     wrong = deepcopy(dual)
     wrong["url"] = "https://example.com/other"
     result = validate_offline(inputs([single], [wrong], composition=policy))
-    assert "dual_coverage_gap" in codes(result)
+    assert "single_only_coverage" in codes(result)
     assert "pin_mismatch" in codes(result)
 
 
-def test_package_denial_neither_exempts_coverage_nor_remains_selected() -> None:
-    denial = [{"id": "one", "reason": "unsupported"}]
-    single_only = validate_offline(inputs([app("one")], [], deny=denial))
-    assert {("single", "denied_output_present"), ("dual", "dual_coverage_gap")} <= {
-        (finding.variant, finding.code) for finding in single_only
+def test_a_pin_is_checked_against_the_overlay_patched_id_at_its_url() -> None:
+    pinned = app("p")
+    policy = {
+        "schemaVersion": 1,
+        "candidates": [],
+        "pins": [
+            {
+                "family": "example.com/app",
+                "variant": "dual",
+                "match": rule(pinned, "app:unused")["match"],
+                "rationale": "fixture",
+            }
+        ],
     }
-    both = validate_offline(inputs([app("one")], [app("one")], deny=denial))
+    patched = {**pinned, "id": "q"}
+    overlay = [{"url": pinned["url"], "patch": {"id": "q"}}]
+    assert (
+        validate_offline(
+            inputs([patched], [patched], overlay=overlay, composition=policy)
+        )
+        == ()
+    )
+    unpatched = validate_offline(
+        inputs([pinned], [pinned], overlay=overlay, composition=policy)
+    )
+    assert "pin_mismatch" in codes(unpatched)
+
+
+def test_an_id_patch_at_a_split_url_fails_while_loading_configuration() -> None:
+    a, b = at("a", "split"), at("b", "split")
+    policy = {
+        "schemaVersion": 1,
+        "candidates": [rule(a, "app:a"), rule(b, "app:b")],
+        "pins": [],
+    }
+    findings = validate_offline(
+        inputs(
+            [a, b],
+            [a, b],
+            overlay=[{"url": a["url"], "patch": {"id": "c"}}],
+            composition=policy,
+        )
+    )
+    assert [(item.code, item.message) for item in findings] == [
+        (
+            "invalid_composition_config",
+            (
+                "overlay record for 'example.com/split' patches id at a URL whose "
+                "rules name families 'app:a', 'app:b'"
+            ),
+        )
+    ]
+    named = validate_offline(
+        inputs(
+            [a, b],
+            [a, b],
+            overlay=[{"url": a["url"], "patch": {"name": "x"}}],
+            composition=policy,
+        )
+    )
+    assert named == ()
+
+
+def test_denial_neither_exempts_coverage_nor_remains_selected() -> None:
+    denial = [{"url": "https://example.com/one", "reason": "unsupported"}]
+    single_only = validate_offline(inputs([at("one")], [], deny=denial))
+    assert {
+        ("single", "denied_output_present"),
+        ("single", "single_only_coverage"),
+    } <= {(finding.variant, finding.code) for finding in single_only}
+    both = validate_offline(inputs([at("one")], [at("one")], deny=denial))
     assert {
         finding.variant for finding in both if finding.code == "denied_output_present"
     } == {"single", "dual"}
@@ -527,21 +590,35 @@ def projecting(family: str, *entries: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def test_explicit_family_repeated_within_a_variant_is_rejected() -> None:
+def test_one_repository_s_entries_pair_by_url() -> None:
+    single, dual = at("stable", "app"), at("dual", "app/")
+    assert validate_offline(inputs([single], [dual])) == ()
+
+
+def test_a_label_repeated_within_a_variant_is_rejected() -> None:
     a, b = at("a"), at("b")
     [finding] = validate_offline(
         inputs([a, b], [], composition=projecting("app:x", a, b))
     )
-    assert (finding.variant, finding.code) == ("single", "duplicate_explicit_family")
+    assert (finding.variant, finding.code, finding.severity) == (
+        "single",
+        "repeated_family_label",
+        Severity.ERROR,
+    )
     assert finding.message == (
-        "explicit family 'app:x' is projected onto more than one entry: "
+        "family label 'app:x' is carried by more than one entry: "
         "('a', 'example.com/a'), ('b', 'example.com/b')"
+    )
+    [by_url] = errors(validate_offline(inputs([at("a", "one"), at("b", "one")], [])))
+    assert by_url.message == (
+        "family label 'example.com/one' is carried by more than one entry: "
+        "('a', 'example.com/one'), ('b', 'example.com/one')"
     )
 
 
 @pytest.mark.parametrize("repeated_in", ["single", "dual"])
 @pytest.mark.parametrize("reverse", [False, True])
-def test_repeated_explicit_family_leaves_both_variants_out_of_coverage(
+def test_repeated_label_leaves_both_variants_out_of_coverage(
     repeated_in: str, reverse: bool
 ) -> None:
     a, b, c = at("a"), at("b"), at("c")
@@ -553,78 +630,115 @@ def test_repeated_explicit_family_leaves_both_variants_out_of_coverage(
         inputs(single, dual, composition=projecting("app:x", a, b, c))
     )
     assert [(item.variant, item.code) for item in findings] == [
-        (repeated_in, "duplicate_explicit_family")
+        (repeated_in, "repeated_family_label")
     ]
 
 
-def test_same_id_entries_of_different_explicit_families_leave_a_coverage_gap() -> None:
+def test_same_id_entries_of_different_explicit_families_leave_a_coverage_finding() -> (
+    None
+):
     single, dual = at("a", "one"), at("a", "two")
     policy = projecting("app:x", single)
     policy["candidates"] += projecting("app:y", dual)["candidates"]
     findings = validate_offline(inputs([single], [dual], composition=policy))
-    assert [(item.variant, item.entry_id, item.code) for item in findings] == [
-        ("dual", "a", "dual_coverage_gap")
-    ]
-    assert "'app:x'" in findings[0].message
+    assert [
+        (item.variant, item.entry_id, item.code, item.severity) for item in findings
+    ] == [("single", "a", "single_only_coverage", Severity.NONFATAL)]
+    assert findings[0].message == (
+        "family label 'app:x' ('a' at 'example.com/one') has no dual-screen entry"
+    )
 
 
 @pytest.mark.parametrize("repeated_in", ["single", "dual"])
 @pytest.mark.parametrize("reverse", [False, True])
-def test_repeated_package_id_is_reported_once_without_a_coverage_gap(
+def test_repeated_package_id_is_nonfatal_and_each_entry_pairs_by_its_label(
     repeated_in: str, reverse: bool
 ) -> None:
     repeated = [at("a", "one"), at("a", "two")]
     if reverse:
         repeated.reverse()
     single, dual = (
-        (repeated, [at("a", "one")])
+        (repeated, deepcopy(repeated))
         if repeated_in == "single"
         else ([at("a", "one")], repeated)
     )
     findings = validate_offline(inputs(single, dual))
-    assert [(item.variant, item.code) for item in findings] == [
-        (repeated_in, "duplicate_id")
+    expected = [(repeated_in, "repeated_package_id", Severity.NONFATAL)]
+    if repeated_in == "single":
+        expected.insert(0, ("dual", "repeated_package_id", Severity.NONFATAL))
+    assert sorted(
+        (item.variant, item.code, item.severity) for item in findings
+    ) == sorted(expected)
+    [finding] = [item for item in findings if item.variant == repeated_in]
+    assert finding.message == (
+        "package id 'a' is carried by more than one entry: "
+        "'example.com/one' at 'example.com/one', 'example.com/two' at 'example.com/two'"
+    )
+
+
+def test_tracker_and_installable_entry_at_one_ruled_url() -> None:
+    installable = at("app.pkg", "project")
+    tracker = with_settings(at("1234", "project"), trackOnly=True)
+    split = {
+        "schemaVersion": 1,
+        "candidates": [rule(installable, "app:a"), rule(tracker, "app:a-tracker")],
+        "pins": [],
+    }
+    findings = validate_offline(
+        inputs([installable], [installable, tracker], composition=split)
+    )
+    assert findings == ()
+    agreeing = {
+        "schemaVersion": 1,
+        "candidates": [rule(installable, "app:a")],
+        "pins": [],
+    }
+    labelled = validate_offline(
+        inputs([installable], [installable, tracker], composition=agreeing)
+    )
+    assert [(item.variant, item.code, item.message) for item in labelled] == [
+        (
+            "dual",
+            "repeated_family_label",
+            (
+                "family label 'app:a' is carried by more than one entry: "
+                "('1234', 'example.com/project'), ('app.pkg', 'example.com/project')"
+            ),
+        )
     ]
 
 
-def test_denial_inside_a_repeated_explicit_family_is_still_reported() -> None:
+def test_denial_inside_a_repeated_label_is_still_reported() -> None:
     a, b = at("a"), at("b")
     findings = validate_offline(
         inputs(
             [a, b],
             [],
             composition=projecting("app:x", a, b),
-            deny=[{"id": "b", "reason": "excluded"}],
+            deny=[{"url": b["url"], "reason": "excluded"}],
         )
     )
     assert {(item.variant, item.entry_id, item.code) for item in findings} == {
-        ("single", None, "duplicate_explicit_family"),
+        ("single", None, "repeated_family_label"),
         ("single", "b", "denied_output_present"),
     }
 
 
-def test_denied_id_repeated_within_a_variant_is_reported_once_per_variant() -> None:
-    repeated = [at("a", "one"), at("a", "two")]
+def test_entry_at_a_denied_url_is_reported_per_variant() -> None:
+    entry = at("a", "one")
     findings = validate_offline(
-        inputs(repeated, deepcopy(repeated), deny=[{"id": "a", "reason": "excluded"}])
+        inputs(
+            [entry],
+            [deepcopy(entry)],
+            deny=[{"url": "https://example.com/one", "reason": "excluded"}],
+        )
     )
     denials = [item for item in findings if item.code == "denied_output_present"]
     assert [(item.variant, item.entry_id, item.message) for item in denials] == [
         (
             variant,
             "a",
-            "denied selection 'a' in family label 'package:a' remains present",
+            "entry 'a' at denied project URL 'example.com/one' remains present",
         )
         for variant in ("single", "dual")
-    ]
-
-
-def test_entry_repeating_both_its_id_and_its_family_gets_both_findings() -> None:
-    first, second = at("a", "one"), at("a", "two")
-    findings = validate_offline(
-        inputs([first, second], [], composition=projecting("app:x", first, second))
-    )
-    assert sorted((item.variant, item.code) for item in findings) == [
-        ("single", "duplicate_explicit_family"),
-        ("single", "duplicate_id"),
     ]
