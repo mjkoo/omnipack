@@ -106,6 +106,10 @@ class BuildInputs:
 def previous_entries(root: Path) -> dict[Variant, set[RenderedKey]]:
     """Read each rendered entry's package id and normalized project URL from the
     output pair before publication begins.
+
+    An entry whose URL does not normalize keeps its URL as written, so the
+    report still lists it as removed, and an `apps` value that is not a list
+    holds no entries.
     """
     result: dict[Variant, set[RenderedKey]] = {}
     for variant, name in OUTPUTS.items():
@@ -128,7 +132,7 @@ def previous_entries(root: Path) -> dict[Variant, set[RenderedKey]]:
                 try:
                     result[variant].add(rendered_key(package_id, url))
                 except ValueError:
-                    continue
+                    result[variant].add((package_id, url))
     return result
 
 

@@ -117,6 +117,17 @@ def test_previous_output_whose_apps_is_not_a_list_counts_as_empty(
     }
 
 
+def test_previous_entry_whose_url_does_not_normalize_keeps_its_raw_url(
+    tmp_path: Path,
+) -> None:
+    entry = {"id": "x", "url": "/no-host"}
+    write_previous(tmp_path, {"apps": [entry]}, {"apps": []})
+    assert build_module.previous_entries(tmp_path) == {
+        Variant.SINGLE: {("x", "/no-host")},
+        Variant.DUAL: set(),
+    }
+
+
 def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> None:
     from omnipack.merge import compose
     from omnipack.model import App, SourceType
