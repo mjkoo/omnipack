@@ -53,7 +53,7 @@
     }
   },
   {
-    "url": "https://github.com/carlox33/the-simpsons-hit-and-run-android",
+    "url": "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android",
     "patch": {
       "id": "com.c4rlox.simpsons"
     }
@@ -125,7 +125,7 @@
     }
   },
   {
-    "url": "https://github.com/igawa6/harvestmoon64recomp",
+    "url": "https://github.com/igawa6/HarvestMoon64Recomp",
     "patch": {
       "id": "io.github.hm64recomp"
     }
@@ -153,13 +153,13 @@
     }
   },
   {
-    "url": "https://github.com/izzy2lost/spaghettikart",
+    "url": "https://github.com/izzy2lost/SpaghettiKart",
     "patch": {
       "id": "com.izzy.kart"
     }
   },
   {
-    "url": "https://github.com/izzy2lost/starship",
+    "url": "https://github.com/izzy2lost/Starship",
     "patch": {
       "id": "com.starship.android"
     }
@@ -174,7 +174,7 @@
     }
   },
   {
-    "url": "https://github.com/josh-daniels/openmw-ds",
+    "url": "https://github.com/Josh-Daniels/OpenMW-DS",
     "patch": {
       "id": "org.openmw.ds"
     }
@@ -192,7 +192,7 @@
     }
   },
   {
-    "url": "https://github.com/linkzenic/2ship2harkinian-android",
+    "url": "https://github.com/linkzenic/2ship2harkinian-Android",
     "patch": {
       "id": "com.twoshipfork.mm"
     }
