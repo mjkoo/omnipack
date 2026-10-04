@@ -344,6 +344,7 @@ def test_human_report_shows_winner_reason_and_considered_candidates(
     from omnipack.merge import CompositionReport, ConsideredCandidate, FamilySelection
     from omnipack.model import Variant
     from omnipack.report import write_report
+    from omnipack.report_model import SelectionReason
     from omnipack.sources import IngestionReport
 
     selection = FamilySelection(
@@ -353,7 +354,7 @@ def test_human_report_shows_winner_reason_and_considered_candidates(
         "https://example.test/winner",
         "extras",
         "extras",
-        "ordinary-fallback",
+        SelectionReason.ORDINARY_FALLBACK,
         (
             ConsideredCandidate(
                 "bboi",
@@ -774,6 +775,16 @@ SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.tes
             },
         ),
         ("singleOnlyFamilies", {"family": "app:x", "id": "x"}),
+        (
+            "selections",
+            {
+                "family": "app:x",
+                "variant": "single",
+                **SELECTOR,
+                "reason": "bogus",
+                "considered": [],
+            },
+        ),
         (
             "sameRankTies",
             {

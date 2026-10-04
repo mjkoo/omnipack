@@ -37,6 +37,17 @@ class InputState(StrEnum):
     UNREADABLE = "unreadable"
 
 
+class SelectionReason(StrEnum):
+    """Why a family's winner won its variant."""
+
+    PIN = "pin"
+    DUAL_PREFERRED = "dual-preferred"
+    # Dual with no available dual-preferred build.
+    ORDINARY_FALLBACK = "ordinary-fallback"
+    # Source precedence alone.
+    SOURCE = "source"
+
+
 class BuildStage(StrEnum):
     """The step of `pack build` that was running, as a failed build reports it."""
 

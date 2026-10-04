@@ -28,6 +28,7 @@ from omnipack.overlay import (
     parse_overlay,
 )
 from omnipack.render import canonical_serialization
+from omnipack.report_model import SelectionReason
 from omnipack.urls import normalize_project_url, parse_project_url
 
 _PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
@@ -66,7 +67,6 @@ class ConsideredCandidate:
 class FamilySelection:
     """One family's winner for one variant, why it won and what it beat.
 
-    `reason` is `pin`, `dual-preferred`, `ordinary-fallback` or `source`.
     `considered` holds the family's other candidates that were eligible for
     the variant and not denied; denied ones appear among the removals.
     """
@@ -77,7 +77,7 @@ class FamilySelection:
     url: str
     source: str
     origin: str
-    reason: str
+    reason: SelectionReason
     considered: tuple[ConsideredCandidate, ...]
 
 
@@ -322,16 +322,16 @@ def _select(
             ]
             pinned_winner = pinned.get((family, variant))
             if pinned_winner is not None:
-                winner, reason = pinned_winner, "pin"
+                winner, reason = pinned_winner, SelectionReason.PIN
             elif available:
-                tier, reason = available, "source"
+                tier, reason = available, SelectionReason.SOURCE
                 if variant is Variant.DUAL and any(
                     item.dual_preferred for item in available
                 ):
                     tier = [item for item in available if item.dual_preferred]
-                    reason = "dual-preferred"
+                    reason = SelectionReason.DUAL_PREFERRED
                 elif variant is Variant.DUAL:
-                    reason = "ordinary-fallback"
+                    reason = SelectionReason.ORDINARY_FALLBACK
                 rank = max(_PRECEDENCE[item.provenance.source] for item in tier)
                 winners = sorted(
                     (

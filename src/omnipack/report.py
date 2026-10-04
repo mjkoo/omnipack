@@ -23,6 +23,7 @@ from omnipack.report_model import (
     InputState,
     OfflineStatus,
     OfflineVerdict,
+    SelectionReason,
     Status,
     not_run_verdict,
 )
@@ -30,6 +31,7 @@ from omnipack.sources import IngestionReport
 
 BUILD_SCHEMA_VERSION = 5
 _VARIANT_VALUES = frozenset(variant.value for variant in Variant)
+_SELECTION_REASONS = frozenset(reason.value for reason in SelectionReason)
 
 
 class ReportFormatError(ValueError):
@@ -253,7 +255,9 @@ def _string_list(value: object) -> TypeIs[list[str]]:
 
 
 def _format_winner(item: dict[str, Any]) -> str:
-    if not _strings(item, ("id", "url", "source", "origin", "reason")):
+    if not _strings(item, ("id", "url", "source", "origin", "reason")) or (
+        item["reason"] not in _SELECTION_REASONS
+    ):
         raise ReportFormatError("malformed build selection winner")
     return (
         f"id: {item['id']}; URL: {item['url']}; "
