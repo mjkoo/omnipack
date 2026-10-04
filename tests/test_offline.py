@@ -658,21 +658,33 @@ def test_repeated_package_id_is_nonfatal_and_each_entry_pairs_by_its_label(
     if reverse:
         repeated.reverse()
     single, dual = (
-        (repeated, deepcopy(repeated))
+        (repeated, [at("a", "one")])
         if repeated_in == "single"
         else ([at("a", "one")], repeated)
     )
     findings = validate_offline(inputs(single, dual))
-    expected = [(repeated_in, "repeated_package_id", Severity.NONFATAL)]
+    assert errors(findings) == ()
+    expected = [(repeated_in, "a", "repeated_package_id")]
     if repeated_in == "single":
-        expected.insert(0, ("dual", "repeated_package_id", Severity.NONFATAL))
-    assert sorted(
-        (item.variant, item.code, item.severity) for item in findings
-    ) == sorted(expected)
-    [finding] = [item for item in findings if item.variant == repeated_in]
-    assert finding.message == (
+        # The entry at the other URL has no dual entry carrying its label, even
+        # though a dual entry carries its package id.
+        expected.append(("single", "a", "single_only_coverage"))
+    assert sorted((item.variant, item.entry_id, item.code) for item in findings) == (
+        sorted(expected)
+    )
+    assert {item.severity for item in findings} == {Severity.NONFATAL}
+    [repeat] = [item for item in findings if item.code == "repeated_package_id"]
+    assert repeat.message == (
         "package id 'a' is carried by more than one entry: "
         "'example.com/one' at 'example.com/one', 'example.com/two' at 'example.com/two'"
+    )
+    coverage = [item for item in findings if item.code == "single_only_coverage"]
+    message = (
+        "family label 'example.com/two' ('a' at 'example.com/two') has no "
+        "dual-screen entry"
+    )
+    assert [item.message for item in coverage] == (
+        [message] if repeated_in == "single" else []
     )
 
 

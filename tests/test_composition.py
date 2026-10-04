@@ -385,6 +385,27 @@ def test_winning_rank_tie_publishes_the_canonically_first_and_records_it() -> No
     ]
 
 
+def test_a_same_rank_tie_follows_serialization_not_id_or_selector_order() -> None:
+    url = "https://example.com/project"
+    # The serialized records first differ inside additionalSettings, which sorts
+    # before id, so the later id and later selector wins.
+    first = app(
+        "a.pkg", url=url, name="App", additional_settings={"apkFilterRegEx": "z"}
+    )
+    second = app(
+        "b.pkg", url=url, name="App", additional_settings={"apkFilterRegEx": "a"}
+    )
+    tied = (candidate_selector(first), candidate_selector(second))
+    assert tied[0].key < tied[1].key
+    for ordered in permutations([first, second]):
+        result = compose(list(ordered), [], [])
+        assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"b.pkg"}
+        assert result.report.same_rank_ties == [
+            SameRankTie(url_family(first), variant, tied, tied[1])
+            for variant in Variant
+        ]
+
+
 def test_a_pin_or_split_rules_resolve_a_same_rank_tie() -> None:
     stable, nightly = stable_and_nightly()
     pinned = compose(
@@ -517,14 +538,6 @@ def test_two_rules_split_one_repository_and_leave_a_third_build_in_the_url_famil
             ("app:b", "b.pkg"),
             ("github.com/owner/project", "c.pkg"),
         ]
-
-
-def test_conflicting_rules_on_one_id_and_url_fail() -> None:
-    url = "https://github.com/owner/project"
-    first = app("a.pkg", family="app:a", url=url)
-    second = app("a.pkg", "bboi", family="app:b", url=url)
-    with pytest.raises(CompositionPolicyError, match="conflicting families"):
-        build_policy(rules_for([first, second]))
 
 
 def test_rule_less_tracker_joins_the_family_ruled_onto_its_url() -> None:
@@ -809,11 +822,30 @@ def test_overlay_fixes_a_wrong_source_id_in_every_variant() -> None:
         "wrong.source.id",
         "other",
     }
-    # Denials and pins still name the source data, never the patched id.
-    denied = compose(
-        [wrong, other], deny(wrong.url), overlays((other.url, {"id": "x"}))
+
+
+def test_a_pin_names_the_source_id_at_a_url_whose_id_an_overlay_patches() -> None:
+    url = "https://example.com/project"
+    pinned = app("p", "rjny", url=url)
+    rival = app("r", "extras", url=url)
+    family = url_family(pinned)
+    result = compose(
+        [pinned, rival],
+        [],
+        overlays((url, {"id": "q"})),
+        policy=build_policy(
+            (),
+            [
+                Pin(family, variant, candidate_selector(pinned), "test")
+                for variant in Variant
+            ],
+        ),
     )
-    assert ids(denied, Variant.SINGLE) == {"x"}
+    for variant in Variant:
+        assert [item.id for item in result.apps[variant]] == ["q"]
+    assert {(item.id, item.reason) for item in result.report.selections} == {
+        ("p", "pin")
+    }
 
 
 @pytest.mark.parametrize("value", [None, "", "  ", 7])

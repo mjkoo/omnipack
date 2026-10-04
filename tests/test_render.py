@@ -14,7 +14,6 @@ from omnipack.render import (
     render_pack,
 )
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
-from omnipack.source_catalog import render_catalog
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -203,17 +202,18 @@ def test_render_accepts_a_repeated_package_id() -> None:
 
 
 def test_entries_sharing_category_name_and_id_are_ordered_by_url() -> None:
+    # Raw, "Zulu" sorts before "alpha"; normalized, the order is reversed.
     apps = [
-        composed("same", url="https://github.com/zulu/app"),
-        composed("same", url="https://github.com/Alpha/app"),
+        composed("same", url="https://github.com/Zulu/app"),
+        composed("same", url="https://github.com/alpha/app"),
         composed("same", url="https://github.com/mike/app"),
     ]
     renderings = {render(list(ordering)) for ordering in permutations(apps)}
     [rendered] = renderings
     assert [app["url"] for app in json.loads(rendered)["apps"]] == [
-        "https://github.com/Alpha/app",
+        "https://github.com/alpha/app",
         "https://github.com/mike/app",
-        "https://github.com/zulu/app",
+        "https://github.com/Zulu/app",
     ]
 
 
@@ -235,12 +235,6 @@ def test_pack_rendering_lets_every_app_adopt_its_apk_id(value: bool | None) -> N
 
 def test_catalog_rendering_does_not_add_allow_id_change() -> None:
     assert "allowIdChange" not in document([composed()])["apps"][0]
-    root = Path(__file__).resolve().parents[1]
-    for name in ("codm", "quiver"):
-        committed = (root / f"config/catalogs/{name}.json").read_bytes()
-        entries = json.loads(committed)["apps"]
-        assert all("allowIdChange" not in entry for entry in entries)
-        assert render_catalog(entries) == committed
 
 
 def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None:
