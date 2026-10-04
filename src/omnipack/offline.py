@@ -437,6 +437,7 @@ def _validate_composition(
         load_composition_policy,
         pair_entries,
         rendered_key,
+        repeated_ids,
         repeated_labels,
     )
     from omnipack.merge import CompositionError, parse_exclusions
@@ -482,25 +483,21 @@ def _validate_composition(
                     variant,
                 )
             )
-        by_id: dict[str, list[RenderedKey]] = {}
-        for key in variant_keys:
-            by_id.setdefault(key[0], []).append(key)
-        for package_id, members in sorted(by_id.items()):
-            if len(members) > 1:
-                entries = ", ".join(
-                    f"{policy.family(*key)!r} at {key[1]!r}" for key in sorted(members)
+        for package_id, members in repeated_ids(variant_keys).items():
+            entries = ", ".join(
+                f"{policy.family(*key)!r} at {key[1]!r}" for key in members
+            )
+            findings.append(
+                Finding(
+                    "composition",
+                    "repeated_package_id",
+                    f"package id {package_id!r} is carried by more than one "
+                    f"entry: {entries}",
+                    variant,
+                    package_id,
+                    severity=Severity.NONFATAL,
                 )
-                findings.append(
-                    Finding(
-                        "composition",
-                        "repeated_package_id",
-                        f"package id {package_id!r} is carried by more than one "
-                        f"entry: {entries}",
-                        variant,
-                        package_id,
-                        severity=Severity.NONFATAL,
-                    )
-                )
+            )
 
     patched_ids = {
         patch.url: patch.patch["id"] for patch in patches if "id" in patch.patch

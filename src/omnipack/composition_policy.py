@@ -148,6 +148,18 @@ def repeated_labels(
     }
 
 
+def repeated_ids(keys: Sequence[RenderedKey]) -> dict[str, tuple[RenderedKey, ...]]:
+    """The package ids more than one entry of one variant carries, sorted."""
+    by_id: dict[str, list[RenderedKey]] = {}
+    for key in keys:
+        by_id.setdefault(key[0], []).append(key)
+    return {
+        package_id: tuple(sorted(members))
+        for package_id, members in sorted(by_id.items())
+        if len(members) > 1
+    }
+
+
 def pair_entries(
     policy: CompositionPolicy,
     single: Sequence[RenderedKey],
