@@ -86,13 +86,13 @@ competes with the other builds of its family through the rules above.
 
 `config/composition.json` requires integer `schemaVersion: 1`, `candidates` and
 `pins` arrays, and accepts an optional [`categories`](#categories) object.
-Unknown fields and invalid selectors fail, and so does a JSON object key repeated
-anywhere in the file, which `pack build`, `pack verify` and the offline gate all
-reject naming the key rather than letting one occurrence win. Candidate rules require
-`match` and a nonempty rationale, and may carry `family`; any other field,
-including `packageId`, fails as unknown. A rule never changes a package id or a
-build's eligibility or dual preference, which come only from the build's source.
-A rule with only a rationale records why a candidate matters and changes nothing.
+Unknown fields and invalid selectors fail, and so does a JSON object key
+repeated anywhere in the file, which `pack build`, `pack verify` and the offline
+gate all reject naming the key rather than letting one occurrence win. Candidate
+rules require `match` and a nonempty rationale, and may carry `family`; any
+other field fails as unknown. A rule never changes a package id or a build's
+eligibility or dual preference, which come only from the build's source. A rule
+with only a rationale records why a candidate matters and changes nothing.
 Track-only entries are ordinary candidates: a rule may give one a family, and
 split rules separate a tracker from an app sharing its URL. Without them, a
 dual-only tracker at an app's URL joins the app's family and, being a
@@ -161,8 +161,9 @@ a normalized project URL, to one category from the set other than Track Only:
 A value that is not one of the categories above other than Track Only, a
 non-string value, or a key that is neither an `app:` name nor a project URL
 already in normalized form with a host and a path fails policy loading with the
-key identified. A full `https://` URL, a URL with uppercase letters, or a family
-name typed without `app:` is therefore caught rather than left stale.
+key identified. A full `https://` URL, a GitHub URL with uppercase letters
+(normalization lowercases only GitHub paths), or a family name typed without
+`app:` is therefore caught rather than left stale.
 
 After overlays apply, every selected entry in each pack gets its categories in
 this order:
@@ -263,21 +264,20 @@ Build reports use schema 5. `changes` lists the entries added and removed in
 each pack since the previous output, each with its package id and normalized
 project URL, so a move to another repository with the same id shows as one
 removed and one added entry. `selections` records every family's winner in each
-pack with its package id, URL, source and origin, the other available
-candidates it was chosen over, and one reason: `pin`, `dual-preferred`,
-`ordinary-fallback` (dual with no available dual-screen build), or `source`
-(single-screen precedence). `denylistRemovals` lists each denial that removed
-candidates, once under its URL with the families it removed, and
-`staleExclusions` each denial that matched nothing. `repeatedIds`,
-`singleOnlyFamilies` and `sameRankTies` hold the nonfatal outcomes described
-above. `sourceAdmissions` lists each committed codm and Quiver entry the build
-admitted, with its source, id, URL and whether it is an APK or track-only entry.
-`uncategorizedFamilies` and `staleCategoryAssignments` are the
-[category outcomes](#categories); a build that fails before categories are
-assigned records both empty, along with the single-only and repeated-id lists,
-while its stage and error say the checks did not run. `offlineVerification`
-holds the offline gate's status, its errors in `findings`, and its nonfatal
-findings in `nonfatalFindings`. Records use snake_case field names:
+pack with its package id, URL, source and origin, the other available candidates
+it was chosen over, and one reason: `pin`, `dual-preferred`, `ordinary-fallback`
+(dual with no available dual-screen build), or `source` (single-screen
+precedence). `denylistRemovals` lists each denial that removed candidates, once
+under its URL with the families it removed, and `staleExclusions` each denial
+that matched nothing. `repeatedIds`, `singleOnlyFamilies` and `sameRankTies`
+hold the nonfatal outcomes described above. `sourceAdmissions` lists each
+committed codm and Quiver entry the build admitted, with its source, id, URL and
+whether it is an APK or track-only entry. `uncategorizedFamilies` and
+`staleCategoryAssignments` are the [category outcomes](#categories); a build
+that fails before categories are assigned records both empty, along with the
+single-only and repeated-id lists, while its stage and error say the checks did
+not run. `offlineVerification` holds the offline gate's status, its errors in
+`findings`, and its nonfatal findings in `nonfatalFindings`. For example:
 
 ```json
 {

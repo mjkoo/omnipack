@@ -3,9 +3,10 @@
 ## Pack tracking entries
 
 The RJNY/Obtainium-Emulation-Pack tracking entry (`904332840`) is excluded from
-both exports by a denial of its project URL in `config/deny.json`. RJNY remains an app catalog source,
-and its attribution and fixture provenance are retained. This exclusion survives
-upstream refreshes and removes the tracker from the individual app catalog too.
+both exports by a denial of its project URL in `config/deny.json`. RJNY remains
+an app catalog source, and its attribution and fixture provenance are retained.
+This exclusion survives upstream refreshes and removes the tracker from the
+individual app catalog too.
 
 If you imported an older pack, manually remove that tracking entry in Obtainium
 if it remains after re-import. Removing the tracker does not remove the emulator
@@ -145,10 +146,11 @@ surfaces as an install prompt instead of a silent fallback to an older release.
 
 Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) ships as
 `com.winlator.vanilla` through an overlay `id` patch on its project URL and
-selects the asset whose name contains `vanilla`. Its [releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases)
-ship three builds: the vanilla build declares `com.winlator.vanilla`, the package
-RJNY's `bionic-vanilla` filter installed through v3.1.h, while the Ludashi and
-Redmagic builds declare other apps' package names (`com.ludashi.benchmark` and
+selects the asset whose name contains `vanilla`. Its
+[releases](https://github.com/StevenMXZ/Winlator-Ludashi/releases) ship three
+builds: the vanilla build declares `com.winlator.vanilla`, the package RJNY's
+`bionic-vanilla` filter installed through v3.1.h, while the Ludashi and Redmagic
+builds declare other apps' package names (`com.ludashi.benchmark` and
 `com.tencent.ig`) to trigger vendor performance profiles. The v3.1.h, v4.0 and
 v4.1 vanilla APKs share one signing certificate and versionCode 20, so the
 vanilla build continues an existing installation.

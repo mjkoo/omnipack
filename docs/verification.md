@@ -21,15 +21,16 @@ untouched. The separate `pack generate-source codm|quiver` operation resolves
 that source's discovered projects under its reviewed policy into a candidate
 catalog; it does not extend structural verification or change committed files.
 
-Standalone verification writes schema 5 evidence to `.build/verify.json`, separately
-from the build report. It reads every input once, checks and fingerprints exactly
-those captured bytes, and writes the report a single time, when the run completes;
-an interrupted run leaves no new report, so any report already on disk still
-describes only the inputs an earlier completed run checked. Reports contain offline
-mode, verifier identity, observation times, status, contextual errors,
-nonfatal findings and SHA-256 fingerprints of both distribution files, the denylist, the overlay,
-composition policy and README. Missing and unreadable inputs are explicit. HTTP
-configuration and environment credentials are not consulted or fingerprinted.
+Standalone verification writes schema 5 evidence to `.build/verify.json`,
+separately from the build report. It reads every input once, checks and
+fingerprints exactly those captured bytes, and writes the report a single time,
+when the run completes; an interrupted run leaves no new report, so any report
+already on disk still describes only the inputs an earlier completed run
+checked. Reports contain offline mode, verifier identity, observation times,
+status, contextual errors, nonfatal findings and SHA-256 fingerprints of both
+distribution files, the denylist, the overlay, composition policy and README.
+Missing and unreadable inputs are explicit. HTTP configuration and environment
+credentials are not consulted or fingerprinted.
 
 Independent errors are collected across both variants. Verification exits zero
 only for a complete run without errors; report persistence failure also causes a
@@ -50,14 +51,14 @@ Displaying a recorded failed operation exits successfully.
 
 ## Structural checks and limits
 
-The validator checks JSON types, required app fields, absolute URLs, supported
-source types and package uniqueness. Within decoded settings, it checks that a
-setting named by the source type's defaults has its default's type, that HTML
+The validator checks JSON types, required app fields, absolute URLs and
+supported source types. Within decoded settings, it checks that a setting named
+by the source type's defaults has its default's type, that HTML
 `intermediateLink` steps and `requestHeader` records are well formed, and that
-`preferredApkIndex`, when present, is an integer. These values come from upstream
-records and overlay patches, and rendering copies them unchecked. Unknown settings
-are acceptable when structurally valid. Regex strings are not compiled or
-evaluated, so even a malformed pattern can pass structural checks.
+`preferredApkIndex`, when present, is an integer. These values come from
+upstream records and overlay patches, and rendering copies them unchecked.
+Unknown settings are acceptable when structurally valid. Regex strings are not
+compiled or evaluated, so even a malformed pattern can pass structural checks.
 
 Verification no longer checks that every default key is present, the rendered
 pack settings or category colours, or GitLab project URL rules. Rendering fills

@@ -55,9 +55,10 @@ for generation, acceptance and output review.
 - **Deny a project:** append `{"url": "https://github.com/example/retired", "reason": "No supported build"}`
   to `config/deny.json`. This removes every build at that project URL from both
   packs across all sources, not just one build, and leaves builds at other URLs
-  selectable; see [denials](composition.md#denials-and-patches). Removing a required
-  curated extra may also require changing its reviewed extras configuration;
-  do not weaken its regression check to hide a contradictory configuration.
+  selectable; see [denials](composition.md#denials-and-patches). Removing a
+  required curated extra may also require changing its reviewed extras
+  configuration; do not weaken its regression check to hide a contradictory
+  configuration.
 - **Group or split a family:** add a candidate rule to
   `config/composition.json`, with `match`, `rationale` and an `app:` `family`.
   Take the `source`, `origin`, `id` and `url` selectors from the build report's
@@ -100,19 +101,19 @@ For every manual edit affecting pack contents:
    generated files. Use `uv run pack report` for supporting `selections`,
    `denylistRemovals`, `staleExclusions`, `sourceAdmissions`,
    `uncategorizedFamilies`, `staleCategoryAssignments` and `changes`,
-   recorded in `.build/report.json`. `changes` contains only package ids added
-   or removed relative to files present immediately before the build: settings
-   or identity edits retaining the id set produce no entries, and a second build
-   can empty it. The command lists all recorded entries, including admitted
-   committed candidates with their source, project URL, entry kind and committed
-   id. A diagnostic kind with nothing recorded prints nothing; an unavailable
+   recorded in `.build/report.json`. `changes` holds the entries, each a package
+   id and normalized project URL, added or removed relative to files present
+   immediately before the build: settings edits that keep every entry's id and
+   URL produce no entries, and a second build can empty it. The command lists
+   all recorded entries, including admitted committed candidates with their
+   source, project URL, entry kind and committed id. A diagnostic kind with nothing recorded prints nothing; an unavailable
    comparison is labeled unavailable, and a failed build's comparison describes
    candidates that were not published.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
-   A new denial's id must appear in `denylistRemovals` and be absent from
-   `staleExclusions`; a mistyped or original id can pass build, verification and
-   CI while leaving the app selected. For a pin or rule, check the intended
+   A new denial's normalized URL must appear in `denylistRemovals` and be absent
+   from `staleExclusions`; a mistyped URL can pass build, verification and CI
+   while leaving the app selected. For a pin or rule, check the intended
    winner in `selections`.
 5. Run `uv run pack verify` and the usual development checks (`just check-all`).
    Include every changed `dist/single-screen.json`, `dist/dual-screen.json` and
@@ -152,8 +153,9 @@ family's selection with the candidates it was chosen over and the selection
 reason, denylist removals and stale exclusions, uncategorized families and stale
 category assignments, repeated package ids, single-only families, same-rank
 ties, admitted committed candidates with their identities, and the entries
-(package id and project URL) added and removed since the previous output. A failed build returns a
-nonzero status and preserves the previous packs and README.
+(package id and project URL) added and removed since the previous output. A
+failed build returns a nonzero status and preserves the previous packs and
+README.
 
 ## Verify and inspect
 

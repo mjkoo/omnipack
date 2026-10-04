@@ -133,9 +133,11 @@ These are corrections to Obtainium's configured tracking ID. They name the
 package already present inside the inspected APK; they do not rename an Android
 installation or require reinstalling an identical APK. Each is an overlay `id`
 patch on the project URL whose entry the packs select, so it changes only the
-rendered id; selection, families and build reports keep the catalog's id. A
-correction for a project the packs do not select, such as BBoi's Pokémon
-Red/Blue build, which the curated extra outranks, is not configured.
+rendered id; selection, families and the build report's selections keep the
+catalog's id. A correction for a project the packs do not select is not
+configured: BBoi's Pokémon Red/Blue Recomp build lists
+`com.bryanthaboi.pokemonredblue` while its APK declares
+`com.theboisclub.pokemonred`, but the curated extra outranks it.
 
 | App | Original catalog ID | Verified APK ID |
 | --- | --- | --- |
@@ -147,7 +149,6 @@ Red/Blue build, which the curated extra outranks, is not configured.
 | Perfect Dark Recomp | `com.izzy2lost.perfectdark` | `com.perfectdark.port` |
 | RetroArch (AArch64) | `487343354` | `com.retroarch.aarch64` |
 | Star Fox 64 (Starship) | `com.izzy2lost.starship` | `com.starship.android` |
-| Pokémon Red/Blue Recomp | `com.bryanthaboi.pokemonredblue` | `com.theboisclub.pokemonred` |
 | Zelda: Majora's Mask (2 Ship) | `org.linkzenic.twoship` | `com.twoshipfork.mm` |
 | Zelda: The Minish Cap | `com.samyost1.tmcandroid` | `dev.picori.tmc` |
 | Zelda: Twilight Princess (Dusklight DS) | `com.igawa6.dusklight` | `dev.twilitrealm.dusk` |
@@ -232,11 +233,11 @@ existing Simon installation. These are limits in our curation and acceptance
 process as well as upstream metadata quality, not evidence that the conflict
 resolver randomly chose the wrong repository.
 
-Maintained provenance-aware overlay `id` patches, explicit official-source pins,
-and project denials now preserve the decisions through refreshes. The bounded
-review did not cover Winlator-Ludashi, whose identity and asset selection
-[curation](curation.md) records separately. See
-[verification](verification.md) for the runtime check's limits.
+Maintained overlay `id` patches, explicit official-source pins, and project
+denials now preserve the decisions through refreshes. The bounded review did not
+cover Winlator-Ludashi, whose identity and asset selection
+[curation](curation.md) records separately. See [verification](verification.md)
+for the runtime check's limits.
 
 The [captured regression evidence](../tests/fixtures/reconciliation/README.md)
 retains source inputs and selected manifest observations. See
