@@ -25,6 +25,17 @@ def normalize_project_url(url: str) -> str:
     return urlunsplit(("", authority, path, query, fragment)).removeprefix("//")
 
 
+def parse_project_url(url: str) -> str:
+    """Normalize a project URL a maintainer wrote in configuration.
+
+    Configuration names a project by URL, so a URL holding whitespace or no
+    host raises ValueError rather than naming a project nothing matches.
+    """
+    if any(character.isspace() for character in url):
+        raise ValueError(f"project URL contains whitespace: {url!r}")
+    return normalize_project_url(url)
+
+
 def _split_url(url: str) -> SplitResult:
     parsed = urlsplit(url)
     if parsed.hostname is None:

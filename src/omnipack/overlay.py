@@ -6,7 +6,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from omnipack.urls import normalize_project_url
+from omnipack.urls import normalize_project_url, parse_project_url
 
 
 class OverlayError(ValueError):
@@ -77,7 +77,7 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
         if not isinstance(url, str) or not url.strip():
             raise OverlayError(f"{item_label}.url must be a nonempty project URL")
         try:
-            url = normalize_project_url(url)
+            url = parse_project_url(url)
         except ValueError as error:
             raise OverlayError(
                 f"{item_label}.url is not a project URL: {url!r}"

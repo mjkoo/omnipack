@@ -28,7 +28,7 @@ from omnipack.overlay import (
     parse_overlay,
 )
 from omnipack.render import canonical_serialization
-from omnipack.urls import normalize_project_url
+from omnipack.urls import normalize_project_url, parse_project_url
 
 _PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
 
@@ -214,7 +214,7 @@ def parse_exclusions(entries: list[Any]) -> tuple[Exclusion, ...]:
         if not isinstance(reason, str) or not reason.strip():
             raise CompositionError(f"{label}.reason must be a nonempty string")
         try:
-            normalized = normalize_project_url(url)
+            normalized = parse_project_url(url)
         except ValueError as error:
             raise CompositionError(
                 f"{label}.url is not a project URL: {url!r}"

@@ -11,7 +11,7 @@ from typing import Any
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import OverlayPatch
 from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
-from omnipack.urls import normalize_project_url
+from omnipack.urls import normalize_project_url, parse_project_url
 
 RenderedKey = tuple[str, str]
 PinKey = tuple[str, Variant]
@@ -428,10 +428,8 @@ def _family_name(value: object, label: str) -> str:
 
 def _url(value: object, label: str) -> str:
     url = _text(value, label)
-    if any(character.isspace() for character in url):
-        raise CompositionPolicyError(f"{label} is not a project URL: {url!r}")
     try:
-        return normalize_project_url(url)
+        return parse_project_url(url)
     except ValueError as error:
         raise CompositionPolicyError(
             f"{label} is not a project URL: {url!r}"

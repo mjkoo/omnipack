@@ -252,6 +252,10 @@ def test_denial_of_a_build_eligible_for_neither_pack_is_not_stale() -> None:
             {"url": "/owner/repo", "reason": "x"},
             r"denylist\[0\]\.url is not a project URL: '/owner/repo'",
         ),
+        (
+            {"url": "https://x.test/a b", "reason": "x"},
+            r"denylist\[0\]\.url is not a project URL: 'https://x.test/a b'",
+        ),
     ],
 )
 def test_denylist_entries_hold_exactly_a_url_and_reason(
@@ -966,10 +970,13 @@ def test_overlay_blank_or_nonstring_url_identifies_the_field(value: object) -> N
     assert str(error.value) == "overlay[0].url must be a nonempty project URL"
 
 
-def test_overlay_hostless_url_identifies_record_field_and_value() -> None:
+@pytest.mark.parametrize("url", ["/owner/repo", "https://x.test/a b"])
+def test_overlay_url_that_is_not_a_project_url_identifies_record_field_and_value(
+    url: str,
+) -> None:
     with pytest.raises(CompositionError) as error:
-        compose([app("app.id")], [], [{"url": "/owner/repo", "patch": {}}])
-    assert str(error.value) == "overlay[0].url is not a project URL: '/owner/repo'"
+        compose([app("app.id")], [], [{"url": url, "patch": {}}])
+    assert str(error.value) == f"overlay[0].url is not a project URL: {url!r}"
 
 
 def test_overlay_record_that_is_not_an_object_fails() -> None:
