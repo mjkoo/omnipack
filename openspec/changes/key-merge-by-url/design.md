@@ -329,23 +329,24 @@ keep the schema.
 Code and configuration change together on one branch, since the old and new
 key spellings are not interchangeable:
 
-1. `config/composition.json`: remove `packageId` from every rule, after
-   carrying each correction whose URL carries a selected entry that does not
-   already list the corrected id into `config/overlay.json` (step 3). Of the 18 rules that carried nothing else,
-   delete 16 and give the remaining two, the BBoi `tmc-android` standard and
-   dual rules, `family: app:minish-cap`; add one for the extras Picori entry;
-   add `app:melonds` and `app:melonds-nightly` rules for RJNY's two melonDS
-   builds; delete the family rules whose only candidates sit at a denied URL
-   (BBoi's two Super Metroid rules and the izzy2lost Ghostship rule), since a
-   URL denial removes those candidates whatever family they form; add `app:cemu` rules joining RJNY's `SSimco/Cemu` and
-   `sapphirerhodonite/cemu` builds; rename the 23 remaining `package:` category keys to URLs and
-   `package:dev.picori.tmc` to `app:minish-cap`; rename the seven `package:`
-   pins to URLs.
+1. `config/composition.json`: remove `packageId` from every rule, after carrying
+   each correction whose URL carries a selected entry that does not already list
+   the corrected id into `config/overlay.json` (step 3). Of the 18 rules that
+   carried nothing else, delete 16 and give the remaining two, the BBoi
+   `tmc-android` standard and dual rules, `family: app:minish-cap`; add one for
+   the extras Picori entry; add `app:melonds` and `app:melonds-nightly` rules
+   for RJNY's two melonDS builds; delete the family rules whose only candidates
+   sit at a denied URL (BBoi's two Super Metroid rules and the izzy2lost
+   Ghostship rule), since a URL denial removes those candidates whatever family
+   they form; add `app:cemu` rules joining RJNY's `SSimco/Cemu` and
+   `sapphirerhodonite/cemu` builds; rename the 23 remaining `package:` category
+   keys to URLs and `package:dev.picori.tmc` to `app:minish-cap`; rename the
+   seven `package:` pins to URLs.
 2. `config/deny.json`: the seven id denials become five URL denials (the three
    Super Metroid ids share one URL).
 3. `config/overlay.json`: drop the `id` selector field from every record, and
-   add each carried correction as `patch.id` on its URL, merging it into the
-   existing record when that URL already has one.
+   add each carried correction (step 1) as `patch.id` on its URL, merging it
+   into the existing record when that URL already has one.
 4. Rebuild and compare with the previous `dist/`: each pack keeps the same
    number of entries (108 and 134 in the simulation) and the same project URL
    per family; ids are unchanged from today's `dist/` for the corrected apps;

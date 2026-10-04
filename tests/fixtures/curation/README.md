@@ -18,9 +18,9 @@ The historical configured Symphony, Simon CTR, Shipwright and Ludashi identities
 disagreed with their APK manifests: respectively `com.blacklabelhq.sotn`,
 `com.ctrnative`, `com.dishii.soh` and `com.winlator.vanilla`. The curation
 regression applies whatever overlay `id` patch sits at each baseline entry's
-URL; Simon CTR has none, because the Quiver entry the packs now select already
-lists `com.ctrnative`. Ludashi's v4.1 `vanilla-build.apk` declares the same `com.winlator.vanilla`
-package as v3.1.h's `bionic-vanilla.apk`.
+URL; Simon CTR has none, because the Quiver entry the packs select already lists
+`com.ctrnative`. Ludashi's v4.1 `vanilla-build.apk` declares the same
+`com.winlator.vanilla` package as v3.1.h's `bionic-vanilla.apk`.
 
 ## Ports
 

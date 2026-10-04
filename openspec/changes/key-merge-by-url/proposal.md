@@ -65,9 +65,10 @@ with the family rules that already exist.
   normalized project URL, then by their serialized form, keeping output
   deterministic now that one id may appear at two URLs.
 - Configuration migration: the 24 `packageId` corrections leave composition
-  rules (18 rules carried nothing else) and move into `config/overlay.json` as
-  `patch.id` records on their URLs, merged into an existing record where the
-  URL already has one, so the corrected apps keep today's ids; rules give RJNY's melonDS stable and nightly
+  rules (18 rules carried nothing else); each one the selected entry at its URL
+  does not already carry moves into `config/overlay.json` as a `patch.id`
+  record on that URL, merged into an existing record where the URL already has
+  one, so the corrected apps keep today's ids; rules give RJNY's melonDS stable and nightly
   builds separate families so both ship; rules join RJNY's `SSimco/Cemu`
   (single-only) and `sapphirerhodonite/cemu` (dual-only) into one `app:cemu`
   family so dual keeps its replacement build; rules join `samyost1/tmc-android`
@@ -160,7 +161,7 @@ None.
   `package:` namespace.
 - Configuration: `config/composition.json` (new and amended rules, renamed
   category keys and pins), `config/deny.json`, `config/overlay.json` (URL
-  records and the moved `patch.id` corrections).
+  records and the carried `patch.id` corrections).
 - Published packs: the rebuilt packs are expected to hold the same 108 single
   and 134 dual entries and the same project per family as today, measured by
   simulation over the current sources; ids are unchanged from today's for the

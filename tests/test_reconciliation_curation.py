@@ -216,3 +216,27 @@ def test_captured_candidates_form_the_recorded_families(
     assert {frozenset(members) for members in actual_partition.values()} == (
         recorded_partition
     )
+
+
+def test_selected_entries_already_listing_their_apk_package_ship_it(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    # These projects need no overlay id patch because the entry the packs
+    # select already lists the package its APK declares.
+    expected = {
+        "github.com/matteo842/crashbandicoot-launcher": (
+            "io.github.matteo842.crashlauncher.runtime"
+        ),
+        "github.com/simon358/ctr-native-android": "com.ctrnative",
+        "github.com/chrissotraidis/kartpad": "dev.kartpad.android",
+        "github.com/slickamogus/silent-hill-decomp": "com.silenthill.port",
+        "github.com/twilitrealm/dusklight": "dev.twilitrealm.dusk",
+    }
+    shipped = {
+        (normalize_project_url(app.data["url"]), app.id)
+        for variant in Variant
+        for app in current_configuration.result.apps[variant]
+        if normalize_project_url(app.data["url"]) in expected
+    }
+    assert {url for url, _ in shipped} == set(expected)
+    assert shipped == set(expected.items())
