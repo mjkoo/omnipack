@@ -13,11 +13,13 @@ from omnipack.composition_policy import (
     CompositionPolicy,
     CompositionPolicyError,
     RenderedKey,
+    check_overlay_id_patches,
     load_composition_policy,
     rendered_key,
 )
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
+from omnipack.overlay import OverlayError, parse_overlay
 from omnipack.render import render_pack
 from omnipack.report_model import (
     BuildStage,
@@ -26,7 +28,7 @@ from omnipack.report_model import (
     OfflineVerdict,
     Severity,
 )
-from omnipack.sources import IngestionReport, SourceError
+from omnipack.sources import IngestionReport, SourceError, parse_json
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -45,7 +47,9 @@ class OfflineVerificationError(ValueError):
 @dataclass(frozen=True, slots=True)
 class BuildInputs:
     """The five configuration files and the optional README, captured once
-    when a build starts, with the composition policy parsed from its bytes.
+    when a build starts, with the composition policy parsed from its bytes and
+    the overlay checked against it, so a build refuses an inconsistent overlay
+    before ingesting any source.
 
     Composition, the offline gate and catalog generation all use these bytes,
     so a file edited while the build runs is overwritten by, or missing from,
@@ -83,6 +87,11 @@ class BuildInputs:
             policy = load_composition_policy(composition)
         except CompositionPolicyError as error:
             raise SourceError("composition policy", str(error)) from error
+        try:
+            patches = parse_overlay(parse_json(overlay, "overlay"), "overlay")
+            check_overlay_id_patches(policy, patches)
+        except (OverlayError, CompositionPolicyError) as error:
+            raise SourceError("overlay", str(error)) from error
         return cls(
             sources=sources,
             extras=extras,

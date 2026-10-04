@@ -682,9 +682,11 @@ def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
     for name in ("single-screen.json", "dual-screen.json"):
         (tmp_path / "dist" / name).write_text('{"settings":{},"apps":[]}')
     before = {path.name: path.read_bytes() for path in (tmp_path / "dist").iterdir()}
-    monkeypatch.setattr(
-        cli, "_ingest_for_build", lambda root, inputs, report: candidates
-    )
+
+    def ingest(root: Path, inputs: object, report: object) -> list[App]:
+        pytest.fail("configuration that fails to load must stop before ingestion")
+
+    monkeypatch.setattr(cli, "_ingest_for_build", ingest)
     monkeypatch.chdir(tmp_path)
 
     assert main([command]) == 1
