@@ -333,7 +333,9 @@ key spellings are not interchangeable:
    delete 16 and give the remaining two, the BBoi `tmc-android` standard and
    dual rules, `family: app:minish-cap`; add one for the extras Picori entry;
    add `app:melonds` and `app:melonds-nightly` rules for RJNY's two melonDS
-   builds; add `app:cemu` rules joining RJNY's `SSimco/Cemu` and
+   builds; delete the family rules whose only candidates sit at a denied URL
+   (BBoi's two Super Metroid rules and the izzy2lost Ghostship rule), since a
+   URL denial removes those candidates whatever family they form; add `app:cemu` rules joining RJNY's `SSimco/Cemu` and
    `sapphirerhodonite/cemu` builds; rename the 23 remaining `package:` category keys to URLs and
    `package:dev.picori.tmc` to `app:minish-cap`; rename the seven `package:`
    pins to URLs.

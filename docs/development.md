@@ -106,9 +106,10 @@ For every manual edit affecting pack contents:
    immediately before the build: settings edits that keep every entry's id and
    URL produce no entries, and a second build can empty it. The command lists
    all recorded entries, including admitted committed candidates with their
-   source, project URL, entry kind and committed id. A diagnostic kind with nothing recorded prints nothing; an unavailable
-   comparison is labeled unavailable, and a failed build's comparison describes
-   candidates that were not published.
+   source, project URL, entry kind and committed id. A diagnostic kind with
+   nothing recorded prints nothing; an unavailable comparison is labeled
+   unavailable, and a failed build's comparison describes candidates that were
+   not published.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
    A new denial's normalized URL must appear in `denylistRemovals` and be absent

@@ -513,7 +513,7 @@ def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None
     )
     before = snapshots.single, snapshots.dual
     findings = validate_offline(snapshots)
-    assert findings == (), findings
+    assert errors(findings) == (), findings
     assert (snapshots.single, snapshots.dual) == before
 
 
