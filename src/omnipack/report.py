@@ -10,6 +10,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, TypeIs, assert_never
 
+from omnipack.composition_policy import RenderedKey, rendered_key
 from omnipack.merge import (
     CompositionReport,
     CompositionResult,
@@ -26,7 +27,6 @@ from omnipack.report_model import (
     not_run_verdict,
 )
 from omnipack.sources import IngestionReport
-from omnipack.urls import normalize_project_url
 
 BUILD_SCHEMA_VERSION = 5
 _VARIANT_VALUES = frozenset(variant.value for variant in Variant)
@@ -38,7 +38,7 @@ class ReportFormatError(ValueError):
 
 def write_report(
     root: Path,
-    previous: Mapping[Variant, set[tuple[str, str]]],
+    previous: Mapping[Variant, set[RenderedKey]],
     composition: CompositionResult | None,
     ingestion: IngestionReport,
     *,
@@ -52,8 +52,7 @@ def write_report(
         changes = {}
         for variant in Variant:
             current = {
-                (app.id, normalize_project_url(app.url))
-                for app in composition.apps[variant]
+                rendered_key(app.id, app.url) for app in composition.apps[variant]
             }
             before = previous.get(variant, set())
             changes[variant.value] = {

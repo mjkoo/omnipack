@@ -12,7 +12,9 @@ from uuid import uuid4
 from omnipack.composition_policy import (
     CompositionPolicy,
     CompositionPolicyError,
+    RenderedKey,
     load_composition_policy,
+    rendered_key,
 )
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
@@ -25,10 +27,6 @@ from omnipack.report_model import (
     Severity,
 )
 from omnipack.sources import IngestionReport, SourceError
-from omnipack.urls import normalize_project_url
-
-# A rendered entry's package id and normalized project URL.
-EntryKey = tuple[str, str]
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -96,11 +94,11 @@ class BuildInputs:
         )
 
 
-def previous_entries(root: Path) -> dict[Variant, set[EntryKey]]:
+def previous_entries(root: Path) -> dict[Variant, set[RenderedKey]]:
     """Read each rendered entry's package id and normalized project URL from the
     output pair before publication begins.
     """
-    result: dict[Variant, set[EntryKey]] = {}
+    result: dict[Variant, set[RenderedKey]] = {}
     for variant, name in OUTPUTS.items():
         path = root / "dist" / name
         if not path.exists():
@@ -111,15 +109,15 @@ def previous_entries(root: Path) -> dict[Variant, set[EntryKey]]:
         except OSError, json.JSONDecodeError:
             result[variant] = set()
             continue
-        apps = document.get("apps", []) if isinstance(document, dict) else []
+        apps = document.get("apps") if isinstance(document, dict) else None
         result[variant] = set()
-        for item in apps:
+        for item in apps if isinstance(apps, list) else []:
             if not isinstance(item, dict):
                 continue
             package_id, url = item.get("id"), item.get("url")
             if isinstance(package_id, str) and isinstance(url, str):
                 try:
-                    result[variant].add((package_id, normalize_project_url(url)))
+                    result[variant].add(rendered_key(package_id, url))
                 except ValueError:
                     continue
     return result
