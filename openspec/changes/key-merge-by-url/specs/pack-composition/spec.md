@@ -117,8 +117,8 @@ formed family.
 - **WHEN** a rule-less candidate is at the project URL of a candidate that a
   rule assigns `app:x`, and a pin selects the rule-less candidate
 - **THEN** a pin naming `app:x` loads and selects it
-- **AND** a pin naming the candidate's normalized project URL fails the build
-  as wrong-family
+- **AND** a pin naming the candidate's normalized project URL fails policy
+  loading, naming the projected family `app:x`
 
 
 ### Requirement: Composition policy assigns app families by project URL
@@ -366,20 +366,21 @@ source-ingestion defines, so a missing preferred candidate and a missing source
 are never confused.
 
 Identical duplicates SHALL collapse. When different candidates tie at the
-winning rank, which happens when one source lists several builds at one
-project URL that no family rule separates, composition SHALL NOT fail: it
-SHALL select the tied candidate whose canonical serialized form sorts first,
-and SHALL record the tie as a nonfatal same-rank tie finding naming the family, the
-variant, the tied candidates' selectors and the chosen winner. The tie SHALL NOT
-fail the build, so one family's ambiguity never blocks the rest of the run. The
+winning rank, which happens when one source lists several builds at one project
+URL that no family rule separates, composition SHALL NOT fail: it SHALL select
+the tied candidate whose canonical serialized form sorts first, and SHALL record
+the tie as a nonfatal same-rank tie finding naming the family, the variant, the
+tied candidates' selectors and the chosen winner. The tie SHALL NOT fail the
+build, so one family's ambiguity never blocks the rest of the run. The
 maintainer resolves it with a pin or with family rules that split the tied
 builds into separate families. Ties among nonwinning candidates SHALL NOT
 displace a unique winner and SHALL NOT be recorded. A candidate's canonical
 serialized form is its import record as ingested, before overlays, category
-assignment and the `allowIdChange` override, serialized the way rendering
-serializes entries. No ordering other than that canonical serialized form,
-such as iteration order, input order or release dates, SHALL break ties, so the
-same candidates select the same winner in any input order.
+assignment and the `allowIdChange` override, serialized with the canonical
+serializer rendering uses for its ordering key. No ordering other than that
+canonical serialized form, such as iteration order, input order or release
+dates, SHALL break ties, so the same candidates select the same winner in any
+input order.
 
 Every member of an explicit family is covered by a projection of that family,
 and every member of a default family carries its project URL, so the family of
