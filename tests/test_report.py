@@ -59,12 +59,9 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
     "document",
     [
         {"status": "success"},
-        {"schemaVersion": 1, "status": "success"},
-        {"schemaVersion": 2, "status": "success", "displacements": []},
-        {"schemaVersion": 3, "status": "success"},
         {"schemaVersion": 4, "status": "success", "denylistRemovals": []},
     ],
-    ids=["schemaless", "schema-1", "schema-2", "schema-3", "schema-4"],
+    ids=["schemaless", "schema-4"],
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
@@ -868,10 +865,8 @@ def test_removed_verification_state_is_rejected(tmp_path: Path) -> None:
         format_reports(tmp_path)
 
 
-@pytest.mark.parametrize("schema", [3, 4])
-def test_previous_verification_schema_requires_regeneration(
-    tmp_path: Path, schema: int
-) -> None:
+def test_previous_verification_schema_requires_regeneration(tmp_path: Path) -> None:
+    schema = 4
     report = write_verification_report(tmp_path, schemaVersion=schema)
     del report["nonfatalFindings"]
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))

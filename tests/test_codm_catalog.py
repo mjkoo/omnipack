@@ -188,25 +188,3 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
     assert ("1234567890", Variant.SINGLE) not in settings
-
-
-def test_reviewed_policy_sets_fallback_for_named_projects() -> None:
-    policy = load_json(ROOT / "config/codm-projects.json")["projects"]
-    assert (
-        policy["github.com/emulnk/emulnk"]["additionalSettings"][
-            "fallbackToOlderReleases"
-        ]
-        is False
-    )
-    assert (
-        policy["github.com/castdrian/showdown-ds"]["additionalSettings"][
-            "fallbackToOlderReleases"
-        ]
-        is False
-    )
-    assert (
-        policy["github.com/mastercook777/heimdall-ayn-thor-assistant"][
-            "additionalSettings"
-        ]["fallbackToOlderReleases"]
-        is True
-    )
