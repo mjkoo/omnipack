@@ -250,12 +250,11 @@ def _exclude(
     still applies.
     """
     denied: dict[int, str] = {}
+    by_url: dict[str, list[App]] = {}
+    for candidate in candidates:
+        by_url.setdefault(normalize_project_url(candidate.url), []).append(candidate)
     for rule in exclusions:
-        matched = [
-            candidate
-            for candidate in candidates
-            if normalize_project_url(candidate.url) == rule.url
-        ]
+        matched = by_url.get(rule.url, [])
         if not matched:
             report.stale_exclusions.append(StaleExclusion(rule.url, rule.reason))
             continue
