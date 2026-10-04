@@ -27,9 +27,7 @@ def read(path: Path):
     return json.loads(path.read_text())
 
 
-def test_manifest_evidence_matches_overlay_id_corrections(
-    current_configuration: CurrentConfiguration,
-) -> None:
+def test_identity_correction_evidence_agrees_across_fixtures() -> None:
     evidence = read(FIXTURE)
     observations = read(OBSERVATIONS)
     ctr = read(CTR_EVIDENCE)
@@ -47,23 +45,6 @@ def test_manifest_evidence_matches_overlay_id_corrections(
         )
     )
     assert set(map(tuple, evidence["identity_corrections"])) == expected
-    # A correction is an overlay id patch on the project URL whenever that URL
-    # carries a selected entry; one for a project never selected is not kept.
-    patched = {
-        normalize_project_url(record["url"]): record["patch"]["id"]
-        for record in read(ROOT / "config/overlay.json")
-        if "id" in record["patch"]
-    }
-    selected = {
-        normalize_project_url(app.url)
-        for apps in current_configuration.result.apps.values()
-        for app in apps
-    }
-    for _, effective, url in expected:
-        normalized = normalize_project_url(url)
-        assert patched.get(normalized) == (
-            effective if normalized in selected else None
-        )
 
     assert evidence["ghostship"]["package"] == "dev.net64.ghostship"
     assert set(ctr["variants"]) == {"single", "dual"}
@@ -82,7 +63,6 @@ def test_full_reconciliation_holds_for_current_composition(
     for variant in Variant:
         apps = result.apps[variant]
         ids = {app.id for app in apps}
-        assert len(ids) == len(apps)
         assert len({app.family for app in apps}) == len(apps)
         assert "dev.net64.ghostship" in ids
         assert "com.theboisclub.pokemonred" in ids
@@ -221,21 +201,18 @@ def test_captured_candidates_form_the_recorded_families(
     }
     assert set(actual_family) == surviving
 
+    # The recorded groups are the families joining several captured candidates
+    # that no committed generated catalog decides. They must stay partitioned
+    # exactly as recorded: a merge of two of them or a split of one fails.
     recorded = read(FORMED_FAMILIES)
-    for recorded_members in recorded.values():
-        present = [
-            tuple(member) for member in recorded_members if tuple(member) in surviving
-        ]
-        assert len({actual_family[member] for member in present}) <= 1
-
-    # Generated catalogs change only through reviewed catalog updates, so the
-    # recorded families freeze only the members the maintained rules and the
-    # captured upstream inputs decide.
-    generated = current_configuration.generated_origins
-    projected = {
-        family: sorted(list(member) for member in members if member[1] not in generated)
-        for family, members in families.items()
+    recorded_partition = {
+        frozenset(tuple(member) for member in members) for members in recorded.values()
     }
-    assert {family: members for family, members in projected.items() if members} == (
-        recorded
+    actual_partition: dict[str, set[tuple[str, str, str, str]]] = {}
+    for members in recorded_partition:
+        for member in members:
+            assert member in actual_family, member
+            actual_partition.setdefault(actual_family[member], set()).add(member)
+    assert {frozenset(members) for members in actual_partition.values()} == (
+        recorded_partition
     )

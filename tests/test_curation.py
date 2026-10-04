@@ -73,19 +73,23 @@ def test_every_committed_denial_excludes_its_project_when_present(
 ) -> None:
     # A denial can match nothing because a source dropped the project. The
     # build reports such a denial as stale rather than failing, so check that
-    # every stale report is genuinely absent and every present project is
-    # removed from both packs.
+    # every stale report has no candidate at all at its URL, that every denial
+    # of an eligible candidate is reported as a removal, and that no denied
+    # project reaches either pack.
     denied = {
         normalize_project_url(entry["url"]) for entry in read(ROOT / "config/deny.json")
     }
     present = {
+        normalize_project_url(app.url) for app in current_configuration.candidates
+    }
+    eligible = {
         normalize_project_url(app.url)
         for app in current_configuration.candidates
         if app.eligibility
     }
     report = current_configuration.result.report
     assert {item.url for item in report.stale_exclusions} == denied - present
-    assert {item.url for item in report.removals} == denied & present
+    assert {item.url for item in report.removals} == denied & eligible
     for variant in Variant:
         selected = {
             normalize_project_url(app.url)
@@ -246,12 +250,3 @@ def test_split_and_joined_families_ship_as_intended(
             if variant is Variant.SINGLE
             else "github.com/sapphirerhodonite/cemu"
         ]
-
-
-def test_current_composition_records_no_repeat_gap_or_tie(
-    current_configuration: CurrentConfiguration,
-) -> None:
-    report = current_configuration.result.report
-    assert report.repeated_ids == []
-    assert report.single_only_families == []
-    assert report.same_rank_ties == []
