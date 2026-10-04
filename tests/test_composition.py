@@ -577,7 +577,7 @@ def test_an_app_missing_from_dual_is_published_and_reported() -> None:
     assert ids(result, Variant.SINGLE) == {"single"}
     assert result.apps[Variant.DUAL] == []
     assert result.report.single_only_families == [
-        SingleOnlyFamily("app:x", "single", single.url)
+        SingleOnlyFamily("app:x", "single", url_family(single))
     ]
 
 
@@ -588,7 +588,7 @@ def test_a_denied_only_dual_build_leaves_a_single_only_finding() -> None:
     result = compose([single, dual], deny(dual.url), [])
     assert ids(result, Variant.SINGLE) == {"single"}
     assert result.report.single_only_families == [
-        SingleOnlyFamily("app:x", "single", single.url)
+        SingleOnlyFamily("app:x", "single", url_family(single))
     ]
 
 
@@ -606,7 +606,7 @@ def test_a_single_only_original_and_a_dual_only_fork_pair_only_by_rule() -> None
     ]
     assert [item.family for item in apart.apps[Variant.DUAL]] == ["example.com/fork"]
     assert apart.report.single_only_families == [
-        SingleOnlyFamily(url_family(original), "shared.pkg", original.url)
+        SingleOnlyFamily(url_family(original), "shared.pkg", url_family(original))
     ]
 
     joined = compose(
@@ -622,8 +622,8 @@ def test_two_url_families_sharing_a_package_id_are_reported_in_their_variant() -
     second = app("shared.pkg", "bboi", url="https://example.com/second")
     result = compose([first, second], [], [])
     entries = (
-        RepeatedEntry("example.com/first", first.url),
-        RepeatedEntry("example.com/second", second.url),
+        RepeatedEntry("example.com/first", "example.com/first"),
+        RepeatedEntry("example.com/second", "example.com/second"),
     )
     assert result.report.repeated_ids == [
         RepeatedId(Variant.SINGLE, "shared.pkg", entries),
@@ -828,8 +828,8 @@ def test_an_id_patch_does_not_move_an_entry_between_families() -> None:
     holder = app("q", "bboi", url="https://example.com/holder")
     result = compose([patched, holder], [], overlays((patched.url, {"id": "q"})))
     entries = (
-        RepeatedEntry("example.com/holder", holder.url),
-        RepeatedEntry("example.com/patched", patched.url),
+        RepeatedEntry("example.com/holder", "example.com/holder"),
+        RepeatedEntry("example.com/patched", "example.com/patched"),
     )
     assert result.report.repeated_ids == [
         RepeatedId(Variant.SINGLE, "q", entries),

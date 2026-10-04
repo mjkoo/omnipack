@@ -583,7 +583,7 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
         {
             "family": "example.test/single",
             "id": "single.app",
-            "url": "https://example.test/single",
+            "url": "example.test/single",
         }
     ]
     assert report["repeatedIds"] == [
@@ -591,8 +591,8 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
             "variant": "dual",
             "id": "shared.app",
             "entries": [
-                {"family": "example.test/first", "url": "https://example.test/first"},
-                {"family": "example.test/second", "url": "https://example.test/second"},
+                {"family": "example.test/first", "url": "example.test/first"},
+                {"family": "example.test/second", "url": "example.test/second"},
             ],
         }
     ]
@@ -625,7 +625,7 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
     output = capsys.readouterr().out
     assert (
         "Single-only family: example.test/single; id: single.app; "
-        "URL: https://example.test/single\n"
+        "URL: example.test/single\n"
     ) in output
     assert "Repeated package id: dual shared.app; entries: " in output
     for item in offline["nonfatalFindings"]:

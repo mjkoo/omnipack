@@ -243,19 +243,19 @@ Valid denylist and overlay records are arrays keyed by project URL:
 
 Every family selected in single is expected to have a dual winner. When it has
 none, the family still ships in single and the build records a single-only
-coverage finding with its single selection's package id and URL. This is the
-usual result of an upstream single-only build and a dual-only fork at another
-repository that share a package id: they no longer pair, and a family rule
-joining the two URLs fixes it, as the Cemu rules do. A different-repository
-replacement in one family satisfies coverage, and an app with only a dual-screen
-build needs no single counterpart. To keep an app out of both packs, deny every
-project URL its family's builds sit at.
+coverage finding with its single selection's package id and normalized URL.
+This is the usual result of an upstream single-only build and a dual-only fork
+at another repository that share a package id: they no longer pair, and a
+family rule joining the two URLs fixes it, as the Cemu rules do. A
+different-repository replacement in one family satisfies coverage, and an app
+with only a dual-screen build needs no single counterpart. To keep an app out
+of both packs, deny every project URL its family's builds sit at.
 
 After overlays apply, the build also records each package id that more than one
-selected entry of one pack carries, with those entries' families and URLs.
-Obtainium stores imported apps by package id and would keep only one of them.
-The fix is a family rule putting the entries in one family, or correcting the
-overlay `id` patch that produced the repeat.
+selected entry of one pack carries, with those entries' families and normalized
+URLs. Obtainium stores imported apps by package id and would keep only one of
+them. The fix is a family rule putting the entries in one family, or correcting
+the overlay `id` patch that produced the repeat.
 
 ## Build report
 

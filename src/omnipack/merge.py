@@ -16,6 +16,8 @@ from omnipack.composition_policy import (
     assigned_family,
     candidate_selector,
     check_overlay_id_patches,
+    rendered_key,
+    repeated_ids,
 )
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import (
@@ -95,7 +97,9 @@ class SameRankTie:
 
 @dataclass(frozen=True, slots=True)
 class SingleOnlyFamily:
-    """A family published in single with no selected build in dual."""
+    """A family published in single with no selected build in dual, with its
+    single entry's package id and normalized project URL.
+    """
 
     family: str
     id: str
@@ -104,6 +108,8 @@ class SingleOnlyFamily:
 
 @dataclass(frozen=True, slots=True)
 class RepeatedEntry:
+    """One entry carrying a repeated package id: its family and normalized URL."""
+
     family: str
     url: str
 
@@ -445,7 +451,7 @@ def _single_only_families(
     """
     dual_families = {app.family for app in apps[Variant.DUAL]}
     return [
-        SingleOnlyFamily(app.family, app.id, app.url)
+        SingleOnlyFamily(app.family, app.id, normalize_project_url(app.url))
         for app in apps[Variant.SINGLE]
         if app.family not in dual_families
     ]
@@ -455,13 +461,21 @@ def _repeated_ids(apps: dict[Variant, list[ComposedApp]]) -> list[RepeatedId]:
     """Package ids, after overlays, that several entries of one variant carry."""
     result: list[RepeatedId] = []
     for variant in Variant:
-        carriers: dict[str, list[RepeatedEntry]] = {}
-        for app in apps[variant]:
-            carriers.setdefault(app.id, []).append(RepeatedEntry(app.family, app.url))
+        families = {rendered_key(app.id, app.url): app.family for app in apps[variant]}
         result.extend(
-            RepeatedId(variant, package_id, tuple(sorted(entries, key=astuple)))
-            for package_id, entries in sorted(carriers.items())
-            if len(entries) > 1
+            RepeatedId(
+                variant,
+                package_id,
+                tuple(
+                    sorted(
+                        (RepeatedEntry(families[key], key[1]) for key in members),
+                        key=astuple,
+                    )
+                ),
+            )
+            for package_id, members in repeated_ids(
+                [rendered_key(app.id, app.url) for app in apps[variant]]
+            ).items()
         )
     return result
 
