@@ -107,6 +107,16 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         assert {app["allowIdChange"] for app in published["apps"]} == {True}
 
 
+def test_previous_output_whose_apps_is_not_a_list_counts_as_empty(
+    tmp_path: Path,
+) -> None:
+    write_previous(tmp_path, {"apps": {"id": "x"}}, {"apps": 7})
+    assert build_module.previous_entries(tmp_path) == {
+        Variant.SINGLE: set(),
+        Variant.DUAL: set(),
+    }
+
+
 def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> None:
     from omnipack.merge import compose
     from omnipack.model import App, SourceType
