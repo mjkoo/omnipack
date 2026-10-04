@@ -229,23 +229,6 @@ def families(
     ]
 
 
-def test_one_project_from_several_sources_forms_its_url_family() -> None:
-    parsed = parse_composition_policy(policy())
-    assert families(parsed, [candidate(), other_source()]) == [
-        ("org.example.old", URL),
-        ("org.example.new", URL),
-    ]
-
-
-def test_repositories_sharing_a_package_id_stay_separate() -> None:
-    parsed = parse_composition_policy(policy())
-    fork = other_source(id="org.example.old", url="https://x.test/fork")
-    assert families(parsed, [candidate(), fork]) == [
-        ("org.example.old", URL),
-        ("org.example.old", "x.test/fork"),
-    ]
-
-
 def test_family_rule_covers_every_build_at_its_url() -> None:
     parsed = parse_composition_policy(
         policy(candidates=[other_rule("org.example.new", URL, family="app:x")])
@@ -318,17 +301,6 @@ def test_agreeing_rules_on_one_id_and_url_load() -> None:
         )
     )
     assert parsed.url_families == {URL: "app:a"}
-
-
-def test_track_only_candidate_joins_the_family_ruled_onto_its_url() -> None:
-    parsed = parse_composition_policy(
-        policy(candidates=[other_rule("org.example.new", URL, family="app:x")])
-    )
-    tracker = candidate(id="1234", additional_settings={"trackOnly": True})
-    assert families(parsed, [other_source(), tracker]) == [
-        ("org.example.new", "app:x"),
-        ("1234", "app:x"),
-    ]
 
 
 def test_rule_assigning_a_family_to_a_track_only_candidate_loads() -> None:

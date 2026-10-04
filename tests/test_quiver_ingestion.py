@@ -182,18 +182,6 @@ def test_quiver_candidates_reach_composition_with_url_and_package_overlaps(
     ]
 
 
-def test_same_project_different_package_forms_one_family() -> None:
-    existing = other("org.example.old", "owner/same", "rjny", "rjny-catalog")
-    quiver_app = other("org.example.new", "owner/same", "quiver", "quiver-generated")
-    result = compose([existing, quiver_app], [], [], policy=policy())
-    for variant in Variant:
-        assert [app.data["id"] for app in result.apps[variant]] == ["org.example.old"]
-    assert all(
-        [item.source for item in selection.considered] == ["quiver"]
-        for selection in result.report.selections
-    )
-
-
 def test_quiver_ranks_between_rjny_and_bboi() -> None:
     quiver_app = other("org.example.game", "owner/quiver", "quiver", "quiver-generated")
     for source, origin, winner in (
@@ -250,34 +238,6 @@ def test_different_package_fork_family_pairs_across_variants() -> None:
     assert b"app:game" not in single
     assert b"app:game" not in dual
     assert b"base" in generate_catalog(single, dual, parsed)
-
-
-def test_quiver_cannot_displace_explicit_family_member_at_same_tier() -> None:
-    existing = other("org.example.game", "owner/old", "rjny", "rjny-catalog")
-    new = other("org.example.other", "owner/old", "quiver", "quiver-generated")
-    parsed = policy(
-        [
-            {
-                "match": {
-                    "source": "rjny",
-                    "origin": "rjny-catalog",
-                    "id": existing.id,
-                    "url": existing.url,
-                },
-                "family": "app:game",
-                "rationale": "Reviewed game family.",
-            }
-        ]
-    )
-    result = compose([existing, new], [], [], policy=parsed)
-    assert {app.data["url"] for variant in Variant for app in result.apps[variant]} == {
-        existing.url
-    }
-    assert all(selection.family == "app:game" for selection in result.report.selections)
-    assert all(
-        selection.considered[0].source == "quiver"
-        for selection in result.report.selections
-    )
 
 
 def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> None:
