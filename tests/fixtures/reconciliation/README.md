@@ -33,10 +33,11 @@ corrected retained source. `../curation/reconciliation.json` records the bounded
 identity map and official Ghostship ZIP/member observation. Runtime behavior does
 not pin these dated hashes.
 
-`formed-families.json` records, for every family the current composition forms
-from these inputs, the original selectors of the candidates that survive
-exclusions and are eligible for some variant, restricted to members that do not
-come from a committed generated catalog. Generated catalogs change only through
-reviewed catalog updates, so their membership is not frozen here. It is an
-expected output, so it changes whenever the maintained rules or captured inputs
-change the families.
+`formed-families.json` records the families the current composition forms from
+these inputs, by the original selectors of their members, where more than one
+surviving candidate eligible for some variant and not from a committed generated
+catalog joins the family. Generated catalogs change only through reviewed
+catalog updates, so their membership is not frozen here. The test requires the
+recorded members to stay partitioned exactly as recorded, so merging two of
+these families or splitting one fails. It is an expected output, so it changes
+whenever the maintained rules or captured inputs change these families.

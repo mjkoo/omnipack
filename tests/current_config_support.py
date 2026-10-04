@@ -30,7 +30,6 @@ class CurrentConfiguration:
     policy: dict[str, Any]
     catalog: dict[str, Any]
     candidates: list[App]
-    generated_origins: frozenset[str]
     result: CompositionResult
 
 
@@ -83,7 +82,6 @@ def build_current_configuration() -> CurrentConfiguration:
         policy,
         catalog,
         candidates,
-        frozenset(app.origin for app in generated),
         result,
     )
 
