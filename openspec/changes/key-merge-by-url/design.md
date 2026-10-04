@@ -104,24 +104,24 @@ repeated label, and no configuration could separate the two.
 ### A same-rank tie publishes one winner and is reported
 
 Under URL keying, builds one source lists at one repository URL with different
-package ids, such as melonDS stable and nightly, share the URL family and tie
-at the winning rank until rules split them. Composition no longer fails on such
-a tie. It selects the tied candidate whose canonical serialized form sorts
-first: the candidate's import record as ingested, before overlays, category
-assignment and the `allowIdChange` override, serialized the way rendering
-serializes entries. Selection runs before those stages, so the rendered form
-does not exist yet; the shared serializer keeps one encoding. The winner
-depends only on candidate content and never on input order, and composition
-records a same-rank tie finding naming the family, variant, tied selectors and
-chosen winner. `pack report` displays the finding. The owner resolves it with a
-pin or with split family rules. Failing was rejected for the same reason as for
-a repeated id: one family's ambiguity should not stop the nightly publication of
-every other app. Choosing by source order or release date was rejected because
-it would make the published winner depend on how a source happens to list its
-entries. Pin conflicts (a missing, ambiguous, excluded, wrong-family or
-target-ineligible pinned candidate, or several pins for one family and target)
-remain fatal, because they are owner configuration errors rather than upstream
-data.
+package ids, such as melonDS stable and nightly, share the URL family and tie at
+the winning rank until rules split them. Composition no longer fails on such a
+tie. It selects the tied candidate whose canonical serialized form sorts first:
+the candidate's import record as ingested, before overlays, category assignment
+and the `allowIdChange` override, serialized with the canonical serializer
+rendering uses for its ordering key. Selection runs before those stages, so the
+rendered form does not exist yet; the shared serializer keeps one encoding. The
+winner depends only on candidate content and never on input order, and
+composition records a same-rank tie finding naming the family, variant, tied
+selectors and chosen winner. `pack report` displays the finding. The owner
+resolves it with a pin or with split family rules. Failing was rejected for the
+same reason as for a repeated id: one family's ambiguity should not stop the
+nightly publication of every other app. Choosing by source order or release date
+was rejected because it would make the published winner depend on how a source
+happens to list its entries. Pin conflicts (a missing, ambiguous, excluded,
+wrong-family or target-ineligible pinned candidate, or several pins for one
+family and target) remain fatal, because they are owner configuration errors
+rather than upstream data.
 
 ### Denials and overlays key on the URL alone
 
@@ -299,8 +299,7 @@ keep the schema.
   the entry with an overlay `id` patch on its URL when Obtainium shows the
   duplicate or an id error; today's corrections move into such patches so
   existing users see no new duplicates. The behavior is read from Obtainium's
-  code; a device check on the AYN Thor, with the owner's approval, records what
-  actually happens.
+  code.
 - [An overlay `id` patch at a URL whose rules name different families would
   give them one id] → the overlay fails on load in `pack build` and
   `pack verify`, naming the record and the families; the fix is to remove the
@@ -348,14 +347,7 @@ key spellings are not interchangeable:
    per family; ids are unchanged from today's `dist/` for the corrected apps;
    every entry gains `allowIdChange: true`; the repeated-id, single-only coverage,
    same-rank tie, uncategorized and stale-category lists are empty; `pack verify` passes.
-5. On the AYN Thor, with the owner's approval first: import a rebuilt pack,
-   install an app whose non-temporary source id differs from its APK's id and
-   has no overlay fix, re-import the pack, and record the entries Obtainium
-   then holds for it; confirm that an app whose id is fixed by overlay keeps
-   one entry across install and re-import; for an app whose source id matches
-   its APK, record the `allowIdChange` value after install and after
-   re-import.
-6. Tests: delete the frozen codm source-generation reproduction
+5. Tests: delete the frozen codm source-generation reproduction
    (`tests/fixtures/source-generation/codm/` and its frozen-baseline checks)
    instead of migrating it. Its goldens pin the old pipeline's entry set,
    which URL keying changes; behavior is covered by synthetic tests and live

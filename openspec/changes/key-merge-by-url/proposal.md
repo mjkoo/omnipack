@@ -89,11 +89,7 @@ with the family rules that already exist.
 
 Package ids stay ordinary entry data that selectors name and packs emit.
 Source generation and its generated catalogs are unchanged; a separate later
-change removes its APK inspection. Acceptance includes an import, install and
-re-import check on the AYN Thor, run only with the owner's approval, recording
-what Obtainium holds after re-import for an app whose source id differs from
-its APK's with no overlay fix, and confirming one entry for an app fixed by
-overlay.
+change removes its APK inspection.
 
 Estimate: about 17 restated or modified requirements across nine
 capabilities, a net reduction of roughly 20 scenarios; implementation roughly
