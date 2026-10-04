@@ -146,7 +146,7 @@ def format_reports(root: Path) -> str:
             lines.append(f"Stale exclusion: {item['url']}; reason: {item['reason']}")
         for item in build["repeatedIds"]:
             entries = item.get("entries") if isinstance(item, dict) else None
-            if not _strings(item, ("variant", "id")) or not (
+            if not _variant_record(item, ("variant", "id")) or not (
                 isinstance(entries, list)
                 and entries
                 and all(_strings(entry, ("family", "url")) for entry in entries)
@@ -166,7 +166,7 @@ def format_reports(root: Path) -> str:
         for item in build["sameRankTies"]:
             tied = item.get("tied") if isinstance(item, dict) else None
             if (
-                not _strings(item, ("family", "variant"))
+                not _variant_record(item, ("family", "variant"))
                 or not isinstance(tied, list)
                 or not tied
             ):
@@ -268,6 +268,11 @@ def _format_considered(item: object) -> str:
         f"id: {item['id']}; URL: {item['url']}; "
         f"source: {item['source']}/{item['origin']}"
     )
+
+
+def _variant_record(item: object, keys: tuple[str, ...]) -> bool:
+    """Whether `item` holds string `keys`, its `variant` naming a pack variant."""
+    return _strings(item, keys) and item["variant"] in _VARIANT_VALUES
 
 
 def _format_selector(item: object) -> str:

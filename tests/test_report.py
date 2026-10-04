@@ -752,6 +752,9 @@ def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
     assert output == expected
 
 
+SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.test/a"}
+
+
 @pytest.mark.parametrize(
     "field,record",
     [
@@ -762,7 +765,24 @@ def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
         ("staleExclusions", {"id": "stale", "reason": "r"}),
         ("repeatedIds", {"variant": "single", "id": "x", "entries": []}),
         ("repeatedIds", {"variant": "single", "id": "x", "entries": [{"url": "u"}]}),
+        (
+            "repeatedIds",
+            {
+                "variant": "bogus",
+                "id": "x",
+                "entries": [{"family": "app:x", "url": "x.test/a"}],
+            },
+        ),
         ("singleOnlyFamilies", {"family": "app:x", "id": "x"}),
+        (
+            "sameRankTies",
+            {
+                "family": "app:x",
+                "variant": "bogus",
+                "tied": [SELECTOR],
+                "winner": SELECTOR,
+            },
+        ),
         ("sameRankTies", {"family": "app:x", "variant": "single", "tied": []}),
         (
             "sameRankTies",
