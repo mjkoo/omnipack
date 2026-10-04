@@ -877,6 +877,17 @@ def test_an_id_patch_does_not_move_an_entry_between_families() -> None:
     }
 
 
+def test_a_denial_never_reads_an_overlay_patched_id() -> None:
+    patched = app("p", url="https://example.com/patched")
+    holder = app("q", "bboi", url="https://example.com/holder")
+    patch = overlays((patched.url, {"id": "q"}))
+    kept = compose([patched, holder], deny(holder.url), patch)
+    for variant in Variant:
+        assert ids(kept, variant) == {"q"}
+        assert {item.family for item in kept.apps[variant]} == {"example.com/patched"}
+    assert [item.families for item in kept.report.removals] == [("example.com/holder",)]
+
+
 def test_an_id_patch_at_a_url_whose_rules_name_two_families_fails() -> None:
     url = "https://github.com/owner/split"
     first = app("a", family="app:a", url=url)
