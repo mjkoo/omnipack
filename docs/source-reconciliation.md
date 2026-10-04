@@ -54,8 +54,9 @@ unknown-code or future publisher-compromise risk.
 - **MetroidArch replaces the retired Super Metroid port in dual.** The successor
   provides a real second-screen companion interface and passes the accepted
   reputation/basic-vetting standard. Normal RetroArch remains in both packs.
-  The reviewed retired Super Metroid catalog IDs remain excluded. MetroidArch uses a new
-  package and needs separate writable-directory setup; see [setup and vetting](metroidarch.md).
+  The retired Super Metroid port's project URL remains denied. MetroidArch uses
+  a new package and needs separate writable-directory setup; see
+  [setup and vetting](metroidarch.md).
 - **Gen1Recomp uses its canonical repository.** The old
   `bryanthaboi/pokemon-gen1-recomp-project` URL redirects to
   `bryanthaboi/gen1recomp`. This is a repository rename, not a publisher switch.

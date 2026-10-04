@@ -35,26 +35,6 @@
       "match": {
         "source": "bboi",
         "origin": "bboi-standard-asset",
-        "id": "com.raekwon1603.supermetroid",
-        "url": "https://github.com/Raekwon1603/super_metroid-android"
-      },
-      "family": "app:super-metroid",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app, with different package identities: the standard build serves single and the dual asset is preferred for dual."
-    },
-    {
-      "match": {
-        "source": "bboi",
-        "origin": "bboi-dual-asset",
-        "id": "com.raekwon1603.supermetroidds",
-        "url": "https://github.com/Raekwon1603/super_metroid-android"
-      },
-      "family": "app:super-metroid",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app, with different package identities: the standard build serves single and the dual asset is preferred for dual."
-    },
-    {
-      "match": {
-        "source": "bboi",
-        "origin": "bboi-standard-asset",
         "id": "com.twilitrealm.dusklight",
         "url": "https://github.com/TwilitRealm/dusklight"
       },
@@ -120,16 +100,6 @@
       },
       "family": "app:minish-cap",
       "rationale": "BBoi's builds of the Minish Cap Android port; join them with Picori's upstream build so each pack carries one Minish Cap entry."
-    },
-    {
-      "match": {
-        "source": "bboi",
-        "origin": "bboi-standard-asset",
-        "id": "com.izzy2lost.ghostship",
-        "url": "https://github.com/izzy2lost/Ghostship"
-      },
-      "family": "app:ghostship",
-      "rationale": "Classify and retire the legacy Ghostship Android package."
     },
     {
       "match": {
