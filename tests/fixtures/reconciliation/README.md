@@ -10,9 +10,7 @@ the locations in `config/sources.json`: the Codeberg latest-release API, its
 two catalog assets, and the raw GitHub catalog. Refresh them from those
 locations whenever the maintained configuration starts depending on newer
 upstream rows. They preserve original catalog IDs, URLs and origins
-independently of the maintained composition rules. The codm pre-migration
-reproduction keeps its own frozen copy of the September 10, 2026 inputs under
-`../source-generation/codm/pre-migration-captures/`.
+independently of the maintained composition rules.
 
 `selected-observations.json` and `codm-relevant-readme.md` are dated
 observations from the September 10, 2026 installed-app reconciliation and are

@@ -1,116 +1,27 @@
 from __future__ import annotations
 
-import hashlib
 import json
 from pathlib import Path
 from typing import Any
 
-from omnipack.composition_policy import (
-    load_composition_policy,
-    parse_composition_policy,
-)
+from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
-from omnipack.model import App, Variant
+from omnipack.model import Variant
 from omnipack.package_id import _is_valid_package_id
-from omnipack.render import render
 from omnipack.source_catalog import render_catalog
-from omnipack.sources import bboi, codm, rjny
-from omnipack.sources.common import normalize_record
+from omnipack.sources import codm
 from omnipack.sources.extras import fetch as fetch_extras
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
     current_configuration_fixture,  # noqa: F401
 )
-from tests.test_sources import FakeHttp
 
 ROOT = Path(__file__).parents[1]
-FIXTURES = Path(__file__).parent / "fixtures/source-generation/codm"
-CAPTURED = FIXTURES / "pre-migration-captures"
-PRE_MIGRATION = FIXTURES / "pre-migration-config"
 
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text())
-
-
-def captured_higher() -> list[App]:
-    """Ingest the captured upstream catalogs with the frozen extras."""
-    sources = load_json(PRE_MIGRATION / "sources.json")
-    release = load_json(CAPTURED / "bboi-release.json")
-    standard_url, dual_url = (
-        asset["browser_download_url"] for asset in release["assets"]
-    )
-    bboi_api = (
-        "https://codeberg.org/api/v1/repos/"
-        f"{sources['bboi']['codeberg_repo']}/releases/latest"
-    )
-    rjny_url = (
-        f"https://raw.githubusercontent.com/{sources['rjny']['repo']}/"
-        f"{sources['rjny']['branch']}/{sources['rjny']['path']}"
-    )
-    http = FakeHttp(
-        {
-            bboi_api: json.dumps(release),
-            standard_url: (CAPTURED / "bboi-standard.json").read_text(),
-            dual_url: (CAPTURED / "bboi-dual.json").read_text(),
-            rjny_url: (CAPTURED / "rjny.json").read_text(),
-        }
-    )
-    return [
-        *rjny.fetch(http, sources["rjny"]),
-        *bboi.fetch(http, sources["bboi"]),
-        *fetch_extras(load_json(PRE_MIGRATION / "extras.json")),
-    ]
-
-
-def captured_pipeline() -> tuple[list[App], list[App]]:
-    higher = captured_higher()
-    generated = [
-        normalize_record(
-            record,
-            source="codm2000",
-            derive_type=True,
-            eligibility=frozenset({Variant.DUAL}),
-            origin="codm-generated",
-        )
-        for record in load_json(PRE_MIGRATION / "admitted-catalog.json")["apps"]
-    ]
-    return higher, generated
-
-
-def compose_captured_baseline() -> CompositionResult:
-    higher, generated = captured_pipeline()
-    return compose(
-        [*higher, *generated],
-        load_json(PRE_MIGRATION / "deny.json"),
-        load_json(PRE_MIGRATION / "overlay.json"),
-        policy=load_composition_policy(
-            (PRE_MIGRATION / "composition.json").read_bytes()
-        ),
-    )
-
-
-def test_frozen_captured_baseline_reproduces_exact_exports_and_family_winners() -> None:
-    index = load_json(FIXTURES / "baseline/index.json")
-    result = compose_captured_baseline()
-
-    for variant in Variant:
-        output = render(result.apps[variant]).encode()
-        expected = next(
-            item for item in index["outputs"] if item["variant"] == variant.value
-        )
-        assert output == (FIXTURES / "baseline" / expected["file"]).read_bytes()
-        assert len(result.apps[variant]) == expected["appCount"]
-        assert hashlib.sha256(output).hexdigest() == expected["sha256"]
-
-    derived_winners: dict[str, dict[str, str]] = {}
-    for selection in result.report.selections:
-        if selection.family in index["familyWinners"]:
-            derived_winners.setdefault(selection.family, {})[
-                selection.variant.value
-            ] = normalize_project_url(selection.url)
-    assert derived_winners == index["familyWinners"]
 
 
 def test_committed_catalog_is_valid_canonical_and_composable(
@@ -217,7 +128,7 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
 
     baseline = compose_catalog([], tmp_path / "baseline")
     before = {(item.family, item.variant): item for item in baseline.report.selections}
-    assert set(before) == {("package:com.example.host", variant) for variant in Variant}
+    assert set(before) == {("github.com/example/host", variant) for variant in Variant}
     prerelease_settings = {
         "includePrereleases": True,
         "apkFilterRegEx": r"^Fixture-v[0-9.]+-rc[0-9]+\.apk$",
@@ -257,32 +168,22 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     # The tracked host's selections are unchanged in both packs.
     assert {key: after[key] for key in before} == before
     assert set(after) - set(before) == {
-        ("package:com.example.prerelease", Variant.DUAL),
-        ("package:1234567890", Variant.DUAL),
+        ("github.com/example/prerelease-app", Variant.DUAL),
+        ("github.com/example/fixture-mod", Variant.DUAL),
     }
 
-    prerelease = after[("package:com.example.prerelease", Variant.DUAL)]
-    assert (
-        prerelease.source,
-        prerelease.origin,
-        prerelease.original_id,
-        prerelease.effective_id,
-    ) == (
+    prerelease = after[("github.com/example/prerelease-app", Variant.DUAL)]
+    assert (prerelease.source, prerelease.origin, prerelease.id) == (
         "codm2000",
         "codm-generated",
-        "com.example.prerelease",
         "com.example.prerelease",
     )
     admitted = settings[("com.example.prerelease", Variant.DUAL)]
     assert {key: admitted[key] for key in prerelease_settings} == prerelease_settings
     assert ("com.example.prerelease", Variant.SINGLE) not in settings
 
-    tracker = after[("package:1234567890", Variant.DUAL)]
-    assert (tracker.source, tracker.original_id, tracker.effective_id) == (
-        "codm2000",
-        "1234567890",
-        "1234567890",
-    )
+    tracker = after[("github.com/example/fixture-mod", Variant.DUAL)]
+    assert (tracker.source, tracker.id) == ("codm2000", "1234567890")
     tracked = settings[("1234567890", Variant.DUAL)]
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
@@ -309,15 +210,3 @@ def test_reviewed_policy_sets_fallback_for_named_projects() -> None:
         ]["fallbackToOlderReleases"]
         is True
     )
-
-
-def test_baseline_index_binds_every_captured_input() -> None:
-    index = load_json(FIXTURES / "baseline/index.json")
-    for item in index["inputs"]:
-        relative = Path(item["file"])
-        contents = (
-            PRE_MIGRATION / relative.name
-            if relative.parts[0] == "config"
-            else ROOT / relative
-        ).read_bytes()
-        assert hashlib.sha256(contents).hexdigest() == item["sha256"]

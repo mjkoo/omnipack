@@ -1,22 +1,25 @@
 [
   {
-    "id": "app.gamenative",
-    "url": "https://github.com/utkarshdalal/GameNative",
+    "url": "https://buildbot.libretro.com/stable",
+    "patch": {
+      "id": "com.retroarch.aarch64"
+    }
+  },
+  {
+    "url": "https://github.com/999sian/melee-pc",
+    "patch": {
+      "name": "Melee PC"
+    }
+  },
+  {
+    "url": "https://github.com/Ashnar2602/X360-Mobile---OFFICIAL",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "^(?!.*-legacy-xr[.]apk$).*[.]apk$"
+        "apkFilterRegEx": "^(?!x360-companion-).*[.]apk$"
       }
     }
   },
   {
-    "id": "app.wayfinder",
-    "url": "https://github.com/Thor-Wayfinder/thor-wayfinder",
-    "patch": {
-      "name": "Wayfinder"
-    }
-  },
-  {
-    "id": "com.aure.banjorecomp",
     "url": "https://github.com/AurelioB/BanjoRecomp-Android",
     "patch": {
       "additionalSettings": {
@@ -26,99 +29,6 @@
     }
   },
   {
-    "id": "com.balatro.dualscreen",
-    "url": "https://github.com/rosbean/balatro-dualscreen",
-    "patch": {
-      "name": "Balatro Dual Screen"
-    }
-  },
-  {
-    "id": "com.blacklabelhq.sotn",
-    "url": "https://github.com/sergiomanzur/SymphonyRecomp",
-    "patch": {
-      "additionalSettings": {
-        "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
-        "matchGroupToUse": "0"
-      }
-    }
-  },
-  {
-    "id": "com.buku313.skate3mobile",
-    "url": "https://github.com/Buku313/Skate3-Mobile",
-    "patch": {
-      "additionalSettings": {
-        "apkFilterRegEx": "^(?!.*-debug[.]apk$).*[.]apk$"
-      }
-    }
-  },
-  {
-    "id": "com.chimeragaming.pokemonzmap",
-    "url": "https://github.com/ChimeraGaming/FanmakePokemonMaps_Android",
-    "patch": {
-      "name": "Fanmake Pokémon Maps"
-    }
-  },
-  {
-    "id": "com.ctrnative",
-    "url": "https://github.com/Simon358/ctr-native-android",
-    "patch": {
-      "name": "Crash Team Racing",
-      "additionalSettings": {
-        "versionDetection": false
-      }
-    }
-  },
-  {
-    "id": "com.ctrnative",
-    "url": "https://github.com/igawa6/ctr-native-android",
-    "patch": {
-      "name": "Crash Team Racing",
-      "additionalSettings": {
-        "versionDetection": false
-      }
-    }
-  },
-  {
-    "id": "com.darkaxt.dualdex",
-    "url": "https://github.com/Darkaxt/DualScreenDex",
-    "patch": {
-      "name": "DualDex"
-    }
-  },
-  {
-    "id": "com.dishii.soh",
-    "url": "https://github.com/Waterdish/Shipwright-Android",
-    "patch": {
-      "additionalSettings": {
-        "versionDetection": false
-      }
-    }
-  },
-  {
-    "id": "com.jrickey.battleship",
-    "url": "https://github.com/JRickey/BattleShip",
-    "patch": {
-      "name": "Super Smash Bros. (BattleShip)"
-    }
-  },
-  {
-    "id": "com.kalenjohnson.chronoduo",
-    "url": "https://github.com/kalenjohnson/chrono-duo",
-    "patch": {
-      "name": "ChronoDuo"
-    }
-  },
-  {
-    "id": "com.limelight",
-    "url": "https://github.com/moonlight-stream/moonlight-android",
-    "patch": {
-      "additionalSettings": {
-        "apkFilterRegEx": "^(?!app-root-).*[.]apk$"
-      }
-    }
-  },
-  {
-    "id": "com.med.sleepmanager",
     "url": "https://github.com/Baggio94/SleepManager",
     "patch": {
       "additionalSettings": {
@@ -127,34 +37,7 @@
     }
   },
   {
-    "id": "com.pokeemerald.dualscreen",
-    "url": "https://github.com/Goldoire/pokeemerald-dualscreen",
-    "patch": {
-      "name": "Pokémon Emerald Dual Screen"
-    }
-  },
-  {
-    "id": "com.silenthill.port",
-    "url": "https://github.com/SlickAmogus/silent-hill-decomp",
-    "patch": {
-      "name": "Silent Hill Decomp",
-      "additionalSettings": {
-        "releaseDateAsVersion": true,
-        "useLatestAssetDateAsReleaseDate": true,
-        "versionDetection": false
-      }
-    }
-  },
-  {
-    "id": "com.stormpanda.megingiard",
-    "url": "https://github.com/stormpanda/megingiard",
-    "patch": {
-      "name": "Megingiard"
-    }
-  },
-  {
-    "id": "com.winlator.cmod",
-    "url": "https://github.com/coffincolors/winlator",
+    "url": "https://github.com/blacksheepmvp/mjolnir",
     "patch": {
       "additionalSettings": {
         "versionDetection": false
@@ -162,79 +45,33 @@
     }
   },
   {
-    "id": "com.winlator.vanilla",
-    "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
+    "url": "https://github.com/Buku313/Skate3-Mobile",
     "patch": {
       "additionalSettings": {
-        "apkFilterRegEx": "vanilla",
-        "versionDetection": false
+        "apkFilterRegEx": "^(?!.*-debug[.]apk$).*[.]apk$"
       }
     }
   },
   {
-    "id": "dev.kartpad.android",
+    "url": "https://github.com/carlox33/the-simpsons-hit-and-run-android",
+    "patch": {
+      "id": "com.c4rlox.simpsons"
+    }
+  },
+  {
+    "url": "https://github.com/ChimeraGaming/FanmakePokemonMaps_Android",
+    "patch": {
+      "name": "Fanmake Pokémon Maps"
+    }
+  },
+  {
     "url": "https://github.com/chrissotraidis/kartpad",
     "patch": {
+      "id": "dev.kartpad.android",
       "name": "Mario Kart Wii (KartPad)"
     }
   },
   {
-    "id": "dev.melee.game",
-    "url": "https://github.com/999sian/melee-pc",
-    "patch": {
-      "name": "Melee PC"
-    }
-  },
-  {
-    "id": "dev.twilitrealm.dusk",
-    "url": "https://github.com/TwilitRealm/dusklight",
-    "patch": {
-      "name": "Zelda: Twilight Princess (Dusklight)"
-    }
-  },
-  {
-    "id": "emu.x360mobile.com",
-    "url": "https://github.com/Ashnar2602/X360-Mobile---OFFICIAL",
-    "patch": {
-      "additionalSettings": {
-        "apkFilterRegEx": "^(?!x360-companion-).*[.]apk$"
-      }
-    }
-  },
-  {
-    "id": "info.cemu.cemu",
-    "url": "https://github.com/SSimco/Cemu",
-    "patch": {
-      "additionalSettings": {
-        "releaseTitleAsVersion": false
-      }
-    }
-  },
-  {
-    "id": "info.cemu.cemu",
-    "url": "https://github.com/sapphirerhodonite/cemu",
-    "patch": {
-      "additionalSettings": {
-        "releaseTitleAsVersion": false
-      }
-    }
-  },
-  {
-    "id": "io.github.matteo842.crashlauncher.runtime",
-    "url": "https://github.com/Matteo842/CrashBandicoot-Launcher",
-    "patch": {
-      "name": "Crash Bandicoot"
-    }
-  },
-  {
-    "id": "io.github.tomba2recomp",
-    "url": "https://github.com/igawa6/Tomba2RecompDS",
-    "patch": {
-      "name": "Tomba! 2 Recompiled"
-    }
-  },
-  {
-    "id": "org.citron.citron_emu",
     "url": "https://github.com/citron-neo/emulator",
     "patch": {
       "additionalSettings": {
@@ -244,7 +81,62 @@
     }
   },
   {
-    "id": "org.legoisland.isle",
+    "url": "https://github.com/coffincolors/winlator",
+    "patch": {
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/Darkaxt/DualScreenDex",
+    "patch": {
+      "name": "DualDex"
+    }
+  },
+  {
+    "url": "https://github.com/Goldoire/pokeemerald-dualscreen",
+    "patch": {
+      "name": "Pokémon Emerald Dual Screen"
+    }
+  },
+  {
+    "url": "https://github.com/igawa6/ctr-native-android",
+    "patch": {
+      "name": "Crash Team Racing",
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/igawa6/dualsouls",
+    "patch": {
+      "name": "Hollow Knight: Dual Souls",
+      "additionalSettings": {
+        "about": "Requires user-supplied Hollow Knight game files. Uses the second screen for maps, inventory and game information."
+      }
+    }
+  },
+  {
+    "url": "https://github.com/igawa6/dusklight",
+    "patch": {
+      "id": "dev.twilitrealm.dusk"
+    }
+  },
+  {
+    "url": "https://github.com/igawa6/harvestmoon64recomp",
+    "patch": {
+      "id": "io.github.hm64recomp"
+    }
+  },
+  {
+    "url": "https://github.com/igawa6/Tomba2RecompDS",
+    "patch": {
+      "name": "Tomba! 2 Recompiled"
+    }
+  },
+  {
     "url": "https://github.com/isledecomp/isle-portable",
     "patch": {
       "name": "LEGO Island Portable",
@@ -255,16 +147,72 @@
     }
   },
   {
-    "id": "org.vita3k.emulator",
-    "url": "https://github.com/Vita3K/Vita3K-builds",
+    "url": "https://github.com/izzy2lost/perfect_dark",
     "patch": {
+      "id": "com.perfectdark.port"
+    }
+  },
+  {
+    "url": "https://github.com/izzy2lost/spaghettikart",
+    "patch": {
+      "id": "com.izzy.kart"
+    }
+  },
+  {
+    "url": "https://github.com/izzy2lost/starship",
+    "patch": {
+      "id": "com.starship.android"
+    }
+  },
+  {
+    "url": "https://github.com/jakobkhansen/SilksongAndroid",
+    "patch": {
+      "name": "Hollow Knight: Silksong",
       "additionalSettings": {
-        "versionDetection": false
+        "about": "Requires user-supplied Linux game files and compiles the port on-device. The upstream setup currently documents Android 13 only; Android 15 is unsupported. Uses the second screen for inventory and maps."
       }
     }
   },
   {
-    "id": "xendroid.compose",
+    "url": "https://github.com/josh-daniels/openmw-ds",
+    "patch": {
+      "id": "org.openmw.ds"
+    }
+  },
+  {
+    "url": "https://github.com/JRickey/BattleShip",
+    "patch": {
+      "name": "Super Smash Bros. (BattleShip)"
+    }
+  },
+  {
+    "url": "https://github.com/kalenjohnson/chrono-duo",
+    "patch": {
+      "name": "ChronoDuo"
+    }
+  },
+  {
+    "url": "https://github.com/linkzenic/2ship2harkinian-android",
+    "patch": {
+      "id": "com.twoshipfork.mm"
+    }
+  },
+  {
+    "url": "https://github.com/Matteo842/CrashBandicoot-Launcher",
+    "patch": {
+      "id": "io.github.matteo842.crashlauncher.runtime",
+      "name": "Crash Bandicoot"
+    }
+  },
+  {
+    "url": "https://github.com/moonlight-stream/moonlight-android",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^(?!app-root-).*[.]apk$"
+      }
+    }
+  },
+  {
     "url": "https://github.com/rfandango/XenDroid",
     "patch": {
       "additionalSettings": {
@@ -273,8 +221,110 @@
     }
   },
   {
-    "id": "xyz.blacksheep.mjolnir",
-    "url": "https://github.com/blacksheepmvp/mjolnir",
+    "url": "https://github.com/rosbean/balatro-dualscreen",
+    "patch": {
+      "name": "Balatro Dual Screen"
+    }
+  },
+  {
+    "url": "https://github.com/samyost1/tmc-android",
+    "patch": {
+      "id": "dev.picori.tmc"
+    }
+  },
+  {
+    "url": "https://github.com/samyost1/zelda3-android",
+    "patch": {
+      "id": "com.dishii.zelda3"
+    }
+  },
+  {
+    "url": "https://github.com/sapphirerhodonite/cemu",
+    "patch": {
+      "additionalSettings": {
+        "releaseTitleAsVersion": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/sergiomanzur/SymphonyRecomp",
+    "patch": {
+      "id": "com.blacklabelhq.sotn",
+      "additionalSettings": {
+        "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
+        "matchGroupToUse": "0"
+      }
+    }
+  },
+  {
+    "url": "https://github.com/Simon358/ctr-native-android",
+    "patch": {
+      "id": "com.ctrnative",
+      "name": "Crash Team Racing",
+      "additionalSettings": {
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/SlickAmogus/silent-hill-decomp",
+    "patch": {
+      "id": "com.silenthill.port",
+      "name": "Silent Hill Decomp",
+      "additionalSettings": {
+        "releaseDateAsVersion": true,
+        "useLatestAssetDateAsReleaseDate": true,
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/SSimco/Cemu",
+    "patch": {
+      "additionalSettings": {
+        "releaseTitleAsVersion": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
+    "patch": {
+      "id": "com.winlator.vanilla",
+      "additionalSettings": {
+        "apkFilterRegEx": "vanilla",
+        "versionDetection": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/stormpanda/megingiard",
+    "patch": {
+      "name": "Megingiard"
+    }
+  },
+  {
+    "url": "https://github.com/Thor-Wayfinder/thor-wayfinder",
+    "patch": {
+      "name": "Wayfinder"
+    }
+  },
+  {
+    "url": "https://github.com/TwilitRealm/dusklight",
+    "patch": {
+      "id": "dev.twilitrealm.dusk",
+      "name": "Zelda: Twilight Princess (Dusklight)"
+    }
+  },
+  {
+    "url": "https://github.com/utkarshdalal/GameNative",
+    "patch": {
+      "additionalSettings": {
+        "apkFilterRegEx": "^(?!.*-legacy-xr[.]apk$).*[.]apk$"
+      }
+    }
+  },
+  {
+    "url": "https://github.com/Vita3K/Vita3K-builds",
     "patch": {
       "additionalSettings": {
         "versionDetection": false
@@ -282,22 +332,11 @@
     }
   },
   {
-    "id": "igawa6.dualsouls",
-    "url": "https://github.com/igawa6/dualsouls",
+    "url": "https://github.com/Waterdish/Shipwright-Android",
     "patch": {
-      "name": "Hollow Knight: Dual Souls",
+      "id": "com.dishii.soh",
       "additionalSettings": {
-        "about": "Requires user-supplied Hollow Knight game files. Uses the second screen for maps, inventory and game information."
-      }
-    }
-  },
-  {
-    "id": "com.jakobkhansen.silksong",
-    "url": "https://github.com/jakobkhansen/SilksongAndroid",
-    "patch": {
-      "name": "Hollow Knight: Silksong",
-      "additionalSettings": {
-        "about": "Requires user-supplied Linux game files and compiles the port on-device. The upstream setup currently documents Android 13 only; Android 15 is unsupported. Uses the second screen for inventory and maps."
+        "versionDetection": false
       }
     }
   }

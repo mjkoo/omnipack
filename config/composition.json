@@ -1,7 +1,16 @@
 {
   "schemaVersion": 1,
   "candidates": [
-    {"match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"family":"app:super-metroid","rationale":"Keep the vetted Super Metroid companion separate from normal RetroArch."},
+    {
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.metroidarch.app.aarch64",
+        "url": "https://github.com/Raekwon1603/RetroArch"
+      },
+      "family": "app:super-metroid",
+      "rationale": "Keep the vetted Super Metroid companion separate from normal RetroArch."
+    },
     {
       "match": {
         "source": "bboi",
@@ -20,8 +29,7 @@
         "url": "https://github.com/Josh-Daniels/OpenMW-DS"
       },
       "family": "app:openmw",
-      "packageId": "org.openmw.ds",
-      "rationale": "The recorded dual asset is retained with the package identity declared by its inspected APK."
+      "rationale": "The recorded dual asset is the dual-screen build of OpenMW, published at a different repository from the standard build."
     },
     {
       "match": {
@@ -51,8 +59,7 @@
         "url": "https://github.com/TwilitRealm/dusklight"
       },
       "family": "app:dusklight",
-      "packageId": "dev.twilitrealm.dusk",
-      "rationale": "The standard build carries the package identity declared by its inspected Dusklight v2.0.2 APK. Quiver's verified entry for the same repository serves single, and the dual asset is preferred for dual."
+      "rationale": "The standard Dusklight build. Quiver's verified entry for the same repository serves single, and the dual asset at another repository is preferred for dual."
     },
     {
       "match": {
@@ -62,8 +69,7 @@
         "url": "https://github.com/igawa6/dusklight"
       },
       "family": "app:dusklight",
-      "packageId": "dev.twilitrealm.dusk",
-      "rationale": "The recorded dual asset is retained with the package identity declared by its inspected APK."
+      "rationale": "The recorded dual asset is the dual-screen build of Dusklight, published at a different repository from the standard build."
     },
     {
       "match": {
@@ -73,8 +79,7 @@
         "url": "https://github.com/Simon358/ctr-native-android"
       },
       "family": "app:ctr",
-      "packageId": "com.ctrnative",
-      "rationale": "The Simon build is the standard CTR candidate. Its recorded primary Android-Build4 APK manifest declares com.ctrnative, so the rendered identity is corrected from com.simon358.ctrnative to match the manifest."
+      "rationale": "The Simon build is the standard CTR candidate; the codm2000 dual-screen build at another repository joins it."
     },
     {
       "match": {
@@ -86,107 +91,322 @@
       "family": "app:ctr",
       "rationale": "The configured dual catalog identifies this repository as CTR-DS with dual-screen support."
     },
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.sergiomanzur.sotnrecomp","url":"https://github.com/sergiomanzur/SymphonyRecomp"},"packageId":"com.blacklabelhq.sotn","rationale":"Use the package identity declared by the inspected retained Symphony APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.carlox33.hitandrun","url":"https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android"},"packageId":"com.c4rlox.simpsons","rationale":"Use the package identity declared by the inspected retained Simpsons APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.waterdish.shipwright","url":"https://github.com/Waterdish/Shipwright-Android"},"packageId":"com.dishii.soh","rationale":"Use the package identity declared by the inspected retained Shipwright APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.samyost1.zelda3android","url":"https://github.com/samyost1/zelda3-android"},"packageId":"com.dishii.zelda3","rationale":"Use the package identity declared by the inspected retained Zelda 3 APK."},
-    {"match":{"source":"bboi","origin":"bboi-dual-asset","id":"com.samyost1.zelda3android","url":"https://github.com/samyost1/zelda3-android"},"packageId":"com.dishii.zelda3","rationale":"Use the package identity declared by the inspected retained Zelda 3 APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.spaghettikart","url":"https://github.com/izzy2lost/SpaghettiKart"},"packageId":"com.izzy.kart","rationale":"Use the package identity declared by the inspected retained SpaghettiKart APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.perfectdark","url":"https://github.com/izzy2lost/perfect_dark"},"packageId":"com.perfectdark.port","rationale":"Use the package identity declared by the inspected retained Perfect Dark APK."},
-    {"match":{"source":"rjny","origin":"rjny-catalog","id":"com.winlator.ludashi","url":"https://github.com/StevenMXZ/Winlator-Ludashi"},"packageId":"com.winlator.vanilla","rationale":"Use the package identity declared by the inspected v3.1.h bionic-vanilla and v4.1 vanilla-build APKs; the ludashi and Redmagic builds impersonate other apps' package names."},
-    {"match":{"source":"rjny","origin":"rjny-catalog","id":"487343354","url":"https://buildbot.libretro.com/stable"},"packageId":"com.retroarch.aarch64","rationale":"Use the package identity declared by the inspected retained RetroArch APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.starship","url":"https://github.com/izzy2lost/Starship"},"packageId":"com.starship.android","rationale":"Use the package identity declared by the inspected retained Starship APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.bryanthaboi.pokemonredblue","url":"https://github.com/bryanthaboi/pokemon-gen1-recomp-project"},"family":"app:gen1recomp","packageId":"com.theboisclub.pokemonred","rationale":"Retain the original catalog identity as provenance while selecting the canonical repository."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"org.linkzenic.twoship","url":"https://github.com/linkzenic/2ship2harkinian-Android"},"packageId":"com.twoshipfork.mm","rationale":"Use the package identity declared by the inspected retained 2Ship APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.samyost1.tmcandroid","url":"https://github.com/samyost1/tmc-android"},"packageId":"dev.picori.tmc","rationale":"Use the package identity declared by the inspected retained Minish Cap APK."},
-    {"match":{"source":"bboi","origin":"bboi-dual-asset","id":"com.samyost1.tmcandroid","url":"https://github.com/samyost1/tmc-android"},"packageId":"dev.picori.tmc","rationale":"Use the package identity declared by the inspected retained Minish Cap APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.igawa6.harvestmoon64","url":"https://github.com/igawa6/HarvestMoon64Recomp"},"packageId":"io.github.hm64recomp","rationale":"Use the package identity declared by the inspected retained Harvest Moon 64 APK."},
-    {"match":{"source":"bboi","origin":"bboi-dual-asset","id":"com.igawa6.harvestmoon64","url":"https://github.com/igawa6/HarvestMoon64Recomp"},"packageId":"io.github.hm64recomp","rationale":"Use the package identity declared by the inspected retained Harvest Moon 64 APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.matteo842.crashbandicoot","url":"https://github.com/Matteo842/CrashBandicoot-Launcher"},"packageId":"io.github.matteo842.crashlauncher.runtime","rationale":"Use the package identity declared by the inspected retained Crash Bandicoot APK."},
-    {"match":{"source":"bboi","origin":"bboi-standard-asset","id":"com.izzy2lost.ghostship","url":"https://github.com/izzy2lost/Ghostship"},"family":"app:ghostship","packageId":"com.ghostship.android","rationale":"Classify and retire the legacy Ghostship Android package."},
-    {"match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"family":"app:ghostship","rationale":"Select the inspected official Ghostship Android ZIP release."},
-    {"match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"family":"app:gen1recomp","rationale":"Select the canonical Gen1Recomp repository while preserving its reviewed settings."},
     {
-      "match": {"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},
+      "match": {
+        "source": "bboi",
+        "origin": "bboi-standard-asset",
+        "id": "com.bryanthaboi.pokemonredblue",
+        "url": "https://github.com/bryanthaboi/pokemon-gen1-recomp-project"
+      },
+      "family": "app:gen1recomp",
+      "rationale": "BBoi lists the project's older repository; join it with the curated extra at the canonical repository."
+    },
+    {
+      "match": {
+        "source": "bboi",
+        "origin": "bboi-standard-asset",
+        "id": "com.samyost1.tmcandroid",
+        "url": "https://github.com/samyost1/tmc-android"
+      },
+      "family": "app:minish-cap",
+      "rationale": "BBoi's builds of the Minish Cap Android port; join them with Picori's upstream build so each pack carries one Minish Cap entry."
+    },
+    {
+      "match": {
+        "source": "bboi",
+        "origin": "bboi-dual-asset",
+        "id": "com.samyost1.tmcandroid",
+        "url": "https://github.com/samyost1/tmc-android"
+      },
+      "family": "app:minish-cap",
+      "rationale": "BBoi's builds of the Minish Cap Android port; join them with Picori's upstream build so each pack carries one Minish Cap entry."
+    },
+    {
+      "match": {
+        "source": "bboi",
+        "origin": "bboi-standard-asset",
+        "id": "com.izzy2lost.ghostship",
+        "url": "https://github.com/izzy2lost/Ghostship"
+      },
+      "family": "app:ghostship",
+      "rationale": "Classify and retire the legacy Ghostship Android package."
+    },
+    {
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "dev.net64.ghostship",
+        "url": "https://github.com/HarbourMasters/Ghostship"
+      },
+      "family": "app:ghostship",
+      "rationale": "Select the inspected official Ghostship Android ZIP release."
+    },
+    {
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.theboisclub.pokemonred",
+        "url": "https://github.com/bryanthaboi/gen1recomp"
+      },
+      "family": "app:gen1recomp",
+      "rationale": "Select the canonical Gen1Recomp repository while preserving its reviewed settings."
+    },
+    {
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.aurora.store",
+        "url": "https://gitlab.com/AuroraOSS/AuroraStore"
+      },
       "rationale": "The curated GitLab entry carries the verified ordinary Aurora Store APK policy."
     },
     {
-      "match": {"source":"extras","origin":"extras","id":"com.karin.idTech4Amm","url":"https://github.com/glKarin/com.n0n3m4.diii4a"},
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.karin.idTech4Amm",
+        "url": "https://github.com/glKarin/com.n0n3m4.diii4a"
+      },
       "rationale": "The curated entry carries the verified universal idTech4A++ APK policy."
     },
     {
-      "match": {"source":"extras","origin":"extras","id":"is.xyz.vcmi","url":"https://github.com/vcmi/vcmi"},
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "is.xyz.vcmi",
+        "url": "https://github.com/vcmi/vcmi"
+      },
       "rationale": "The curated entry carries the verified architecture-aware VCMI APK policy."
     },
     {
-      "match": {"source":"extras","origin":"extras","id":"com.github.bvschaik.julius","url":"https://github.com/bvschaik/julius"},
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.github.bvschaik.julius",
+        "url": "https://github.com/bvschaik/julius"
+      },
       "rationale": "The curated entry carries the verified Julius Android APK policy."
     },
     {
-      "match": {"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "su.xash.engine.test",
+        "url": "https://github.com/FWGS/xash3d-fwgs"
+      },
       "rationale": "The curated entry carries the rolling Xash3D Android APK policy."
     },
     {
-      "match": {"source":"quiver","origin":"quiver-generated","id":"com.mstan.emeraldrecomp","url":"https://github.com/mstan/emeraldrecomp"},
+      "match": {
+        "source": "quiver",
+        "origin": "quiver-generated",
+        "id": "com.mstan.emeraldrecomp",
+        "url": "https://github.com/mstan/emeraldrecomp"
+      },
       "family": "app:pokemon-emerald",
       "rationale": "The native Emerald recompilation provides a standard-screen build of the same game as the separate dual-screen port."
     },
     {
-      "match": {"source":"codm2000","origin":"codm-generated","id":"com.pokeemerald.dualscreen","url":"https://github.com/Goldoire/pokeemerald-dualscreen"},
+      "match": {
+        "source": "codm2000",
+        "origin": "codm-generated",
+        "id": "com.pokeemerald.dualscreen",
+        "url": "https://github.com/Goldoire/pokeemerald-dualscreen"
+      },
       "family": "app:pokemon-emerald",
       "rationale": "The existing dual-screen Emerald port remains the preferred dual build while the native recompilation supplies the standard-screen variant."
     },
     {
-      "match": {"source":"bboi","origin":"bboi-standard-asset","id":"com.chrissotraidis.kartpad","url":"https://github.com/chrissotraidis/kartpad"},
-      "packageId": "dev.kartpad.android",
-      "rationale": "Use the package identity declared by the inspected KartPad Android release, which groups this BBoi entry with the Quiver candidate for the same app."
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "dev.picori.tmc",
+        "url": "https://github.com/999sian/tmc"
+      },
+      "family": "app:minish-cap",
+      "rationale": "Picori's upstream Minish Cap build serves single; the Android port's dual asset replaces it in dual."
     },
     {
-      "match": {"source":"bboi","origin":"bboi-standard-asset","id":"com.slickamogus.silenthill","url":"https://github.com/SlickAmogus/silent-hill-decomp"},
-      "packageId": "com.silenthill.port",
-      "rationale": "Use the package identity declared by the inspected Silent Hill Android release, which groups this BBoi entry with the Quiver candidate for the same app."
+      "match": {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "me.magnum.melonds",
+        "url": "https://github.com/rafaelvcaetano/melonDS-android"
+      },
+      "family": "app:melonds",
+      "rationale": "RJNY lists melonDS stable and nightly at one repository; separate families let both ship."
+    },
+    {
+      "match": {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "me.magnum.melonds.nightly",
+        "url": "https://github.com/rafaelvcaetano/melonDS-android"
+      },
+      "family": "app:melonds-nightly",
+      "rationale": "RJNY lists melonDS stable and nightly at one repository; separate families let both ship."
+    },
+    {
+      "match": {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "info.cemu.cemu",
+        "url": "https://github.com/SSimco/Cemu"
+      },
+      "family": "app:cemu",
+      "rationale": "RJNY's single-only SSimco build and its dual-only replacement at another repository are one app."
+    },
+    {
+      "match": {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "info.cemu.cemu",
+        "url": "https://github.com/sapphirerhodonite/cemu"
+      },
+      "family": "app:cemu",
+      "rationale": "RJNY's dual-only replacement for the single-only SSimco build at another repository."
     }
   ],
   "pins": [
-    {"family":"package:app.nanostack.pixelguide","variant":"dual","match":{"source":"rjny","origin":"rjny-catalog","id":"app.nanostack.pixelguide","url":"https://github.com/rexmont/Pixel-Guide-Android"},"rationale":"Keep RJNY's Pixel Guide rendering in dual when the codm2000 build is also admitted."},
-    {"family":"package:com.emulnk","variant":"dual","match":{"source":"rjny","origin":"rjny-catalog","id":"com.emulnk","url":"https://github.com/EmuLnk/emulnk"},"rationale":"Keep RJNY's EmuLnk rendering in dual when the codm2000 build is also admitted."},
-    {"family":"app:super-metroid","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.metroidarch.app.aarch64","url":"https://github.com/Raekwon1603/RetroArch"},"rationale":"Select the vetted MetroidArch successor for dual-screen devices."},
-    {"family":"app:ghostship","variant":"dual","match":{"source":"extras","origin":"extras","id":"dev.net64.ghostship","url":"https://github.com/HarbourMasters/Ghostship"},"rationale":"Keep official Ghostship in the dual-screen pack."},
-    {"family":"app:gen1recomp","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.theboisclub.pokemonred","url":"https://github.com/bryanthaboi/gen1recomp"},"rationale":"Keep canonical Gen1Recomp in the dual-screen pack."},
-    {"family":"package:com.aurora.store","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.aurora.store","url":"https://gitlab.com/AuroraOSS/AuroraStore"},"rationale":"Keep the maintained Aurora Store selection policy."},
-    {"family":"package:com.karin.idTech4Amm","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.karin.idTech4Amm","url":"https://github.com/glKarin/com.n0n3m4.diii4a"},"rationale":"Keep the maintained idTech4A++ selection policy."},
-    {"family":"package:is.xyz.vcmi","variant":"dual","match":{"source":"extras","origin":"extras","id":"is.xyz.vcmi","url":"https://github.com/vcmi/vcmi"},"rationale":"Keep the maintained VCMI selection policy."},
-    {"family":"package:com.github.bvschaik.julius","variant":"dual","match":{"source":"extras","origin":"extras","id":"com.github.bvschaik.julius","url":"https://github.com/bvschaik/julius"},"rationale":"Keep the maintained Julius selection policy."},
-    {"family":"package:su.xash.engine.test","variant":"dual","match":{"source":"extras","origin":"extras","id":"su.xash.engine.test","url":"https://github.com/FWGS/xash3d-fwgs"},"rationale":"Keep the maintained rolling Xash3D selection policy."}
+    {
+      "family": "github.com/rexmont/pixel-guide-android",
+      "variant": "dual",
+      "match": {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "app.nanostack.pixelguide",
+        "url": "https://github.com/rexmont/Pixel-Guide-Android"
+      },
+      "rationale": "Keep RJNY's Pixel Guide rendering in dual when the codm2000 build is also admitted."
+    },
+    {
+      "family": "github.com/emulnk/emulnk",
+      "variant": "dual",
+      "match": {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "com.emulnk",
+        "url": "https://github.com/EmuLnk/emulnk"
+      },
+      "rationale": "Keep RJNY's EmuLnk rendering in dual when the codm2000 build is also admitted."
+    },
+    {
+      "family": "app:super-metroid",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.metroidarch.app.aarch64",
+        "url": "https://github.com/Raekwon1603/RetroArch"
+      },
+      "rationale": "Select the vetted MetroidArch successor for dual-screen devices."
+    },
+    {
+      "family": "app:ghostship",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "dev.net64.ghostship",
+        "url": "https://github.com/HarbourMasters/Ghostship"
+      },
+      "rationale": "Keep official Ghostship in the dual-screen pack."
+    },
+    {
+      "family": "app:gen1recomp",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.theboisclub.pokemonred",
+        "url": "https://github.com/bryanthaboi/gen1recomp"
+      },
+      "rationale": "Keep canonical Gen1Recomp in the dual-screen pack."
+    },
+    {
+      "family": "gitlab.com/AuroraOSS/AuroraStore",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.aurora.store",
+        "url": "https://gitlab.com/AuroraOSS/AuroraStore"
+      },
+      "rationale": "Keep the maintained Aurora Store selection policy."
+    },
+    {
+      "family": "github.com/glkarin/com.n0n3m4.diii4a",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.karin.idTech4Amm",
+        "url": "https://github.com/glKarin/com.n0n3m4.diii4a"
+      },
+      "rationale": "Keep the maintained idTech4A++ selection policy."
+    },
+    {
+      "family": "github.com/vcmi/vcmi",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "is.xyz.vcmi",
+        "url": "https://github.com/vcmi/vcmi"
+      },
+      "rationale": "Keep the maintained VCMI selection policy."
+    },
+    {
+      "family": "github.com/bvschaik/julius",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.github.bvschaik.julius",
+        "url": "https://github.com/bvschaik/julius"
+      },
+      "rationale": "Keep the maintained Julius selection policy."
+    },
+    {
+      "family": "github.com/fwgs/xash3d-fwgs",
+      "variant": "dual",
+      "match": {
+        "source": "extras",
+        "origin": "extras",
+        "id": "su.xash.engine.test",
+        "url": "https://github.com/FWGS/xash3d-fwgs"
+      },
+      "rationale": "Keep the maintained rolling Xash3D selection policy."
+    }
   ],
   "categories": {
     "app:ctr": "Decomps/Recomps",
     "app:dusklight": "Decomps/Recomps",
+    "app:minish-cap": "Decomps/Recomps",
     "app:openmw": "PC Ports",
     "app:pokemon-emerald": "Decomps/Recomps",
-    "package:app.wayfinder": "Utilities",
-    "package:com.andreyvelsk.skyrimwebmonitor": "Utilities",
-    "package:com.aure.banjorecomp": "Decomps/Recomps",
-    "package:com.balatro.dualscreen": "PC Ports",
-    "package:com.chimeragaming.pixelnavigator": "Utilities",
-    "package:com.chimeragaming.pokemonzmap": "Utilities",
-    "package:com.cylonid.nativealpha": "Utilities",
-    "package:com.darkaxt.dualdex": "Utilities",
-    "package:com.digitaladventure.dw2003": "Utilities",
-    "package:com.dishii.zelda3": "Decomps/Recomps",
-    "package:com.enrpau.dualscreendex": "Utilities",
-    "package:com.exojosh.minecraftsecondscreen": "Utilities",
-    "package:com.jakobkhansen.silksong": "PC Ports",
-    "package:com.kalenjohnson.chronoduo": "Utilities",
-    "package:com.mastercook777.heimdall": "Utilities",
-    "package:com.stormpanda.megingiard": "Utilities",
-    "package:com.thor.mph": "Decomps/Recomps",
-    "package:dev.adrian.showdown": "Utilities",
-    "package:dev.picori.tmc": "Decomps/Recomps",
-    "package:dev.zomboidds.companion": "Utilities",
-    "package:igawa6.dualsouls": "PC Ports",
-    "package:io.github.hm64recomp": "Decomps/Recomps",
-    "package:io.github.tomba2recomp": "Decomps/Recomps",
-    "package:org.pkforge.app": "Utilities"
+    "github.com/aabrole/huntersrecomp": "Decomps/Recomps",
+    "github.com/andreyvelsk/skyrimwebmonitor": "Utilities",
+    "github.com/aureliob/banjorecomp-android": "Decomps/Recomps",
+    "github.com/castdrian/showdown-ds": "Utilities",
+    "github.com/chimeragaming/fanmakepokemonmaps_android": "Utilities",
+    "github.com/chimeragaming/pixelnavigator": "Utilities",
+    "github.com/cylonid/nativealphaforandroid": "Utilities",
+    "github.com/darkaxt/dualscreendex": "Utilities",
+    "github.com/enrique-paulino/dualscreendex": "Utilities",
+    "github.com/exojosh/aynthorsecondscreen": "Utilities",
+    "github.com/igawa6/dualsouls": "PC Ports",
+    "github.com/igawa6/harvestmoon64recomp": "Decomps/Recomps",
+    "github.com/igawa6/tomba2recompds": "Decomps/Recomps",
+    "github.com/jakobkhansen/silksongandroid": "PC Ports",
+    "github.com/kalenjohnson/chrono-duo": "Utilities",
+    "github.com/mastercook777/heimdall-ayn-thor-assistant": "Utilities",
+    "github.com/rosbean/balatro-dualscreen": "PC Ports",
+    "github.com/rsigristc/dw3-ds-android": "Utilities",
+    "github.com/samyost1/zelda3-android": "Decomps/Recomps",
+    "github.com/sofianeelhor/pkforge": "Utilities",
+    "github.com/space001000/zomboidds": "Utilities",
+    "github.com/stormpanda/megingiard": "Utilities",
+    "github.com/thor-wayfinder/thor-wayfinder": "Utilities"
   }
 }

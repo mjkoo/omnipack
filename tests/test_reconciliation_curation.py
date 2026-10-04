@@ -27,12 +27,12 @@ def read(path: Path):
     return json.loads(path.read_text())
 
 
-def test_manifest_evidence_matches_configured_corrections():
+def test_manifest_evidence_matches_overlay_id_corrections(
+    current_configuration: CurrentConfiguration,
+) -> None:
     evidence = read(FIXTURE)
     observations = read(OBSERVATIONS)
     ctr = read(CTR_EVIDENCE)
-    document = read(ROOT / "config/composition.json")
-    rules = document["candidates"]
 
     expected = {
         (record["original_id"], item["package"], record["source"])
@@ -47,14 +47,23 @@ def test_manifest_evidence_matches_configured_corrections():
         )
     )
     assert set(map(tuple, evidence["identity_corrections"])) == expected
-    for original, effective, url in expected:
-        matches = [
-            rule
-            for rule in rules
-            if rule["match"]["id"] == original and rule["match"]["url"] == url
-        ]
-        assert matches
-        assert {rule.get("packageId") for rule in matches} == {effective}
+    # A correction is an overlay id patch on the project URL whenever that URL
+    # carries a selected entry; one for a project never selected is not kept.
+    patched = {
+        normalize_project_url(record["url"]): record["patch"]["id"]
+        for record in read(ROOT / "config/overlay.json")
+        if "id" in record["patch"]
+    }
+    selected = {
+        normalize_project_url(app.url)
+        for apps in current_configuration.result.apps.values()
+        for app in apps
+    }
+    for _, effective, url in expected:
+        normalized = normalize_project_url(url)
+        assert patched.get(normalized) == (
+            effective if normalized in selected else None
+        )
 
     assert evidence["ghostship"]["package"] == "dev.net64.ghostship"
     assert set(ctr["variants"]) == {"single", "dual"}
@@ -133,11 +142,14 @@ def test_full_reconciliation_holds_for_current_composition(
         assert gen1.url == "https://github.com/bryanthaboi/gen1recomp"
         assert gen1.data["additionalSettings"]["versionDetection"] is True
 
-    for package_id in ("app.nanostack.pixelguide", "com.emulnk"):
+    for family in (
+        "github.com/rexmont/pixel-guide-android",
+        "github.com/emulnk/emulnk",
+    ):
         selection = next(
             item
             for item in result.report.selections
-            if item.family == f"package:{package_id}" and item.variant is Variant.DUAL
+            if item.family == family and item.variant is Variant.DUAL
         )
         assert selection.source == "rjny"
         assert selection.origin == "rjny-catalog"
@@ -179,7 +191,7 @@ def test_captured_candidates_form_the_recorded_families(
             (
                 selection.source,
                 selection.origin,
-                selection.original_id,
+                selection.id,
                 normalize_project_url(selection.url),
             )
         )
@@ -187,7 +199,7 @@ def test_captured_candidates_form_the_recorded_families(
             (
                 item.source,
                 item.origin,
-                item.original_id,
+                item.id,
                 normalize_project_url(item.url),
             )
             for item in selection.considered
@@ -195,15 +207,17 @@ def test_captured_candidates_form_the_recorded_families(
     actual_family = {
         member: family for family, members in families.items() for member in members
     }
-    corrected = apply_composition_policy(
+    applied = apply_composition_policy(
         parse_composition_policy(current_configuration.policy),
         current_configuration.candidates,
     )
-    denied_ids = {item["id"] for item in read(ROOT / "config/deny.json")}
+    denied = {
+        normalize_project_url(item["url"]) for item in read(ROOT / "config/deny.json")
+    }
     surviving = {
         candidate_selector(app).key
-        for app in corrected
-        if app.eligibility and app.id not in denied_ids
+        for app in applied
+        if app.eligibility and normalize_project_url(app.url) not in denied
     }
     assert set(actual_family) == surviving
 
