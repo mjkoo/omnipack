@@ -32,6 +32,40 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     assert json.loads((tmp_path / verify.VERIFY_PATH).read_text()) == result
 
 
+@pytest.mark.parametrize("allow_id_change", [None, False])
+def test_verify_rejects_an_entry_that_does_not_allow_an_id_change(
+    tmp_path: Path, allow_id_change: bool | None
+) -> None:
+    from omnipack.overlay import ComposedApp
+    from omnipack.render import render_pack
+
+    copy_inputs(tmp_path)
+    entry = {
+        "id": "org.example.app",
+        "url": "https://example.test/app",
+        "name": "Example",
+        "overrideSource": "HTML",
+        "additionalSettings": {},
+    }
+    pack = json.loads(render_pack([ComposedApp("example.test/app", entry)]))
+    if allow_id_change is None:
+        del pack["apps"][0]["allowIdChange"]
+    else:
+        pack["apps"][0]["allowIdChange"] = allow_id_change
+    for name in ("single", "dual"):
+        (tmp_path / f"dist/{name}-screen.json").write_text(json.dumps(pack))
+    result = verify.run_verification(tmp_path)
+    assert result["status"] == "failed"
+    assert {
+        (error["variant"], error["entry_id"], error["code"])
+        for error in result["errors"]
+        if error.get("field") == "allowIdChange"
+    } == {
+        (variant, "org.example.app", "invalid_allow_id_change")
+        for variant in ("single", "dual")
+    }
+
+
 def test_missing_inputs_complete_as_failed_evidence(tmp_path: Path) -> None:
     result = verify.run_verification(tmp_path)
     assert result["status"] == "failed"

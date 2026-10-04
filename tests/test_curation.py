@@ -246,3 +246,12 @@ def test_split_and_joined_families_ship_as_intended(
             if variant is Variant.SINGLE
             else "github.com/sapphirerhodonite/cemu"
         ]
+
+
+def test_current_composition_records_no_repeat_gap_or_tie(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    report = current_configuration.result.report
+    assert report.repeated_ids == []
+    assert report.single_only_families == []
+    assert report.same_rank_ties == []

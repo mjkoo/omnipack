@@ -636,6 +636,68 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
         assert output.count(line) == 2
 
 
+@pytest.mark.parametrize("command", ["build", "verify"])
+def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+    command: str,
+) -> None:
+    write_config(tmp_path)
+    url = "https://example.test/split"
+    candidates = [
+        App(
+            package_id,
+            url,
+            package_id,
+            SourceType.HTML,
+            (),
+            Provenance("rjny", "https://example.test/catalog"),
+            eligibility=frozenset(Variant),
+            origin="rjny-catalog",
+        )
+        for package_id in ("a.pkg", "b.pkg")
+    ]
+    rules = [
+        {
+            "match": {
+                "source": "rjny",
+                "origin": "rjny-catalog",
+                "id": app.id,
+                "url": url,
+            },
+            "family": family,
+            "rationale": "test",
+        }
+        for app, family in zip(candidates, ("app:a", "app:b"), strict=True)
+    ]
+    config = tmp_path / "config"
+    (config / "composition.json").write_text(
+        json.dumps({"schemaVersion": 1, "candidates": rules, "pins": []})
+    )
+    (config / "overlay.json").write_text(
+        json.dumps([{"url": url, "patch": {"id": "c.pkg"}}])
+    )
+    (tmp_path / "dist").mkdir()
+    for name in ("single-screen.json", "dual-screen.json"):
+        (tmp_path / "dist" / name).write_text('{"settings":{},"apps":[]}')
+    before = {path.name: path.read_bytes() for path in (tmp_path / "dist").iterdir()}
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: candidates
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main([command]) == 1
+    expected = (
+        "overlay record for 'example.test/split' patches id at a URL whose rules "
+        "name families 'app:a', 'app:b'"
+    )
+    assert expected in capsys.readouterr().err
+    assert {
+        path.name: path.read_bytes() for path in (tmp_path / "dist").iterdir()
+    } == before
+
+
 @pytest.mark.parametrize("reverse", [False, True])
 def test_winning_tie_publishes_one_build_and_reports_the_tie(
     tmp_path: Path,
