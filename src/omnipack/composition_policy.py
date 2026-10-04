@@ -6,7 +6,7 @@ import json
 import re
 from collections.abc import Sequence
 from dataclasses import dataclass, replace
-from typing import Any, cast
+from typing import Any
 
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import OverlayPatch
@@ -85,17 +85,22 @@ class CompositionPolicy:
     # The one category each named family carries unless its entry is track-only.
     categories: dict[str, Category]
 
+    def explicit_family(self, package_id: str, url: str) -> str | None:
+        """The explicit family the rules project onto `package_id` at `url`, if any."""
+        normalized = normalize_project_url(url)
+        whole = self.url_families.get(normalized)
+        if whole is not None:
+            return whole
+        return self.split_families.get(normalized, {}).get(package_id)
+
     def family(self, package_id: str, url: str) -> str:
         """The family of an entry carrying `package_id` at project `url`.
 
         It is the explicit family the rules project there, otherwise the
         entry's default family, named by its normalized project URL.
         """
-        normalized = normalize_project_url(url)
-        whole = self.url_families.get(normalized)
-        if whole is not None:
-            return whole
-        return self.split_families.get(normalized, {}).get(package_id, normalized)
+        explicit = self.explicit_family(package_id, url)
+        return explicit if explicit is not None else normalize_project_url(url)
 
     def url_rule_families(self, url: str) -> tuple[str, ...]:
         """The distinct families the rules at `url` name, sorted."""
@@ -169,7 +174,7 @@ def build_policy(
 ) -> CompositionPolicy:
     """Check rules and pins against each other and derive their projections."""
     selectors: set[tuple[str, str, str, str]] = set()
-    by_url: dict[str, list[CandidateRule]] = {}
+    by_url: dict[str, list[tuple[CandidateRule, str]]] = {}
     for rule in rules:
         if rule.match.key in selectors:
             raise CompositionPolicyError(
@@ -177,49 +182,48 @@ def build_policy(
             )
         selectors.add(rule.match.key)
         if rule.family is not None:
-            by_url.setdefault(rule.match.url, []).append(rule)
+            by_url.setdefault(rule.match.url, []).append((rule, rule.family))
 
     url_families: dict[str, str] = {}
     split_families: dict[str, dict[str, str]] = {}
     for url, members in by_url.items():
-        if len({rule.family for rule in members}) == 1:
-            url_families[url] = cast(str, members[0].family)
+        if len({family for _, family in members}) == 1:
+            url_families[url] = members[0][1]
             continue
-        by_id: dict[str, CandidateRule] = {}
-        for rule in members:
-            first = by_id.setdefault(rule.match.id, rule)
-            if first.family != rule.family:
+        by_id: dict[str, tuple[CandidateRule, str]] = {}
+        for rule, family in members:
+            first, first_family = by_id.setdefault(rule.match.id, (rule, family))
+            if first_family != family:
                 raise CompositionPolicyError(
                     f"rules {_show(first.match)} and {_show(rule.match)} project "
-                    f"conflicting families {first.family!r} and {rule.family!r} "
+                    f"conflicting families {first_family!r} and {family!r} "
                     f"onto {rendered_key(rule.match.id, url)!r}"
                 )
         split_families[url] = {
-            package_id: cast(str, rule.family) for package_id, rule in by_id.items()
+            package_id: family for package_id, (_, family) in by_id.items()
         }
 
     policy = CompositionPolicy(
         tuple(rules), tuple(pins), url_families, split_families, {}, categories or {}
     )
-    pin_keys: set[PinKey] = set()
+    projected_pins: dict[PinKey, RenderedKey] = {}
     for pin in pins:
         key = (pin.family, pin.variant)
-        if key in pin_keys:
+        if key in projected_pins:
             raise CompositionPolicyError(
                 f"multiple pins for family {pin.family!r} target {pin.variant.value!r}"
             )
-        pin_keys.add(key)
         pinned = rendered_key(pin.match.id, pin.match.url)
         # Only an explicit projection is known here. Any other pin names the
         # family its candidate forms, which composition checks once it forms.
-        projected = policy.family(*pinned)
-        if projected.startswith("app:") and pin.family != projected:
+        projected = policy.explicit_family(*pinned)
+        if projected is not None and pin.family != projected:
             raise CompositionPolicyError(
                 f"pin family {pin.family!r} target {pin.variant.value!r} conflicts "
                 f"with projected family {projected!r}"
             )
-        policy.projected_pins[key] = pinned
-    return policy
+        projected_pins[key] = pinned
+    return replace(policy, projected_pins=projected_pins)
 
 
 def check_overlay_id_patches(
