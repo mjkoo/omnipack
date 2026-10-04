@@ -155,15 +155,14 @@ names SHALL use the `app:` namespace and SHALL NOT be inferred from names,
 categories or repository ancestry.
 
 A candidate rule SHALL contain a `match` selector and a `rationale`, SHALL
-permit a family assignment (`family`) for candidates that are not track-only,
-and SHALL preserve original provenance. Rules SHALL NOT change a candidate's
-package id: a selected entry carries the id its source supplied. If the
-ingested candidate has `trackOnly: true` in its normalized settings, a matching
-rule containing `family` SHALL fail the build with the affected selector
-identified. This restriction SHALL apply before exclusions and selection,
-regardless of whether the candidate would win or be denied. A track-only
-candidate SHALL retain its default family; a selector-and-rationale-only rule
-SHALL remain valid.
+permit a family assignment (`family`), and SHALL preserve original provenance.
+Rules SHALL NOT change a candidate's package id: a selected entry carries the
+id its source supplied. A candidate whose normalized settings carry
+`trackOnly: true` SHALL be treated like every other candidate at its URL: a
+rule matching it MAY carry `family`, and the projections below cover it exactly
+as they cover an installable build. Rules at one URL that name different
+families therefore separate a track-only candidate from an installable build
+sharing that URL, so that each forms its own family and each can ship.
 
 A candidate-rule field other than `match`, `rationale` and `family` SHALL fail
 as an unknown candidate-rule field with the rule and field identified. Only a
@@ -250,20 +249,25 @@ Obtainium app records.
 - **THEN** configuration fails with the selector and the invalid origin
   identified, before any candidate is matched
 
-#### Scenario: Track-only resource is assigned to an app family
-
-- **WHEN** a rule assigns a family to an ingested track-only candidate
-- **THEN** the build fails with that selector identified before a pin or source ranking can hide or select the candidate
-
-#### Scenario: Track-only candidate would be excluded
-
-- **WHEN** a track-only candidate has a prohibited rule assignment and a denial would remove it
-- **THEN** the build fails on the invalid rule rather than ignoring it because of the denial
-
 #### Scenario: Track-only candidate has a descriptive rule
 
 - **WHEN** a track-only candidate has a matching rule containing only its selector and rationale
-- **THEN** its ingested identity and default family remain unchanged and the rule does not cause rejection
+- **THEN** its ingested identity remains unchanged and the rule does not cause rejection
+
+#### Scenario: A track-only candidate joins the family ruled onto its URL
+
+- **WHEN** every family rule at project URL X assigns `app:x`, and a rule-less
+  track-only candidate is at X
+- **THEN** the track-only candidate belongs to `app:x` and competes within it
+  like any other build there
+
+#### Scenario: Split rules let a tracker and an installable build both ship
+
+- **WHEN** a track-only candidate and an installable build sit at one project
+  URL with different package ids, one rule assigns the installable build
+  `app:a`, and another assigns the track-only candidate `app:a-tracker`
+- **THEN** each belongs to its rule's family, each variant that can select
+  them selects both, and neither replaces the other
 
 #### Scenario: A selector's URL has no host
 
@@ -304,37 +308,50 @@ target, validate overlay
 targets, apply overlays, assign categories, check family coverage and record
 package ids repeated within a variant. Exclusions SHALL observe normalized
 project URLs before selection and SHALL NOT be re-applied after overlays.
-Because a removed candidate belongs to no formed family, its exclusion SHALL be
-reported under its own normalized project URL, or under its explicit family
-when a rule assigns one. Overlays SHALL NOT assign or delete `id`, `url`,
+Each denial's exclusions SHALL be reported under the denied normalized project
+URL, listing the families whose candidates it removed as the family rules
+project them, so one denial is reported under one label however many families
+it touches. Overlays SHALL NOT assign or delete `url`,
 `overrideSource`, `family`, `variant` or `categories`, including by null
-deletion. Failures SHALL preserve the previous output pair and diagnostics
-already collected.
+deletion. An overlay MAY assign `id`; because family formation, exclusions,
+explicit selections, selection and overlay matching all run before overlays
+apply, none of them SHALL read a patched id, while the record of package ids
+repeated within a variant SHALL use each entry's patched id. Failures SHALL
+preserve the previous output pair and diagnostics already collected.
 
-#### Scenario: An overlay cannot change an entry's identity
+#### Scenario: An overlay cannot change an entry's project URL
 
-- **WHEN** an overlay record's patch contains an `id` or `url` field
-- **THEN** the build fails because identity fields are forbidden in overlays
+- **WHEN** an overlay record's patch contains a `url` field
+- **THEN** the build fails because the project URL is forbidden in overlays
+
+#### Scenario: An overlay id patch does not move an entry between families
+
+- **WHEN** an overlay record patches `id` to `q` at a URL whose candidates
+  carry source id `p`, and another family's entry carries `q`
+- **THEN** family formation, denials, pins and selection see only `p`, the
+  patched entry stays in its own family, and the build records `q` as a
+  package id repeated within each variant that selects both entries
 
 #### Scenario: Denylist removes an entry an overlay names
 
 - **WHEN** candidate exclusions leave no selected entry matching an overlay record
 - **THEN** the build fails with that stale record identified
 
-#### Scenario: A removed candidate is reported under its own identity
+#### Scenario: A denial's exclusions are reported under its URL
 
-- **WHEN** a denial removes a rule-less candidate and a candidate that a rule
-  assigns `app:x`
-- **THEN** the first exclusion is reported under its normalized project URL and
-  the second under `app:x`
+- **WHEN** rules at URL X assign id `a` to `app:a` and id `b` to `app:b`, a
+  third build at X carries id `c` and no rule, and a denial at X removes all
+  three
+- **THEN** the exclusions are reported once under X, listing the families
+  `app:a`, `app:b` and X
 
 
 ### Requirement: One candidate per family and variant is selected by fixed precedence
 
 The system SHALL select within the families that "Composition policy assigns
 app families by project URL" defines. It SHALL select at most one candidate
-per family per variant, honoring a valid explicit pin first, as "Explicit
-selections identify an eligible candidate" defines. Otherwise single
+per family per variant, honoring a valid explicit pin first, as "Pins select
+an eligible candidate of their family" defines. Otherwise single
 SHALL consider single-eligible candidates; dual SHALL consider dual-preferred
 eligible candidates when any exist, or all dual-eligible candidates otherwise.
 Within that tier, precedence SHALL be extras, RJNY, Quiver, BBoi34, then codm.
@@ -348,18 +365,33 @@ fetched SHALL abort the build instead, as "A failed fetch aborts the build" in
 source-ingestion defines, so a missing preferred candidate and a missing source
 are never confused.
 
-Identical duplicates SHALL collapse. Different candidates tied at the winning
-rank SHALL fail with the family, variant and selectors identified, requiring an
-explicit selection. Ties among nonwinning candidates SHALL NOT displace a unique
-winner. Iteration order, names, URLs and release dates SHALL NOT break ties.
+Identical duplicates SHALL collapse. When different candidates tie at the
+winning rank, which happens when one source lists several builds at one
+project URL that no family rule separates, composition SHALL NOT fail: it
+SHALL select the tied candidate whose canonical serialized form sorts first,
+and SHALL record the tie as a nonfatal same-rank tie finding naming the family, the
+variant, the tied candidates' selectors and the chosen winner. The tie SHALL NOT
+fail the build, so one family's ambiguity never blocks the rest of the run. The
+maintainer resolves it with a pin or with family rules that split the tied
+builds into separate families. Ties among nonwinning candidates SHALL NOT
+displace a unique winner and SHALL NOT be recorded. A candidate's canonical
+serialized form is its import record as ingested, before overlays, category
+assignment and the `allowIdChange` override, serialized the way rendering
+serializes entries. No ordering other than that canonical serialized form,
+such as iteration order, input order or release dates, SHALL break ties, so the
+same candidates select the same winner in any input order.
 
 Every member of an explicit family is covered by a projection of that family,
 and every member of a default family carries its project URL, so the family of
 each selected entry SHALL be recoverable from its package id and normalized
-project URL alone. Offline verification and the README catalog
+project URL alone. This holds for rendered entries carrying an overlay `id`
+patch too, since such a patch is accepted only at a URL whose candidates form
+one family, where the family does not depend on the id. Offline verification and the README catalog
 rely on this, as "Offline verification labels and pairs rendered
 entries by family" in pack-verification defines, and composition needs no separate
-pairing check.
+pairing check. Composition, offline verification and the README catalog SHALL
+apply the same projections to track-only entries as to installable ones, so a
+track-only entry's family and its rendered label never disagree.
 
 #### Scenario: Two sources contribute one project
 
@@ -384,8 +416,24 @@ pairing check.
 
 #### Scenario: One source contributes one project with different content
 
-- **WHEN** one source contributes two different candidates tied at the winning tier
-- **THEN** composition fails with both selectors rather than choosing by input order
+- **WHEN** one source contributes two different candidates tied at the winning
+  tier, for example stable and nightly builds with different package ids at
+  one repository URL that no family rule separates
+- **THEN** the build succeeds, the family publishes the tied candidate whose
+  canonical serialized form sorts first, and a same-rank tie finding records
+  the family, the variant, both selectors and the chosen winner
+
+#### Scenario: A same-rank tie is resolved the same way in any input order
+
+- **WHEN** the same tied candidates are composed from each permutation of the
+  source's input order
+- **THEN** every build selects the same winner and records the same tie finding
+
+#### Scenario: A pin or split rules resolve a same-rank tie
+
+- **WHEN** a pin names one of the tied candidates, or family rules place the
+  tied candidates in different families
+- **THEN** no same-rank tie finding is recorded for that family and variant
 
 #### Scenario: One source contributes an identical entry twice
 
@@ -478,14 +526,44 @@ one. Two records with one normalized URL SHALL fail. A non-object patch,
 including null, SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
-The protected patch fields SHALL be exactly `id`, `url`, `overrideSource`,
-`family`, `variant` and `categories`: a patch SHALL NOT contain any of them with
-any value, including null. Every other key SHALL be patchable, and all other
+The protected patch fields SHALL be exactly `url`, `overrideSource`, `family`,
+`variant` and `categories`: a patch SHALL NOT contain any of them with any
+value, including null. Every other key SHALL be patchable, and all other
 unpatched data SHALL remain unchanged. Shared settings for distinct project URLs
 SHALL require explicit records for each project; a common package id or family
 SHALL NOT make a patch transfer to another project. Whole-app removal SHALL
 remain the denylist's responsibility, and categories SHALL remain the category
 map's.
+
+A patch MAY assign `id`, a nonempty string, which is how the owner fixes a
+source's wrong package id by hand, exactly as a name or an APK filter is fixed.
+Obtainium saves every imported record under its `id` and, after an install
+whose APK declares another id, re-saves the installed app under the APK's id,
+so a shipped id that differs from the APK's makes each later pack import add a
+never-installed duplicate beside the installed app; the owner patches `id` to
+the APK's id when Obtainium shows such a duplicate or an id error. An `id`
+patch SHALL change only the selected entry's rendered output: family
+formation, deduplication, denials, pins and overlay matching SHALL stay keyed
+by normalized project URL and source data and SHALL NOT read a patched id. The
+record of package ids repeated within a pack, offline verification and the
+README catalog SHALL see the patched id, since it is the id the pack ships.
+An `id` patch SHALL be accepted only at a URL whose candidates form one family,
+that is, a URL no family rule names or one whose family rules all name the same
+family. A record that patches `id` at a URL whose family rules name different
+families is an owner configuration error: it SHALL fail when the overlay and
+composition policy load, before any patch is applied or output is written,
+identifying the record and the families its URL's rules name, in `pack build`
+and `pack verify` alike, as two records with one normalized URL fail. A record
+at such a URL that does not patch `id` SHALL remain valid and SHALL apply to
+every selected entry at that URL, whichever family it belongs to; overlays are
+not scoped per family, so a setting meant for only one of those families
+belongs in its source.
+
+An `id` patch applies to every selected entry at its URL in every variant. When
+one family's single and dual selections at one URL are different APKs
+declaring different real ids, no overlay record fixes both, and the entry left
+wrong shows the recurring duplicate described above. This is an accepted
+limitation; no current family has this shape.
 
 #### Scenario: Overlay changes a setting
 
@@ -505,9 +583,38 @@ map's.
 
 #### Scenario: Protected field is assigned or deleted
 
-- **WHEN** a patch contains `id`, `url`, `overrideSource`, `family`,
-  `variant` or `categories`, with any value including null
+- **WHEN** a patch contains `url`, `overrideSource`, `family`, `variant` or
+  `categories`, with any value including null
 - **THEN** the build fails naming the record and forbidden field
+
+#### Scenario: Overlay fixes a wrong source id
+
+- **WHEN** a record at URL X patches `id` to the APK's package id `p`, and the
+  selected entry at X carries a different source id
+- **THEN** the rendered entry at X carries `p` in every variant that selects
+  it, and the entry's family, selection and denial checks are unchanged
+
+#### Scenario: Overlay deletes the id
+
+- **WHEN** a patch maps `id` to null or to a value that is not a nonempty
+  string
+- **THEN** the build fails naming the record and the field
+
+#### Scenario: Overlay patches the id at a split URL
+
+- **WHEN** rules at URL X assign builds with ids `a` and `b` to `app:a` and
+  `app:b`, and a record at X patches `id` to `c`
+- **THEN** `pack build` and `pack verify` each fail when the overlay and
+  composition policy load, naming the record and the families `app:a` and
+  `app:b`, and no pack is published
+- **AND** a record at X whose patch does not set `id` loads
+
+#### Scenario: Overlay patches every family at a split URL
+
+- **WHEN** rules at URL X assign builds to `app:a` and `app:b`, both are
+  selected, and a record at X patches `name` without patching `id`
+- **THEN** the patch applies to the selected entries of both `app:a` and
+  `app:b`
 
 #### Scenario: Overlay record carries an unknown field
 
@@ -567,13 +674,25 @@ where matched. Losing or excluded candidates SHALL NOT satisfy overlay targets.
 - **THEN** the build fails with the stale record identified
 
 
-### Requirement: Every single-screen family is selected in dual too
+### Requirement: A single-screen family without a dual build is published and reported
 
-Every family selected in single SHALL have a selected build in dual. Upstream
-eligibility restrictions, unresolved generated links, denials of other projects
-in the family and verification failures SHALL NOT waive family coverage. An app
-therefore cannot be published in single only. An app is kept out of both packs
-by denying every project URL its family's builds carry, since a denial removes
+Every family selected in single is expected to have a selected build in dual.
+After selection, the system SHALL check family coverage and SHALL record, as a
+single-only coverage finding, every family selected in single that has no
+selected build in dual, naming the family and its single selection's package
+id and project URL. Such a family SHALL still be published in single, and the
+finding SHALL NOT fail the build, so one family's gap never blocks the rest of
+the run. The system SHALL NOT copy a build ineligible for dual into dual to
+close the gap. Upstream eligibility restrictions, unresolved generated links,
+denials of other projects in the family and verification failures SHALL NOT
+suppress the finding.
+
+A shared package id no longer joins candidates at different URLs, so an
+upstream pattern of a single-only build at one URL and a dual-only fork at
+another URL sharing its package id forms two families and produces this
+finding for the single-only one. The maintainer resolves it with a family rule
+joining the URLs into one explicit family. An app is kept out of both packs by
+denying every project URL its family's builds carry, since a denial removes
 builds, not families, as "Project denials exclude candidates from both
 variants" defines. Different-repository replacements in one declared family
 SHALL satisfy coverage. Dual-only additions SHALL NOT require a single
@@ -588,13 +707,26 @@ counterpart.
 #### Scenario: An app is missing from the dual-screen variant
 
 - **WHEN** single selects a family with no dual-eligible candidate
-- **THEN** the build fails with the family coverage gap rather than copying an ineligible build
+- **THEN** the build succeeds, single publishes that family's entry, no
+  ineligible build is copied into dual, and the family is recorded as a
+  single-only coverage finding with its single selection's package id and
+  project URL
 
 #### Scenario: The only dual build is denied
 
 - **WHEN** the only dual-eligible candidate of a single-selected family is at a
   denied project URL
-- **THEN** the build fails with the family coverage gap
+- **THEN** the build succeeds and the family is recorded as a single-only
+  coverage finding
+
+#### Scenario: A single-only original and a dual-only fork share a package id
+
+- **WHEN** an upstream supplies a single-only build at URL A and a dual-only
+  build at URL B carrying the same package id, and no rule joins them
+- **THEN** single selects A's URL family, dual selects B's URL family, and A's
+  family is recorded as a single-only coverage finding
+- **AND** when a rule assigns both builds `app:x`, single selects A and dual
+  selects B within `app:x` and no finding is recorded
 
 
 ### Requirement: A package id repeated within a pack is reported
@@ -602,10 +734,12 @@ counterpart.
 Obtainium stores imported apps by package id, so two entries of one pack that
 carry the same id would leave only one of them after import. Composition SHALL
 NOT prevent this structurally, because families no longer form by package id.
-After selection, the system SHALL record, for each variant, every package id
-that more than one selected entry carries, together with those entries'
-families and project URLs. The record SHALL NOT fail the build. The maintainer
-resolves it with a family rule that puts the entries in one family.
+After overlays apply, the system SHALL record, for each variant, every package
+id that more than one selected entry carries, using each entry's id after any
+overlay `id` patch, together with those entries' families and project URLs.
+The record SHALL NOT fail the build. The maintainer resolves it with a family
+rule that puts the entries in one family, or by correcting an overlay `id`
+patch that produced it.
 
 #### Scenario: Two forks with one package id are selected in one pack
 
@@ -634,7 +768,10 @@ pin whenever a pin selected the winner. Otherwise single SHALL report source
 precedence, and dual SHALL report dual preference when the winner is a
 dual-screen build and ordinary fallback when the family had no available
 dual-screen build, including when source precedence chose among several
-baseline builds. Exclusions and stale exclusions SHALL also be reported.
+baseline builds. A selection decided by a same-rank tie SHALL keep the reason
+its rank gives, and the tie SHALL be reported as a same-rank tie finding, as
+"One candidate per family and variant is selected by fixed precedence"
+defines. Exclusions and stale exclusions SHALL also be reported.
 
 #### Scenario: Lower-source dual build wins
 
@@ -658,9 +795,10 @@ Decomps/Recomps, PC Ports, Frontend, Utilities, Streaming and Track Only. The
 composition policy SHALL accept an optional `categories` object mapping a
 family name to one category of that set other than Track Only, which only
 track-only entries carry. A family name is an `app:` name or a normalized
-project URL. A value outside those categories, a non-string value, a key that
-is neither an `app:` name nor already in normalized project URL form, or a
-family key that appears more than once in the object SHALL fail policy loading
+project URL. A map key SHALL be either an `app:` family name or a project URL
+already in normalized form with both a host and a path. A value outside those
+categories, a non-string value, a key that is neither, including one without a
+path such as `melonds` or `com.dishii.zelda3`, or a family key that appears more than once in the object SHALL fail policy loading
 with the key identified, rather than one occurrence silently taking effect.
 
 After overlays apply, the system SHALL assign each selected entry's categories
@@ -700,6 +838,12 @@ uncategorized entry and a stale category assignment SHALL NOT fail the build.
 #### Scenario: A map key not in normalized form fails policy loading
 
 - **WHEN** the map has a key `https://github.com/Owner/Repo`
+- **THEN** policy loading fails with that key identified
+
+#### Scenario: A map key without a path fails policy loading
+
+- **WHEN** the map has a key `melonds` or `com.dishii.zelda3`, neither an
+  `app:` name nor a URL with a path
 - **THEN** policy loading fails with that key identified
 
 #### Scenario: A track-only entry is Track Only
@@ -821,7 +965,7 @@ uncategorized entry and a stale category assignment SHALL NOT fail the build.
 
 **Reason**: Restated around URL-keyed families, URL denials and URL overlays.
 
-**Migration**: Replaced by "Every single-screen family is selected in dual too".
+**Migration**: Replaced by "A single-screen family without a dual build is published and reported", which records a family selected in single without a dual build as a nonfatal finding instead of failing the build.
 
 ### Requirement: Family selections are reported
 

@@ -173,6 +173,6 @@ Pruning an unwanted Quiver app uses the project deny list, as for any source.
 
 ### Requirement: Curation evidence states its limits
 
-**Reason**: Packs no longer carry maintained package-id corrections, so upstream id mismatches are left to Obtainium on first install rather than recorded as corrections.
+**Reason**: Package-id corrections are no longer composition rules backed by recorded APK evidence; the owner fixes a wrong source id by hand with an overlay `id` patch when Obtainium shows a duplicate or an id error, so curation no longer maintains package-id mismatch records.
 
 **Migration**: Replaced by "Curation records state their evidence and limits".

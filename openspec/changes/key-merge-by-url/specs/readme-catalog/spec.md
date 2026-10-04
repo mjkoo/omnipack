@@ -4,7 +4,10 @@
 
 The catalog SHALL contain one row per pair that offline verification's pairing
 produces across both exports, plus one row per entry that pairing leaves
-unpaired. Rows sharing a family label SHALL never be merged. Columns SHALL be
+unpaired. Rows sharing a family label SHALL never be merged. Track-only
+entries SHALL be labelled and paired by the same projections as installable
+entries, and a single entry with no dual pair, which verification reports as a
+nonfatal single-only coverage finding, SHALL still get its own row. Columns SHALL be
 Program, Single-screen and Dual-screen. Each available
 variant SHALL include its own source URL and Add to Obtainium link; an unavailable
 variant SHALL display a hyphen. The single-screen record SHALL supply the row name
@@ -23,6 +26,12 @@ so it cannot change the table structure or create HTML elements.
 
 - **WHEN** a selected family is present only in dual with no categories
 - **THEN** its row appears in Other with a hyphen in the single-screen column
+
+#### Scenario: Single-only family
+
+- **WHEN** a single entry has no dual entry carrying its family label
+- **THEN** its row appears with its single-screen configuration and a hyphen
+  in the dual-screen column, and generation succeeds
 
 #### Scenario: Names contain markup
 

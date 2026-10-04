@@ -179,7 +179,12 @@ pack-composition.
 
 - **WHEN** the committed catalog includes an explicit track-only resource
 - **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
-- **AND** neither pack's entry for the app the resource extends is replaced
+- **AND** when the resource and the app it extends belong to different
+  families once family rules apply, whether their project URLs are equal or
+  not, neither pack's entry for that app is replaced
+- **AND** when family rules place them in one family, whatever their project
+  URLs, they compete under ordinary selection, so dual may select the resource
+  in place of the app
 
 ### Requirement: Committed Quiver entries are baseline builds with generated provenance
 
@@ -210,6 +215,56 @@ generated provenance in reports without claiming a fresh APK check.
 
 - **WHEN** a committed Quiver record includes a top-level family or variant field
 - **THEN** ingestion rejects it under the source-record policy-field prohibition
+
+### Requirement: One package id may resolve differently per variant
+
+Upstreams deliberately point a single package id at different projects or
+settings per variant, so that a dual-screen fork replaces its single-screen
+counterpart in their own packs. The system SHALL resolve each variant's
+candidates independently and SHALL NOT require that a package id map to the
+same entry across variants. A shared package id does not join candidates at
+different project URLs into one family, so such a replacement across URLs
+holds in these packs only when a family rule joins the URLs into one explicit
+family, as "Composition policy assigns app families by project URL" in
+pack-composition defines; without one, the single-screen build's family is
+published in single and reported as a single-only coverage finding.
+
+An upstream catalog contributing two entries that share a package id SHALL have
+both retained for composition to resolve, because ingestion cannot know which
+of them a family rule, a pin or a denial will select. The committed codm2000
+catalog SHALL instead fail ingestion when it repeats an entry id, naming the id
+and both project URLs, because it is reviewed before it is committed and a
+repeated id there is an error in the catalog rather than a choice for
+composition.
+
+#### Scenario: Same id, different project per variant
+
+- **WHEN** an upstream contains two entries sharing a package id, one opted
+  out of the single-screen variant and the other opted out of the dual-screen
+  variant
+- **THEN** the single-screen variant ingests one of them and the dual-screen
+  variant ingests the other
+
+#### Scenario: A cross-URL replacement needs a family rule
+
+- **WHEN** the two entries sharing a package id, one single-only and one
+  dual-only, carry different project URLs
+- **THEN** ingestion retains both, and the dual-only entry replaces the
+  single-only one in dual only when a family rule joins their URLs
+
+#### Scenario: Duplicate ids remain within a variant
+
+- **WHEN** ingesting one upstream catalog leaves two candidate entries sharing
+  a package id within the same variant
+- **THEN** the duplicate is resolved during composition, not silently dropped
+  during ingestion
+
+#### Scenario: The committed catalog repeats an entry id
+
+- **WHEN** the committed codm2000 catalog contains two entries carrying the
+  same id
+- **THEN** ingestion fails naming that id and both entries' project URLs,
+  rather than retaining both or keeping whichever appears first
 
 ## REMOVED Requirements
 
