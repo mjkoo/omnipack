@@ -120,6 +120,22 @@ def test_previous_output_whose_apps_is_not_a_list_counts_as_empty(
     }
 
 
+@pytest.mark.parametrize(
+    "content",
+    [b"\xff\xfe", b"[" * 3_000_000 + b"]" * 3_000_000],
+    ids=["not-utf-8", "nested-too-deep"],
+)
+def test_previous_output_that_cannot_be_decoded_counts_as_empty(
+    tmp_path: Path, content: bytes
+) -> None:
+    write_previous(tmp_path, {"apps": []}, {"apps": []})
+    (tmp_path / "dist" / "single-screen.json").write_bytes(content)
+    assert build_module.previous_entries(tmp_path) == {
+        Variant.SINGLE: set(),
+        Variant.DUAL: set(),
+    }
+
+
 def test_previous_entry_whose_url_does_not_normalize_keeps_its_raw_url(
     tmp_path: Path,
 ) -> None:

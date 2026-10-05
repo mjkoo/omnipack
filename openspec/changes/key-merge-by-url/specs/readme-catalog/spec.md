@@ -5,18 +5,18 @@
 The catalog SHALL contain one row per pair that offline verification's pairing
 produces across both exports, plus one row per entry that pairing leaves
 unpaired. Entries of different family labels SHALL never share a row, even
-when they share a package id or name. Track-only
-entries SHALL be labelled and paired by the same projections as installable
-entries, and a single entry with no dual pair, which verification reports as a
-nonfatal single-only coverage finding, SHALL still get its own row. Columns SHALL be
-Program, Single-screen and Dual-screen. Each available
-variant SHALL include its own source URL and Add to Obtainium link; an unavailable
-variant SHALL display a hyphen. The single-screen record SHALL supply the row name
-and first category when present, otherwise the dual-screen record SHALL supply
-them. Empty categories SHALL use Other. Each category SHALL be a closed collapsible
-section. Categories and rows SHALL have deterministic, case-insensitive ordering
-with exact text, then family label breaking ties. Source text SHALL be escaped
-so it cannot change the table structure or create HTML elements.
+when they share a package id or name. Track-only entries SHALL be labelled and
+paired by the same projections as installable entries, and a single entry with
+no dual pair, which verification reports as a nonfatal single-only coverage
+finding, SHALL still get its own row. Columns SHALL be Program, Single-screen
+and Dual-screen. Each available variant SHALL include its own source URL and
+Add to Obtainium link; an unavailable variant SHALL display a hyphen. The
+single-screen record SHALL supply the row name and first category when
+present, otherwise the dual-screen record SHALL supply them. Empty categories
+SHALL use Other. Each category SHALL be a closed collapsible section.
+Categories and rows SHALL have deterministic, case-insensitive ordering with
+exact text, then family label breaking ties. Source text SHALL be escaped so
+it cannot change the table structure or create HTML elements.
 
 #### Scenario: Variant builds differ
 

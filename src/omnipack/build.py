@@ -108,8 +108,8 @@ def previous_entries(root: Path) -> dict[Variant, set[RenderedKey]]:
     output pair before publication begins.
 
     An entry whose URL does not normalize keeps its URL as written, so the
-    report still lists it as removed, and an `apps` value that is not a list
-    holds no entries.
+    report still lists it as removed, and an unreadable output or an `apps`
+    value that is not a list holds no entries.
     """
     result: dict[Variant, set[RenderedKey]] = {}
     for variant, name in OUTPUTS.items():
@@ -119,7 +119,7 @@ def previous_entries(root: Path) -> dict[Variant, set[RenderedKey]]:
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
+        except OSError, ValueError, RecursionError:
             result[variant] = set()
             continue
         apps = document.get("apps") if isinstance(document, dict) else None

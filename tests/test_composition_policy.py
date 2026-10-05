@@ -366,7 +366,7 @@ def test_pin_family_must_match_an_explicit_projection_at_load() -> None:
     assert parse_composition_policy(policy(pins=[pin])).pins[0].family == "app:wrong"
 
 
-def test_pin_family_conflict_fails_at_load_before_a_denial_of_its_candidate() -> None:
+def test_pin_family_is_checked_at_load_and_its_denial_at_compose() -> None:
     pin = {
         "family": "app:wrong",
         "variant": "dual",

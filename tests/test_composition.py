@@ -625,6 +625,15 @@ def test_an_app_missing_from_dual_is_published_and_reported() -> None:
     ]
 
 
+def test_a_single_only_finding_names_the_id_after_overlays() -> None:
+    single = app("single", family="app:x", eligibility=SINGLE_ONLY)
+    overlay = [{"url": single.url, "patch": {"id": "patched"}}]
+    result = compose([single], [], overlay)
+    assert result.report.single_only_families == [
+        SingleOnlyFamily("app:x", "patched", url_family(single))
+    ]
+
+
 def test_a_family_with_only_a_dual_build_is_absent_from_single() -> None:
     dual = app("dual", "bboi", family="app:x", eligibility=DUAL_ONLY)
     other = app("other", "extras")

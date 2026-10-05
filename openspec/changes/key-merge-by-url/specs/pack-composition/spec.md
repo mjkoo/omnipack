@@ -694,12 +694,12 @@ Every family selected in single is expected to have a selected build in dual.
 After selection, the system SHALL check family coverage and SHALL record, as a
 single-only coverage finding, every family selected in single that has no
 selected build in dual, naming the family, its single selection's package id
-after overlays and its project URL. Such a family SHALL still be published in single, and the
-finding SHALL NOT fail the build, so one family's gap never blocks the rest of
-the run. The system SHALL NOT copy a build ineligible for dual into dual to
-close the gap. Upstream eligibility restrictions, unresolved generated links,
-denials of other projects in the family and verification failures SHALL NOT
-suppress the finding.
+after overlays and its project URL. Such a family SHALL still be published in
+single, and the finding SHALL NOT fail the build, so one family's gap never
+blocks the rest of the run. The system SHALL NOT copy a build ineligible for
+dual into dual to close the gap. Upstream eligibility restrictions, unresolved
+generated links, denials of other projects in the family and verification
+failures SHALL NOT suppress the finding.
 
 A shared package id no longer joins candidates at different URLs, so an
 upstream pattern of a single-only build at one URL and a dual-only fork at
