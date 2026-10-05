@@ -9,6 +9,7 @@ from typing import Any
 
 from omnipack.overlay import ComposedApp
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.urls import normalize_project_url
 
 
 class RenderError(ValueError):
@@ -45,6 +46,11 @@ def _canonical_value(value: Any) -> Any:
     return deepcopy(value)
 
 
+def canonical_serialization(data: dict[str, Any]) -> str:
+    """One canonical JSON text for an app record, used to order records totally."""
+    return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+
+
 def hydrate_settings(source_type: str, values: dict[str, Any]) -> dict[str, Any]:
     """Fill source defaults, retaining entry values and future keys."""
     try:
@@ -60,9 +66,20 @@ def hydrate_settings(source_type: str, values: dict[str, Any]) -> dict[str, Any]
     return result
 
 
+def render_pack(apps: list[ComposedApp]) -> str:
+    """Render a published pack, in which every app may adopt its APK's id.
+
+    A source's package id can differ from the id its APK declares, and
+    Obtainium refuses such an install unless the app allows an id change, so
+    the flag is forced on whatever the source or an overlay says.
+    """
+    return render(
+        [ComposedApp(app.family, {**app.data, "allowIdChange": True}) for app in apps]
+    )
+
+
 def render(apps: list[ComposedApp]) -> str:
     """Return a deterministic Obtainium import document as JSON text."""
-    _validate_unique_ids(apps)
     rendered_apps = [_render_app(app) for app in apps]
     rendered_apps.sort(key=_sort_key)
     document = {"settings": _render_settings(rendered_apps), "apps": rendered_apps}
@@ -90,6 +107,10 @@ def _render_app(app: ComposedApp) -> dict[str, Any]:
             raise RenderError(
                 f"app {package_id!r} has invalid {field}; expected string"
             )
+    if not data["url"]:
+        raise RenderError(
+            f"app {package_id!r} has invalid url; expected nonempty string"
+        )
     if "author" not in data:
         data["author"] = ""
     elif not isinstance(data["author"], str):
@@ -136,9 +157,16 @@ def _render_app(app: ComposedApp) -> dict[str, Any]:
     return ordered
 
 
-def _sort_key(app: dict[str, Any]) -> tuple[str, str, str]:
+def _sort_key(app: dict[str, Any]) -> tuple[str, str, str, str, str]:
+    """Order apps totally: one package id may appear at several project URLs."""
     categories = app["categories"]
-    return (categories[0] if categories else "", app["name"], app["id"])
+    return (
+        categories[0] if categories else "",
+        app["name"],
+        app["id"],
+        normalize_project_url(app["url"]),
+        canonical_serialization(app),
+    )
 
 
 def _render_settings(apps: list[dict[str, Any]]) -> dict[str, str]:
@@ -151,18 +179,3 @@ def _render_settings(apps: list[dict[str, Any]]) -> dict[str, str]:
         for category in observed
     }
     return {"categories": json.dumps(categories, separators=(",", ":"))}
-
-
-def _validate_unique_ids(apps: list[ComposedApp]) -> None:
-    seen: set[str] = set()
-    duplicates: set[str] = set()
-    for app in apps:
-        package_id = app.data.get("id")
-        if not isinstance(package_id, str):
-            raise RenderError(f"app {package_id!r} has invalid id; expected string")
-        if package_id in seen:
-            duplicates.add(package_id)
-        seen.add(package_id)
-    if duplicates:
-        values = ", ".join(repr(value) for value in sorted(duplicates))
-        raise RenderError(f"duplicate package id(s): {values}")

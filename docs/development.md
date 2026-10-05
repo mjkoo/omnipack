@@ -35,31 +35,39 @@ for generation, acceptance and output review.
   [Quiver](source-generation.md#quiver-discovery-skips-and-removals) policy
   fields, then generate and accept a candidate as described below before
   building.
-- **Patch selected settings:** add an `{id, url, patch}` record to
-  `config/overlay.json`, using the selected effective id and project URL.
-  `patch.additionalSettings` is an object whose keys merge into existing
-  settings, not a JSON-encoded string. Null deletes allowed fields. Follow the
+- **Patch selected settings:** add a `{url, patch}` record to
+  `config/overlay.json`, using the selected entry's project URL. The record
+  patches every selected entry at that URL. `patch.additionalSettings` is an
+  object whose keys merge into existing settings, not a JSON-encoded string.
+  Null deletes allowed fields. Follow the
   [overlay example and protected-field rules](composition.md#denials-and-patches).
+- **Fix a wrong package id:** when Obtainium shows a never-installed duplicate
+  of an installed app after re-import, or an id error, set `patch.id` to the
+  installed APK's package id in that app's overlay record, as
+  [wrong package ids](curation.md#wrong-package-ids) describes.
 - **Set an app's category:** add a `categories` key for its family to
-  `config/composition.json`, such as `"package:org.example.app": "PC Ports"`.
+  `config/composition.json`: its `app:` name, or otherwise its normalized
+  project URL, such as `"github.com/example/app": "PC Ports"`.
   Overlays cannot patch categories. A build report entry under
   `uncategorizedFamilies` names the family key to add, and one under
   `staleCategoryAssignments` names a key to remove or correct. See
   [categories](composition.md#categories).
-- **Deny a package:** append `{"id": "org.example.retired", "reason": "No supported build"}`
-  to `config/deny.json`. Use the effective package id, not an original id corrected
-  by policy. This removes that id from both packs across all sources, not just
-  one build; see [denials](composition.md#denials-and-patches). Removing a required
-  curated extra may also require changing its reviewed extras configuration;
-  do not weaken its regression check to hide a contradictory configuration.
-- **Correct identity or group a family:** add a candidate rule to
-  `config/composition.json`, with `match`, `rationale`, and `packageId` and/or
-  `family` as needed. Take original `source`, `origin`, `id` and `url` selectors
-  from the build report (`original_id` supplies `match.id`), not the effective
-  output id. Record primary APK manifest evidence for identity corrections.
-  Use an `app:` family for grouping; follow the
-  [complete policy example](composition.md#candidate-policy) and
-  [tracker identity restrictions](../openspec/specs/pack-composition/spec.md#requirement-composition-policy-separates-app-families-from-package-identities).
+- **Deny a project:** append `{"url": "https://github.com/example/retired", "reason": "No supported build"}`
+  to `config/deny.json`. This removes every build at that project URL from both
+  packs across all sources, not just one build, and leaves builds at other URLs
+  selectable; see [denials](composition.md#denials-and-patches). Removing a
+  required curated extra may also require changing its reviewed extras
+  configuration; do not weaken its regression check to hide a contradictory
+  configuration.
+- **Group or split a family:** add a candidate rule to
+  `config/composition.json`, with `match`, `rationale` and an `app:` `family`.
+  Take the `source`, `origin`, `id` and `url` selectors from the build report's
+  selections or considered candidates. A rule claims every build at its URL,
+  so joining two repositories takes one rule at each; giving two builds at one
+  URL different families splits that URL by package id. Follow the
+  [complete policy example](composition.md#candidate-policy). The build
+  report's `repeatedIds`, `singleOnlyFamilies` and `sameRankTies` name the
+  families that usually need such a rule.
 - **Pin a winner:** add a pin with `family`, `variant` (`single` or `dual`),
   original candidate `match` and `rationale` in `config/composition.json`.
   The [candidate must be eligible](composition.md#candidate-policy) and survive
@@ -93,19 +101,20 @@ For every manual edit affecting pack contents:
    generated files. Use `uv run pack report` for supporting `selections`,
    `denylistRemovals`, `staleExclusions`, `sourceAdmissions`,
    `uncategorizedFamilies`, `staleCategoryAssignments` and `changes`,
-   recorded in `.build/report.json`. `changes` contains only package ids added
-   or removed relative to files present immediately before the build: settings
-   or identity edits retaining the id set produce no entries, and a second build
-   can empty it. The command lists all recorded entries, including admitted
-   committed candidates with their source, project URL, entry kind and committed
-   id. A diagnostic kind with nothing recorded prints nothing; an unavailable
-   comparison is labeled unavailable, and a failed build's comparison describes
-   candidates that were not published.
+   recorded in `.build/report.json`. `changes` holds the entries, each a package
+   id and normalized project URL, added or removed relative to files present
+   immediately before the build: settings edits that keep every entry's id and
+   URL produce no entries, and a second build can empty it. The command lists
+   all recorded entries, including admitted committed candidates with their
+   source, project URL, entry kind and committed id. A diagnostic kind with
+   nothing recorded prints nothing; an unavailable comparison is labeled
+   unavailable, and a failed build's comparison describes candidates that were
+   not published.
 4. An unchanged output needs no artificial diff, but accept a successful no-op
    only when the report shows the edit took effect or it was expected to be inert.
-   A new denial's id must appear in `denylistRemovals` and be absent from
-   `staleExclusions`; a mistyped or original id can pass build, verification and
-   CI while leaving the app selected. For a pin or rule, check the intended
+   A new denial's normalized URL must appear in `denylistRemovals` and be absent
+   from `staleExclusions`; a mistyped URL can pass build, verification and CI
+   while leaving the app selected. For a pin or rule, check the intended
    winner in `selections`.
 5. Run `uv run pack verify` and the usual development checks (`just check-all`).
    Include every changed `dist/single-screen.json`, `dist/dual-screen.json` and
@@ -140,13 +149,14 @@ build preserves all bytes outside them. The build fetches public catalogs withou
 reads `config/http.json`. Only source generation reads it, so that an optional
 `GITHUB_TOKEN` authenticates its requests to `api.github.com`.
 
-The JSON diagnostics are in `.build/report.json` (schema 4), including each
+The JSON diagnostics are in `.build/report.json`, including each
 family's selection with the candidates it was chosen over and the selection
-reason, original and effective package ids, denylist removals and stale
-exclusions, uncategorized families and stale category assignments, admitted
-committed candidates with their identities, and the package ids added and
-removed since the previous output. A failed build returns a
-nonzero status and preserves the previous packs and README.
+reason, denylist removals and stale exclusions, uncategorized families and stale
+category assignments, repeated package ids, single-only families, same-rank
+ties, admitted committed candidates with their identities, and the entries
+(package id and project URL) added and removed since the previous output. A
+failed build returns a nonzero status and preserves the previous packs and
+README.
 
 ## Verify and inspect
 

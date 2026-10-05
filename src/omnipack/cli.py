@@ -7,7 +7,7 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
-from omnipack.build import BuildInputs, previous_ids, publish_build
+from omnipack.build import BuildInputs, previous_entries, publish_build
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App
@@ -35,6 +35,8 @@ def build(_args: argparse.Namespace) -> int:
         nonlocal offline_verification
         offline_verification = value
 
+    # Read once, before publication, so a failed rollback cannot change it.
+    previous = previous_entries(root)
     try:
         inputs = BuildInputs.read(root)
         ingested = _ingest_for_build(root, inputs, ingestion_report)
@@ -52,6 +54,7 @@ def build(_args: argparse.Namespace) -> int:
             composition,
             ingestion_report,
             inputs,
+            previous,
             on_stage=record_stage,
             on_verification=record_verification,
         )
@@ -59,7 +62,7 @@ def build(_args: argparse.Namespace) -> int:
         try:
             write_report(
                 root,
-                previous_ids(root),
+                previous,
                 composition,
                 ingestion_report,
                 composition_report=composition_report,

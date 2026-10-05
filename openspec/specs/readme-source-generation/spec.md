@@ -275,8 +275,17 @@ filtering. The record SHALL contain no observed installed or latest version,
 fixed download URL or claim of an Android package identity. Tracking outcomes
 SHALL be separate from APK resolution in diagnostics.
 
-A track-only resource SHALL appear under its own synthetic identity and SHALL
-NOT replace the entry of the app it extends in either pack. Its description
+A track-only resource SHALL appear under its own synthetic identity. Whether
+it can replace the app it extends SHALL follow from the families
+pack-composition forms once family rules apply, as "Composition policy assigns
+app families by project URL" in pack-composition defines, and not from whether
+their project URLs are equal. When the resource and the app belong to different
+families, whether their URLs are equal or not, the resource SHALL NOT replace
+the app's entry in either pack. When they belong to one family, whether by
+sharing a URL or because owner family rules join their different URLs, they
+compete under ordinary selection whatever their URLs, and which of them each
+pack selects is governed by "One candidate per family and variant is selected
+by fixed precedence" in pack-composition. Its description
 SHALL carry the rule's rationale and installation path, and with consumer
 guidance SHALL explain that path, and that Obtainium notifications and
 acknowledgement neither install it nor detect its installed version. Enabling
@@ -292,6 +301,28 @@ and the committed URL, SHALL reproduce the committed entry exactly, so a changed
 tracker ID blocks retention. A change of kind SHALL require fresh validation for
 the destination kind, with no cross-kind fallback, and an APK package ID SHALL
 NOT be reused as a tracker ID.
+
+#### Scenario: A tracker and the app it extends are kept apart
+
+- **WHEN** a dual-only track-only resource and the baseline app it extends
+  belong to different families once family rules apply, whether their project
+  URLs are equal or not
+- **THEN** single holds the app's entry and not the resource's
+- **AND** dual holds both entries, and neither replaces the other
+
+#### Scenario: A tracker shares the app's family
+
+- **WHEN** a track-only resource and the app it extends sit at one project URL
+  and no family rule separates them
+- **THEN** they are candidates of one family and pack-composition's precedence
+  decides which entry each pack selects
+
+#### Scenario: Owner rules join a tracker and its app at different URLs
+
+- **WHEN** owner family rules assign a baseline app at one project URL and a
+  dual-only track-only resource at another project URL to one explicit family
+- **THEN** they compete within that family under ordinary selection
+- **AND** single selects the app and dual selects the resource
 
 #### Scenario: A tracked release contains only non-APK assets
 

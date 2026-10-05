@@ -100,7 +100,7 @@ A discovery skip pauses inspection of that row; it does not reject the app.
 If the skipped row's listed URL matches an accepted entry, generation SHALL
 retain that entry unchanged and report it as skipped without claiming a fresh
 check. A skip SHALL NOT affect entries supplied by other sources. Pruning an
-app from the packs is done by package denial, not by a skip rule.
+app from the packs is done by project denial, not by a skip rule.
 
 #### Scenario: Newly discovered stable Android project
 
@@ -226,10 +226,9 @@ never overwrite committed catalogs or policy.
 
 Initial source admission SHALL account for every discovered Android candidate
 under the existing curation standard. Every rejected Android candidate SHALL
-have its known package ID and rejection reason recorded in the package deny
-list. A skip MAY additionally silence its discovery row to avoid resolution;
+have its project URL and rejection reason recorded in the deny list. A skip MAY additionally silence its discovery row to avoid resolution;
 it SHALL NOT substitute for that denial. A denied app MAY remain in a source
-candidate catalog because final composition applies package denials.
+candidate catalog because final composition applies project denials.
 Maintained skips, denials and selection exceptions SHALL
 survive later source refreshes. Subsequent generation SHALL admit newly resolvable default
 projects to candidate catalogs without requiring an admission-list edit.
@@ -242,8 +241,8 @@ SHALL fail the existing composition checks rather than silently rewrite policy.
 #### Scenario: Initial candidate is unsuitable
 
 - **WHEN** initial vetting rejects a discovered Android project
-- **THEN** its known package ID and rejection reason are maintained in the package deny list, and a skip rule may additionally avoid resolving its discovery row
-- **AND** if a later catalog lists the same package under a renamed repository, final composition still excludes it by package denial
+- **THEN** its project URL and rejection reason are maintained in the deny list, and a skip rule may additionally avoid resolving its discovery row
+- **AND** if a later catalog lists the app under a renamed repository, the new URL is a different project until the maintainer denies it too
 
 #### Scenario: Future project passes default resolution
 

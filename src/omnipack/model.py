@@ -61,8 +61,7 @@ class App:
     responsible for the Obtainium export's string-encoded form.
     `raw` carries any Obtainium fields not otherwise modeled, keyed by
     their Obtainium field name. `eligibility` holds the packs the build's
-    source offers it to. An unset `origin` or `original_id` defaults to the
-    source and the package id.
+    source offers it to. An unset `origin` defaults to the source.
     """
 
     id: str
@@ -75,14 +74,11 @@ class App:
     additional_settings: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
     origin: str = ""
-    original_id: str = ""
     family: str | None = None
 
     def __post_init__(self) -> None:
         if not self.origin:
             object.__setattr__(self, "origin", self.provenance.source)
-        if not self.original_id:
-            object.__setattr__(self, "original_id", self.id)
 
     @property
     def dual_preferred(self) -> bool:

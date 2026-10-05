@@ -25,12 +25,13 @@ from omnipack.report_model import (
     FindingRecord,
     Fingerprint,
     InputState,
+    Severity,
     Status,
     VerificationReport,
 )
 
-SCHEMA_VERSION = 4
-VERIFIER_VERSION = "2.1.0"
+SCHEMA_VERSION = 5
+VERIFIER_VERSION = "3.0.0"
 VERIFY_PATH = Path(".build/verify.json")
 INPUT_PATHS = {
     "single": Path("dist/single-screen.json"),
@@ -107,8 +108,13 @@ def run_verification(root: Path) -> VerificationReport:
         if fingerprint["state"] == InputState.UNREADABLE
     }
     errors.extend(
-        item.to_record() for item in findings if item not in unreadable_missing
+        item.to_record()
+        for item in findings
+        if item.severity is Severity.ERROR and item not in unreadable_missing
     )
+    nonfatal = [
+        item.to_record() for item in findings if item.severity is Severity.NONFATAL
+    ]
     from omnipack.catalog import generate_catalog, split_catalog
 
     # An invalid policy is already a finding above; without one there is no
@@ -151,6 +157,7 @@ def run_verification(root: Path) -> VerificationReport:
         "status": Status.FAILED if errors else Status.SUCCESS,
         "inputs": fingerprints,
         "errors": errors,
+        "nonfatalFindings": nonfatal,
     }
     _write_atomic(root / VERIFY_PATH, report)
     return report

@@ -5,9 +5,9 @@ from __future__ import annotations
 import json
 from typing import Any, cast
 
-from omnipack.composition_policy import default_family
 from omnipack.overlay import ComposedApp
 from omnipack.render import render
+from omnipack.urls import normalize_project_url
 
 
 def rendered_entry(entry: dict[str, Any]) -> dict[str, Any]:
@@ -28,7 +28,7 @@ def render_catalog(entries: list[dict[str, Any]]) -> bytes:
         if not isinstance(settings, dict):
             raise TypeError(f"entry {data.get('id')!r} has invalid additionalSettings")
         data["additionalSettings"] = settings
-        apps.append(ComposedApp(default_family(data["id"]), data))
+        apps.append(ComposedApp(normalize_project_url(data["url"]), data))
     return render(apps).encode()
 
 

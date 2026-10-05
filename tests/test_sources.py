@@ -25,9 +25,10 @@ from omnipack.sources import (
     codm,
     extras,
     ingest_all,
+    quiver,
     rjny,
 )
-from omnipack.urls import gitlab_project_path
+from omnipack.urls import gitlab_project_path, normalize_project_url
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -70,9 +71,7 @@ def test_rjny_applies_export_flags_and_ignores_presentation_overrides() -> None:
     assert all(isinstance(app.additional_settings, dict) for app in apps)
 
 
-def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_only_build() -> (
-    None
-):
+def test_rjny_cemu_builds_at_two_urls_form_two_url_families() -> None:
     url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     apps = rjny.fetch(
         FakeHttp({url: fixture("rjny-applications.json")}),
@@ -93,12 +92,66 @@ def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_only_build
     )
     selections = {item.variant: item for item in result.report.selections}
     assert {
-        variant: (item.url, item.reason) for variant, item in selections.items()
+        variant: (item.family, item.url, item.reason)
+        for variant, item in selections.items()
     } == {
-        Variant.SINGLE: ("https://github.com/SSimco/Cemu", "source"),
-        Variant.DUAL: ("https://github.com/sapphirerhodonite/cemu", "dual-preferred"),
+        Variant.SINGLE: (
+            "github.com/ssimco/cemu",
+            "https://github.com/SSimco/Cemu",
+            "source",
+        ),
+        Variant.DUAL: (
+            "github.com/sapphirerhodonite/cemu",
+            "https://github.com/sapphirerhodonite/cemu",
+            "dual-preferred",
+        ),
     }
     assert selections[Variant.DUAL].considered == ()
+
+
+def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_build() -> None:
+    url = "https://raw.githubusercontent.com/fixture/rjny/main/apps.json"
+    project = "https://github.com/example/app"
+
+    def record(package_id: str, meta: dict[str, object]) -> dict[str, object]:
+        return {
+            "id": package_id,
+            "url": project,
+            "name": "App",
+            "overrideSource": "GitHub",
+            "categories": ["Emulator"],
+            "additionalSettings": {},
+            "meta": meta,
+        }
+
+    catalog = {
+        "apps": [
+            record("org.example.app", {"includeInDualScreen": False}),
+            record("org.example.app.dual", {"includeInStandard": False}),
+        ]
+    }
+    apps = rjny.fetch(
+        FakeHttp({url: json.dumps(catalog)}),
+        {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
+    )
+    assert {(app.id, app.eligibility) for app in apps} == {
+        ("org.example.app", frozenset({Variant.SINGLE})),
+        ("org.example.app.dual", frozenset({Variant.DUAL})),
+    }
+    result = compose(
+        apps,
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
+    )
+    assert {
+        (item.variant, item.family, item.id) for item in result.report.selections
+    } == {
+        (Variant.SINGLE, "github.com/example/app", "org.example.app"),
+        (Variant.DUAL, "github.com/example/app", "org.example.app.dual"),
+    }
 
 
 def test_rjny_matches_both_upstream_exports() -> None:
@@ -277,7 +330,7 @@ def _fetch_codm(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
     return codm.fetch(tmp_path, {"catalog": "catalog.json"})
 
 
-@pytest.mark.parametrize("field", ["family", "packageId", "variant"])
+@pytest.mark.parametrize("field", ["family", "variant"])
 @pytest.mark.parametrize("value", ["assigned", None], ids=["assigned", "null"])
 @pytest.mark.parametrize(
     ("source", "fetch"),
@@ -309,8 +362,32 @@ def test_source_record_rejects_composition_policy_fields(
     message = str(excinfo.value)
     assert message.startswith(f"{source}: entry 'Entry' field {field!r} ")
     assert "cannot come from a source record" in message
-    assert "composition policy in config/composition.json owns app families" in message
-    assert "package identities and per-pack selection" in message
+    assert (
+        "composition policy in config/composition.json owns app families "
+        "and per-pack selection"
+    ) in message
+    # Policy cannot override a source record, so nothing points there as a fix.
+    assert not any(
+        verb in message.lower() for verb in ("edit", "update", "change", "add ", "fix")
+    )
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {"includeInStandard": True},
+        {"includeInDualScreen": True},
+        {"includeInStandard": True, "includeInDualScreen": True},
+        {"includeInStandard": False},
+        {"includeInDualScreen": False},
+    ],
+)
+def test_rjny_entry_excluded_from_export_is_dropped_whatever_its_other_flags(
+    flags: dict[str, bool],
+) -> None:
+    excluded = _record_with("meta", {"excludeFromExport": True, **flags})
+    kept = {**_record_with("meta", {}), "id": "app.kept"}
+    assert [app.id for app in _fetch_rjny([excluded, kept])] == ["app.kept"]
 
 
 def test_rjny_excluded_record_is_not_guarded_but_neither_pack_record_is() -> None:
@@ -354,8 +431,8 @@ def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
         for entry in json.loads(
             render(
                 [
-                    ComposedApp("package:app.entry", _import_data(upstream_app)),
-                    ComposedApp("package:app.extra", _import_data(extra_app)),
+                    ComposedApp("example.test/entry", _import_data(upstream_app)),
+                    ComposedApp("example.test/extra", _import_data(extra_app)),
                 ]
             )
         )["apps"]
@@ -366,24 +443,48 @@ def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
     assert "dualScreen" not in rendered["app.extra"]
 
 
-@pytest.mark.parametrize("source", ["extras", "codm2000"])
-def test_non_rjny_catalog_metadata_is_dropped_but_unmodeled_fields_render(
-    source: str, tmp_path: Path
+def test_package_id_field_is_ingested_and_rendered_unchanged() -> None:
+    [upstream_app] = _fetch_rjny([_record_with("packageId", "org.example.declared")])
+    assert upstream_app.raw == {"packageId": "org.example.declared"}
+    [rendered] = json.loads(
+        render([ComposedApp("example.test/entry", _import_data(upstream_app))])
+    )["apps"]
+    assert rendered["packageId"] == "org.example.declared"
+    assert rendered["id"] == upstream_app.id
+
+
+def _fetch_quiver(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
+    (tmp_path / "quiver.json").write_text(json.dumps({"apps": records}))
+    return quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+
+
+EVERY_SOURCE_FETCH = [
+    pytest.param(lambda record, _: _fetch_rjny([record]), id="rjny"),
+    pytest.param(lambda record, _: _fetch_bboi([record], []), id="bboi-standard"),
+    pytest.param(lambda record, _: _fetch_bboi([], [record]), id="bboi-dual"),
+    pytest.param(lambda record, path: _fetch_codm(path, [record]), id="codm2000"),
+    pytest.param(lambda record, path: _fetch_quiver(path, [record]), id="quiver"),
+    pytest.param(lambda record, _: extras.fetch([record]), id="extras"),
+]
+
+
+@pytest.mark.parametrize("fetch", EVERY_SOURCE_FETCH)
+def test_catalog_metadata_is_dropped_but_unmodeled_fields_render(
+    fetch: Callable[[dict[str, object], Path], list[App]], tmp_path: Path
 ) -> None:
     record: dict[str, object] = {
-        "id": f"app.{source}",
-        "name": source,
-        "url": f"https://github.com/owner/{source}",
+        "id": "org.example.entry",
+        "name": "Entry",
+        "url": "https://github.com/owner/entry",
+        "overrideSource": "GitHub",
         "meta": {"presentation": "catalog-only"},
         "unmodeled": {"retained": True},
     }
-    if source == "extras":
-        [app] = extras.fetch([record])
-    else:
-        [app] = _fetch_codm(tmp_path, [record])
+    [app] = fetch(record, tmp_path)
+    assert app.raw == {"unmodeled": {"retained": True}}
 
     [rendered] = json.loads(
-        render([ComposedApp(f"package:{app.id}", _import_data(app))])
+        render([ComposedApp(normalize_project_url(app.url), _import_data(app))])
     )["apps"]
     assert "meta" not in rendered
     assert rendered["unmodeled"] == {"retained": True}
@@ -728,7 +829,7 @@ def ingest_over_codm_entry(
     )
 
 
-def test_codm_url_overlap_keeps_both_candidates_in_composition(
+def test_codm_url_overlap_keeps_both_candidates_and_composition_selects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -744,10 +845,9 @@ def test_codm_url_overlap_keeps_both_candidates_in_composition(
             {"schemaVersion": 1, "candidates": [], "pins": []}
         ),
     )
-    assert {app.data["id"] for app in result.apps[Variant.DUAL]} == {
-        "app.standard",
-        "app.generated",
-    }
+    # One project URL forms one family, so the dual-screen build replaces the
+    # baseline build in dual.
+    assert {app.data["id"] for app in result.apps[Variant.DUAL]} == {"app.generated"}
     assert {app.data["id"] for app in result.apps[Variant.SINGLE]} == {"app.standard"}
 
 
@@ -855,7 +955,11 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["status"] == "failed"
     assert report["stage"] == "ingestion"
-    assert report["offlineVerification"] == {"status": "not-run", "findings": []}
+    assert report["offlineVerification"] == {
+        "status": "not-run",
+        "findings": [],
+        "nonfatalFindings": [],
+    }
     assert report["changes"] is None
     assert "rjny" in report["error"]
     assert (
@@ -968,7 +1072,7 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
     result = compose([extra, fork], [], [], policy=policy)
     assert result.apps[Variant.SINGLE] == []
     [selection] = result.report.selections
-    assert (selection.variant, selection.effective_id, selection.reason) == (
+    assert (selection.variant, selection.id, selection.reason) == (
         Variant.DUAL,
         "com.example.companion",
         "dual-preferred",

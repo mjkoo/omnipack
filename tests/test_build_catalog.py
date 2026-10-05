@@ -113,6 +113,7 @@ def test_invalid_readme_fails_offline_gate_without_publishing(
             composition("one"),
             IngestionReport(),
             build.BuildInputs.read(tmp_path),
+            build.previous_entries(tmp_path),
         )
     assert failure.value.findings[0]["stage"] == "catalog"
     assert not (tmp_path / "dist").exists()
@@ -133,6 +134,7 @@ def test_build_catalog_matches_published_exports_and_preserves_surrounding_bytes
         composition("one"),
         IngestionReport(),
         build.BuildInputs.read(tmp_path),
+        build.previous_entries(tmp_path),
     )
     prefix, interior, suffix = split_catalog(readme.read_bytes())
     before_prefix, _, before_suffix = split_catalog(MARKED)
@@ -173,6 +175,7 @@ def test_readme_replacement_failure_restores_published_pack_bytes(
             composition("one"),
             IngestionReport(),
             build.BuildInputs.read(tmp_path),
+            build.previous_entries(tmp_path),
         )
     assert readme.read_bytes() == before
     for output in outputs:

@@ -4,7 +4,7 @@
     "single": {
       "source": "https://github.com/Simon358/ctr-native-android",
       "original_id": "com.simon358.ctrnative",
-      "effective_id": "com.ctrnative",
+      "manifest_id": "com.ctrnative",
       "source_version": "Android-Build4",
       "release": {
         "tag_name": "Android-Build4",
@@ -33,7 +33,7 @@
     "dual": {
       "source": "https://github.com/igawa6/ctr-native-android",
       "original_id": "com.ctrnative",
-      "effective_id": "com.ctrnative",
+      "manifest_id": "com.ctrnative",
       "source_version": "v0.1.0",
       "release": {
         "tag_name": "v0.1.0",

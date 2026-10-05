@@ -22,12 +22,30 @@ class OfflineStatus(StrEnum):
     FAILED = "failed"
 
 
+class Severity(StrEnum):
+    """Whether an offline finding blocks publication."""
+
+    ERROR = "error"
+    NONFATAL = "nonfatal"
+
+
 class InputState(StrEnum):
     """Whether a verification input could be read when it was captured."""
 
     PRESENT = "present"
     MISSING = "missing"
     UNREADABLE = "unreadable"
+
+
+class SelectionReason(StrEnum):
+    """Why a family's winner won its variant."""
+
+    PIN = "pin"
+    DUAL_PREFERRED = "dual-preferred"
+    # Dual with no available dual-preferred build.
+    ORDINARY_FALLBACK = "ordinary-fallback"
+    # Source precedence alone.
+    SOURCE = "source"
 
 
 class BuildStage(StrEnum):
@@ -54,6 +72,7 @@ class FindingRecord(TypedDict):
 class OfflineVerdict(TypedDict):
     status: OfflineStatus
     findings: list[FindingRecord]
+    nonfatalFindings: list[FindingRecord]
 
 
 class Fingerprint(TypedDict):
@@ -71,7 +90,8 @@ class VerificationReport(TypedDict):
     status: Status
     inputs: dict[str, Fingerprint]
     errors: list[FindingRecord]
+    nonfatalFindings: list[FindingRecord]
 
 
 def not_run_verdict() -> OfflineVerdict:
-    return {"status": OfflineStatus.NOT_RUN, "findings": []}
+    return {"status": OfflineStatus.NOT_RUN, "findings": [], "nonfatalFindings": []}

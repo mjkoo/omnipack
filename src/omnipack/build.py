@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from stat import S_IMODE
@@ -12,18 +12,23 @@ from uuid import uuid4
 from omnipack.composition_policy import (
     CompositionPolicy,
     CompositionPolicyError,
+    RenderedKey,
+    check_overlay_id_patches,
     load_composition_policy,
+    rendered_key,
 )
 from omnipack.merge import CompositionResult
 from omnipack.model import Variant
-from omnipack.render import render
+from omnipack.overlay import OverlayError, parse_overlay
+from omnipack.render import render_pack
 from omnipack.report_model import (
     BuildStage,
     FindingRecord,
     OfflineStatus,
     OfflineVerdict,
+    Severity,
 )
-from omnipack.sources import IngestionReport, SourceError
+from omnipack.sources import IngestionReport, SourceError, parse_json
 
 OUTPUTS = {
     Variant.SINGLE: "single-screen.json",
@@ -42,7 +47,9 @@ class OfflineVerificationError(ValueError):
 @dataclass(frozen=True, slots=True)
 class BuildInputs:
     """The five configuration files and the optional README, captured once
-    when a build starts, with the composition policy parsed from its bytes.
+    when a build starts, with the composition policy parsed from its bytes and
+    the overlay checked against it, so a build refuses an inconsistent overlay
+    before ingesting any source.
 
     Composition, the offline gate and catalog generation all use these bytes,
     so a file edited while the build runs is overwritten by, or missing from,
@@ -80,6 +87,11 @@ class BuildInputs:
             policy = load_composition_policy(composition)
         except CompositionPolicyError as error:
             raise SourceError("composition policy", str(error)) from error
+        try:
+            patches = parse_overlay(parse_json(overlay, "overlay"), "overlay")
+            check_overlay_id_patches(policy, patches)
+        except (OverlayError, CompositionPolicyError) as error:
+            raise SourceError("overlay", str(error)) from error
         return cls(
             sources=sources,
             extras=extras,
@@ -91,9 +103,15 @@ class BuildInputs:
         )
 
 
-def previous_ids(root: Path) -> dict[Variant, set[str]]:
-    """Read rendered package ids from the output pair before publication begins."""
-    result: dict[Variant, set[str]] = {}
+def previous_entries(root: Path) -> dict[Variant, set[RenderedKey]]:
+    """Read each rendered entry's package id and normalized project URL from the
+    output pair before publication begins.
+
+    An entry whose URL does not normalize keeps its URL as written, so the
+    report still lists it as removed, and an unreadable output or an `apps`
+    value that is not a list holds no entries.
+    """
+    result: dict[Variant, set[RenderedKey]] = {}
     for variant, name in OUTPUTS.items():
         path = root / "dist" / name
         if not path.exists():
@@ -101,15 +119,20 @@ def previous_ids(root: Path) -> dict[Variant, set[str]]:
             continue
         try:
             document = json.loads(path.read_text(encoding="utf-8"))
-        except OSError, json.JSONDecodeError:
+        except OSError, ValueError, RecursionError:
             result[variant] = set()
             continue
-        apps = document.get("apps", []) if isinstance(document, dict) else []
-        result[variant] = {
-            item["id"]
-            for item in apps
-            if isinstance(item, dict) and isinstance(item.get("id"), str)
-        }
+        apps = document.get("apps") if isinstance(document, dict) else None
+        result[variant] = set()
+        for item in apps if isinstance(apps, list) else []:
+            if not isinstance(item, dict):
+                continue
+            package_id, url = item.get("id"), item.get("url")
+            if isinstance(package_id, str) and isinstance(url, str):
+                try:
+                    result[variant].add(rendered_key(package_id, url))
+                except ValueError:
+                    result[variant].add((package_id, url))
     return result
 
 
@@ -118,16 +141,20 @@ def publish_build(
     composition: CompositionResult,
     ingestion: IngestionReport,
     inputs: BuildInputs,
+    previous: Mapping[Variant, set[RenderedKey]],
     *,
     on_stage: Callable[[BuildStage], None] | None = None,
     on_verification: Callable[[OfflineVerdict], None] | None = None,
 ) -> None:
-    """Render both variants and their catalog, gate them, and publish together."""
+    """Render both variants and their catalog, gate them, and publish together.
+
+    `previous` is the output read before the build began, so the report's
+    changes compare against it even when a failed publication cannot restore it.
+    """
     if on_stage is not None:
         on_stage(BuildStage.RENDERING)
-    before = previous_ids(root)
     rendered = {
-        variant: render(composition.apps[variant]).encode() for variant in Variant
+        variant: render_pack(composition.apps[variant]).encode() for variant in Variant
     }
     from omnipack.offline import OfflineInputs, validate_offline
     from omnipack.report import write_report
@@ -143,7 +170,14 @@ def publish_build(
             inputs.composition,
         )
     )
-    findings: list[FindingRecord] = [item.to_record() for item in offline_findings]
+    findings: list[FindingRecord] = [
+        item.to_record() for item in offline_findings if item.severity is Severity.ERROR
+    ]
+    nonfatal: list[FindingRecord] = [
+        item.to_record()
+        for item in offline_findings
+        if item.severity is Severity.NONFATAL
+    ]
     from omnipack.catalog import generate_catalog, replace_catalog
 
     readme_rendered = None
@@ -162,6 +196,7 @@ def publish_build(
     verdict: OfflineVerdict = {
         "status": OfflineStatus.FAILED if findings else OfflineStatus.SUCCESS,
         "findings": findings,
+        "nonfatalFindings": nonfatal,
     }
     if on_verification is not None:
         on_verification(verdict)
@@ -172,7 +207,7 @@ def publish_build(
         on_stage(BuildStage.REPORT_WRITING)
     write_report(
         root,
-        before,
+        previous,
         composition,
         ingestion,
         offline_verification=verdict,

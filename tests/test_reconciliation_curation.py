@@ -27,12 +27,10 @@ def read(path: Path):
     return json.loads(path.read_text())
 
 
-def test_manifest_evidence_matches_configured_corrections():
+def test_manifest_evidence_agrees_across_fixtures() -> None:
     evidence = read(FIXTURE)
     observations = read(OBSERVATIONS)
     ctr = read(CTR_EVIDENCE)
-    document = read(ROOT / "config/composition.json")
-    rules = document["candidates"]
 
     expected = {
         (record["original_id"], item["package"], record["source"])
@@ -42,25 +40,17 @@ def test_manifest_evidence_matches_configured_corrections():
     expected.add(
         (
             ctr["variants"]["single"]["original_id"],
-            ctr["variants"]["single"]["effective_id"],
+            ctr["variants"]["single"]["manifest_id"],
             ctr["variants"]["single"]["source"],
         )
     )
-    assert set(map(tuple, evidence["identity_corrections"])) == expected
-    for original, effective, url in expected:
-        matches = [
-            rule
-            for rule in rules
-            if rule["match"]["id"] == original and rule["match"]["url"] == url
-        ]
-        assert matches
-        assert {rule.get("packageId") for rule in matches} == {effective}
+    assert set(map(tuple, evidence["manifest_evidence"])) == expected
 
     assert evidence["ghostship"]["package"] == "dev.net64.ghostship"
     assert set(ctr["variants"]) == {"single", "dual"}
     for item in ctr["variants"].values():
         [asset] = item["release"]["assets"]
-        assert item["manifest"]["package"] == item["effective_id"] == "com.ctrnative"
+        assert item["manifest"]["package"] == item["manifest_id"] == "com.ctrnative"
         assert asset["browser_download_url"].startswith(item["source"] + "/releases/")
         assert item["release"]["tag_name"] == item["source_version"]
 
@@ -68,12 +58,11 @@ def test_manifest_evidence_matches_configured_corrections():
 def test_full_reconciliation_holds_for_current_composition(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    expected = {new for _, new, _ in read(FIXTURE)["identity_corrections"]}
+    expected = {new for _, new, _ in read(FIXTURE)["manifest_evidence"]}
     result = current_configuration.result
     for variant in Variant:
         apps = result.apps[variant]
         ids = {app.id for app in apps}
-        assert len(ids) == len(apps)
         assert len({app.family for app in apps}) == len(apps)
         assert "dev.net64.ghostship" in ids
         assert "com.theboisclub.pokemonred" in ids
@@ -133,11 +122,14 @@ def test_full_reconciliation_holds_for_current_composition(
         assert gen1.url == "https://github.com/bryanthaboi/gen1recomp"
         assert gen1.data["additionalSettings"]["versionDetection"] is True
 
-    for package_id in ("app.nanostack.pixelguide", "com.emulnk"):
+    for family in (
+        "github.com/rexmont/pixel-guide-android",
+        "github.com/emulnk/emulnk",
+    ):
         selection = next(
             item
             for item in result.report.selections
-            if item.family == f"package:{package_id}" and item.variant is Variant.DUAL
+            if item.family == family and item.variant is Variant.DUAL
         )
         assert selection.source == "rjny"
         assert selection.origin == "rjny-catalog"
@@ -156,7 +148,7 @@ def test_full_reconciliation_holds_for_current_composition(
     for variant in Variant:
         ctr_app = next(app for app in result.apps[variant] if app.family == "app:ctr")
         observation = expected_ctr[variant.value]
-        assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
+        assert ctr_app.id == observation["manifest_id"] == "com.ctrnative"
         assert ctr_app.url == observation["source"]
         [rendered_ctr] = json.loads(render([ctr_app]))["apps"]
         settings = json.loads(rendered_ctr["additionalSettings"])
@@ -179,7 +171,7 @@ def test_captured_candidates_form_the_recorded_families(
             (
                 selection.source,
                 selection.origin,
-                selection.original_id,
+                selection.id,
                 normalize_project_url(selection.url),
             )
         )
@@ -187,7 +179,7 @@ def test_captured_candidates_form_the_recorded_families(
             (
                 item.source,
                 item.origin,
-                item.original_id,
+                item.id,
                 normalize_project_url(item.url),
             )
             for item in selection.considered
@@ -195,33 +187,56 @@ def test_captured_candidates_form_the_recorded_families(
     actual_family = {
         member: family for family, members in families.items() for member in members
     }
-    corrected = apply_composition_policy(
+    applied = apply_composition_policy(
         parse_composition_policy(current_configuration.policy),
         current_configuration.candidates,
     )
-    denied_ids = {item["id"] for item in read(ROOT / "config/deny.json")}
+    denied = {
+        normalize_project_url(item["url"]) for item in read(ROOT / "config/deny.json")
+    }
     surviving = {
         candidate_selector(app).key
-        for app in corrected
-        if app.eligibility and app.id not in denied_ids
+        for app in applied
+        if app.eligibility and normalize_project_url(app.url) not in denied
     }
     assert set(actual_family) == surviving
 
+    # The recorded groups are the families joining several captured candidates
+    # that no committed generated catalog decides. They must stay partitioned
+    # exactly as recorded: a merge of two of them or a split of one fails.
     recorded = read(FORMED_FAMILIES)
-    for recorded_members in recorded.values():
-        present = [
-            tuple(member) for member in recorded_members if tuple(member) in surviving
-        ]
-        assert len({actual_family[member] for member in present}) <= 1
-
-    # Generated catalogs change only through reviewed catalog updates, so the
-    # recorded families freeze only the members the maintained rules and the
-    # captured upstream inputs decide.
-    generated = current_configuration.generated_origins
-    projected = {
-        family: sorted(list(member) for member in members if member[1] not in generated)
-        for family, members in families.items()
+    recorded_partition = {
+        frozenset(tuple(member) for member in members) for members in recorded.values()
     }
-    assert {family: members for family, members in projected.items() if members} == (
-        recorded
+    actual_partition: dict[str, set[tuple[str, str, str, str]]] = {}
+    for members in recorded_partition:
+        for member in members:
+            assert member in actual_family, member
+            actual_partition.setdefault(actual_family[member], set()).add(member)
+    assert {frozenset(members) for members in actual_partition.values()} == (
+        recorded_partition
     )
+
+
+def test_selected_entries_already_listing_their_apk_package_ship_it(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    # These projects need no overlay id patch because the entry the packs
+    # select already lists the package its APK declares.
+    expected = {
+        "github.com/matteo842/crashbandicoot-launcher": (
+            "io.github.matteo842.crashlauncher.runtime"
+        ),
+        "github.com/simon358/ctr-native-android": "com.ctrnative",
+        "github.com/chrissotraidis/kartpad": "dev.kartpad.android",
+        "github.com/slickamogus/silent-hill-decomp": "com.silenthill.port",
+        "github.com/twilitrealm/dusklight": "dev.twilitrealm.dusk",
+    }
+    shipped = {
+        (normalize_project_url(app.data["url"]), app.id)
+        for variant in Variant
+        for app in current_configuration.result.apps[variant]
+        if normalize_project_url(app.data["url"]) in expected
+    }
+    assert {url for url, _ in shipped} == set(expected)
+    assert shipped == set(expected.items())

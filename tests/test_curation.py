@@ -7,7 +7,6 @@ from pathlib import Path
 
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import (
-    apply_composition_policy,
     parse_composition_policy,
 )
 from omnipack.merge import compose
@@ -69,48 +68,54 @@ def test_upstream_pack_tracker_stays_excluded_from_current_composition(
     assert b"Obtainium-Emulation-Pack" not in catalog
 
 
-def test_every_committed_denial_excludes_its_package_when_present(
+def test_every_committed_denial_excludes_its_project_when_present(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    # A denial can match nothing because a generated catalog dropped the app.
-    # The build reports such a denial as stale rather than failing, so check
-    # that every stale report is genuinely absent and every present package
-    # is removed from both packs.
-    denied = {entry["id"] for entry in read(ROOT / "config/deny.json")}
-    effective_candidates = apply_composition_policy(
-        parse_composition_policy(current_configuration.policy),
-        current_configuration.candidates,
-    )
-    present = {app.id for app in effective_candidates}
+    # A denial can match nothing because a source dropped the project. The
+    # build reports such a denial as stale rather than failing, so check that
+    # every stale report has no candidate at all at its URL, that every denial
+    # of an eligible candidate is reported as a removal, and that no denied
+    # project reaches either pack.
+    denied = {
+        normalize_project_url(entry["url"]) for entry in read(ROOT / "config/deny.json")
+    }
+    present = {
+        normalize_project_url(app.url) for app in current_configuration.candidates
+    }
+    eligible = {
+        normalize_project_url(app.url)
+        for app in current_configuration.candidates
+        if app.eligibility
+    }
     report = current_configuration.result.report
-    stale = {item.package_id for item in report.stale_exclusions}
-    assert stale == denied - present
-    assert {item.package_id for item in report.removals} == denied & present
+    assert {item.url for item in report.stale_exclusions} == denied - present
+    assert {item.url for item in report.removals} == denied & eligible
     for variant in Variant:
-        selected = {app.id for app in current_configuration.result.apps[variant]}
+        selected = {
+            normalize_project_url(app.url)
+            for app in current_configuration.result.apps[variant]
+        }
         assert not (selected & denied)
 
 
-def effective_id(record):
-    corrections = {
-        (rule["match"]["id"], rule["match"]["url"].lower()): rule["packageId"]
-        for rule in read(ROOT / "config/composition.json")["candidates"]
-        if "packageId" in rule
-    }
-    return corrections.get((record["id"], record["url"].lower()), record["id"])
+def corrected_id(record, overlay):
+    """The id an overlay record at the record's project URL patches in, if any."""
+    patches = {item.url: item.patch for item in overlay}
+    return patches.get(normalize_project_url(record["url"]), {}).get("id", record["id"])
 
 
 def historical_curated():
     """Apply maintained overlays to historical, already selected output records."""
     baseline = read(FIXTURES / "baseline-apps.json")
+    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     selected = {variant: [] for variant in Variant}
     for variant in Variant:
         for record in baseline[variant.value]:
             data = deepcopy(record)
             data["additionalSettings"] = json.loads(data["additionalSettings"])
-            data["id"] = effective_id(data)
-            selected[variant].append(ComposedApp(f"package:{data['id']}", data))
-    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
+            selected[variant].append(
+                ComposedApp(normalize_project_url(data["url"]), data)
+            )
     return {
         variant.value: json.loads(render(apply_overlay(apps, overlay)))["apps"]
         for variant, apps in selected.items()
@@ -119,14 +124,14 @@ def historical_curated():
 
 def test_policies_preserve_existing_entries_and_settings():
     baseline = read(FIXTURES / "baseline-apps.json")
+    overlay = parse_overlay(read(ROOT / "config/overlay.json"), "overlay")
     apps = historical_curated()
     for variant, originals in baseline.items():
         actual = {a["id"]: a for a in apps[variant]}
-        expected_ids = {effective_id(a) for a in originals}
+        expected_ids = {corrected_id(a, overlay) for a in originals}
         assert set(actual) == expected_ids
         for old in originals:
-            corrected_id = effective_id(old)
-            new = actual[corrected_id]
+            new = actual[corrected_id(old, overlay)]
             old_settings = json.loads(old["additionalSettings"])
             expected = deepcopy(old_settings)
             if old["id"] in APK_FILTERS:
@@ -143,7 +148,7 @@ def test_policies_preserve_existing_entries_and_settings():
             expected_record = {
                 k: v for k, v in old.items() if k != "additionalSettings"
             }
-            expected_record["id"] = corrected_id
+            expected_record["id"] = corrected_id(old, overlay)
             assert {
                 k: v for k, v in new.items() if k != "additionalSettings"
             } == expected_record
@@ -176,7 +181,7 @@ def test_maintained_version_override_survives_refreshed_source_settings(
 ) -> None:
     overlay = read(ROOT / "config/overlay.json")
     protected = {
-        (record["id"], normalize_project_url(record["url"]))
+        normalize_project_url(record["url"])
         for record in overlay
         if record["patch"].get("additionalSettings", {}).get("versionDetection")
         is False
@@ -198,7 +203,7 @@ def test_maintained_version_override_survives_refreshed_source_settings(
     observed = set()
     for variant in Variant:
         for entry in json.loads(render(result.apps[variant]))["apps"]:
-            key = (entry["id"], normalize_project_url(entry["url"]))
+            key = normalize_project_url(entry["url"])
             if key in protected:
                 assert (
                     json.loads(entry["additionalSettings"])["versionDetection"] is False
@@ -219,3 +224,29 @@ def test_current_composition_categorizes_every_entry_from_the_taxonomy(
             assert set(app.data["categories"]) <= set(Category)
             track_only = app.data["additionalSettings"].get("trackOnly") is True
             assert (app.data["categories"] == [Category.TRACK_ONLY]) == track_only
+
+
+def test_split_and_joined_families_ship_as_intended(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    """melonDS stable and nightly share a repository but ship separately, and
+    Minish Cap and Cemu each ship one build per pack from different repositories.
+    """
+    apps = current_configuration.result.apps
+    for variant in Variant:
+        by_family: dict[str, list[str]] = {}
+        for app in apps[variant]:
+            by_family.setdefault(app.family, []).append(normalize_project_url(app.url))
+        assert {
+            app.id
+            for app in apps[variant]
+            if normalize_project_url(app.url)
+            == "github.com/rafaelvcaetano/melonds-android"
+        } == {"me.magnum.melonds", "me.magnum.melonds.nightly"}
+        assert len(by_family["app:minish-cap"]) == 1
+        assert [app.id for app in apps[variant]].count("dev.picori.tmc") == 1
+        assert by_family["app:cemu"] == [
+            "github.com/ssimco/cemu"
+            if variant is Variant.SINGLE
+            else "github.com/sapphirerhodonite/cemu"
+        ]

@@ -30,6 +30,5 @@ def test_dual_preference_is_derived_from_dual_only_eligibility(
     assert app(eligibility).dual_preferred is preferred
 
 
-def test_origin_and_original_id_default_from_provenance_and_id() -> None:
-    built = app(frozenset(Variant))
-    assert (built.origin, built.original_id) == ("fixture", "org.example.app")
+def test_origin_defaults_from_provenance() -> None:
+    assert app(frozenset(Variant)).origin == "fixture"

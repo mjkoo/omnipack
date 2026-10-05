@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from omnipack.report_model import FindingRecord
+from omnipack.report_model import FindingRecord, Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 
@@ -34,9 +34,14 @@ class Finding:
     entry_id: str | None = None
     index: int | None = None
     field: str | None = None
+    severity: Severity = Severity.ERROR
 
     def to_record(self) -> FindingRecord:
-        """Serialize a finding, omitting absent location fields."""
+        """Serialize a finding, omitting absent location fields.
+
+        Errors and nonfatal findings are recorded in separate lists, so the
+        record does not repeat the severity.
+        """
         record: FindingRecord = {
             "stage": self.stage,
             "code": self.code,
@@ -167,23 +172,7 @@ def _validate_document(variant: str, document: object, findings: list[Finding]) 
             )
         )
 
-    seen: set[str] = set()
     for index, raw in enumerate(apps):
-        if isinstance(raw, dict):
-            entry_id = raw.get("id")
-            if isinstance(entry_id, str) and entry_id:
-                if entry_id in seen:
-                    _add(
-                        findings,
-                        "entry",
-                        "duplicate_id",
-                        "duplicate id",
-                        variant,
-                        entry_id,
-                        index,
-                        "id",
-                    )
-                seen.add(entry_id)
         _validate_entry(variant, index, raw, findings)
 
 
@@ -271,6 +260,17 @@ def _validate_entry(
             "overrideSource",
         )
         source = None
+    if raw.get("allowIdChange") is not True:
+        _add(
+            findings,
+            "entry",
+            "invalid_allow_id_change",
+            "allowIdChange must be true",
+            variant,
+            entry_id,
+            index,
+            "allowIdChange",
+        )
     preferred = raw.get("preferredApkIndex")
     if "preferredApkIndex" in raw and (
         not isinstance(preferred, int) or isinstance(preferred, bool)
@@ -433,14 +433,14 @@ def _validate_composition(
     from omnipack.composition_policy import (
         CompositionPolicyError,
         RenderedKey,
-        entry_family,
-        find_repeats,
+        check_overlay_id_patches,
         load_composition_policy,
         pair_entries,
         rendered_key,
+        repeated_ids,
+        repeated_labels,
     )
     from omnipack.merge import CompositionError, parse_exclusions
-    from omnipack.model import Variant
     from omnipack.overlay import OverlayError, parse_overlay
 
     try:
@@ -449,6 +449,7 @@ def _validate_composition(
             raise CompositionError("denylist must be a list")
         exclusions = parse_exclusions(deny)
         patches = parse_overlay(overlay, "overlay")
+        check_overlay_id_patches(policy, patches)
     except (CompositionPolicyError, CompositionError, OverlayError, TypeError) as error:
         findings.append(Finding("config", "invalid_composition_config", str(error)))
         return
@@ -472,71 +473,87 @@ def _validate_composition(
                 continue
 
     for variant, variant_keys in keys.items():
-        for family, members in find_repeats(policy, variant_keys).families.items():
+        for label, members in repeated_labels(policy, variant_keys).items():
             findings.append(
                 Finding(
                     "composition",
-                    "duplicate_explicit_family",
-                    f"explicit family {family!r} is projected onto more than "
-                    f"one entry: {', '.join(map(repr, members))}",
+                    "repeated_family_label",
+                    f"family label {label!r} is carried by more than one entry: "
+                    f"{', '.join(map(repr, members))}",
                     variant,
                 )
             )
+        for package_id, members in repeated_ids(variant_keys).items():
+            entries = ", ".join(
+                f"{policy.family(*key)!r} at {key[1]!r}" for key in members
+            )
+            findings.append(
+                Finding(
+                    "composition",
+                    "repeated_package_id",
+                    f"package id {package_id!r} is carried by more than one "
+                    f"entry: {entries}",
+                    variant,
+                    package_id,
+                    severity=Severity.NONFATAL,
+                )
+            )
 
-    for (family, target), pinned in policy.projected_pins.items():
-        if pinned not in keys[target.value]:
+    patched_ids = {
+        patch.url: patch.patch["id"] for patch in patches if "id" in patch.patch
+    }
+    for (family, target), (package_id, url) in policy.projected_pins.items():
+        expected = (patched_ids.get(url, package_id), url)
+        if expected not in keys[target.value]:
             findings.append(
                 Finding(
                     "composition",
                     "pin_mismatch",
-                    f"family {family!r} requires pinned output {pinned!r} in {target.value}",
+                    f"family {family!r} requires pinned output {expected!r} in "
+                    f"{target.value}",
                     target.value,
-                    pinned[0],
+                    expected[0],
                 )
             )
 
     for exclusion in exclusions:
-        for target in Variant:
-            present = [
-                key for key in keys[target.value] if key[0] == exclusion.package_id
-            ]
-            if present:
-                labels = " and ".join(
-                    sorted({repr(entry_family(policy, key)) for key in present})
-                )
-                findings.append(
-                    Finding(
-                        "composition",
-                        "denied_output_present",
-                        f"denied selection {exclusion.package_id!r} in family label "
-                        f"{labels} remains present",
-                        target.value,
-                        exclusion.package_id,
+        for variant, variant_keys in keys.items():
+            for package_id, url in sorted(variant_keys):
+                if url == exclusion.url:
+                    findings.append(
+                        Finding(
+                            "composition",
+                            "denied_output_present",
+                            f"entry {package_id!r} at denied project URL "
+                            f"{exclusion.url!r} remains present",
+                            variant,
+                            package_id,
+                        )
                     )
-                )
 
-    all_keys = {*keys["single"], *keys["dual"]}
+    urls = {url for variant_keys in keys.values() for _, url in variant_keys}
     for patch in patches:
-        if patch.key not in all_keys:
+        if patch.url not in urls:
             findings.append(
                 Finding(
                     "composition",
                     "stale_overlay",
-                    f"overlay has no target for {patch.key!r}",
-                    entry_id=patch.package_id,
+                    f"overlay has no target for {patch.url!r}",
                 )
             )
 
-    pairs = pair_entries(policy, keys["single"], keys["dual"])
-    for pair in sorted(pairs, key=lambda item: (item.label, item.single or ())):
+    for pair in pair_entries(policy, keys["single"], keys["dual"]):
         if pair.single is not None and pair.dual is None:
+            package_id, url = pair.single
             findings.append(
                 Finding(
                     "composition",
-                    "dual_coverage_gap",
-                    f"dual variant is missing family label {pair.label!r}",
-                    "dual",
-                    pair.single[0],
+                    "single_only_coverage",
+                    f"family label {pair.label!r} ({package_id!r} at {url!r}) has "
+                    "no dual-screen entry",
+                    "single",
+                    package_id,
+                    severity=Severity.NONFATAL,
                 )
             )
 

@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from omnipack import build as build_module
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import (
@@ -19,7 +21,7 @@ from omnipack.sources import IngestionReport
 
 def app(package_id: str) -> ComposedApp:
     return ComposedApp(
-        f"package:{package_id}",
+        f"example.test/{package_id}",
         {
             "id": package_id,
             "url": f"https://example.test/{package_id}",
@@ -35,9 +37,9 @@ def composition(*ids: str) -> CompositionResult:
         {variant: [app(package_id) for package_id in ids] for variant in Variant},
         CompositionReport(
             removals=[
-                Removal("denied.id", Variant.DUAL, "curated", "package:denied.id")
+                Removal("example.test/denied", "curated", ("example.test/denied",))
             ],
-            stale_exclusions=[StaleExclusion("stale.id", "gone")],
+            stale_exclusions=[StaleExclusion("example.test/stale", "gone")],
         ),
     )
 
@@ -67,11 +69,9 @@ def write_config(root: Path) -> None:
 def test_report_compares_with_previous_output_and_keeps_source_details(
     tmp_path: Path,
 ) -> None:
-    write_previous(
-        tmp_path,
-        {"apps": [{"id": "old.id"}, {"id": "kept.id"}]},
-        {"apps": [{"id": "kept.id"}]},
-    )
+    old = {"id": "old.id", "url": "https://example.test/old.id"}
+    kept = {"id": "kept.id", "url": "https://EXAMPLE.test/kept.id/"}
+    write_previous(tmp_path, {"apps": [old, kept]}, {"apps": [kept]})
     write_config(tmp_path)
     admitted = {
         "source": "codm2000",
@@ -85,16 +85,73 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         composition("kept.id", "new.id"),
         ingestion,
         build_module.BuildInputs.read(tmp_path),
+        build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["changes"]["single"] == {"added": ["new.id"], "removed": ["old.id"]}
-    assert report["changes"]["dual"] == {"added": ["new.id"], "removed": []}
+    added = [{"id": "new.id", "url": "example.test/new.id"}]
+    assert report["changes"]["single"] == {
+        "added": added,
+        "removed": [{"id": "old.id", "url": "example.test/old.id"}],
+    }
+    assert report["changes"]["dual"] == {"added": added, "removed": []}
     assert report["sourceAdmissions"] == [admitted]
-    assert report["denylistRemovals"][0]["id"] == "denied.id"
-    assert report["staleExclusions"][0]["id"] == "stale.id"
+    assert report["denylistRemovals"] == [
+        {
+            "url": "example.test/denied",
+            "reason": "curated",
+            "families": ["example.test/denied"],
+        }
+    ]
+    assert report["staleExclusions"] == [
+        {"url": "example.test/stale", "reason": "gone"}
+    ]
+    for variant in ("single", "dual"):
+        published = json.loads((tmp_path / f"dist/{variant}-screen.json").read_text())
+        assert {app["allowIdChange"] for app in published["apps"]} == {True}
 
 
-def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> None:
+def test_previous_output_whose_apps_is_not_a_list_counts_as_empty(
+    tmp_path: Path,
+) -> None:
+    write_previous(tmp_path, {"apps": {"id": "x"}}, {"apps": 7})
+    assert build_module.previous_entries(tmp_path) == {
+        Variant.SINGLE: set(),
+        Variant.DUAL: set(),
+    }
+
+
+@pytest.mark.parametrize(
+    "content",
+    [b"\xff\xfe", b"[" * 3_000_000 + b"]" * 3_000_000],
+    ids=["not-utf-8", "nested-too-deep"],
+)
+def test_previous_output_that_cannot_be_decoded_counts_as_empty(
+    tmp_path: Path, content: bytes
+) -> None:
+    write_previous(tmp_path, {"apps": []}, {"apps": []})
+    (tmp_path / "dist" / "single-screen.json").write_bytes(content)
+    assert build_module.previous_entries(tmp_path) == {
+        Variant.SINGLE: set(),
+        Variant.DUAL: set(),
+    }
+
+
+def test_previous_entry_whose_url_does_not_normalize_keeps_its_raw_url(
+    tmp_path: Path,
+) -> None:
+    entry = {"id": "x", "url": "/no-host"}
+    write_previous(tmp_path, {"apps": [entry]}, {"apps": []})
+    assert build_module.previous_entries(tmp_path) == {
+        Variant.SINGLE: {("x", "/no-host")},
+        Variant.DUAL: set(),
+    }
+
+
+@pytest.mark.parametrize("package_id", ["new.pkg", "old.pkg"])
+def test_family_switch_reports_package_diff_and_new_winner(
+    tmp_path: Path, package_id: str
+) -> None:
+    """The new winner may carry a new package id or keep the old one."""
     from omnipack.merge import compose
     from omnipack.model import App, SourceType
 
@@ -104,7 +161,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     write_previous(tmp_path, {"apps": [old, removed]}, {"apps": [old, removed]})
     current_url = "https://example.test/new"
     candidate = App(
-        "new.pkg",
+        package_id,
         current_url,
         "Replacement",
         SourceType.HTML,
@@ -117,7 +174,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
             "match": {
                 "source": "extras",
                 "origin": "extras",
-                "id": "new.pkg",
+                "id": package_id,
                 "url": current_url,
             },
             "family": "app:shared",
@@ -129,19 +186,26 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     (tmp_path / "config/composition.json").write_bytes(policy_bytes)
     current = compose([candidate], [], [], policy=parse_composition_policy(policy_data))
     build_module.publish_build(
-        tmp_path, current, IngestionReport(), build_module.BuildInputs.read(tmp_path)
+        tmp_path,
+        current,
+        IngestionReport(),
+        build_module.BuildInputs.read(tmp_path),
+        build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
     for variant in Variant:
         assert report["changes"][variant.value] == {
-            "added": ["new.pkg"],
-            "removed": ["old.pkg", "retired.pkg"],
+            "added": [{"id": package_id, "url": "example.test/new"}],
+            "removed": [
+                {"id": "old.pkg", "url": "example.test/old"},
+                {"id": "retired.pkg", "url": "example.test/retired"},
+            ],
         }
         [selection] = [
             item for item in report["selections"] if item["variant"] == variant.value
         ]
         assert selection["family"] == "app:shared"
-        assert selection["effective_id"] == "new.pkg"
+        assert selection["id"] == package_id
         assert selection["url"] == current_url
 
 
@@ -153,6 +217,9 @@ BUILD_REPORT_FIELDS = {
     "denylistRemovals",
     "staleExclusions",
     "selections",
+    "repeatedIds",
+    "singleOnlyFamilies",
+    "sameRankTies",
     "uncategorizedFamilies",
     "staleCategoryAssignments",
     "offlineVerification",
@@ -168,9 +235,10 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
         composition("one"),
         IngestionReport(),
         build_module.BuildInputs.read(tmp_path),
+        build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["schemaVersion"] == 4
+    assert report["schemaVersion"] == 5
     assert set(report) == BUILD_REPORT_FIELDS
     write_report(
         tmp_path,

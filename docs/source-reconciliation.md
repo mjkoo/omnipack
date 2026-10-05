@@ -54,8 +54,9 @@ unknown-code or future publisher-compromise risk.
 - **MetroidArch replaces the retired Super Metroid port in dual.** The successor
   provides a real second-screen companion interface and passes the accepted
   reputation/basic-vetting standard. Normal RetroArch remains in both packs.
-  The reviewed retired Super Metroid catalog IDs remain excluded. MetroidArch uses a new
-  package and needs separate writable-directory setup; see [setup and vetting](metroidarch.md).
+  The retired Super Metroid port's project URL remains denied. MetroidArch uses
+  a new package and needs separate writable-directory setup; see
+  [setup and vetting](metroidarch.md).
 - **Gen1Recomp uses its canonical repository.** The old
   `bryanthaboi/pokemon-gen1-recomp-project` URL redirects to
   `bryanthaboi/gen1recomp`. This is a repository rename, not a publisher switch.
@@ -87,7 +88,7 @@ date.
   the acceptance standard above, made without downloading or inspecting an APK.
   It also settles the open identity question: the packs used
   `com.underdecoded.gen2recomped` while an Obtainium entry predating the pack
-  used `com.underdecodedhd.gen2recomp`, and a denial keyed on the effective id
+  used `com.underdecodedhd.gen2recomp`, and a denial of the project URL
   removes the entry without resolving which id the APK declares.
 - **GameHub Lite is excluded (observed 2026-09-28 UTC).**
   [Producdevity/gamehub-lite](https://github.com/Producdevity/gamehub-lite),
@@ -131,9 +132,16 @@ use and reputation; they are not endorsements by the original game publishers.
 
 These are corrections to Obtainium's configured tracking ID. They name the
 package already present inside the inspected APK; they do not rename an Android
-installation or require reinstalling an identical APK. Composition rules match
-original source provenance and preserve that original catalog identity in build
-reports. Package/family uniqueness is enforced after correction.
+installation or require reinstalling an identical APK. Where the entry the packs
+select already lists the APK's package, as Quiver's entries for Crash Bandicoot,
+Simon's CTR, KartPad, Silent Hill and Dusklight do, the table records the
+correction but nothing needs configuring. Every other correction is an overlay
+`id` patch on the project URL whose entry the packs select, so it changes only
+the rendered id; selection, families and the build report's selections keep the
+catalog's id. A correction for a project the packs do not select is not
+configured: BBoi's Pokémon Red/Blue Recomp build lists
+`com.bryanthaboi.pokemonredblue` while its APK declares
+`com.theboisclub.pokemonred`, but the curated extra outranks it.
 
 | App | Original catalog ID | Verified APK ID |
 | --- | --- | --- |
@@ -145,7 +153,6 @@ reports. Package/family uniqueness is enforced after correction.
 | Perfect Dark Recomp | `com.izzy2lost.perfectdark` | `com.perfectdark.port` |
 | RetroArch (AArch64) | `487343354` | `com.retroarch.aarch64` |
 | Star Fox 64 (Starship) | `com.izzy2lost.starship` | `com.starship.android` |
-| Pokémon Red/Blue Recomp | `com.bryanthaboi.pokemonredblue` | `com.theboisclub.pokemonred` |
 | Zelda: Majora's Mask (2 Ship) | `org.linkzenic.twoship` | `com.twoshipfork.mm` |
 | Zelda: The Minish Cap | `com.samyost1.tmcandroid` | `dev.picori.tmc` |
 | Zelda: Twilight Princess (Dusklight DS) | `com.igawa6.dusklight` | `dev.twilitrealm.dusk` |
@@ -230,11 +237,11 @@ existing Simon installation. These are limits in our curation and acceptance
 process as well as upstream metadata quality, not evidence that the conflict
 resolver randomly chose the wrong repository.
 
-Maintained provenance-aware corrections, explicit official-source pins, and
-package denials now preserve the decisions through refreshes. The bounded
-review did not cover Winlator-Ludashi, whose identity and asset selection
-[curation](curation.md) records separately. See
-[verification](verification.md) for the runtime check's limits.
+Maintained overlay `id` patches, explicit official-source pins, and project
+denials now preserve the decisions through refreshes. The bounded review did not
+cover Winlator-Ludashi, whose identity and asset selection
+[curation](curation.md) records separately. See [verification](verification.md)
+for the runtime check's limits.
 
 The [captured regression evidence](../tests/fixtures/reconciliation/README.md)
 retains source inputs and selected manifest observations. See
