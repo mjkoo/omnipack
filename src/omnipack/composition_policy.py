@@ -408,15 +408,15 @@ def _explicit_family(value: object, label: str) -> str:
 def _family_name(value: object, label: str) -> str:
     """An `app:` family, or a default family's normalized project URL.
 
-    A URL must already be in normalized form and carry a host and a path, so a
-    full `https://` URL or an `app:` name typed without its prefix fails
-    instead of naming nothing.
+    A URL must already be in normalized form, carry a host and a path and hold
+    no whitespace, so a full `https://` URL or an `app:` name typed without its
+    prefix fails instead of naming nothing.
     """
     family = _text(value, label)
     if family.startswith("app:"):
         return _explicit_family(family, label)
     try:
-        normalized = normalize_project_url(family)
+        normalized = parse_project_url(family)
     except ValueError:
         normalized = None
     if normalized != family or "/" not in family.strip("/"):

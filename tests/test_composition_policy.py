@@ -497,6 +497,10 @@ def test_category_map_assigns_one_category_per_family() -> None:
         ),
         ({"app:": "PC Ports"}, r"categories key 'app:' must use a nonempty"),
         ({"package:x": "PC Ports"}, r"categories key 'package:x' must be an app:"),
+        (
+            {"github.com/owner/a b": "PC Ports"},
+            r"categories key 'github.com/owner/a b' must be an app: family",
+        ),
         (["app:x"], "categories must be an object"),
     ],
 )
