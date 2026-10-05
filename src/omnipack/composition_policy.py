@@ -244,13 +244,14 @@ def check_overlay_id_patches(
     """Refuse an `id` patch at a URL whose family rules name different families.
 
     Such a patch would give every family there one id, so the rendered entries
-    could no longer be told apart by family.
+    could no longer be told apart by family. `patches` keep the overlay's
+    record order, so each error names its record by index.
     """
-    for patch in patches:
+    for index, patch in enumerate(patches):
         families = policy.url_rule_families(patch.url)
         if "id" in patch.patch and len(families) > 1:
             raise CompositionPolicyError(
-                f"overlay record for {patch.url!r} patches id at a URL whose "
+                f"overlay[{index}] for {patch.url!r} patches id at a URL whose "
                 f"rules name families {', '.join(map(repr, families))}"
             )
 

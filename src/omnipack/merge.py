@@ -280,8 +280,9 @@ def _resolve_pins(
 ) -> dict[PinKey, App]:
     """Validate every pin against the admitted candidates before any selection.
 
-    A denied candidate, or one eligible for no variant, forms no family, so its
-    pin fails on that exclusion before the family comparison.
+    A candidate eligible for no variant, or a denied one, forms no family, so
+    its pin fails on that exclusion before the family comparison. Ineligibility
+    is checked first, since a denial of such a candidate removes nothing.
     """
     by_selector = {candidate_selector(item).key: item for item in formed}
     resolved: dict[PinKey, App] = {}
@@ -297,14 +298,14 @@ def _resolve_pins(
         )
         if candidate is None:
             raise CompositionError(f"{label} is missing")
+        if not candidate.eligibility:
+            raise CompositionError(f"{label} is ineligible for every variant")
         denied_reason = denied.get(id(candidate))
         if denied_reason is not None:
             denied_url = normalize_project_url(candidate.url)
             raise CompositionError(
                 f"{label} is denied at {denied_url!r}: {denied_reason}"
             )
-        if not candidate.eligibility:
-            raise CompositionError(f"{label} is ineligible for every variant")
         winner = by_selector[pin.match.key]
         if winner.family != pin.family:
             raise CompositionError(

@@ -943,10 +943,15 @@ def test_an_id_patch_at_a_url_whose_rules_name_two_families_fails() -> None:
     url = "https://github.com/owner/split"
     first = app("a", family="app:a", url=url)
     second = app("b", family="app:b", url=url)
+    other = app("other", "bboi")
     with pytest.raises(CompositionError) as error:
-        compose([first, second], [], overlays((url, {"id": "c", "name": "x"})))
+        compose(
+            [first, second, other],
+            [],
+            overlays((other.url, {"name": "y"}), (url, {"id": "c", "name": "x"})),
+        )
     assert str(error.value) == (
-        "overlay record for 'github.com/owner/split' patches id at a URL whose "
+        "overlay[1] for 'github.com/owner/split' patches id at a URL whose "
         "rules name families 'app:a', 'app:b'"
     )
     result = compose([first, second], [], overlays((url, {"name": "patched"})))
@@ -1269,6 +1274,27 @@ def test_pin_on_a_removed_candidate_fails_on_the_removal(removal: str) -> None:
     assert report.stale_exclusions == [
         StaleExclusion("example.com/retired", "obsolete")
     ]
+
+
+def test_pin_on_a_denied_candidate_eligible_for_no_variant_fails_as_ineligible() -> (
+    None
+):
+    pinned = app("pinned", eligibility=frozenset())
+    family = url_family(pinned)
+    report = CompositionReport()
+    with pytest.raises(CompositionError) as error:
+        compose(
+            [pinned, app("other", "bboi")],
+            deny(pinned.url),
+            [],
+            policy=policy_of([], [pin(pinned, family, Variant.DUAL)]),
+            report=report,
+        )
+    assert str(error.value) == (
+        f"pin for family {family!r} target 'dual' is ineligible for every variant"
+    )
+    # The denial removes nothing, since the candidate forms no family.
+    assert report.removals == []
 
 
 def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:

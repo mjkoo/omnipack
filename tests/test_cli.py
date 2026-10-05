@@ -446,6 +446,61 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
     }
 
 
+def test_failed_rollback_reports_changes_against_the_output_before_the_build(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    candidate = App(
+        "current.id",
+        "https://example.test/current",
+        "Current",
+        SourceType.HTML,
+        (),
+        Provenance("extras", "fixture"),
+        eligibility=frozenset(Variant),
+    )
+    before = json.dumps(
+        {"apps": [{"id": "before.id", "url": "https://example.test/old"}]}
+    ).encode()
+    single, dual = (
+        tmp_path / "dist" / name for name in ("single-screen.json", "dual-screen.json")
+    )
+    single.parent.mkdir()
+    for path in (single, dual):
+        path.write_bytes(before)
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [candidate]
+    )
+    real_replace = Path.replace
+    single_writes = 0
+
+    def replace(source: Path, target: Path) -> Path:
+        nonlocal single_writes
+        name = Path(target).name
+        if name == "dual-screen.json":
+            raise OSError("injected publication failure")
+        if name == "single-screen.json":
+            single_writes += 1
+            if single_writes == 2:
+                raise OSError("injected rollback failure")
+        return real_replace(source, target)
+
+    monkeypatch.setattr(Path, "replace", replace)
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 1
+    # The failed rollback leaves the new single output in place.
+    assert json.loads(single.read_text())["apps"][0]["id"] == "current.id"
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "publication"
+    assert report["changes"] == {
+        variant.value: {
+            "added": [{"id": "current.id", "url": "example.test/current"}],
+            "removed": [{"id": "before.id", "url": "example.test/old"}],
+        }
+        for variant in Variant
+    }
+
+
 # A category key no build can satisfy, so assignment always reports it stale.
 ABSENT_CATEGORY_POLICY = {
     "schemaVersion": 1,
@@ -881,7 +936,7 @@ def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
 
     assert main([command]) == 1
     expected = (
-        "overlay record for 'example.test/split' patches id at a URL whose rules "
+        "overlay[0] for 'example.test/split' patches id at a URL whose rules "
         "name families 'app:a', 'app:b'"
     )
     assert expected in capsys.readouterr().err

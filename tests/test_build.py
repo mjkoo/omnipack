@@ -85,6 +85,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         composition("kept.id", "new.id"),
         ingestion,
         build_module.BuildInputs.read(tmp_path),
+        build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
     added = [{"id": "new.id", "url": "example.test/new.id"}]
@@ -169,7 +170,11 @@ def test_family_switch_reports_package_diff_and_new_winner(
     (tmp_path / "config/composition.json").write_bytes(policy_bytes)
     current = compose([candidate], [], [], policy=parse_composition_policy(policy_data))
     build_module.publish_build(
-        tmp_path, current, IngestionReport(), build_module.BuildInputs.read(tmp_path)
+        tmp_path,
+        current,
+        IngestionReport(),
+        build_module.BuildInputs.read(tmp_path),
+        build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
     for variant in Variant:
@@ -214,6 +219,7 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
         composition("one"),
         IngestionReport(),
         build_module.BuildInputs.read(tmp_path),
+        build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["schemaVersion"] == 5

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import json
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from stat import S_IMODE
@@ -141,14 +141,18 @@ def publish_build(
     composition: CompositionResult,
     ingestion: IngestionReport,
     inputs: BuildInputs,
+    previous: Mapping[Variant, set[RenderedKey]],
     *,
     on_stage: Callable[[BuildStage], None] | None = None,
     on_verification: Callable[[OfflineVerdict], None] | None = None,
 ) -> None:
-    """Render both variants and their catalog, gate them, and publish together."""
+    """Render both variants and their catalog, gate them, and publish together.
+
+    `previous` is the output read before the build began, so the report's
+    changes compare against it even when a failed publication cannot restore it.
+    """
     if on_stage is not None:
         on_stage(BuildStage.RENDERING)
-    before = previous_entries(root)
     rendered = {
         variant: render_pack(composition.apps[variant]).encode() for variant in Variant
     }
@@ -203,7 +207,7 @@ def publish_build(
         on_stage(BuildStage.REPORT_WRITING)
     write_report(
         root,
-        before,
+        previous,
         composition,
         ingestion,
         offline_verification=verdict,

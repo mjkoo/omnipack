@@ -469,7 +469,7 @@ def test_an_id_patch_at_a_split_url_fails_while_loading_configuration() -> None:
         (
             "invalid_composition_config",
             (
-                "overlay record for 'example.com/split' patches id at a URL whose "
+                "overlay[0] for 'example.com/split' patches id at a URL whose "
                 "rules name families 'app:a', 'app:b'"
             ),
         )
