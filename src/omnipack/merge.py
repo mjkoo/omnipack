@@ -288,10 +288,15 @@ def _resolve_pins(
     # Sorted so the first failing pin reported does not depend on policy order.
     for pin in sorted(pins, key=lambda item: (item.family, item.variant.value)):
         label = f"pin for family {pin.family!r} target {pin.variant.value!r}"
-        matches = [item for item in candidates if candidate_selector(item) == pin.match]
-        if len(matches) != 1:
-            raise CompositionError(f"{label} is missing or ambiguous")
-        [candidate] = matches
+        # Policy application has already collapsed identical candidates and
+        # failed on different records sharing one selector, so at most one
+        # candidate matches.
+        candidate = next(
+            (item for item in candidates if candidate_selector(item) == pin.match),
+            None,
+        )
+        if candidate is None:
+            raise CompositionError(f"{label} is missing")
         denied_reason = denied.get(id(candidate))
         if denied_reason is not None:
             denied_url = normalize_project_url(candidate.url)
