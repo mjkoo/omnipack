@@ -9,7 +9,6 @@ from urllib.parse import urlsplit
 
 from omnipack.http import HttpResponse
 from omnipack.model import App, Provenance, SourceType, Variant
-from omnipack.urls import gitlab_project_path
 
 
 class HttpGetter(Protocol):
@@ -24,16 +23,22 @@ class SourceError(RuntimeError):
         super().__init__(f"{source}: {message}")
 
 
-def source_type(value: object, *, source: str, entry: str) -> SourceType:
-    try:
-        return SourceType(value)
-    except (TypeError, ValueError) as error:
+def declared_source_type(value: object, *, source: str, entry: str) -> str:
+    """Keep any source type a record declares; Obtainium supports many more
+    than the pack holds default settings for."""
+    if not isinstance(value, str):
         raise SourceError(
-            source, f"entry {entry!r} has unsupported source type {value!r}"
-        ) from error
+            source, f"entry {entry!r} has malformed source type {value!r}"
+        )
+    return value
 
 
-def derived_source_type(url: str) -> SourceType:
+def derived_source_type(url: str) -> SourceType | None:
+    """Derive the source type of a URL whose type is unambiguous.
+
+    A github.com repository is GitHub and a gitlab.com project is GitLab. Any
+    other URL gets no source type, leaving detection to Obtainium.
+    """
     parsed = urlsplit(url if "://" in url else f"https://{url}")
     host = (parsed.hostname or "").lower().removeprefix("www.")
     parts = parsed.path.strip("/").split("/")
@@ -81,7 +86,12 @@ def derived_source_type(url: str) -> SourceType:
         and parts[1] not in {".", ".."}
     ):
         return SourceType.GITHUB
-    return SourceType.HTML
+    # A gitlab.com project is a namespace path and a project; GitLab reserves
+    # the `-` segment for its own routes inside a project.
+    segments = [part for part in parts if part]
+    if host == "gitlab.com" and len(segments) >= 2 and "-" not in segments:
+        return SourceType.GITLAB
+    return None
 
 
 def settings(value: object, *, source: str, entry: str) -> dict[str, Any]:
@@ -106,7 +116,6 @@ def normalize_record(
     *,
     source: str,
     eligibility: frozenset[Variant],
-    derive_type: bool = False,
     origin: str = "",
     default_label: str = "unnamed entry",
 ) -> App:
@@ -133,14 +142,11 @@ def normalize_record(
             source, f"entry {label!r} categories must be a list of strings"
         )
     url = record["url"]
-    declared_type = record.get("overrideSource")
     kind = (
-        derived_source_type(url)
-        if derive_type and "overrideSource" not in record
-        else source_type(declared_type, source=source, entry=str(label))
+        declared_source_type(record["overrideSource"], source=source, entry=str(label))
+        if "overrideSource" in record
+        else derived_source_type(url)
     )
-    if kind is SourceType.GITLAB:
-        _validate_gitlab_url(url, source=source, entry=str(label))
     modeled = {
         "id",
         "url",
@@ -164,12 +170,3 @@ def normalize_record(
         raw={key: value for key, value in record.items() if key not in modeled},
         origin=origin,
     )
-
-
-def _validate_gitlab_url(url: str, *, source: str, entry: str) -> None:
-    try:
-        gitlab_project_path(url)
-    except ValueError as error:
-        raise SourceError(
-            source, f"entry {entry!r} has invalid GitLab URL {url!r}"
-        ) from error

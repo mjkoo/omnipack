@@ -28,7 +28,7 @@ from omnipack.sources import (
     quiver,
     rjny,
 )
-from omnipack.urls import gitlab_project_path, normalize_project_url
+from omnipack.urls import normalize_project_url
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -176,17 +176,33 @@ def test_rjny_matches_both_upstream_exports() -> None:
         }
 
 
-def test_rjny_rejects_empty_location_and_unsupported_source() -> None:
+def test_rjny_rejects_empty_location_and_malformed_source_type() -> None:
     with pytest.raises(SourceError, match="rjny"):
         rjny.fetch(FakeHttp({}), {"repo": "", "branch": "main", "path": "x"})
     record = json.loads(fixture("rjny-applications.json"))
-    record["apps"][0]["overrideSource"] = "F-Droid Third Party Repo"
+    record["apps"][0]["overrideSource"] = ["GitHub"]
     url = "https://raw.githubusercontent.com/r/main/p"
-    with pytest.raises(SourceError, match="rjny.*F-Droid Third Party Repo"):
+    with pytest.raises(SourceError, match=r"rjny.*malformed source type \['GitHub'\]"):
         rjny.fetch(
             FakeHttp({url: json.dumps(record)}),
             {"repo": "r", "branch": "main", "path": "p"},
         )
+
+
+@pytest.mark.parametrize("declared", ["Codeberg", "F-Droid Third Party Repo"])
+def test_upstream_record_keeps_a_source_type_without_defaults(declared: str) -> None:
+    url = "https://raw.githubusercontent.com/r/main/p"
+    record = {
+        "id": "app.test",
+        "name": "Example",
+        "url": "https://codeberg.org/owner/repo",
+        "overrideSource": declared,
+    }
+    [app] = rjny.fetch(
+        FakeHttp({url: json.dumps({"apps": [record]})}),
+        {"repo": "r", "branch": "main", "path": "p"},
+    )
+    assert app.source_type == declared
 
 
 @pytest.mark.parametrize(
@@ -206,7 +222,7 @@ def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
             }
         ]
     )
-    assert app.source_type is SourceType.GITLAB
+    assert app.source_type == SourceType.GITLAB
     assert app.url == f"https://gitlab.com/{path}"
 
 
@@ -224,24 +240,21 @@ def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
         "https://gitlab.com/a/b#fragment",
         "https://gitlab.com/a/-/b",
         "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22)),
-        "https://gitlab.com:invalid/a/b",
+        "https://gitlab.example.org/group/app",
     ],
 )
-def test_explicit_gitlab_extra_rejects_urls_outside_public_boundary(url: str) -> None:
-    with pytest.raises(SourceError) as error:
-        extras.fetch(
-            [
-                {
-                    "id": "bad",
-                    "name": "Bad",
-                    "url": url,
-                    "overrideSource": "GitLab",
-                }
-            ]
-        )
-    assert "entry 'Bad'" in str(error.value)
-    assert "invalid GitLab URL" in str(error.value)
-    assert repr(url) in str(error.value)
+def test_declared_gitlab_extra_keeps_any_url_as_written(url: str) -> None:
+    [app] = extras.fetch(
+        [
+            {
+                "id": "app.gitlab",
+                "name": "GitLab app",
+                "url": url,
+                "overrideSource": "GitLab",
+            }
+        ]
+    )
+    assert (app.url, app.source_type) == (url, SourceType.GITLAB)
 
 
 def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
@@ -513,18 +526,26 @@ def test_codm_declared_source_type_wins_and_omitted_type_is_derived(
         pytest.param("bboi", lambda record: _fetch_bboi([record], []), id="bboi34"),
     ],
 )
-def test_upstream_record_without_declared_source_type_is_rejected(
-    source: str, fetch: Callable[[dict[str, object]], list[App]]
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://github.com/owner/repo", SourceType.GITHUB),
+        ("https://gitlab.com/group/app", SourceType.GITLAB),
+        ("https://owner.itch.io/app", None),
+    ],
+)
+def test_upstream_record_without_declared_source_type_derives_or_leaves_it(
+    source: str,
+    fetch: Callable[[dict[str, object]], list[App]],
+    url: str,
+    expected: SourceType | None,
 ) -> None:
-    record = _record_with("ordinary", True)
+    record = {**_record_with("ordinary", True), "url": url}
     del record["overrideSource"]
 
-    with pytest.raises(SourceError) as excinfo:
-        fetch(record)
+    [app] = fetch(record)
 
-    assert str(excinfo.value) == (
-        f"{source}: entry 'Entry' has unsupported source type None"
-    )
+    assert app.source_type == expected
 
 
 @pytest.mark.parametrize(
@@ -606,7 +627,7 @@ def test_bboi_latest_release_retains_both_asset_origins() -> None:
             assert app.name == entry["name"]
             assert app.url == entry["url"]
             assert app.categories == tuple(entry["categories"])
-            assert app.source_type is SourceType(entry["overrideSource"])
+            assert app.source_type == entry["overrideSource"]
             assert app.additional_settings == json.loads(entry["additionalSettings"])
             assert app.eligibility == eligibility
             assert app.dual_preferred is preferred
@@ -677,7 +698,7 @@ def test_codm_loads_every_committed_entry_and_reports_admission(
         and not app.categories
         for app in apps
     )
-    assert all(app.source_type is SourceType.GITHUB for app in apps)
+    assert all(app.source_type == SourceType.GITHUB for app in apps)
     assert (
         next(app for app in apps if app.url.endswith("OpenMW-DS")).name == "OpenMW-DS"
     )
@@ -890,8 +911,8 @@ def test_extras_dual_screen_flag_decides_eligibility_and_preference() -> None:
         (app.id, app.eligibility, app.dual_preferred, app.source_type) for app in apps
     } == {
         ("a", frozenset(Variant), False, SourceType.GITHUB),
-        ("b", frozenset({Variant.DUAL}), True, SourceType.HTML),
-        ("c", frozenset(Variant), False, SourceType.HTML),
+        ("b", frozenset({Variant.DUAL}), True, None),
+        ("c", frozenset(Variant), False, None),
     }
 
 
@@ -970,22 +991,27 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
 @pytest.mark.parametrize(
     ("url", "expected"),
     [
-        ("https://github.com", SourceType.HTML),
-        ("https://github.com/owner", SourceType.HTML),
-        ("https://github.com/topics/android", SourceType.HTML),
-        ("https://github.com/orgs/example/repositories", SourceType.HTML),
-        ("https://github.com/settings/profile", SourceType.HTML),
-        ("https://github.com/features/actions", SourceType.HTML),
-        ("https://github.com/codespaces/new", SourceType.HTML),
-        ("https://github.com/stars/example", SourceType.HTML),
+        ("https://github.com", None),
+        ("https://github.com/owner", None),
+        ("https://github.com/topics/android", None),
+        ("https://github.com/orgs/example/repositories", None),
+        ("https://github.com/settings/profile", None),
+        ("https://github.com/features/actions", None),
+        ("https://github.com/codespaces/new", None),
+        ("https://github.com/stars/example", None),
         ("https://github.com/owner/repo", SourceType.GITHUB),
         ("https://www.github.com/owner/repo/releases/latest", SourceType.GITHUB),
         ("https://github.com/owner/repo/tree/main", SourceType.GITHUB),
-        ("https://gitlab.com/a/b", SourceType.HTML),
+        ("https://gitlab.com/a/b", SourceType.GITLAB),
+        ("https://gitlab.com/group/sub/app", SourceType.GITLAB),
+        ("https://gitlab.com/a", None),
+        ("https://gitlab.com/a/b/-/releases", None),
+        ("https://gitlab.example.org/a/b", None),
+        ("https://christt105.itch.io/poketch", None),
     ],
 )
-def test_extras_derives_github_only_for_repository_urls(
-    url: str, expected: SourceType
+def test_extras_derives_only_unambiguous_source_types(
+    url: str, expected: SourceType | None
 ) -> None:
     apps = extras.fetch([{"id": "app.test", "url": url, "name": "Example"}])
     assert {app.source_type for app in apps} == {expected}
@@ -1005,7 +1031,7 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
         {"repo": "r", "branch": "main", "path": "p"},
     )
     assert len(apps) == 1
-    assert all(app.source_type is declared for app in apps)
+    assert all(app.source_type == declared for app in apps)
 
 
 @pytest.mark.parametrize("body", ["null", "[]", '{"apps":"bad"}'])
@@ -1080,15 +1106,9 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
 
 
 @pytest.mark.parametrize("prefix", ["https://gitlab.com", "HTTPS://GitLab.com"])
-@pytest.mark.parametrize(
-    ("path", "project_path"),
-    [
-        ("Group/Project", "Group/Project"),
-        ("/Group//Sub%47roup/Project/", "Group/Sub%47roup/Project"),
-    ],
-)
+@pytest.mark.parametrize("path", ["Group/Project", "/Group//Sub%47roup/Project/"])
 def test_gitlab_acceptance_preserves_path_case_and_encoding(
-    prefix: str, path: str, project_path: str
+    prefix: str, path: str
 ) -> None:
     url = f"{prefix}/{path}"
     [app] = extras.fetch(
@@ -1102,8 +1122,7 @@ def test_gitlab_acceptance_preserves_path_case_and_encoding(
         ]
     )
     assert app.url == url
-    assert app.source_type is SourceType.GITLAB
-    assert gitlab_project_path(url) == project_path
+    assert app.source_type == SourceType.GITLAB
 
 
 @pytest.mark.parametrize("pattern", ["single*.json", "dual*.json"])
@@ -1180,3 +1199,52 @@ def test_bboi_reads_the_current_latest_release_on_every_run() -> None:
         "https://asset/single1.json",
         "https://asset/dual1.json",
     ]
+
+
+def test_entries_of_any_source_type_compose_render_and_verify() -> None:
+    from omnipack.offline import OfflineInputs, validate_offline
+    from omnipack.render import render_pack
+    from omnipack.report_model import Severity
+
+    apps = extras.fetch(
+        [
+            {
+                "id": "org.codeberg.app",
+                "name": "Codeberg app",
+                "url": "https://codeberg.org/owner/app",
+                "overrideSource": "Codeberg",
+            },
+            {
+                "id": "a1b2c3d4e5f6",
+                "name": "Pokétch",
+                "url": "https://christt105.itch.io/poketch",
+            },
+            {
+                "id": "org.example.gitlab",
+                "name": "Self-hosted",
+                "url": "https://gitlab.example.org/group/app",
+                "overrideSource": "GitLab",
+            },
+        ]
+    )
+    policy = parse_composition_policy(
+        {"schemaVersion": 1, "candidates": [], "pins": []}
+    )
+    result = compose(apps, [], [], policy=policy)
+    packs = {variant: render_pack(result.apps[variant]).encode() for variant in Variant}
+    rendered = {app["id"]: app for app in json.loads(packs[Variant.SINGLE])["apps"]}
+    assert rendered["org.codeberg.app"]["overrideSource"] == "Codeberg"
+    assert "overrideSource" not in rendered["a1b2c3d4e5f6"]
+    assert rendered["org.example.gitlab"]["url"] == (
+        "https://gitlab.example.org/group/app"
+    )
+    findings = validate_offline(
+        OfflineInputs(
+            single=packs[Variant.SINGLE],
+            dual=packs[Variant.DUAL],
+            deny=b"[]",
+            overlay=b"[]",
+            composition=b'{"schemaVersion": 1, "candidates": [], "pins": []}',
+        )
+    )
+    assert not [item for item in findings if item.severity is Severity.ERROR]

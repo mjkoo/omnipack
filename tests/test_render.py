@@ -254,3 +254,37 @@ def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None
     assert json.loads(decoded["apps"][0]["additionalSettings"])["intermediateLink"] == [
         left
     ]
+
+
+@pytest.mark.parametrize("source", ["Codeberg", None])
+def test_entry_without_defaults_renders_exactly_its_own_settings(
+    source: str | None,
+) -> None:
+    app = composed(
+        url="https://christt105.itch.io/poketch",
+        settings={"trackOnly": "kept as written", "custom": 1},
+    )
+    if source is None:
+        del app.data["overrideSource"]
+    else:
+        app.data["overrideSource"] = source
+    [rendered] = document([app])["apps"]
+    assert json.loads(rendered["additionalSettings"]) == {
+        "custom": 1,
+        "trackOnly": "kept as written",
+    }
+    assert rendered.get("overrideSource") == source
+
+
+def test_self_hosted_gitlab_entry_is_hydrated_with_gitlab_defaults() -> None:
+    app = composed(
+        url="https://gitlab.example.org/group/app",
+        source="GitLab",
+        settings={"apkFilterRegEx": "app"},
+    )
+    [rendered] = document([app])["apps"]
+    assert rendered["url"] == "https://gitlab.example.org/group/app"
+    assert json.loads(rendered["additionalSettings"]) == {
+        **SETTINGS_DEFAULTS["GitLab"],
+        "apkFilterRegEx": "app",
+    }

@@ -69,7 +69,7 @@ def test_committed_quiver_ingests_every_entry_without_network(tmp_path: Path) ->
     assert [app.id for app in apps] == ["org.example.one", "org.example.two"]
     assert all(app.eligibility == frozenset(Variant) for app in apps)
     assert all(
-        app.origin == "quiver-generated" and app.source_type is SourceType.GITHUB
+        app.origin == "quiver-generated" and app.source_type == SourceType.GITHUB
         for app in apps
     )
     assert [item["source"] for item in report.admitted] == ["quiver", "quiver"]

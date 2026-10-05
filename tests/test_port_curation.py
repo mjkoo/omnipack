@@ -56,7 +56,7 @@ def test_curated_ports_are_present_once_with_maintained_policy(variant):
         )
         assert app.additional_settings["trackOnly"] is False
     by_id = {app.id: app for app in selected}
-    assert by_id["com.aurora.store"].source_type.value == "GitLab"
+    assert by_id["com.aurora.store"].source_type == "GitLab"
     assert (
         by_id["com.aurora.store"].additional_settings["apkFilterRegEx"]
         == r"^AuroraStore-[0-9]+(?:\.[0-9]+)+\.apk$"

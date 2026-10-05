@@ -51,12 +51,13 @@ def canonical_serialization(data: dict[str, Any]) -> str:
     return json.dumps(data, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
 
 
-def hydrate_settings(source_type: str, values: dict[str, Any]) -> dict[str, Any]:
-    """Fill source defaults, retaining entry values and future keys."""
-    try:
-        defaults = SETTINGS_DEFAULTS[source_type]
-    except KeyError as error:
-        raise RenderError(f"unsupported source type {source_type!r}") from error
+def hydrate_settings(source_type: str | None, values: dict[str, Any]) -> dict[str, Any]:
+    """Fill source defaults, retaining entry values and future keys.
+
+    An entry whose source type the pack holds no defaults for, or that has
+    none, keeps exactly the settings it carries.
+    """
+    defaults = SETTINGS_DEFAULTS.get(source_type or "", {})
     result = deepcopy(defaults)
     for key in defaults:
         if key in values:
@@ -126,7 +127,7 @@ def _render_app(app: ComposedApp) -> dict[str, Any]:
     data["categories"] = categories
 
     source_type = data.get("overrideSource")
-    if not isinstance(source_type, str):
+    if source_type is not None and not isinstance(source_type, str):
         raise RenderError(
             f"app {package_id!r} has invalid overrideSource; expected string"
         )

@@ -72,8 +72,7 @@ def validate_offline(inputs: OfflineInputs) -> tuple[Finding, ...]:
     """Validate a pair and its composition configuration without I/O.
 
     Rendering fills every default setting key and derives the category
-    colours from the entries it renders, and ingestion enforces GitLab project
-    URLs, so none of those is checked again here. Setting values are checked:
+    colours from the entries it renders, so neither is checked again here. Setting values are checked:
     upstream records and overlay patches supply them, and rendering copies them
     without checking their types.
     """
@@ -248,17 +247,19 @@ def _validate_entry(
             "categories",
         )
     source = raw.get("overrideSource")
-    if not isinstance(source, str) or source not in SETTINGS_DEFAULTS:
+    if "overrideSource" in raw and not isinstance(source, str):
         _add(
             findings,
             "entry",
-            "unsupported_source",
-            f"unsupported source {source!r}",
+            "invalid_source",
+            "overrideSource must be a string",
             variant,
             entry_id,
             index,
             "overrideSource",
         )
+    # Settings are type-checked only against committed defaults.
+    if not isinstance(source, str) or source not in SETTINGS_DEFAULTS:
         source = None
     if raw.get("allowIdChange") is not True:
         _add(

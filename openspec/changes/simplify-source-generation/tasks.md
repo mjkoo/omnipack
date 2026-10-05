@@ -6,7 +6,7 @@
 
 ## 2. The pack accepts any source type
 
-- [ ] 2.1 Keep any declared source type in ingestion, derive only GitHub and GitLab from unambiguous URLs and leave other undeclared types unset, render default settings only for types with defaults and pass other entries' settings through, type-check settings in verification only where defaults exist, and remove the GitLab URL boundary so any URL declared GitLab is kept as written; verify with ingestion, rendering and offline tests for a declared Codeberg entry, an undeclared itch.io entry and a self-hosted GitLab entry
+- [x] 2.1 Keep any declared source type in ingestion, derive only GitHub and GitLab from unambiguous URLs and leave other undeclared types unset, render default settings only for types with defaults and pass other entries' settings through, type-check settings in verification only where defaults exist, and remove the GitLab URL boundary so any URL declared GitLab is kept as written; verify with ingestion, rendering and offline tests for a declared Codeberg entry, an undeclared itch.io entry and a self-hosted GitLab entry
 
 ## 3. Removal
 

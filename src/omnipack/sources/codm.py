@@ -30,7 +30,6 @@ def fetch(
         app = normalize_record(
             record,
             source="codm2000",
-            derive_type=True,
             eligibility=frozenset({Variant.DUAL}),
             origin="codm-generated",
         )

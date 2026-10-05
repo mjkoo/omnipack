@@ -517,9 +517,10 @@ def _import_data(app: App) -> dict[str, Any]:
             "id": app.id,
             "url": app.url,
             "name": app.name,
-            "overrideSource": app.source_type.value,
             "categories": list(app.categories),
             "additionalSettings": deepcopy(app.additional_settings),
         }
     )
+    if app.source_type is not None:
+        data["overrideSource"] = str(app.source_type)
     return data
