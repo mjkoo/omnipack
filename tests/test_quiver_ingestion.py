@@ -260,13 +260,33 @@ def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> Non
     ]
 
 
-def test_committed_quiver_catalog_is_canonical_without_a_fixed_roster() -> None:
-    root = Path(__file__).resolve().parents[1]
-    catalog = root / "config/catalogs/quiver.json"
+def assert_canonical_quiver_catalog(catalog: Path) -> None:
     from omnipack.quiver_catalog import load_quiver_catalog
 
     entries = load_quiver_catalog(catalog)
-    assert catalog.read_bytes() == render_catalog(entries)
+    assert catalog.read_bytes() == render_catalog(entries), (
+        f"{catalog} differs from the canonical rendering of its entries"
+    )
+
+
+def test_committed_quiver_catalog_is_canonical_without_a_fixed_roster() -> None:
+    root = Path(__file__).resolve().parents[1]
+    assert_canonical_quiver_catalog(root / "config/catalogs/quiver.json")
+
+
+def test_a_valid_but_noncanonical_quiver_catalog_fails_the_check(
+    tmp_path: Path,
+) -> None:
+    entries = [entry("org.example.one", "owner/one")]
+    catalog = tmp_path / "quiver.json"
+    catalog.write_bytes(render_catalog(entries))
+    assert_canonical_quiver_catalog(catalog)
+
+    catalog.write_text(json.dumps(json.loads(catalog.read_text()), indent=2))
+    with pytest.raises(
+        AssertionError, match=r"quiver\.json differs from the canonical"
+    ):
+        assert_canonical_quiver_catalog(catalog)
 
 
 def test_current_configuration_fixture_composes_quiver(

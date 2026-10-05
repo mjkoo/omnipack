@@ -27,23 +27,31 @@ def load_json(path: Path) -> Any:
 def test_committed_catalog_is_valid_canonical_and_composable(
     current_configuration: CurrentConfiguration,
 ) -> None:
+    path = "config/catalogs/codm.json"
     catalog = current_configuration.catalog
     ids = [app["id"] for app in catalog["apps"]]
     urls = [normalize_project_url(app["url"]) for app in catalog["apps"]]
-    assert len(ids) == len(set(ids))
-    assert len(urls) == len(set(urls))
+    assert len(ids) == len(set(ids)), f"{path} repeats an entry id"
+    assert len(urls) == len(set(urls)), f"{path} repeats a project URL"
     for app in catalog["apps"]:
         settings = json.loads(app["additionalSettings"])
+        entry = f"{path} entry {app['id']!r}"
         if settings.get("trackOnly"):
-            assert app["id"].isdecimal()
-            assert settings["versionDetection"] is False
-            assert settings["includeZips"] is False
-            assert settings["autoApkFilterByArch"] is False
+            assert app["id"].isdecimal(), f"{entry} is not a numeric tracker id"
+            assert (
+                settings["versionDetection"],
+                settings["includeZips"],
+                settings["autoApkFilterByArch"],
+            ) == (False, False, False), f"{entry} has installable tracker settings"
         else:
-            assert settings.get("trackOnly", False) is False
-            assert _is_valid_package_id(app["id"])
-    raw = (ROOT / "config/catalogs/codm.json").read_bytes()
-    assert render_catalog(catalog["apps"]) == raw
+            assert settings.get("trackOnly", False) is False, (
+                f"{entry} has bad trackOnly"
+            )
+            assert _is_valid_package_id(app["id"]), f"{entry} is not a package id"
+    raw = (ROOT / path).read_bytes()
+    assert render_catalog(catalog["apps"]) == raw, (
+        f"{path} differs from the canonical rendering of its entries"
+    )
     assert current_configuration.result.apps[Variant.DUAL]
 
 

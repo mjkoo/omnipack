@@ -881,11 +881,14 @@ def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
     assert settings["trackOnly"] is True
     for key in ["versionDetection", "includeZips", "autoApkFilterByArch"]:
         assert settings[key] is False
-    assert (
-        "https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import."
-        in settings["about"]
+    # An acknowledged notification points the user at the manual installation
+    # path and claims no installation.
+    assert settings["about"] == (
+        "A Lua mod for Gen1Recomp. Install/update through official Gen1Recomp at "
+        "https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP "
+        "import. Obtainium only tracks release notifications; acknowledgement "
+        "does not install the resource or detect its installed version."
     )
-    assert "acknowledgement does not install" in settings["about"]
     assert http.urls == [source, API]
     assert "mod.zip" not in (output / "catalog.json").read_text()
     assert app.get("installedVersion") in (None, "")

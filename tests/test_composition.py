@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 from dataclasses import replace
 from itertools import permutations
 
@@ -31,6 +32,7 @@ from omnipack.merge import (
     compose as compose_apps,
 )
 from omnipack.model import App, Category, Provenance, SourceType, Variant
+from omnipack.render import render_pack
 from omnipack.urls import normalize_project_url
 
 SINGLE_ONLY = frozenset({Variant.SINGLE})
@@ -827,6 +829,18 @@ def test_overlay_rejects_assigning_or_deleting_protected_fields(
     message = str(raised.value)
     assert repr(url_family(candidate)) in message
     assert message.endswith(f"protected field {field}")
+
+
+def test_an_overlay_cannot_stop_a_published_entry_adopting_its_apk_id() -> None:
+    candidate = app("pkg")
+    result = compose(
+        [candidate], [], overlays((candidate.url, {"allowIdChange": False}))
+    )
+    for variant in Variant:
+        [composed] = result.apps[variant]
+        assert composed.data["allowIdChange"] is False
+        [rendered] = json.loads(render_pack(result.apps[variant]))["apps"]
+        assert rendered["allowIdChange"] is True
 
 
 def test_overlay_patches_unmodeled_fields_including_package_id() -> None:

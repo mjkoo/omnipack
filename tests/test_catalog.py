@@ -250,6 +250,18 @@ def test_repositories_sharing_a_package_id_are_separate_rows() -> None:
     assert decoded_apps(catalog) == [first, first, second]
 
 
+def test_single_only_and_dual_only_entries_sharing_an_id_are_separate_rows() -> None:
+    single = app("same", "Same", "https://example.test/single")
+    dual = app("same", "Same", "https://example.test/dual")
+    catalog = generate_catalog(pack(single), pack(dual), policy())
+    # The rows tie on category and name; their labels order them.
+    assert row_programs(catalog) == [("Same", 1), ("Same", 1)]
+    assert decoded_apps(catalog) == [dual, single]
+    rows = [line for line in catalog.decode().splitlines() if line.startswith("| Same")]
+    assert [row.startswith("| Same | - |") for row in rows] == [True, False]
+    assert rows[1].endswith(" | - |")
+
+
 def test_one_repository_s_entries_pair_by_url() -> None:
     single = app("stable", "App", "https://example.test/app")
     dual = app("dual", "App DS", "https://example.test/app/")
