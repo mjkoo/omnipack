@@ -298,7 +298,7 @@ change.
 
 #### Scenario: Family conflict stops composition
 
-- **WHEN** composition fails on a pin that is missing, ambiguous, excluded,
+- **WHEN** composition fails on a pin that is missing, excluded,
   wrong-family, target-ineligible or one of several pins for one family and
   target
 - **THEN** the report identifies the family, target and conflicting selectors

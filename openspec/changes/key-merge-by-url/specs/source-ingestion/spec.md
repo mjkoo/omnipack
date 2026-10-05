@@ -148,9 +148,10 @@ preference, precedence, pins and project denials in pack-composition decide
 between a codm2000 build and another source's build of the same app.
 
 Retained entries SHALL preserve codm2000 provenance, generated origin, original
-package identity and source settings, so family rules and fork-specific overlays
-that select a generated entry match it. How a policy selector is validated
-against the admitted candidates, and what a missing rule target or pinned
+package identity and source settings, so family rules and pins that select a
+generated entry by its original selector match it; an overlay matches it by its
+normalized project URL alone, as every overlay does. How a policy selector is
+validated against the admitted candidates, and what a missing rule target or pinned
 candidate does, is defined by "Composition policy assigns app families by
 project URL" and "Pins select an eligible candidate of their family" in
 pack-composition.
@@ -162,8 +163,10 @@ pack-composition.
 
 #### Scenario: Retained generated selectors keep matching
 
-- **WHEN** a retained committed entry has a generated-origin rule or overlay selector
-- **THEN** its source identity is preserved and the same family and override behavior applies
+- **WHEN** a retained committed entry is named by a generated-origin family rule
+  or pin selector
+- **THEN** its source identity is preserved, so the rule still assigns its
+  family and the pin still selects it
 
 #### Scenario: A selected project is removed
 
@@ -190,8 +193,9 @@ pack-composition.
 
 Routine ingestion SHALL read Quiver entries from its configured committed
 Obtainium catalog without requesting Quiver lists, release metadata or APKs.
-A missing, unreadable or malformed catalog or repeated entry ID SHALL fail the
-build while preserving previous outputs. Valid entries SHALL carry source
+A missing, unreadable or malformed catalog, a repeated entry ID or two entries
+at one normalized project URL SHALL fail the build while preserving previous
+outputs. Valid entries SHALL carry source
 `quiver`, generated origin `quiver-generated`, their committed package identities,
 explicit GitHub source type and reviewed discovery settings. They SHALL be
 baseline candidates eligible for both packs, subject to ordinary normalization,
@@ -208,7 +212,8 @@ generated provenance in reports without claiming a fresh APK check.
 
 #### Scenario: Broken committed Quiver catalog
 
-- **WHEN** the configured catalog is missing, malformed or repeats an entry ID
+- **WHEN** the configured catalog is missing, malformed, repeats an entry ID or
+  holds two entries at one normalized project URL
 - **THEN** the build fails naming Quiver and leaves published outputs unchanged
 
 #### Scenario: Quiver record carries policy fields

@@ -118,7 +118,7 @@ resolves it with a pin or with split family rules. Failing was rejected for the
 same reason as for a repeated id: one family's ambiguity should not stop the
 nightly publication of every other app. Choosing by source order or release date
 was rejected because it would make the published winner depend on how a source
-happens to list its entries. Pin conflicts (a missing, ambiguous, excluded,
+happens to list its entries. Pin conflicts (a missing, excluded,
 wrong-family or target-ineligible pinned candidate, or several pins for one
 family and target) remain fatal, because they are owner configuration errors
 rather than upstream data.

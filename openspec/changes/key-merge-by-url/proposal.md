@@ -92,10 +92,10 @@ Package ids stay ordinary entry data that selectors name and packs emit.
 Source generation and its generated catalogs are unchanged; a separate later
 change removes its APK inspection.
 
-Estimate: about 17 restated or modified requirements across nine
-capabilities, a net reduction of roughly 20 scenarios; implementation roughly
-250 lines removed and 80 added in composition, overlay, rendering, offline
-verification and reporting; roughly 500 test lines rewritten for the new keys.
+Size: nine modified capabilities. The implementation changed roughly 720
+added and 610 removed lines across 15 source modules and roughly 2,500 added
+and 1,700 removed lines of test code, besides deleting the frozen codm
+source-generation reproduction fixtures.
 
 ## Capabilities
 
@@ -159,6 +159,14 @@ None.
   the same `render()` and must replace their use of the retired id-based
   `default_family` helper with something that does not depend on the retired
   `package:` namespace.
+  Also `model.py` (a candidate no longer carries a separate original id),
+  `urls.py` (parsing a project URL a maintainer wrote in configuration),
+  `catalog.py` (rows rejected only for a repeated family label and ordered
+  without package ids), `report_model.py` (finding severity, selection reasons
+  and the nonfatal findings list), `verify.py` (nonfatal findings, and the
+  advanced report schema and verifier identity), `cli.py` (the previous
+  entries compared by package id and URL) and `sources/common.py` (`packageId`
+  no longer reserved).
 - Configuration: `config/composition.json` (new and amended rules, renamed
   category keys and pins), `config/deny.json`, `config/overlay.json` (URL
   records and the carried `patch.id` corrections).
@@ -167,11 +175,14 @@ None.
   simulation over the current sources; ids are unchanged from today's for the
   corrected apps, every entry gains `allowIdChange: true`, and README row
   labels change. Generated catalogs keep their bytes.
-- Docs: `docs/composition.md`, `docs/curation.md`, `docs/development.md` and any
-  page naming `package:` families or package denials.
+- Docs: `docs/composition.md`, `docs/curation.md`, `docs/development.md`,
+  `docs/source-generation.md`, `docs/source-reconciliation.md`,
+  `docs/verification.md` and `docs/quiver-ports.md`, and any other page naming
+  `package:` families or package denials.
 - Tests: the frozen codm source-generation reproduction
   (`tests/fixtures/source-generation/codm/` and the frozen-baseline checks in
   `tests/test_source_generation_fixtures.py`) is deleted rather than migrated;
   behavior tests use synthetic inputs and live-data outcome checks pair the
   committed configuration with the latest capture under
-  `tests/fixtures/reconciliation/`.
+  `tests/fixtures/reconciliation/`, whose expected `formed-families.json` is
+  rewritten for URL families.

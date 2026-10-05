@@ -25,9 +25,11 @@ patch.
 
 #### Scenario: A source's id differs from its APK
 
-- **WHEN** a selected entry carries an id other than the package id its APK
-  declares
-- **THEN** the rendered app carries `allowIdChange: true`
+- **WHEN** a selected entry is rendered into a published pack, whether or not
+  its id matches the package id its APK declares
+- **THEN** the rendered app carries `allowIdChange: true`; rendering reads no
+  APK and compares no ids, and Obtainium, given the flag, adopts the APK's own
+  id when they differ
 
 #### Scenario: A source record or overlay sets the flag false
 

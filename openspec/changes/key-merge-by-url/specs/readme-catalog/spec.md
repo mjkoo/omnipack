@@ -14,7 +14,7 @@ variant SHALL display a hyphen. The single-screen record SHALL supply the row na
 and first category when present, otherwise the dual-screen record SHALL supply
 them. Empty categories SHALL use Other. Each category SHALL be a closed collapsible
 section. Categories and rows SHALL have deterministic, case-insensitive ordering
-with exact text, then family label, then the row's package ids breaking ties. Source text SHALL be escaped
+with exact text, then family label breaking ties. Source text SHALL be escaped
 so it cannot change the table structure or create HTML elements.
 
 #### Scenario: Variant builds differ
