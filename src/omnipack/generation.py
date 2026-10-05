@@ -1,0 +1,261 @@
+"""Turn a generated source's upstream list into a candidate committed catalog.
+
+Each project discovery keeps becomes one minimal Obtainium entry. An entry the
+committed catalog already holds at the same normalized URL keeps its id and
+URL, so composition rules, pins and installed apps that know it keep working;
+a new one gets an Obtainium placeholder id. Per-app settings and categories
+are overlay records and category map keys, never catalog content.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import json
+import shutil
+import unicodedata
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import Any, NotRequired, TypedDict
+from urllib.parse import urlsplit
+
+from omnipack.discovery import (
+    DiscoveryError,
+    EmptyDiscovery,
+    GeneratedSource,
+    Listing,
+    Skip,
+    config_text,
+    discover,
+)
+from omnipack.http import HttpClient, HttpResponse
+from omnipack.report_model import Status
+from omnipack.source_catalog import render_catalog, rendered_entry
+from omnipack.sources.common import HttpGetter, derived_source_type
+from omnipack.urls import normalize_project_url, project_url
+
+
+class Changes(TypedDict):
+    """Entries added, removed and changed in place, each by its catalog URL."""
+
+    added: list[str]
+    removed: list[str]
+    changed: list[str]
+
+
+class GenerationReport(TypedDict):
+    status: Status
+    source: GeneratedSource
+    inputs: list[dict[str, str]]
+    skipped: list[dict[str, Any]]
+    changes: NotRequired[Changes]
+    error: NotRequired[str]
+
+
+def output_directory(root: Path, source: GeneratedSource) -> Path:
+    return root / ".build/source-generation" / source
+
+
+def generate(
+    root: Path, source: GeneratedSource, *, http: HttpGetter | None = None
+) -> GenerationReport:
+    """Write a candidate catalog and its report, or only the report on failure.
+
+    No earlier candidate survives a run, so a failed run never leaves one to be
+    mistaken for current.
+    """
+    output = output_directory(root, source)
+    if output.exists():
+        shutil.rmtree(output)
+    output.mkdir(parents=True)
+    reader = _RecordingHttp(http or HttpClient())
+    report: GenerationReport = {
+        "status": Status.FAILED,
+        "source": source,
+        "inputs": reader.inputs,
+        "skipped": [],
+    }
+    try:
+        sources = json.loads((root / "config/sources.json").read_bytes())
+        config = sources.get(source) if isinstance(sources, dict) else None
+        if not isinstance(config, dict):
+            raise DiscoveryError(f"{source} source configuration must be an object")
+        committed = load_committed(root / config_text(config, "catalog"))
+        try:
+            discovery = discover(source, config, reader, frozenset(committed))
+        except EmptyDiscovery as error:
+            report["skipped"] = _skipped(error.skipped)
+            raise
+        report["skipped"] = _skipped(discovery.skipped)
+        entries = render_entries(discovery.listings, committed)
+        catalog = render_catalog(entries)
+        report["changes"] = _changes(entries, committed)
+        (output / "catalog.json").write_bytes(catalog)
+        report["status"] = Status.SUCCESS
+    except Exception as error:  # noqa: BLE001 - the report records every failure
+        report["error"] = str(error)
+    (output / "report.json").write_text(
+        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    )
+    return report
+
+
+def load_committed(path: Path) -> dict[str, dict[str, Any]]:
+    """Read the committed catalog's entries by normalized URL.
+
+    A missing catalog holds nothing. One that cannot be read or is malformed
+    fails, because guessing would change published ids, and so does one
+    holding two entries at one normalized URL, since either id could be kept.
+    """
+    if not path.exists():
+        return {}
+    try:
+        document = json.loads(path.read_bytes())
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
+        raise DiscoveryError(f"committed catalog {path.name} is unreadable") from error
+    apps = document.get("apps") if isinstance(document, dict) else None
+    if not isinstance(apps, list) or not all(
+        isinstance(entry, dict)
+        and isinstance(entry.get("id"), str)
+        and isinstance(entry.get("url"), str)
+        for entry in apps
+    ):
+        raise DiscoveryError(f"committed catalog {path.name} is malformed")
+    by_url: dict[str, dict[str, Any]] = {}
+    ids: set[str] = set()
+    for entry in apps:
+        normalized = normalize_project_url(entry["url"])
+        if normalized in by_url:
+            competing = sorted(
+                item["id"]
+                for item in apps
+                if normalize_project_url(item["url"]) == normalized
+            )
+            raise DiscoveryError(
+                f"committed catalog holds several entries for {normalized}: "
+                + ", ".join(competing)
+            )
+        if entry["id"] in ids:
+            raise DiscoveryError(f"committed catalog repeats the id {entry['id']!r}")
+        ids.add(entry["id"])
+        by_url[normalized] = entry
+    return by_url
+
+
+def render_entries(
+    listings: Sequence[Listing], committed: Mapping[str, Mapping[str, Any]]
+) -> list[dict[str, Any]]:
+    """One minimal entry per normalized URL, independent of listing order."""
+    grouped: dict[str, list[Listing]] = {}
+    for listing in listings:
+        grouped.setdefault(normalize_project_url(listing.url), []).append(listing)
+    return [
+        minimal_entry(normalized, group, committed.get(normalized))
+        for normalized, group in sorted(grouped.items())
+    ]
+
+
+def minimal_entry(
+    normalized: str,
+    listings: Sequence[Listing],
+    committed: Mapping[str, Any] | None,
+) -> dict[str, Any]:
+    if committed is not None:
+        url, identifier = committed["url"], committed["id"]
+    else:
+        url = min(project_url(listing.url) for listing in listings)
+        identifier = placeholder_id(normalized)
+    names = sorted(
+        {trimmed for listing in listings if (trimmed := trim_name(listing.name))},
+        key=lambda name: (name.casefold(), name),
+    )
+    source_type = derived_source_type(url)
+    segments = [part for part in urlsplit(url).path.split("/") if part]
+    entry: dict[str, Any] = {
+        "id": identifier,
+        "url": url,
+        "author": segments[0] if source_type is not None else "",
+        "name": names[0] if names else _fallback_name(url, segments),
+        "additionalSettings": {},
+        "categories": [],
+    }
+    if source_type is not None:
+        entry["overrideSource"] = str(source_type)
+    return entry
+
+
+def placeholder_id(normalized: str) -> str:
+    """An id Obtainium treats as a placeholder: twelve lowercase hex characters.
+
+    Obtainium replaces it with the APK's package id on first install. Hashing
+    the normalized URL keeps it stable across runs without any lookup.
+    """
+    return hashlib.sha256(normalized.encode()).hexdigest()[:12]
+
+
+# Joiners, variation selectors, keycaps, skin tones and tag characters that
+# complete an emoji without being symbols themselves.
+_EMOJI_PARTS = frozenset("‍︎️⃣")
+
+
+def trim_name(name: str | None) -> str:
+    """Trim trailing emoji, other symbols and surrounding whitespace.
+
+    Only "other symbol" characters count, so punctuation, math and currency
+    signs that may be part of a name, such as `A.I.R.` or `C++`, are kept.
+    """
+    text = (name or "").strip()
+    while text and (_decoration(text[-1]) or text[-1].isspace()):
+        text = text[:-1]
+    return text
+
+
+def _decoration(character: str) -> bool:
+    return (
+        unicodedata.category(character) == "So"
+        or character in _EMOJI_PARTS
+        or "\U0001f3fb" <= character <= "\U0001f3ff"
+        or "\U000e0020" <= character <= "\U000e007f"
+    )
+
+
+def _fallback_name(url: str, segments: list[str]) -> str:
+    return segments[-1] if segments else urlsplit(url).hostname or url
+
+
+def _changes(
+    entries: list[dict[str, Any]], committed: Mapping[str, Mapping[str, Any]]
+) -> Changes:
+    candidate = {normalize_project_url(entry["url"]): entry for entry in entries}
+    return {
+        "added": sorted(
+            entry["url"] for key, entry in candidate.items() if key not in committed
+        ),
+        "removed": sorted(
+            entry["url"] for key, entry in committed.items() if key not in candidate
+        ),
+        "changed": sorted(
+            entry["url"]
+            for key, entry in candidate.items()
+            if key in committed
+            and rendered_entry(entry) != rendered_entry(dict(committed[key]))
+        ),
+    }
+
+
+def _skipped(skipped: tuple[Skip, ...]) -> list[dict[str, Any]]:
+    return [{**skip.listing, "reason": str(skip.reason)} for skip in skipped]
+
+
+class _RecordingHttp:
+    """Record each input generation reads, with the digest of its bytes."""
+
+    def __init__(self, http: HttpGetter) -> None:
+        self.http = http
+        self.inputs: list[dict[str, str]] = []
+
+    def get(self, url: str) -> HttpResponse:
+        response = self.http.get(url)
+        self.inputs.append(
+            {"url": url, "sha256": hashlib.sha256(response.body).hexdigest()}
+        )
+        return response

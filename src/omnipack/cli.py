@@ -8,13 +8,13 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from omnipack.build import BuildInputs, previous_entries, publish_build
+from omnipack.discovery import GeneratedSource
+from omnipack.generation import generate
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App
-from omnipack.quiver_generation import generate_quiver
 from omnipack.report import format_reports, write_report
 from omnipack.report_model import BuildStage, OfflineVerdict, Status, not_run_verdict
-from omnipack.source_generation import generate_codm
 from omnipack.sources import IngestionReport, SourceError, ingest_all, parse_json
 from omnipack.verify import VerificationReportError, run_verification
 
@@ -125,10 +125,9 @@ def report(_args: argparse.Namespace) -> int:
 
 
 def generate_source(args: argparse.Namespace) -> int:
-    result = args.generator(Path.cwd())
+    result = generate(Path.cwd(), GeneratedSource(args.source))
     if result["status"] == Status.FAILED:
-        detail = result.get("error") or result.get("unresolved") or "generation failed"
-        print(f"source generation failed: {detail}", file=sys.stderr)
+        print(f"source generation failed: {result.get('error')}", file=sys.stderr)
         return 1
     return 0
 
@@ -151,13 +150,10 @@ def _parser() -> argparse.ArgumentParser:
     report_parser.set_defaults(func=report)
 
     generate_parser = subparsers.add_parser(
-        "generate-source", help="generate a reviewed source catalog candidate"
+        "generate-source", help="generate a source catalog candidate"
     )
-    source_parsers = generate_parser.add_subparsers(dest="source", required=True)
-    codm_parser = source_parsers.add_parser("codm", help="generate codm source")
-    codm_parser.set_defaults(func=generate_source, generator=generate_codm)
-    quiver_parser = source_parsers.add_parser("quiver", help="generate Quiver source")
-    quiver_parser.set_defaults(func=generate_source, generator=generate_quiver)
+    generate_parser.add_argument("source", choices=[str(s) for s in GeneratedSource])
+    generate_parser.set_defaults(func=generate_source)
 
     return parser
 

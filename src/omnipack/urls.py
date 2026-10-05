@@ -5,8 +5,16 @@ from __future__ import annotations
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 
-def normalize_project_url(url: str) -> str:
-    """Normalize the URL features that do not identify a different project."""
+def project_url(url: str) -> str:
+    """Reduce a link to the project URL that normalization identifies.
+
+    The result keeps the scheme and the path's case, lowercases the host and
+    drops a leading `www.`, keeps an explicit port, and drops a trailing slash
+    and `.git`. A GitHub link is reduced to its owner and repository, so a
+    releases, tags, blob or release-asset link becomes the repository root.
+    On any other host the query and fragment are kept, since which parts of
+    such a link identify the project cannot be known.
+    """
     parsed = _split_url(url)
     host = (parsed.hostname or "").lower()
     host = host.removeprefix("www.")
@@ -14,7 +22,7 @@ def normalize_project_url(url: str) -> str:
     path = parsed.path.rstrip("/")
     query, fragment = parsed.query, parsed.fragment
     if host == "github.com":
-        path = "/".join(path.split("/")[:3]).lower()
+        path = "/".join(path.split("/")[:3])
         query = fragment = ""
     if path.lower().endswith(".git"):
         path = path[:-4]
@@ -22,7 +30,16 @@ def normalize_project_url(url: str) -> str:
     authority = host
     if parsed.port is not None:
         authority = f"{authority}:{parsed.port}"
-    return urlunsplit(("", authority, path, query, fragment)).removeprefix("//")
+    return urlunsplit((parsed.scheme.lower(), authority, path, query, fragment))
+
+
+def normalize_project_url(url: str) -> str:
+    """Normalize the URL features that do not identify a different project."""
+    parsed = urlsplit(project_url(url))
+    path = parsed.path.lower() if parsed.hostname == "github.com" else parsed.path
+    return urlunsplit(
+        ("", parsed.netloc, path, parsed.query, parsed.fragment)
+    ).removeprefix("//")
 
 
 def parse_project_url(url: str) -> str:

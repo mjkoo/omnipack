@@ -5,7 +5,6 @@ from pathlib import Path
 
 import pytest
 
-from omnipack.cli import main
 from omnipack.http import HttpStatusError
 from omnipack.project_policy import PolicyError, default_apk_rule, parse_project_policy
 from omnipack.source_generation import generate_codm, parse_project_table
@@ -787,116 +786,6 @@ def test_duplicate_policy_keys_and_inactive_rules(tmp_path):
     )
     result, _ = run(tmp_path, source)
     assert result["inactiveRules"] == ["github.com/inactive/app"]
-
-
-def test_cli_real_generation_preserves_inputs_and_cleans_failed_candidates(
-    tmp_path, monkeypatch
-):
-    source = setup(tmp_path)
-    assert run(tmp_path, source)[0]["status"] == "success"
-    accept(tmp_path)
-    (tmp_path / "README.md").write_text("handwritten")
-    (tmp_path / "dist").mkdir()
-    for name in ["single-screen.json", "dual-screen.json"]:
-        (tmp_path / "dist" / name).write_text("published")
-    tracked = {
-        p: p.read_bytes()
-        for p in tmp_path.rglob("*")
-        if p.is_file() and ".build" not in p.parts
-    }
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "omnipack.source_generation.HttpConfig.from_path", lambda path: None
-    )
-    for late_failure in [False, True]:
-        readme = README + (
-            b"| [New](https://github.com/new-project/app) | missing |\n"
-            if late_failure
-            else b""
-        )
-        http = MappingHttp(
-            {
-                source: readme,
-                API: release(),
-                ASSET: apk("org.example.app"),
-                "https://api.github.com/repos/new-project/app/releases/latest": release(
-                    8,
-                    assets=[
-                        {"name": "new.apk", "browser_download_url": ASSET + "?new"}
-                    ],
-                ),
-                ASSET + "?new": b"not an apk",
-            }
-        )
-        monkeypatch.setattr(
-            "omnipack.source_generation.SourceHttpClient",
-            lambda config, client=http: client,
-        )
-        assert main(["generate-source", "codm"]) == int(late_failure)
-        output = tmp_path / ".build/source-generation/codm"
-        report = json.loads((output / "report.json").read_text())
-        assert report["apk"][0]["status"] == "resolved"
-        assert report["status"] == ("failed" if late_failure else "success")
-        assert all(p.read_bytes() == content for p, content in tracked.items())
-        if late_failure:
-            assert {p.name for p in output.iterdir()} == {"report.json"}
-
-
-def test_kanto_settings_manual_guidance_and_cli_tracker(tmp_path, monkeypatch):
-    source = setup(
-        tmp_path,
-        {
-            "kind": "track-only",
-            "trackerId": "1845280017",
-            "name": "Kanto Gear (mod updates)",
-            "rationale": "A Lua mod for Gen1Recomp.",
-            "installation": "Install/update through official Gen1Recomp at https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import.",
-        },
-    )
-    monkeypatch.chdir(tmp_path)
-    http = MappingHttp(
-        {
-            source: README,
-            API: release(
-                assets=[
-                    {
-                        "name": "mod.zip",
-                        "browser_download_url": "https://fixture.test/mod.zip",
-                    }
-                ]
-            ),
-        }
-    )
-    monkeypatch.setattr(
-        "omnipack.source_generation.HttpConfig.from_path", lambda path: None
-    )
-    monkeypatch.setattr(
-        "omnipack.source_generation.SourceHttpClient", lambda config: http
-    )
-    assert main(["generate-source", "codm"]) == 0
-    output = tmp_path / ".build/source-generation/codm"
-    app = json.loads((output / "catalog.json").read_text())["apps"][0]
-    settings = json.loads(app["additionalSettings"])
-    assert app["id"] == "1845280017"
-    assert settings["trackOnly"] is True
-    for key in ["versionDetection", "includeZips", "autoApkFilterByArch"]:
-        assert settings[key] is False
-    # An acknowledged notification points the user at the manual installation
-    # path and claims no installation.
-    assert settings["about"] == (
-        "A Lua mod for Gen1Recomp. Install/update through official Gen1Recomp at "
-        "https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP "
-        "import. Obtainium only tracks release notifications; acknowledgement "
-        "does not install the resource or detect its installed version."
-    )
-    assert http.urls == [source, API]
-    assert "mod.zip" not in (output / "catalog.json").read_text()
-    assert app.get("installedVersion") in (None, "")
-    assert app.get("latestVersion") in (None, "")
-    report = json.loads((output / "report.json").read_text())
-    assert report["tracking"] == [
-        {"url": PROJECT, "id": "1845280017", "status": "verified"}
-    ]
 
 
 @pytest.mark.parametrize(

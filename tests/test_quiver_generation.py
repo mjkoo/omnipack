@@ -8,7 +8,6 @@ from urllib.request import Request
 
 import pytest
 
-from omnipack import cli
 from omnipack.http import HttpError, HttpResponse, HttpStatusError
 from omnipack.quiver_generation import generate_quiver
 from omnipack.source_catalog import render_catalog
@@ -411,26 +410,6 @@ def test_invalid_accepted_catalog_fails_before_requests(
     http = ScenarioHttp(values)
     assert generate_quiver(tmp_path, http=http)["status"] == "failed"
     assert not http.urls
-
-
-def test_cli_success_and_failed_rerun_preserve_committed_inputs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
-) -> None:
-    values = setup(tmp_path)
-    http = ScenarioHttp(values)
-    monkeypatch.chdir(tmp_path)
-    monkeypatch.setattr(
-        "omnipack.quiver_generation.SourceHttpClient", lambda config: http
-    )
-    (tmp_path / "config/http.json").write_text('{"credentials":{}}')
-    tracked = [p for p in tmp_path.rglob("*") if p.is_file()]
-    before = {p: p.read_bytes() for p in tracked}
-    assert cli.main(["generate-source", "quiver"]) == 0
-    values[LIST] = HttpError("required list unavailable")
-    assert cli.main(["generate-source", "quiver"]) == 1
-    assert "required list unavailable" in capsys.readouterr().err
-    assert not (tmp_path / OUTPUT / "catalog.json").exists()
-    assert before == {p: p.read_bytes() for p in tracked}
 
 
 @pytest.mark.parametrize("outcome", ["no-apk", "no-release", "rate-limit"])
