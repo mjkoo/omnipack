@@ -48,7 +48,7 @@ def test_verification_only_report_is_current_then_stale(tmp_path: Path) -> None:
     assert "Evidence: current" in output
     assert "Mode: offline (structural checks only)" in output
     (tmp_path / "config/overlay.json").write_text(
-        '{"changed.app":{"name":"Changed"}}\n'
+        '[{"url":"https://example.test/changed","patch":{"name":"Changed"}}]\n'
     )
     assert "Evidence: stale" in format_reports(tmp_path)
 

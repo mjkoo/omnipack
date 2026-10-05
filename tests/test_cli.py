@@ -599,19 +599,32 @@ def test_composition_failure_preserves_collected_diagnostics(
 
 
 @pytest.mark.parametrize(
-    ("pinned", "failure"),
+    ("pinned", "family", "failure"),
     [
-        pytest.param("gone", "is missing", id="missing"),
+        pytest.param("gone", "example.test/gone", "is missing", id="missing"),
         pytest.param(
             "removed",
+            "example.test/removed",
             "is denied at 'example.test/removed': excluded",
             id="excluded",
         ),
-        pytest.param("single", "is ineligible", id="target-ineligible"),
+        pytest.param(
+            "single", "example.test/single", "is ineligible", id="target-ineligible"
+        ),
+        pytest.param(
+            "kept",
+            "example.test/other",
+            "names a candidate of family 'example.test/kept'",
+            id="wrong-family",
+        ),
     ],
 )
 def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned: str, failure: str
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    pinned: str,
+    family: str,
+    failure: str,
 ) -> None:
     write_config(tmp_path)
     config = tmp_path / "config"
@@ -634,7 +647,7 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
             policy(
                 pins=[
                     {
-                        "family": f"example.test/{pinned}",
+                        "family": family,
                         "variant": "dual",
                         "match": match,
                         "rationale": "Require this build for dual.",
@@ -667,9 +680,7 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
     assert main(["build"]) == 1
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == "composition"
-    assert report["error"] == (
-        f"pin for family 'example.test/{pinned}' target 'dual' {failure}"
-    )
+    assert report["error"] == (f"pin for family '{family}' target 'dual' {failure}")
     # Pins are checked before any family selects a winner.
     assert report["selections"] == []
     assert report["denylistRemovals"] == [
@@ -720,6 +731,38 @@ def test_pin_naming_another_family_fails_on_load_although_its_candidate_is_denie
         "composition policy: pin family 'app:two' target 'dual' conflicts with "
         "projected family 'app:one'"
     )
+    assert not (tmp_path / "dist").exists()
+
+
+def test_several_pins_for_one_family_and_target_fail_the_build_on_load(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    pin = {
+        "family": "app:one",
+        "variant": "dual",
+        "match": rule()["match"],
+        "rationale": "Require this build for dual.",
+    }
+    (tmp_path / "config/composition.json").write_text(
+        json.dumps(
+            policy(
+                candidates=[rule(family="app:one")],
+                pins=[pin, {**pin, "rationale": "Require it again."}],
+            )
+        )
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [policy_candidate()]
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["error"] == (
+        "composition policy: multiple pins for family 'app:one' target 'dual'"
+    )
+    assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
 
 

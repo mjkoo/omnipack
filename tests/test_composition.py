@@ -1078,7 +1078,9 @@ def test_overlay_blank_or_nonstring_url_identifies_the_field(value: object) -> N
     assert str(error.value) == "overlay[0].url must be a nonempty project URL"
 
 
-@pytest.mark.parametrize("url", ["/owner/repo", "https://x.test/a b"])
+@pytest.mark.parametrize(
+    "url", ["/owner/repo", "https://x.test/a b", "https://x.test:99999/a"]
+)
 def test_overlay_url_that_is_not_a_project_url_identifies_record_field_and_value(
     url: str,
 ) -> None:

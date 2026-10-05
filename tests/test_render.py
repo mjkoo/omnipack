@@ -14,6 +14,7 @@ from omnipack.render import (
     render_pack,
 )
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
+from omnipack.source_catalog import render_catalog
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -234,7 +235,8 @@ def test_pack_rendering_lets_every_app_adopt_its_apk_id(value: bool | None) -> N
 
 
 def test_catalog_rendering_does_not_add_allow_id_change() -> None:
-    assert "allowIdChange" not in document([composed()])["apps"][0]
+    [rendered] = json.loads(render_catalog([composed().data]))["apps"]
+    assert "allowIdChange" not in rendered
 
 
 def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None:
