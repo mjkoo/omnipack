@@ -71,6 +71,13 @@ def test_codm_takes_every_link_in_the_project_tables_whatever_its_host() -> None
     ]
 
 
+def test_codm_badge_image_inside_a_link_is_not_a_project() -> None:
+    readme = (
+        TABLE + "| [![badge](https://img.test/b.svg) App](https://github.com/o/app) |\n"
+    )
+    assert codm(readme) == [Listing("https://github.com/o/app", " App")]
+
+
 def test_codm_link_inside_an_indented_code_block_is_not_a_project() -> None:
     readme = (
         TABLE

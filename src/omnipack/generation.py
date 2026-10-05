@@ -194,7 +194,7 @@ def placeholder_id(normalized: str) -> str:
 
 # Joiners, variation selectors, keycaps, skin tones and tag characters that
 # complete an emoji without being symbols themselves.
-_EMOJI_PARTS = frozenset("‍︎️⃣")
+_EMOJI_PARTS = frozenset("\u200d\ufe0e\ufe0f\u20e3")
 
 
 def trim_name(name: str | None) -> str:
@@ -247,15 +247,16 @@ def _skipped(skipped: tuple[Skip, ...]) -> list[dict[str, Any]]:
 
 
 class _RecordingHttp:
-    """Record each input generation reads, with the digest of its bytes."""
+    """Record each input generation reads, with the digest of its bytes once
+    read, so a failed run's report still names the input that failed."""
 
     def __init__(self, http: HttpGetter) -> None:
         self.http = http
         self.inputs: list[dict[str, str]] = []
 
     def get(self, url: str) -> HttpResponse:
+        record = {"url": url}
+        self.inputs.append(record)
         response = self.http.get(url)
-        self.inputs.append(
-            {"url": url, "sha256": hashlib.sha256(response.body).hexdigest()}
-        )
+        record["sha256"] = hashlib.sha256(response.body).hexdigest()
         return response

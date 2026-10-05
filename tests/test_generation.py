@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import hashlib
 import json
-import os
-from collections.abc import Iterator
 from email.message import Message
 from pathlib import Path
 from typing import Any
@@ -263,14 +261,10 @@ def stored_report(root: Path, source: str) -> dict[str, Any]:
 
 
 @pytest.fixture
-def workdir(tmp_path: Path) -> Iterator[Path]:
+def workdir(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Path:
     write_config(tmp_path)
-    previous = Path.cwd()
-    os.chdir(tmp_path)
-    try:
-        yield tmp_path
-    finally:
-        os.chdir(previous)
+    monkeypatch.chdir(tmp_path)
+    return tmp_path
 
 
 def run_cli(monkeypatch: pytest.MonkeyPatch, source: str, http: FakeHttp) -> int:
@@ -379,7 +373,11 @@ def test_quiver_command_reports_skipped_rows_and_screened_out_projects(
             row("new/zip", project="Zip only"),
             row("a/b", project="Elsewhere", repositorySource="codeberg"),
         ],
-        [asset("new/port", "port.apk"), asset("new/zip", "port.zip")],
+        [
+            asset("kept/old", "old.zip"),
+            asset("new/port", "port.apk"),
+            asset("new/zip", "port.zip"),
+        ],
     )
     assert run_cli(monkeypatch, "quiver", http) == 0
     assert http.urls == [INDEX_URL, ASSETS_URL, LIST_URL]

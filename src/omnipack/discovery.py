@@ -54,6 +54,8 @@ class Skip:
 
 @dataclass(frozen=True, slots=True)
 class Discovery:
+    """The listings a source keeps and the rows or projects it skipped."""
+
     listings: tuple[Listing, ...]
     skipped: tuple[Skip, ...]
 
@@ -101,6 +103,7 @@ def config_text(config: Mapping[str, object], key: str) -> str:
 # --- codm: links inside the README's Project tables -----------------------
 
 _LINK = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
+_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _DELIMITER = re.compile(r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
 _PROJECT_HEADER = re.compile(r"^\s*\|\s*Project\s*\|", re.IGNORECASE)
 
@@ -140,7 +143,8 @@ def project_table_links(readme: bytes) -> Iterator[Listing]:
         found = True
         index += 2
         while index < len(lines) and lines[index].lstrip().startswith("|"):
-            for text, url in _LINK.findall(lines[index]):
+            # A badge image inside a link is decoration, not a project.
+            for text, url in _LINK.findall(_IMAGE.sub("", lines[index])):
                 yield Listing(url, text)
             index += 1
     if not found:
