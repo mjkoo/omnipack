@@ -69,8 +69,8 @@ build, and SHALL keep that baseline build in the dual-screen pack in place of
 the family's dual-screen build whether or not the two builds share a project
 URL. A missing, excluded, wrong-family or target-ineligible pinned candidate
 SHALL fail the build. A pin cannot match more than one candidate, because
-different records sharing one original identity fail before any pin is read. A pin SHALL NOT implicitly override an
-exclusion or eligibility restriction. Multiple pins for one family and target
+different records sharing one original identity fail before any pin is read.
+A pin SHALL NOT implicitly override an exclusion or eligibility restriction. Multiple pins for one family and target
 SHALL fail. A pin whose candidate was removed by a denial or is eligible for no
 variant belongs to no formed family, so it SHALL fail as a conflict with that
 exclusion, identifying the pin and the denial or the ineligibility, before the

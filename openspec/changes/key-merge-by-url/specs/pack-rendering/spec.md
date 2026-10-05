@@ -23,7 +23,7 @@ import after install adds a never-installed duplicate under the shipped id
 beside the installed app. The owner fixes that entry's id with an overlay `id`
 patch.
 
-#### Scenario: A source's id differs from its APK
+#### Scenario: Every published entry may adopt its APK id
 
 - **WHEN** a selected entry is rendered into a published pack, whether or not
   its id matches the package id its APK declares

@@ -768,6 +768,64 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
         assert output.count(line) == 2
 
 
+def test_a_pin_on_a_project_whose_id_an_overlay_patches_builds_and_verifies(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    url = "https://example.test/patched"
+
+    def candidate(package_id: str, source: str, origin: str) -> App:
+        return App(
+            package_id,
+            url,
+            package_id,
+            SourceType.HTML,
+            (),
+            Provenance(source, "https://example.test/catalog"),
+            eligibility=frozenset(Variant),
+            origin=origin,
+        )
+
+    pinned = candidate("source.pkg", "bboi", "bboi-standard-asset")
+    rival = candidate("rival.pkg", "rjny", "rjny-catalog")
+    match = {"source": "bboi", "origin": "bboi-standard-asset", "id": "source.pkg"}
+    config = tmp_path / "config"
+    (config / "composition.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "candidates": [],
+                "pins": [
+                    {
+                        "family": "example.test/patched",
+                        "variant": variant.value,
+                        "match": {**match, "url": url},
+                        "rationale": "test",
+                    }
+                    for variant in Variant
+                ],
+            }
+        )
+    )
+    (config / "overlay.json").write_text(
+        json.dumps([{"url": url, "patch": {"id": "fixed.pkg"}}])
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [pinned, rival]
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 0
+    for name in ("single-screen.json", "dual-screen.json"):
+        pack = json.loads((tmp_path / "dist" / name).read_text())
+        assert [app["id"] for app in pack["apps"]] == ["fixed.pkg"]
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert {(item["id"], item["reason"]) for item in report["selections"]} == {
+        ("source.pkg", "pin")
+    }
+    assert main(["verify"]) == 0
+
+
 @pytest.mark.parametrize("command", ["build", "verify"])
 def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
     tmp_path: Path,
@@ -1021,6 +1079,20 @@ def _quiver_entry(package_id: str) -> dict[str, object]:
                 }
             ),
             id="repeated-url",
+        ),
+        pytest.param(
+            json.dumps(
+                {
+                    "apps": [
+                        _quiver_entry("org.fixture.a"),
+                        {
+                            **_quiver_entry("org.fixture.a"),
+                            "url": "https://github.com/fixture/other",
+                        },
+                    ]
+                }
+            ),
+            id="repeated-id",
         ),
     ],
 )

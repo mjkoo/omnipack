@@ -1126,6 +1126,8 @@ def test_a_disappeared_pinned_build_selects_no_other_build_of_its_family() -> No
     assert ids(compose([pinned, other], [], [], policy=policy), Variant.SINGLE) == {
         "pinned"
     }
+    # The pinned build's own family rule goes with it; a rule left behind would
+    # fail earlier as a selector that matches no candidate.
     report = CompositionReport()
     with pytest.raises(CompositionError, match="is missing"):
         compose(

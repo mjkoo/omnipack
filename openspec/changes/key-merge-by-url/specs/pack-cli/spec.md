@@ -301,7 +301,7 @@ change.
 - **WHEN** composition fails on a pin that is missing, excluded,
   wrong-family, target-ineligible or one of several pins for one family and
   target
-- **THEN** the report identifies the family, target and conflicting selectors
+- **THEN** the report identifies the pin by its family and target
 - **AND** the report preserves prior diagnostics
 
 #### Scenario: A single-screen family has no dual build
