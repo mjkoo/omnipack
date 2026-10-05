@@ -21,7 +21,7 @@ untouched. The separate `pack generate-source codm|quiver` operation resolves
 that source's discovered projects under its reviewed policy into a candidate
 catalog; it does not extend structural verification or change committed files.
 
-Standalone verification writes schema 5 evidence to `.build/verify.json`,
+Standalone verification writes its evidence to `.build/verify.json`,
 separately from the build report. It reads every input once, checks and
 fingerprints exactly those captured bytes, and writes the report a single time,
 when the run completes; an interrupted run leaves no new report, so any report

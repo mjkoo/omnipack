@@ -529,15 +529,17 @@ explicitly with the entry identified.
 
 The overlay file SHALL contain an array of records with project `url` and
 object `patch`. An overlay document that is not an array SHALL fail with the
-overlay identified. A record SHALL carry no field other than `url` and `patch`,
-and SHALL fail with the record and the unknown field identified otherwise. A
-record's `url` SHALL be a nonempty string, failing with the record and the
-offending field identified, and SHALL additionally be one a host can be read
-from; one no host can be read from SHALL fail with the record, the field and
-the offending value identified. Each record SHALL apply to every selected entry
-whose normalized project URL equals the record's, in every variant that selects
-one. Two records with one normalized URL SHALL fail. A non-object patch,
-including null, SHALL fail.
+overlay identified. A record SHALL carry no field other than `url` and
+`patch`, and SHALL fail with the record and the unknown field identified
+otherwise. A record's `url` SHALL be a nonempty string, failing with the
+record and the offending field identified, and SHALL additionally be one the
+pipeline can normalize for comparison: a host SHALL be readable from it, any
+port SHALL be numeric and in the valid range, and it SHALL contain no
+whitespace; any other SHALL fail with the record, the field and the offending
+value identified. Each record SHALL apply to every selected entry whose
+normalized project URL equals the record's, in every variant that selects one.
+Two records with one normalized URL SHALL fail. A non-object patch, including
+null, SHALL fail.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.
 The protected patch fields SHALL be exactly `url`, `overrideSource`, `family`,
@@ -810,9 +812,10 @@ composition policy SHALL accept an optional `categories` object mapping a
 family name to one category of that set other than Track Only, which only
 track-only entries carry. A family name is an `app:` name or a normalized
 project URL. A map key SHALL be either an `app:` family name or a project URL
-already in normalized form with both a host and a path. A value outside those
-categories, a non-string value, a key that is neither, including one without a
-path such as `melonds` or `com.dishii.zelda3`, or a family key that appears more than once in the object SHALL fail policy loading
+already in normalized form with both a host and a path and no whitespace. A
+value outside those categories, a non-string value, a key that is neither,
+including one without a path such as `melonds` or `com.dishii.zelda3`, or a
+family key that appears more than once in the object SHALL fail policy loading
 with the key identified, rather than one occurrence silently taking effect.
 
 After overlays apply, the system SHALL assign each selected entry's categories

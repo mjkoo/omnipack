@@ -149,7 +149,7 @@ build preserves all bytes outside them. The build fetches public catalogs withou
 reads `config/http.json`. Only source generation reads it, so that an optional
 `GITHUB_TOKEN` authenticates its requests to `api.github.com`.
 
-The JSON diagnostics are in `.build/report.json` (schema 5), including each
+The JSON diagnostics are in `.build/report.json`, including each
 family's selection with the candidates it was chosen over and the selection
 reason, denylist removals and stale exclusions, uncategorized families and stale
 category assignments, repeated package ids, single-only families, same-rank

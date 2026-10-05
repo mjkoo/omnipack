@@ -260,7 +260,7 @@ the overlay `id` patch that produced the repeat.
 
 ## Build report
 
-Build reports use schema 5. `changes` lists the entries added and removed in
+`changes` lists the entries added and removed in
 each pack since the previous output, each with its package id and normalized
 project URL, so a move to another repository with the same id shows as one
 removed and one added entry. `selections` records every family's winner in each
@@ -297,7 +297,7 @@ not run. `offlineVerification` holds the offline gate's status, its errors in
 The example is abridged; the other build fields remain present in the full
 report. A considered candidate records its identity, not why it lost; compare a
 losing candidate's settings with the winner's by reading the source catalogs.
-`pack report` reads only schema 5 build reports; an older report must be
+`pack report` reads only build reports of the current schema; an older report must be
 regenerated with `pack build`.
 
 Offline verification labels each rendered entry with the explicit family the

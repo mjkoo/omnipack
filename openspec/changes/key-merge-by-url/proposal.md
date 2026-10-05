@@ -93,9 +93,7 @@ Package ids stay ordinary entry data that selectors name and packs emit.
 Source generation and its generated catalogs are unchanged; a separate later
 change removes its APK inspection.
 
-Size: nine modified capabilities. The implementation changed roughly 720
-added and 610 removed lines across 15 source modules and roughly 2,500 added
-and 1,700 removed lines of test code, besides deleting the frozen codm
+Size: nine modified capabilities, plus deleting the frozen codm
 source-generation reproduction fixtures.
 
 ## Capabilities
