@@ -8,7 +8,7 @@ trackers.
 
 ## Requirements
 
-### Requirement: Curation evidence states its limits
+### Requirement: Curation records state their evidence and limits
 
 Durable curation documentation SHALL state each maintained policy and its
 rationale, the observed release/APK versions and package identities behind it, the
@@ -23,10 +23,11 @@ explicit source-version tracking keeps update checks enabled but cannot
 guarantee eliminating a one-time spurious update after re-import or detecting
 an in-place asset replacement that leaves the source version unchanged.
 
-Known upstream package-id mismatches SHALL be recorded without claiming that a
-version policy repairs them. A successful structural result SHALL NOT be
-described as proof of safe identity, installation, re-import, or update
-behavior for those entries.
+A successful structural result SHALL NOT be described as proof of safe
+identity, installation, re-import, or update behavior.
+
+These are obligations on documentation, so document review, not an automated
+test, checks the scenarios of this requirement.
 
 When a pack's selection for a family moves to another publisher's build,
 curation SHALL distinguish package identity from update compatibility. An
@@ -41,11 +42,11 @@ and durable curation documentation SHALL record the family, the dated
 observations and the unresolved route. The pipeline SHALL NOT install,
 uninstall or migrate apps as part of changing a pack's source selection.
 
-#### Scenario: Resolved APK declares another package id
+#### Scenario: A structural pass is not an install claim
 
-- **WHEN** an inspected APK declares a package id other than the id its upstream catalog uses
-- **THEN** documentation records the original identity and the manifest-backed correction
-- **AND** the maintained identity policy exports the manifest-backed id
+- **WHEN** both packs pass offline verification
+- **THEN** curation documentation does not describe that result as proof that
+  every entry installs, re-imports or updates correctly
 
 #### Scenario: A curated entry needs user-supplied files
 
@@ -67,13 +68,13 @@ uninstall or migrate apps as part of changing a pack's source selection.
 ### Requirement: Upstream pack trackers are excluded from both packs
 
 Both published variants SHALL exclude an upstream catalog's own pack-update
-tracker entry through a maintained package denial, including after upstream
+tracker entry through a maintained project denial, including after upstream
 refreshes. The exclusion SHALL keep that upstream as an app catalog source,
 with its attribution and provenance.
 
 #### Scenario: Upstream refresh contains its pack tracker
 
-- **WHEN** an upstream source's refreshed records include its own track-only pack tracker, and a maintained denial names that tracker's id
+- **WHEN** an upstream source's refreshed records include its own track-only pack tracker, and a maintained denial names that tracker's project URL
 - **THEN** neither generated pack nor the generated README catalog includes that tracker
 - **AND** the upstream's other eligible apps remain available to composition
 
@@ -169,7 +170,7 @@ flag; Quiver generation owns canonical-project and package uniqueness as defined
 in quiver-source-generation. Accepted Quiver catalogs SHALL NOT be subject to a
 hard-coded membership assertion. Reviewed Quiver exceptions and skip rules SHALL
 be hand-maintained configuration, not automation-maintained catalog content.
-Pruning an unwanted Quiver app uses the package deny list, as for any source.
+Pruning an unwanted Quiver app uses the project deny list, as for any source.
 
 #### Scenario: Upstream refresh changes a curated setting
 
@@ -178,7 +179,7 @@ Pruning an unwanted Quiver app uses the package deny list, as for any source.
 
 #### Scenario: A designated curated extra stops winning single
 
-- **WHEN** a curated extra's entry in `config/extras.json` is eligible for single and its family has no committed single pin, and a configuration change that composition accepts, such as a package denial of that extra's id when no pin names it, leaves it without its family's single-screen selection
+- **WHEN** a curated extra's entry in `config/extras.json` is eligible for single and its family has no committed single pin, and a configuration change that composition accepts, such as a denial of that extra's project URL when no pin names it, leaves it without its family's single-screen selection
 - **THEN** a regression check fails and identifies that family
 
 #### Scenario: A source proposal adds, removes or re-resolves projects

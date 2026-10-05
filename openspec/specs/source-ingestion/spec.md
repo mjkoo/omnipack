@@ -230,7 +230,7 @@ build. An entry only in the dual-screen export SHALL be a dual-screen build,
 preferred in dual. An entry only in the standard export SHALL be a baseline
 build that upstream keeps out of dual. An entry marked out of both packs SHALL
 contribute to neither. These flags SHALL alone decide an entry's kind and
-eligibility. "Each build is a baseline build or a dual-screen build" in
+eligibility. "Builds are baseline or dual-screen and each pack selects its kind" in
 pack-composition states, once for every source, that no composition setting
 changes either, which is also why none restores an entry to a pack its flags
 leave it out of or revives an entry excluded from export.
@@ -272,8 +272,14 @@ ignore those overrides and SHALL carry through the entry's own name and URL.
 
 Upstreams deliberately point a single package id at different projects or
 settings per variant, so that a dual-screen fork replaces its single-screen
-counterpart. The system SHALL resolve each variant's candidates independently
-and SHALL NOT require that a package id map to the same entry across variants.
+counterpart in their own packs. The system SHALL resolve each variant's
+candidates independently and SHALL NOT require that a package id map to the
+same entry across variants. A shared package id does not join candidates at
+different project URLs into one family, so such a replacement across URLs
+holds in these packs only when a family rule joins the URLs into one explicit
+family, as "Composition policy assigns app families by project URL" in
+pack-composition defines; without one, the single-screen build's family is
+published in single and reported as a single-only coverage finding.
 
 An upstream catalog contributing two entries that share a package id SHALL have
 both retained for composition to resolve, because ingestion cannot know which
@@ -290,6 +296,13 @@ composition.
   variant
 - **THEN** the single-screen variant ingests one of them and the dual-screen
   variant ingests the other
+
+#### Scenario: A cross-URL replacement needs a family rule
+
+- **WHEN** the two entries sharing a package id, one single-only and one
+  dual-only, carry different project URLs
+- **THEN** ingestion retains both, and the dual-only entry replaces the
+  single-only one in dual only when a family rule joins their URLs
 
 #### Scenario: Duplicate ids remain within a variant
 
@@ -310,11 +323,11 @@ composition.
 The system SHALL retain each standard-asset record as a baseline build eligible
 for both targets, and each dual-asset record as a dual-screen build eligible
 only for dual and therefore preferred there. It SHALL preserve asset origin and
-retain both records when a package id appears in both assets. Selection SHALL
-occur during composition: what a pin, a dual-screen build and a package denial
-each do to a package id present in both assets is defined by "Each build is a
-baseline build or a dual-screen build", "Explicit selections identify an
-eligible candidate" and "Package denials exclude candidates from both
+retain both records when one project appears in both assets. Selection SHALL
+occur during composition: what a pin, a dual-screen build and a project denial
+each do to a project present in both assets is defined by "Builds are baseline
+or dual-screen and each pack selects its kind", "Pins select an eligible
+candidate of their family" and "Project denials exclude candidates from both
 variants" in pack-composition. The asset a record comes from SHALL alone decide
 its kind.
 
@@ -329,7 +342,7 @@ its kind.
 
 - **WHEN** a family's standard-asset build is eligible for both targets and the
   family has no available dual-screen build, because the dual asset lacks one
-  or a denial removed one whose package the standard build does not carry
+  or a denial removed one at a project URL the standard build does not share
 - **THEN** the retained standard build remains available for dual selection
 
 ### Requirement: Hand-written extras are baseline or dual-screen builds
@@ -501,15 +514,16 @@ During routine ingestion, codm2000 entries SHALL be dual-screen builds, eligible
 for dual only and preferred there. Every committed entry SHALL become a
 candidate whether or not another source lists the same project, and ingestion
 SHALL NOT read or apply the composition policy. Family formation, dual
-preference, precedence, pins and package denials in pack-composition decide
+preference, precedence, pins and project denials in pack-composition decide
 between a codm2000 build and another source's build of the same app.
 
 Retained entries SHALL preserve codm2000 provenance, generated origin, original
-package identity and source settings, so family rules and fork-specific overlays
-that select a generated entry match it. How a policy selector is validated
-against the admitted candidates, and what a missing rule target or pinned
-candidate does, is defined by "Composition policy separates app families from
-package identities" and "Explicit selections identify an eligible candidate" in
+package identity and source settings, so family rules and pins that select a
+generated entry by its original selector match it; an overlay matches it by its
+normalized project URL alone, as every overlay does. How a policy selector is
+validated against the admitted candidates, and what a missing rule target or pinned
+candidate does, is defined by "Composition policy assigns app families by
+project URL" and "Pins select an eligible candidate of their family" in
 pack-composition.
 
 #### Scenario: Another source lists the same project
@@ -519,8 +533,10 @@ pack-composition.
 
 #### Scenario: Retained generated selectors keep matching
 
-- **WHEN** a retained committed entry has a generated-origin rule or overlay selector
-- **THEN** its source identity is preserved and the same family and override behavior applies
+- **WHEN** a retained committed entry is named by a generated-origin family rule
+  or pin selector
+- **THEN** its source identity is preserved, so the rule still assigns its
+  family and the pin still selects it
 
 #### Scenario: A selected project is removed
 
@@ -536,9 +552,14 @@ pack-composition.
 
 - **WHEN** the committed catalog includes an explicit track-only resource
 - **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
-- **AND** neither pack's entry for the app the resource extends is replaced
+- **AND** when the resource and the app it extends belong to different
+  families once family rules apply, whether their project URLs are equal or
+  not, neither pack's entry for that app is replaced
+- **AND** when family rules place them in one family, whatever their project
+  URLs, they compete under ordinary selection, so dual may select the resource
+  in place of the app
 
-### Requirement: No source record carries composition policy fields
+### Requirement: Source records carry no composition policy fields
 
 This requirement SHALL apply to every record a source normalizes,
 and SHALL NOT apply to an RJNY entry marked as excluded from export, which is
@@ -546,12 +567,12 @@ dropped before normalization. Every such record, from each upstream catalog, the
 committed codm2000 catalog and the hand-written extras, SHALL be
 an Obtainium app object as its source publishes it, and the extras
 `dualScreen` field SHALL be the only field defined by this system that
-ingestion reads from a source record. A source record carrying `family`,
-`packageId` or `variant` at its top level SHALL fail ingestion regardless of
+ingestion reads from a source record. A source record carrying `family` or
+`variant` at its top level SHALL fail ingestion regardless of
 the field's value, including null, with an error naming the source, the entry
 and the field, stating that the field cannot come from a source record, and
 stating that composition policy in `config/composition.json` owns app
-families, package identities and per-pack selection. The error SHALL NOT
+families and per-pack selection. The error SHALL NOT
 direct or imply that the failure can be corrected by editing composition
 policy. The failure SHALL persist while the configured source location serves
 a record carrying the field, and the system SHALL provide no override for an
@@ -563,13 +584,13 @@ ingestion SHALL drop a top-level `meta` from a record of any source, so it never
 reaches a pack. Every other field ingestion does not model SHALL be retained
 unchanged for rendering, from every source.
 
-#### Scenario: Upstream entry carries a package identity field
+#### Scenario: Upstream entry carries a variant field
 
 - **WHEN** an otherwise valid upstream catalog entry carries a top-level
-  `packageId`
-- **THEN** ingestion fails naming that source, the entry and `packageId`,
+  `variant`
+- **THEN** ingestion fails naming that source, the entry and `variant`,
   stating that the field cannot come from a source record and that
-  composition policy in `config/composition.json` owns package identities,
+  composition policy in `config/composition.json` owns per-pack selection,
   without directing the correction to composition policy, and later builds
   from that source location fail the same way while the record carries the
   field
@@ -589,8 +610,8 @@ unchanged for rendering, from every source.
 #### Scenario: Unrelated unmodeled field passes through
 
 - **WHEN** an otherwise valid entry from any source carries a top-level field
-  that ingestion does not model and that is not `family`, `packageId`,
-  `variant` or `meta`
+  that ingestion does not model and that is not `family`, `variant` or `meta`,
+  including `packageId`
 - **THEN** ingestion retains the field unchanged for rendering rather than
   rejecting or removing it
 
@@ -604,8 +625,9 @@ unchanged for rendering, from every source.
 
 Routine ingestion SHALL read Quiver entries from its configured committed
 Obtainium catalog without requesting Quiver lists, release metadata or APKs.
-A missing, unreadable or malformed catalog or repeated entry ID SHALL fail the
-build while preserving previous outputs. Valid entries SHALL carry source
+A missing, unreadable or malformed catalog, a repeated entry ID or two entries
+at one normalized project URL SHALL fail the build while preserving previous
+outputs. Valid entries SHALL carry source
 `quiver`, generated origin `quiver-generated`, their committed package identities,
 explicit GitHub source type and reviewed discovery settings. They SHALL be
 baseline candidates eligible for both packs, subject to ordinary normalization,
@@ -622,10 +644,11 @@ generated provenance in reports without claiming a fresh APK check.
 
 #### Scenario: Broken committed Quiver catalog
 
-- **WHEN** the configured catalog is missing, malformed or repeats an entry ID
+- **WHEN** the configured catalog is missing, malformed, repeats an entry ID or
+  holds two entries at one normalized project URL
 - **THEN** the build fails naming Quiver and leaves published outputs unchanged
 
 #### Scenario: Quiver record carries policy fields
 
-- **WHEN** a committed Quiver record includes a top-level family or packageId field
+- **WHEN** a committed Quiver record includes a top-level family or variant field
 - **THEN** ingestion rejects it under the source-record policy-field prohibition
