@@ -9,7 +9,12 @@ import pytest
 from omnipack.report import format_reports, write_report
 from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
-from omnipack.verify import INPUT_PATHS, run_verification, verifier_identity
+from omnipack.verify import (
+    INPUT_PATHS,
+    VERIFIER_VERSION,
+    run_verification,
+    verifier_identity,
+)
 from tests.verification_support import (
     write_verification_inputs as copy_inputs,
 )
@@ -137,6 +142,10 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
+    # Composition keyed by project URL changed what verification checks, so
+    # evidence from an earlier verifier must read as stale.
+    assert VERIFIER_VERSION == "3.0.0"
+    assert report["verifier"]["version"] == VERIFIER_VERSION
     assert report["schemaVersion"] == 5
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))

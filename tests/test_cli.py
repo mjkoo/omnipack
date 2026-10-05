@@ -543,6 +543,118 @@ def test_composition_failure_preserves_collected_diagnostics(
     assert not (tmp_path / "dist").exists()
 
 
+def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    config = tmp_path / "config"
+    match = {
+        "source": "rjny",
+        "origin": "rjny-catalog",
+        "id": "gone.app",
+        "url": "https://example.test/gone",
+    }
+    for name, value in (
+        (
+            "deny.json",
+            [
+                {"url": "https://example.test/removed", "reason": "excluded"},
+                {"url": "https://example.test/stale", "reason": "obsolete"},
+            ],
+        ),
+        (
+            "composition.json",
+            policy(
+                pins=[
+                    {
+                        "family": "example.test/gone",
+                        "variant": "dual",
+                        "match": match,
+                        "rationale": "Require this build for dual.",
+                    }
+                ]
+            ),
+        ),
+    ):
+        (config / name).write_text(json.dumps(value), encoding="utf-8")
+    apps = [
+        App(
+            package_id,
+            url,
+            package_id,
+            SourceType.HTML,
+            (),
+            Provenance("rjny", "https://example.test/catalog"),
+            eligibility=frozenset(Variant),
+            origin="rjny-catalog",
+        )
+        for package_id, url in (
+            ("kept.app", "https://example.test/kept"),
+            ("removed.app", "https://example.test/removed"),
+        )
+    ]
+    monkeypatch.setattr(cli, "_ingest_for_build", lambda root, inputs, report: apps)
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["stage"] == "composition"
+    assert (
+        report["error"] == "pin for family 'example.test/gone' target 'dual' is missing"
+    )
+    # Pins are checked before any family selects a winner.
+    assert report["selections"] == []
+    assert report["denylistRemovals"] == [
+        {
+            "url": "example.test/removed",
+            "reason": "excluded",
+            "families": ["example.test/removed"],
+        }
+    ]
+    assert report["staleExclusions"] == [
+        {"url": "example.test/stale", "reason": "obsolete"}
+    ]
+    assert report["changes"] is None
+    assert not (tmp_path / "dist").exists()
+
+
+def test_pin_naming_another_family_fails_on_load_although_its_candidate_is_denied(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    config = tmp_path / "config"
+    (config / "deny.json").write_text(
+        json.dumps([{"url": "https://github.com/example/app", "reason": "broken"}])
+    )
+    (config / "composition.json").write_text(
+        json.dumps(
+            policy(
+                candidates=[rule(family="app:one")],
+                pins=[
+                    {
+                        "family": "app:two",
+                        "variant": "dual",
+                        "match": rule()["match"],
+                        "rationale": "Require this build for dual.",
+                    }
+                ],
+            )
+        )
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [policy_candidate()]
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["error"] == (
+        "composition policy: pin family 'app:two' target 'dual' conflicts with "
+        "projected family 'app:one'"
+    )
+    assert not (tmp_path / "dist").exists()
+
+
 def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
@@ -607,10 +719,30 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
     assert report["staleCategoryAssignments"] == ["app:absent"]
     offline = report["offlineVerification"]
     assert (offline["status"], offline["findings"]) == ("success", [])
-    nonfatal = [(item["variant"], item["code"]) for item in offline["nonfatalFindings"]]
+    nonfatal = [
+        (item["variant"], item["code"], item["entry_id"], item["message"])
+        for item in offline["nonfatalFindings"]
+    ]
     assert nonfatal == [
-        ("dual", "repeated_package_id"),
-        ("single", "single_only_coverage"),
+        (
+            "dual",
+            "repeated_package_id",
+            "shared.app",
+            (
+                "package id 'shared.app' is carried by more than one entry: "
+                "'example.test/first' at 'example.test/first', "
+                "'example.test/second' at 'example.test/second'"
+            ),
+        ),
+        (
+            "single",
+            "single_only_coverage",
+            "single.app",
+            (
+                "family label 'example.test/single' ('single.app' at "
+                "'example.test/single') has no dual-screen entry"
+            ),
+        ),
     ]
     readme = (tmp_path / "README.md").read_bytes()
     assert readme != readme_before and b"single.app" in readme
