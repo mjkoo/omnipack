@@ -27,7 +27,7 @@ def read(path: Path):
     return json.loads(path.read_text())
 
 
-def test_identity_correction_evidence_agrees_across_fixtures() -> None:
+def test_manifest_evidence_agrees_across_fixtures() -> None:
     evidence = read(FIXTURE)
     observations = read(OBSERVATIONS)
     ctr = read(CTR_EVIDENCE)
@@ -40,17 +40,17 @@ def test_identity_correction_evidence_agrees_across_fixtures() -> None:
     expected.add(
         (
             ctr["variants"]["single"]["original_id"],
-            ctr["variants"]["single"]["effective_id"],
+            ctr["variants"]["single"]["manifest_id"],
             ctr["variants"]["single"]["source"],
         )
     )
-    assert set(map(tuple, evidence["identity_corrections"])) == expected
+    assert set(map(tuple, evidence["manifest_evidence"])) == expected
 
     assert evidence["ghostship"]["package"] == "dev.net64.ghostship"
     assert set(ctr["variants"]) == {"single", "dual"}
     for item in ctr["variants"].values():
         [asset] = item["release"]["assets"]
-        assert item["manifest"]["package"] == item["effective_id"] == "com.ctrnative"
+        assert item["manifest"]["package"] == item["manifest_id"] == "com.ctrnative"
         assert asset["browser_download_url"].startswith(item["source"] + "/releases/")
         assert item["release"]["tag_name"] == item["source_version"]
 
@@ -58,7 +58,7 @@ def test_identity_correction_evidence_agrees_across_fixtures() -> None:
 def test_full_reconciliation_holds_for_current_composition(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    expected = {new for _, new, _ in read(FIXTURE)["identity_corrections"]}
+    expected = {new for _, new, _ in read(FIXTURE)["manifest_evidence"]}
     result = current_configuration.result
     for variant in Variant:
         apps = result.apps[variant]
@@ -148,7 +148,7 @@ def test_full_reconciliation_holds_for_current_composition(
     for variant in Variant:
         ctr_app = next(app for app in result.apps[variant] if app.family == "app:ctr")
         observation = expected_ctr[variant.value]
-        assert ctr_app.id == observation["effective_id"] == "com.ctrnative"
+        assert ctr_app.id == observation["manifest_id"] == "com.ctrnative"
         assert ctr_app.url == observation["source"]
         [rendered_ctr] = json.loads(render([ctr_app]))["apps"]
         settings = json.loads(rendered_ctr["additionalSettings"])

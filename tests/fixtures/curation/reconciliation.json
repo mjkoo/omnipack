@@ -1,6 +1,6 @@
 {
   "observed_at": "2026-09-10",
-  "identity_corrections": [
+  "manifest_evidence": [
     ["com.sergiomanzur.sotnrecomp", "com.blacklabelhq.sotn", "https://github.com/sergiomanzur/SymphonyRecomp"],
     ["com.carlox33.hitandrun", "com.c4rlox.simpsons", "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android"],
     ["com.waterdish.shipwright", "com.dishii.soh", "https://github.com/Waterdish/Shipwright-Android"],

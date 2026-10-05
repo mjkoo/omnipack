@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 from typing import Any
 
@@ -70,19 +71,24 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
     document: dict[str, object],
 ) -> None:
+    from omnipack.cli import main
+
     path = tmp_path / ".build/report.json"
     path.parent.mkdir()
     path.write_text(json.dumps(document))
-    with pytest.raises(
-        ValueError,
-        match=(
-            rf"unsupported build report schema {document.get('schemaVersion')!r}; "
-            r"regenerate with `pack build`"
-        ),
-    ):
+    message = (
+        f"unsupported build report schema {document.get('schemaVersion')!r}; "
+        "regenerate with `pack build`"
+    )
+    with pytest.raises(ValueError, match=re.escape(message)):
         format_reports(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 1
+    assert capsys.readouterr().err == f"report failed: {message}\n"
 
 
 @pytest.mark.parametrize(
@@ -96,9 +102,21 @@ def test_corrupt_or_unsupported_report_fails(tmp_path: Path, value: str) -> None
         format_reports(tmp_path)
 
 
-def test_missing_both_fails(tmp_path: Path) -> None:
+def test_missing_both_fails(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from omnipack.cli import main
+
     with pytest.raises(ValueError, match="no build or verification"):
         format_reports(tmp_path)
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 1
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "report failed: " in captured.err
+    assert "no build or verification" in captured.err
 
 
 @pytest.mark.parametrize(
@@ -699,7 +717,13 @@ def test_a_change_of_url_alone_shows_both_urls(tmp_path: Path) -> None:
     assert "Change: single removed: same.pkg; URL: github.com/old/app\n" in output
 
 
-def test_nonfatal_findings_are_displayed_from_both_reports(tmp_path: Path) -> None:
+def test_nonfatal_findings_are_displayed_from_both_reports(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    from omnipack.cli import main
+
     finding = {
         "stage": "composition",
         "code": "single_only_coverage",
@@ -731,6 +755,9 @@ def test_nonfatal_findings_are_displayed_from_both_reports(tmp_path: Path) -> No
         )
         assert output.count(line) == 2
     assert "Status: success" in output
+    monkeypatch.chdir(tmp_path)
+    assert main(["report"]) == 0
+    assert capsys.readouterr().out == output
 
 
 @pytest.mark.parametrize("unavailable", [False, True])

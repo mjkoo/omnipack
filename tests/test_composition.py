@@ -1181,14 +1181,30 @@ def test_a_denied_ruled_candidate_names_no_family_and_joins_no_other_url() -> No
 
 def test_candidate_eligible_for_no_variant_names_no_family() -> None:
     ruled = app("ruled", "rjny", eligibility=frozenset())
+    member = app("member", "extras")
     other = app("other", "bboi")
     result = compose(
-        [ruled, other], [], [], policy=policy_of([family_rule(ruled, "app:x")])
+        [ruled, member, other],
+        [],
+        [],
+        policy=policy_of([family_rule(ruled, "app:x"), family_rule(member, "app:x")]),
     )
+    # The member at another URL keeps the rule's family, and the rule-less
+    # candidate keeps its URL family; the ineligible candidate is in neither.
     assert families(result) == {
+        ("app:x", "single", "extras"),
+        ("app:x", "dual", "extras"),
         (url_family(other), "single", "bboi"),
         (url_family(other), "dual", "bboi"),
     }
+    assert (
+        ids(result, Variant.SINGLE)
+        == ids(result, Variant.DUAL)
+        == {
+            "member",
+            "other",
+        }
+    )
 
 
 def test_rule_on_a_candidate_eligible_for_no_variant_still_covers_its_url() -> None:

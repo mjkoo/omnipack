@@ -102,6 +102,21 @@ def test_quiver_duplicate_package_id_fails_named(tmp_path: Path) -> None:
         quiver.fetch(tmp_path, {"catalog": "quiver.json"})
 
 
+@pytest.mark.parametrize("repo", ["Owner/Shared", "owner/shared.git"])
+def test_quiver_duplicate_normalized_project_url_fails_named(
+    tmp_path: Path, repo: str
+) -> None:
+    write_catalog(
+        tmp_path,
+        [entry("org.example.one", "owner/shared"), entry("org.example.two", repo)],
+    )
+    with pytest.raises(
+        SourceError,
+        match=r"quiver.*duplicate normalized project URL github\.com/owner/shared",
+    ):
+        quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+
+
 @pytest.mark.parametrize("field", ["family", "variant"])
 def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
     write_catalog(tmp_path, [entry("org.example.one", "owner/one", **{field: "x"})])

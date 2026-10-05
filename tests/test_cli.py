@@ -9,7 +9,7 @@ import pytest
 from omnipack import cli
 from omnipack.build import BuildInputs
 from omnipack.cli import main
-from omnipack.http import HttpClient, HttpResponse
+from omnipack.http import HttpClient, HttpResponse, HttpStatusError
 from omnipack.model import App, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport
@@ -598,16 +598,28 @@ def test_composition_failure_preserves_collected_diagnostics(
     assert not (tmp_path / "dist").exists()
 
 
+@pytest.mark.parametrize(
+    ("pinned", "failure"),
+    [
+        pytest.param("gone", "is missing", id="missing"),
+        pytest.param(
+            "removed",
+            "is denied at 'example.test/removed': excluded",
+            id="excluded",
+        ),
+        pytest.param("single", "is ineligible", id="target-ineligible"),
+    ],
+)
 def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, pinned: str, failure: str
 ) -> None:
     write_config(tmp_path)
     config = tmp_path / "config"
     match = {
         "source": "rjny",
         "origin": "rjny-catalog",
-        "id": "gone.app",
-        "url": "https://example.test/gone",
+        "id": f"{pinned}.app",
+        "url": f"https://example.test/{pinned}",
     }
     for name, value in (
         (
@@ -622,7 +634,7 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
             policy(
                 pins=[
                     {
-                        "family": "example.test/gone",
+                        "family": f"example.test/{pinned}",
                         "variant": "dual",
                         "match": match,
                         "rationale": "Require this build for dual.",
@@ -640,12 +652,13 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
             SourceType.HTML,
             (),
             Provenance("rjny", "https://example.test/catalog"),
-            eligibility=frozenset(Variant),
+            eligibility=eligibility,
             origin="rjny-catalog",
         )
-        for package_id, url in (
-            ("kept.app", "https://example.test/kept"),
-            ("removed.app", "https://example.test/removed"),
+        for package_id, url, eligibility in (
+            ("kept.app", "https://example.test/kept", frozenset(Variant)),
+            ("removed.app", "https://example.test/removed", frozenset(Variant)),
+            ("single.app", "https://example.test/single", frozenset({Variant.SINGLE})),
         )
     ]
     monkeypatch.setattr(cli, "_ingest_for_build", lambda root, inputs, report: apps)
@@ -654,8 +667,8 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
     assert main(["build"]) == 1
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["stage"] == "composition"
-    assert (
-        report["error"] == "pin for family 'example.test/gone' target 'dual' is missing"
+    assert report["error"] == (
+        f"pin for family 'example.test/{pinned}' target 'dual' {failure}"
     )
     # Pins are checked before any family selects a winner.
     assert report["selections"] == []
@@ -1178,6 +1191,37 @@ def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
     assert [path.read_bytes() for path in published] == before
 
 
+def test_failed_upstream_fetch_fails_build_and_keeps_published_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    published = [
+        tmp_path / "dist/single-screen.json",
+        tmp_path / "dist/dual-screen.json",
+        tmp_path / "README.md",
+    ]
+    before = [path.read_bytes() for path in published]
+    failing = "https://raw.githubusercontent.com/fixture/rjny/main/apps.json"
+    serve = fixture_transport(responses)
+
+    def transport(client: HttpClient, request: Request, timeout: float) -> HttpResponse:
+        if request.full_url == failing:
+            raise HttpStatusError(failing, 404)
+        return serve(client, request, timeout)
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert (report["status"], report["stage"]) == ("failed", "ingestion")
+    assert report["error"].startswith("rjny: ")
+    assert "HTTP 404" in report["error"]
+    assert report["changes"] is None
+    assert [path.read_bytes() for path in published] == before
+
+
 @pytest.mark.parametrize(
     ("missing", "source"),
     [
@@ -1227,27 +1271,42 @@ def test_missing_local_input_fails_at_ingestion_before_any_fetch(
         ),
     ],
 )
+@pytest.mark.parametrize("command", ["build", "verify"])
 def test_malformed_composition_policy_error_names_its_input(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
     policy_bytes: bytes,
     message: str,
+    command: str,
 ) -> None:
     write_fixture_pipeline(tmp_path)
     (tmp_path / "config/composition.json").write_bytes(policy_bytes)
+    if command == "verify":
+        (tmp_path / "dist").mkdir()
+        for name in ("single-screen.json", "dual-screen.json"):
+            (tmp_path / "dist" / name).write_text('{"settings":{},"apps":[]}')
+    before = {
+        path.name: path.read_bytes() for path in (tmp_path / "dist").glob("*.json")
+    }
 
     def fetch(*_args: object) -> HttpResponse:
         pytest.fail("the build fetched a catalog after a malformed input")
 
     monkeypatch.setattr(HttpClient, "_urllib_transport", fetch)
     monkeypatch.chdir(tmp_path)
-    assert main(["build"]) == 1
-    report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["stage"] == "ingestion"
-    assert report["error"] == f"composition policy: {message}"
-    assert report["error"] in capsys.readouterr().err
-    assert not (tmp_path / "dist").exists()
+    assert main([command]) == 1
+    error = capsys.readouterr().err
+    if command == "build":
+        report = json.loads((tmp_path / ".build/report.json").read_text())
+        assert report["stage"] == "ingestion"
+        assert report["error"] == f"composition policy: {message}"
+        assert report["error"] in error
+    else:
+        assert f"config/invalid_composition_config: {message}\n" in error
+    assert {
+        path.name: path.read_bytes() for path in (tmp_path / "dist").glob("*.json")
+    } == before
 
 
 def test_family_rule_on_a_track_only_candidate_builds(

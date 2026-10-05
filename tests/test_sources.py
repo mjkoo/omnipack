@@ -71,9 +71,7 @@ def test_rjny_applies_export_flags_and_ignores_presentation_overrides() -> None:
     assert all(isinstance(app.additional_settings, dict) for app in apps)
 
 
-def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_only_build() -> (
-    None
-):
+def test_rjny_cemu_builds_at_two_urls_form_two_url_families() -> None:
     url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     apps = rjny.fetch(
         FakeHttp({url: fixture("rjny-applications.json")}),
@@ -94,12 +92,66 @@ def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_only_build
     )
     selections = {item.variant: item for item in result.report.selections}
     assert {
-        variant: (item.url, item.reason) for variant, item in selections.items()
+        variant: (item.family, item.url, item.reason)
+        for variant, item in selections.items()
     } == {
-        Variant.SINGLE: ("https://github.com/SSimco/Cemu", "source"),
-        Variant.DUAL: ("https://github.com/sapphirerhodonite/cemu", "dual-preferred"),
+        Variant.SINGLE: (
+            "github.com/ssimco/cemu",
+            "https://github.com/SSimco/Cemu",
+            "source",
+        ),
+        Variant.DUAL: (
+            "github.com/sapphirerhodonite/cemu",
+            "https://github.com/sapphirerhodonite/cemu",
+            "dual-preferred",
+        ),
     }
     assert selections[Variant.DUAL].considered == ()
+
+
+def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_build() -> None:
+    url = "https://raw.githubusercontent.com/fixture/rjny/main/apps.json"
+    project = "https://github.com/example/app"
+
+    def record(package_id: str, meta: dict[str, object]) -> dict[str, object]:
+        return {
+            "id": package_id,
+            "url": project,
+            "name": "App",
+            "overrideSource": "GitHub",
+            "categories": ["Emulator"],
+            "additionalSettings": {},
+            "meta": meta,
+        }
+
+    catalog = {
+        "apps": [
+            record("org.example.app", {"includeInDualScreen": False}),
+            record("org.example.app.dual", {"includeInStandard": False}),
+        ]
+    }
+    apps = rjny.fetch(
+        FakeHttp({url: json.dumps(catalog)}),
+        {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
+    )
+    assert {(app.id, app.eligibility) for app in apps} == {
+        ("org.example.app", frozenset({Variant.SINGLE})),
+        ("org.example.app.dual", frozenset({Variant.DUAL})),
+    }
+    result = compose(
+        apps,
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
+    )
+    assert {
+        (item.variant, item.family, item.id) for item in result.report.selections
+    } == {
+        (Variant.SINGLE, "github.com/example/app", "org.example.app"),
+        (Variant.DUAL, "github.com/example/app", "org.example.app.dual"),
+    }
 
 
 def test_rjny_matches_both_upstream_exports() -> None:

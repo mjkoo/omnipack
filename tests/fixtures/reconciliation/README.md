@@ -29,9 +29,9 @@ aff8d285128eb24cfd2e9e9d34eaa8422e9f58865c3b99467b81700dd04a06a5  rjny.json
 
 `selected-observations.json` records the public release, selected asset URL,
 manifest package and version, APK digest and signer certificate digest for each
-corrected retained source. `../curation/reconciliation.json` records the bounded
-identity map and official Ghostship ZIP/member observation. Runtime behavior does
-not pin these dated hashes.
+corrected retained source. `../curation/reconciliation.json` records the dated
+source id to manifest package evidence and official Ghostship ZIP/member
+observation. Runtime behavior does not pin these dated hashes.
 
 `formed-families.json` records the families the current composition forms from
 these inputs, by the original selectors of their members, where more than one

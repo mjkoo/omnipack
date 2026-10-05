@@ -12,7 +12,7 @@ from omnipack.composition_policy import (
     load_composition_policy,
     parse_composition_policy,
 )
-from omnipack.merge import _import_data
+from omnipack.merge import CompositionError, _import_data, compose
 from omnipack.model import App, Category, Provenance, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import render
@@ -364,6 +364,29 @@ def test_pin_family_must_match_an_explicit_projection_at_load() -> None:
         )
     # Without an explicit projection the family forms at build time.
     assert parse_composition_policy(policy(pins=[pin])).pins[0].family == "app:wrong"
+
+
+def test_pin_family_conflict_fails_at_load_before_a_denial_of_its_candidate() -> None:
+    pin = {
+        "family": "app:wrong",
+        "variant": "dual",
+        "match": rule()["match"],
+        "rationale": "Prefer this build.",
+    }
+    denylist = [{"url": "https://github.com/example/app", "reason": "broken"}]
+    with pytest.raises(CompositionPolicyError, match="pin family 'app:wrong'"):
+        parse_composition_policy(
+            policy(candidates=[rule(family="app:example")], pins=[pin])
+        )
+    # With the family corrected, the same denial is what fails the build.
+    parsed = parse_composition_policy(
+        policy(
+            candidates=[rule(family="app:example")],
+            pins=[{**pin, "family": "app:example"}],
+        )
+    )
+    with pytest.raises(CompositionError, match=f"is denied at '{URL}': broken"):
+        compose([candidate()], denylist, [], policy=parsed)
 
 
 def test_pin_may_name_a_url_family() -> None:

@@ -11,8 +11,9 @@ The APK identities were decoded from separately downloaded binaries, and each
 download byte-matched its corresponding prior capture. The hashes identify dated
 evidence and are not runtime pins or reproducible-build requirements.
 
-`reconciliation.json` records the bounded identity map and the official
-Ghostship ZIP and member observation used by the reconciliation curation tests.
+`reconciliation.json` records the dated source id to manifest package evidence
+and the official Ghostship ZIP and member observation used by the reconciliation
+curation tests.
 
 The historical configured Symphony, Simon CTR, Shipwright and Ludashi identities
 disagreed with their APK manifests: respectively `com.blacklabelhq.sotn`,
