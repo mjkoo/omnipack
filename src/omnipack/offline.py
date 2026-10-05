@@ -72,9 +72,9 @@ def validate_offline(inputs: OfflineInputs) -> tuple[Finding, ...]:
     """Validate a pair and its composition configuration without I/O.
 
     Rendering fills every default setting key and derives the category
-    colours from the entries it renders, so neither is checked again here. Setting values are checked:
-    upstream records and overlay patches supply them, and rendering copies them
-    without checking their types.
+    colours from the entries it renders, so neither is checked again here.
+    Setting values are checked: upstream records and overlay patches supply
+    them, and rendering copies them without checking their types.
     """
     findings: list[Finding] = []
     documents = {

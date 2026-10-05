@@ -16,8 +16,10 @@ from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import _import_data, compose
 from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.offline import OfflineInputs, validate_offline
 from omnipack.overlay import ComposedApp
-from omnipack.render import render
+from omnipack.render import render, render_pack
+from omnipack.report_model import Severity
 from omnipack.sources import (
     IngestionReport,
     SourceError,
@@ -1202,10 +1204,6 @@ def test_bboi_reads_the_current_latest_release_on_every_run() -> None:
 
 
 def test_entries_of_any_source_type_compose_render_and_verify() -> None:
-    from omnipack.offline import OfflineInputs, validate_offline
-    from omnipack.render import render_pack
-    from omnipack.report_model import Severity
-
     apps = extras.fetch(
         [
             {

@@ -127,7 +127,7 @@ def _render_app(app: ComposedApp) -> dict[str, Any]:
     data["categories"] = categories
 
     source_type = data.get("overrideSource")
-    if source_type is not None and not isinstance(source_type, str):
+    if "overrideSource" in data and not isinstance(source_type, str):
         raise RenderError(
             f"app {package_id!r} has invalid overrideSource; expected string"
         )
