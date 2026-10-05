@@ -89,8 +89,6 @@ def generate_catalog(single: bytes, dual: bytes, policy: CompositionPolicy) -> b
             row.name.casefold(),
             row.name,
             row.label,
-            row.single["id"] if row.single else "",
-            row.dual["id"] if row.dual else "",
         )
     )
     lines: list[str] = []

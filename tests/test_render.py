@@ -101,7 +101,7 @@ def test_render_hydrates_when_app_settings_are_missing() -> None:
     assert json.loads(rendered["additionalSettings"]) == SETTINGS_DEFAULTS["GitHub"]
 
 
-@pytest.mark.parametrize("field,value", [("name", None), ("url", 7)])
+@pytest.mark.parametrize("field,value", [("name", None), ("url", 7), ("url", "")])
 def test_render_rejects_missing_or_wrong_required_strings(
     field: str, value: object
 ) -> None:

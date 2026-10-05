@@ -1153,7 +1153,7 @@ def test_pin_on_a_removed_candidate_fails_on_the_removal(removal: str) -> None:
         )
     label = f"pin for family {family!r} target 'dual'"
     assert str(error.value) == (
-        f"{label} is denied: broken"
+        f"{label} is denied at {normalize_project_url(pinned.url)!r}: broken"
         if removal == "denial"
         else f"{label} is ineligible for every variant"
     )

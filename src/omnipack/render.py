@@ -107,6 +107,10 @@ def _render_app(app: ComposedApp) -> dict[str, Any]:
             raise RenderError(
                 f"app {package_id!r} has invalid {field}; expected string"
             )
+    if not data["url"]:
+        raise RenderError(
+            f"app {package_id!r} has invalid url; expected nonempty string"
+        )
     if "author" not in data:
         data["author"] = ""
     elif not isinstance(data["author"], str):

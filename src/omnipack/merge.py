@@ -294,7 +294,10 @@ def _resolve_pins(
         [candidate] = matches
         denied_reason = denied.get(id(candidate))
         if denied_reason is not None:
-            raise CompositionError(f"{label} is denied: {denied_reason}")
+            denied_url = normalize_project_url(candidate.url)
+            raise CompositionError(
+                f"{label} is denied at {denied_url!r}: {denied_reason}"
+            )
         if not candidate.eligibility:
             raise CompositionError(f"{label} is ineligible for every variant")
         winner = by_selector[pin.match.key]
