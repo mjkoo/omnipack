@@ -418,6 +418,7 @@ def test_selector_origin_must_belong_to_its_source_before_matching(kind: str) ->
         pytest.param("/owner/repo", id="no-host"),
         pytest.param("https://example.com/owner /repo", id="whitespace"),
         pytest.param("https://example.com:abc/owner/repo", id="bad-port"),
+        pytest.param("https://example.com:99999/owner/repo", id="out-of-range-port"),
     ],
 )
 def test_selector_url_must_be_normalizable_before_candidate_matching(

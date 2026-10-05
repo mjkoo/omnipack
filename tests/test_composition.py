@@ -290,6 +290,22 @@ def test_denial_permits_an_alternative_at_another_url() -> None:
     assert dual.reason == "ordinary-fallback"
 
 
+def test_denial_of_a_dual_build_falls_back_to_a_bboi_standard_build() -> None:
+    standard = app("standard", "bboi", family="app:x")
+    preferred = app(
+        "preferred",
+        "bboi",
+        family="app:x",
+        eligibility=DUAL_ONLY,
+        origin="bboi-dual-asset",
+    )
+    assert ids(compose([standard, preferred], [], []), Variant.DUAL) == {"preferred"}
+    result = compose([standard, preferred], deny(preferred.url), [])
+    assert ids(result, Variant.DUAL) == {"standard"}
+    [dual] = [item for item in result.report.selections if item.variant is Variant.DUAL]
+    assert (dual.origin, dual.reason) == ("bboi-standard-asset", "ordinary-fallback")
+
+
 def test_denied_url_shared_by_both_builds_leaves_other_projects_selectable() -> None:
     url = "https://example.com/denied"
     standard = app("standard", "bboi", family="app:x", url=url)
@@ -383,6 +399,11 @@ def test_winning_rank_tie_publishes_the_canonically_first_and_records_it() -> No
         SameRankTie(family, Variant.SINGLE, (stable, nightly), stable),
         SameRankTie(family, Variant.DUAL, (stable, nightly), stable),
     ]
+    reasons = compose(stable_and_nightly(), [], []).report.selections
+    assert [(item.variant, item.reason) for item in reasons] == [
+        (Variant.SINGLE, "source"),
+        (Variant.DUAL, "ordinary-fallback"),
+    ]
 
 
 def test_a_same_rank_tie_follows_serialization_not_id_or_selector_order() -> None:
@@ -403,6 +424,10 @@ def test_a_same_rank_tie_follows_serialization_not_id_or_selector_order() -> Non
         assert result.report.same_rank_ties == [
             SameRankTie(url_family(first), variant, tied, tied[1])
             for variant in Variant
+        ]
+        assert [item.reason for item in result.report.selections] == [
+            "source",
+            "ordinary-fallback",
         ]
 
 
@@ -596,6 +621,18 @@ def test_an_app_missing_from_dual_is_published_and_reported() -> None:
     assert result.report.single_only_families == [
         SingleOnlyFamily("app:x", "single", url_family(single))
     ]
+
+
+def test_a_family_with_only_a_dual_build_is_absent_from_single() -> None:
+    dual = app("dual", "bboi", family="app:x", eligibility=DUAL_ONLY)
+    other = app("other", "extras")
+    result = compose([dual, other], [], [])
+    assert {item.family for item in result.apps[Variant.SINGLE]} == {url_family(other)}
+    assert {item.family for item in result.apps[Variant.DUAL]} == {
+        "app:x",
+        url_family(other),
+    }
+    assert result.report.single_only_families == []
 
 
 def test_a_denied_only_dual_build_leaves_a_single_only_finding() -> None:
@@ -1062,6 +1099,62 @@ def families(result: CompositionResult) -> set[tuple[str, str, str]]:
     return {
         (item.family, item.variant.value, item.source)
         for item in result.report.selections
+    }
+
+
+def test_a_disappeared_pinned_build_selects_no_other_build_of_its_family() -> None:
+    pinned = app("pinned", "bboi", family="app:x")
+    other = app("other", "rjny", family="app:x")
+    policy = policy_of(
+        [family_rule(pinned, "app:x"), family_rule(other, "app:x")],
+        [pin(pinned, "app:x", Variant.SINGLE)],
+    )
+    assert ids(compose([pinned, other], [], [], policy=policy), Variant.SINGLE) == {
+        "pinned"
+    }
+    report = CompositionReport()
+    with pytest.raises(CompositionError, match="is missing"):
+        compose(
+            [other],
+            [],
+            [],
+            policy=build_policy(
+                rules_for([replace(other, family="app:x")]), policy.pins
+            ),
+            report=report,
+        )
+    assert report.selections == []
+
+
+def test_two_records_sharing_a_pinned_identity_fail_before_the_pin_is_read() -> None:
+    first = app("pinned", "rjny", additional_settings={"about": "one"})
+    second = replace(first, additional_settings={"about": "two"})
+    policy = policy_of([], [pin(first, url_family(first), Variant.DUAL)])
+    with pytest.raises(CompositionError) as error:
+        compose([first, second], [], [], policy=policy)
+    assert str(error.value) == (
+        f"ambiguous original candidate identity {candidate_selector(first).key!r}"
+    )
+    result = compose(
+        [first, replace(second, additional_settings={"about": "one"})],
+        [],
+        [],
+        policy=policy,
+    )
+    assert ids(result, Variant.DUAL) == {"pinned"}
+
+
+def test_a_denied_ruled_candidate_names_no_family_and_joins_no_other_url() -> None:
+    denied = app("denied", "rjny", family="app:x")
+    member = app("member", "bboi", family="app:x")
+    rule_less = app("rule.less", "extras")
+    result = compose([denied, member, rule_less], deny(denied.url), [])
+    assert result.report.removals == [Removal(url_family(denied), "broken", ("app:x",))]
+    assert families(result) == {
+        ("app:x", "single", "bboi"),
+        ("app:x", "dual", "bboi"),
+        (url_family(rule_less), "single", "extras"),
+        (url_family(rule_less), "dual", "extras"),
     }
 
 
