@@ -260,24 +260,24 @@ the overlay `id` patch that produced the repeat.
 
 ## Build report
 
-`changes` lists the entries added and removed in
-each pack since the previous output, each with its package id and normalized
-project URL, so a move to another repository with the same id shows as one
-removed and one added entry. `selections` records every family's winner in each
-pack with its package id, URL, source and origin, the other available candidates
-it was chosen over, and one reason: `pin`, `dual-preferred`, `ordinary-fallback`
-(dual with no available dual-screen build), or `source` (single-screen
-precedence). `denylistRemovals` lists each denial that removed candidates, once
-under its URL with the families it removed, and `staleExclusions` each denial
-that matched nothing. `repeatedIds`, `singleOnlyFamilies` and `sameRankTies`
-hold the nonfatal outcomes described above. `sourceAdmissions` lists each
-committed codm and Quiver entry the build admitted, with its source, id, URL and
-whether it is an APK or track-only entry. `uncategorizedFamilies` and
-`staleCategoryAssignments` are the [category outcomes](#categories); a build
-that fails before categories are assigned records both empty, along with the
-single-only and repeated-id lists, while its stage and error say the checks did
-not run. `offlineVerification` holds the offline gate's status, its errors in
-`findings`, and its nonfatal findings in `nonfatalFindings`. For example:
+`changes` lists the entries added and removed in each pack since the previous
+output, each with its package id and normalized project URL, so a move to
+another repository with the same id shows as one removed and one added entry.
+`selections` records every family's winner in each pack with its package id,
+URL, source and origin, the other available candidates it was chosen over, and
+one reason: `pin`, `dual-preferred`, `ordinary-fallback` (dual with no available
+dual-screen build), or `source` (single-screen precedence). `denylistRemovals`
+lists each denial that removed candidates, once under its URL with the families
+it removed, and `staleExclusions` each denial that matched nothing.
+`repeatedIds`, `singleOnlyFamilies` and `sameRankTies` hold the nonfatal
+outcomes described above. `sourceAdmissions` lists each committed codm and
+Quiver entry the build admitted, with its source, id, URL and whether it is an
+APK or track-only entry. `uncategorizedFamilies` and `staleCategoryAssignments`
+are the [category outcomes](#categories); a build that fails before categories
+are assigned records both empty, along with the single-only and repeated-id
+lists, while its stage and error say the checks did not run.
+`offlineVerification` holds the offline gate's status, its errors in `findings`,
+and its nonfatal findings in `nonfatalFindings`. For example:
 
 ```json
 {
@@ -297,8 +297,8 @@ not run. `offlineVerification` holds the offline gate's status, its errors in
 The example is abridged; the other build fields remain present in the full
 report. A considered candidate records its identity, not why it lost; compare a
 losing candidate's settings with the winner's by reading the source catalogs.
-`pack report` reads only build reports of the current schema; an older report must be
-regenerated with `pack build`.
+`pack report` reads only build reports of the current schema; an older report
+must be regenerated with `pack build`.
 
 Offline verification labels each rendered entry with the explicit family the
 rules project onto its package id and URL, or otherwise its normalized URL, and
