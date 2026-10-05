@@ -39,11 +39,14 @@ upstream records captured in the repository, while the source workflow builds
 from live ones, so a catalog whose composition depends on upstream records
 newer than those captures is outside this guarantee.
 
-Catalog validity comprises the rules the build enforces and one rule no
-pipeline stage checks, which this requirement owns. A build rejects a malformed
-committed catalog, by "A failed fetch aborts the build" in source-ingestion,
-and one that repeats an entry id, by "One package id may resolve differently
-per variant" there. The owned rule is that the committed catalog file SHALL be
+Catalog validity comprises the rules the build enforces, the rule generation
+enforces when it reads the committed catalog, and one rule no pipeline stage
+checks, which this requirement owns. A build rejects a malformed committed
+catalog, by "A failed fetch aborts the build" in source-ingestion, and one that
+repeats an entry id, by "One package id may resolve differently per variant"
+there. Generation treats a committed catalog holding two entries whose URLs
+normalize to the same project as malformed and fails, by "Each listed project
+becomes a minimal Obtainium entry" in source-generation. The owned rule is that the committed catalog file SHALL be
 byte-identical to the canonical rendering of the entries it holds, so that a
 hand edit or a stale write is visible rather than silently carried; it SHALL be
 guarded by a check that fails when it drifts. Per-app settings and categories

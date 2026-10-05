@@ -12,32 +12,135 @@ The supported generated sources are codm and Quiver, each configured with its
 upstream input and its committed catalog path. For codm, generation SHALL read
 the configured README and take the links inside its Project tables; a link
 outside those tables, or inside a fenced or indented code block, SHALL NOT
-introduce a project, and a README with no Project table SHALL fail generation.
-For Quiver, generation SHALL read the configured index and every list it
-references, and SHALL fail when the index or a referenced list is unavailable
-or not the shape the source publishes; a list location outside the configured
-index's host and directory SHALL fail generation as a malformed index. A
-Quiver row names its project by its `repository` and `repositorySource`, which
-generation turns into the forge's project URL, and its `project` field is the
-row's name; a row whose `repositorySource` names a forge generation cannot form
-a URL for is reported and skipped, without failing generation.
+introduce a project. Every Project table SHALL be well formed: a README with no
+Project table, or with a Project table whose delimiter row is missing or
+invalid, SHALL fail generation, even when another Project table is valid.
+
+For Quiver, generation SHALL read the configured index, every list it
+references and the release asset-name file it names by `platformMetadataUrl`,
+and SHALL fail when the index, a referenced list or the asset-name file is
+unavailable or not the shape the source publishes; a location the index names
+outside the configured index's host and directory SHALL fail generation as a
+malformed index. Generation SHALL read every input through the same
+credential-free HTTP client the pack build uses: redirects SHALL be followed
+as that client follows them, and responses SHALL carry no size bound beyond
+the client's own. A Quiver row names its project by its `repository` and
+`repositorySource`, and its `project` field is the row's name. An absent
+`repositorySource` SHALL mean GitHub, and forge names SHALL match without
+regard to case: `github` forms `https://github.com/<repository>` and `gitlab`
+forms `https://gitlab.com/<repository>`. The `repository` SHALL be a valid
+path for its forge: for GitHub exactly an owner and a name, for GitLab one or
+more namespace segments followed by a project, every segment nonempty and free
+of whitespace. A row whose `repositorySource` names any other forge, or whose
+`repository` is missing, not a string or not a valid path for its forge, SHALL
+be reported and skipped; the skip alone SHALL NOT fail generation, which fails
+only when no entry is left.
+
+Where a source's upstream publishes release asset names for its listed
+projects, generation SHALL screen on them. Quiver's asset-name file holds one
+entry per listed repository, with its `provider` (`github` or `gitlab`),
+`repository`, `releaseTag` and `assetNames`; an entry matches the listed
+project whose URL its `provider` and `repository` form, by normalized URL.
+Generation SHALL keep a listed project when its matching entry names an asset
+whose name ends in `.apk`, compared without regard to case, or when the
+committed catalog already holds an entry with the project's normalized URL.
+The asset names describe only a project's latest release, while Obtainium by
+default falls back to older releases, so the screen decides only whether a
+project not yet in the committed catalog is admitted: it SHALL NOT remove a
+committed entry that the upstream still lists. A listed project that the
+committed catalog does not hold and whose entry names no such asset, or that
+has no entry, SHALL be reported and skipped; the screen alone SHALL NOT fail
+generation, which fails only when no entry is left. A
+source whose upstream publishes no asset names, such as the codm README, SHALL
+NOT be screened, and every project it lists SHALL be kept.
 
 Generation SHALL make no request other than reading these inputs: it SHALL NOT
-query a repository host's API, read release metadata or download or inspect
-APKs. A discovery that fails, or that lists no project at all, SHALL fail
-generation without writing a candidate catalog, so it never
-proposes removing every entry. Nothing else SHALL fail generation.
+query a repository host's API, read release metadata from a repository host or
+download or inspect APKs. A discovery that fails SHALL fail generation without
+writing a candidate catalog. Skipping a row or screening out a project fails
+nothing for that row or project, but when the candidate generation would write
+keeps no entry, however that happens (an upstream list with no rows, every row
+skipped as unformable or for an unknown forge, or every listed project screened
+out while the upstream lists no committed project), generation SHALL fail
+without writing a candidate catalog, so it never proposes removing every entry.
+Nothing else SHALL fail generation, apart from a committed catalog that cannot
+be read or is malformed.
 
 #### Scenario: A README link outside the Project tables
 
 - **WHEN** the README links a repository outside its Project tables
 - **THEN** that repository does not become a project
 
+#### Scenario: One of multiple Project tables is malformed
+
+- **WHEN** a README contains a valid Project table and another Project header
+  with a missing or invalid delimiter row
+- **THEN** generation fails without writing a candidate catalog or proposing
+  removals from the malformed table
+
 #### Scenario: A Quiver list is unavailable
 
 - **WHEN** a list the Quiver index references cannot be read
 - **THEN** generation fails, writes no candidate catalog, and proposes no
   removal
+
+#### Scenario: The asset-name file is malformed
+
+- **WHEN** the asset-name file the Quiver index names cannot be read or is not
+  the shape the source publishes
+- **THEN** generation fails without writing a candidate catalog
+
+#### Scenario: A row omits its forge
+
+- **WHEN** a Quiver row carries no `repositorySource` and names `owner/repo`
+- **THEN** its project URL is `https://github.com/owner/repo`
+
+#### Scenario: A row names its forge in mixed case
+
+- **WHEN** a Quiver row's `repositorySource` is `GitHub`
+- **THEN** it is treated as `github` and its project URL is formed on
+  github.com
+
+#### Scenario: A row names an unknown forge
+
+- **WHEN** a Quiver row's `repositorySource` is `codeberg`
+- **THEN** the row is reported and skipped, and generation succeeds
+
+#### Scenario: A row has no repository
+
+- **WHEN** a Quiver row's `repository` is null
+- **THEN** the row is reported and skipped, and generation succeeds
+
+#### Scenario: A GitLab repository sits in a nested group
+
+- **WHEN** a Quiver row names `gitlab` with the repository `group/subgroup/app`
+- **THEN** its project URL is `https://gitlab.com/group/subgroup/app` and the
+  row is not skipped for its path
+
+#### Scenario: A listed project publishes an APK asset
+
+- **WHEN** a listed Quiver project's asset-name entry names `App-v2.APK`
+- **THEN** the project is kept
+
+#### Scenario: A new listed project publishes no APK asset
+
+- **WHEN** a listed Quiver project that the committed catalog does not hold has
+  an asset-name entry naming only assets that do not end in `.apk`, or the
+  asset-name file has no entry for it
+- **THEN** the project is reported and skipped, and generation succeeds
+
+#### Scenario: A committed project's latest release has no APK asset
+
+- **WHEN** a listed Quiver project whose normalized URL the committed catalog
+  holds has an asset-name entry naming no asset that ends in `.apk`
+- **THEN** the project is kept, and the candidate holds its entry with the
+  committed id and URL
+
+#### Scenario: A source publishes no asset names
+
+- **WHEN** generation runs for a source whose upstream publishes no release
+  asset names
+- **THEN** every project it lists is kept without screening
 
 #### Scenario: Generation inspects nothing it lists
 
@@ -50,40 +153,89 @@ proposes removing every entry. Nothing else SHALL fail generation.
 - **WHEN** a source's discovery succeeds but lists no project
 - **THEN** generation fails without writing a candidate catalog
 
+#### Scenario: Every row is skipped
+
+- **WHEN** every Quiver row is skipped, each for naming an unknown forge or a
+  missing or invalid repository
+- **THEN** generation fails without writing a candidate catalog, and the
+  skipped rows are reported with their reasons
+
+#### Scenario: Every new project is screened out
+
+- **WHEN** the upstream lists no project the committed catalog holds, and
+  every project it lists is screened out for publishing no APK asset
+- **THEN** generation fails without writing a candidate catalog, and the
+  screened-out projects are reported with their reasons
+
 ### Requirement: Each listed project becomes a minimal Obtainium entry
 
-Generation SHALL emit one entry per normalized URL a source lists, whatever
-its host, collapsing several listings of one normalized URL into one entry. It
-SHALL NOT judge whether Obtainium can track a URL; an entry Obtainium cannot
-use is removed by a denial for its URL. Each entry SHALL carry:
+Generation SHALL emit one entry per normalized URL that discovery keeps,
+whatever its host, collapsing several listings of one normalized URL into one
+entry. Beyond the asset-name screen discovery applies, it SHALL NOT judge
+whether Obtainium can track a URL; an entry Obtainium cannot use is removed by
+a denial for its URL. Each entry SHALL carry:
 
-- the URL as listed;
+- as its URL, the URL of the committed catalog's entry with the same
+  normalized URL when there is one, kept verbatim the same way the id is kept,
+  so re-casing or reordering upstream rows changes no catalog bytes; otherwise
+  the project URL of a listing, and when several listings collapse into one
+  entry, the smallest of their project URLs in code point order, so the order
+  and case of upstream rows do not choose the URL. A listing's project URL is
+  its scheme, its host lowercased without a leading `www.`, any explicit port,
+  and the project path URL normalization identifies, in the listing's case:
+  for a GitHub link its owner and repository alone, never a releases, tags,
+  blob or release-asset path, and on any other host the path without a
+  trailing slash or `.git`, with the query and fragment that normalization
+  retains;
 - `overrideSource` GitHub for a github.com repository URL and GitLab for a
   gitlab.com project URL, and no `overrideSource` otherwise, so Obtainium
   detects the source from the URL;
 - the name the listing gives (a codm link's text, a Quiver row's `project`),
-  or else the last path segment of the URL; when listings of one URL give
-  different names, the first in case-insensitive order;
-- the repository owner as its author for a GitHub or GitLab URL, and an empty
-  author otherwise;
-- as its id, the first twelve lowercase hexadecimal characters of the SHA-256
-  of its normalized URL, a form Obtainium treats as a placeholder it replaces
-  with the APK's package id on first install;
+  with trailing emoji and symbol characters and surrounding whitespace
+  trimmed, or else, when the listing gives none or nothing remains after
+  trimming, the last path segment of the URL; when listings of one URL give
+  different names, the first trimmed name in case-insensitive order, with
+  names equal ignoring case ordered by code point (`App` before `app`), so the
+  order of upstream rows never chooses the name;
+- the first path segment of its URL, the repository's owner or top-level group,
+  as its author for a GitHub or GitLab URL, and an empty author otherwise, so a
+  committed entry's kept URL also keeps its author;
+- as its id, the id of the committed catalog's entry with the same normalized
+  URL when there is one, so a regenerated entry keeps the id composition rules,
+  pins and installed apps already know; otherwise the first twelve lowercase
+  hexadecimal characters of the SHA-256 of its normalized URL, a form Obtainium
+  treats as a placeholder it replaces with the APK's package id on first
+  install;
 - no categories and no settings beyond those the source type's defaults
   supply.
+
+Name trimming SHALL apply to every listing-derived name, uniformly for every
+source. The committed catalog generation reads for its ids and URLs is the same one it
+compares the candidate against to report entries added, removed and changed
+in place, so keeping
+them adds no input or request; when no committed catalog exists every entry
+gets its placeholder id and a URL chosen from its listings, and a committed catalog that cannot be read or is malformed
+SHALL fail generation like its discovery input. A committed catalog holding two
+or more entries whose URLs normalize to the same project is malformed, since no
+single committed id or URL could be kept for it: generation SHALL fail without
+writing a candidate catalog and SHALL name that normalized URL and the
+competing entries' ids.
 
 Generation SHALL NOT read any per-project policy: a setting an app needs, such
 as an APK filter, prerelease inclusion or track-only treatment, SHALL be
 supplied by an overlay record for its URL, and its category by the category
-map. The catalog SHALL be a deterministic function of the upstream inputs:
-entries ordered by normalized URL and serialized in the canonical form, so
-unchanged inputs reproduce the committed catalog byte for byte. A project the
-upstream no longer lists SHALL be absent from the candidate, which the
-proposal shows as a removal.
+map. The catalog SHALL be a deterministic function of the upstream inputs and
+the committed catalog's ids and URLs, serialized in the canonical catalog
+rendering, whose entry order and bytes are those pack-curation checks a
+committed catalog against, so unchanged inputs reproduce the committed catalog
+byte for byte. A project the upstream no longer lists SHALL be absent from the
+candidate, which the proposal shows as a removal; a project discovery screens
+out is never a committed entry, so screening proposes no removal.
 
 #### Scenario: A GitLab repository is listed
 
-- **WHEN** a Quiver row names a GitLab repository
+- **WHEN** a Quiver row names a GitLab repository whose asset-name entry names
+  an APK
 - **THEN** the candidate holds an entry for it with `overrideSource` GitLab
 
 #### Scenario: A link on another host is listed
@@ -96,11 +248,64 @@ proposal shows as a removal.
 - **WHEN** two Quiver rows name `Owner/Repo` and `owner/repo`
 - **THEN** the candidate holds one entry for that repository
 
-#### Scenario: The id is a placeholder
+#### Scenario: Listing order does not choose the URL
 
-- **WHEN** generation emits an entry for `github.com/owner/repo`
+- **WHEN** two listings give `https://github.com/Owner/Repo` and
+  `https://github.com/owner/repo`, in one order on one run and the other order
+  on another
+- **AND** the committed catalog holds no entry with that normalized URL
+- **THEN** both runs emit one entry whose URL is `https://github.com/Owner/Repo`
+  and whose author is `Owner`, and the two candidates are byte-identical
+
+#### Scenario: Upstream re-cases a committed entry's row
+
+- **WHEN** the committed catalog holds an entry whose URL is
+  `https://github.com/owner/repo` and whose author is `owner`
+- **AND** the upstream now lists that repository as
+  `https://github.com/Owner/Repo`
+- **THEN** the regenerated entry's URL is `https://github.com/owner/repo` and
+  its author is `owner`, and the entry's bytes are unchanged
+
+#### Scenario: A listing links a release deep link
+
+- **WHEN** a listing links
+  `https://github.com/Owner/Repo/releases/download/v1.0/app.apk` and the
+  committed catalog holds no entry with that normalized URL
+- **THEN** the entry's URL is the project URL `https://github.com/Owner/Repo`,
+  not the release-asset link, and its author is `Owner`
+
+#### Scenario: Listing order does not choose the name
+
+- **WHEN** two listings of one normalized URL give the names `App` and `app`,
+  in one order on one run and the other order on another
+- **THEN** both runs emit one entry whose name is `App`, and the two
+  candidates are byte-identical
+
+#### Scenario: A listing name ends in an emoji
+
+- **WHEN** a codm Project table link's text is `Kanto Gear 🤖`
+- **THEN** the entry's name is `Kanto Gear`
+
+#### Scenario: A new project gets a placeholder id
+
+- **WHEN** generation emits an entry for `github.com/owner/repo` and the
+  committed catalog holds no entry with that normalized URL
 - **THEN** its id is the first twelve hexadecimal characters of the SHA-256 of
   `github.com/owner/repo`
+
+#### Scenario: A committed entry keeps its id
+
+- **WHEN** generation emits an entry whose normalized URL matches a committed
+  catalog entry with the id `com.example.app`
+- **THEN** the regenerated entry's id is `com.example.app`
+
+#### Scenario: Two committed entries share a project URL
+
+- **WHEN** the committed catalog holds an entry with the id `com.example.app`
+  at `https://github.com/Owner/Repo` and another with the id `a1b2c3d4e5f6` at
+  `https://www.github.com/owner/repo/`
+- **THEN** generation fails without writing a candidate catalog, and its error
+  names the normalized URL `github.com/owner/repo` and both ids
 
 #### Scenario: Unchanged inputs
 
@@ -135,8 +340,9 @@ catalog, which SHALL be a regular file of mode 100644 in both the base revision
 and the commit. A source's run SHALL NOT stage or publish another source's
 catalog. The read-only job SHALL likewise reject a generated candidate or a
 workspace catalog that is not a regular file. Diagnostics SHALL identify the
-base revision, catalog changes, skipped listings and pack validation
-outcome. The base revision SHALL appear in the PR body and in the run summary of
+base revision, the catalog's added, removed and changed entries, skipped
+listings and pack validation outcome; the PR body and the run summary SHALL
+each show the added, removed and changed entries. The base revision SHALL appear in the PR body and in the run summary of
 a run whose staging succeeds; a run whose staging fails SHALL summarize that
 staging failed and its reason instead. The pack validation outcome SHALL be the
 reported results of the run's test, build and verification steps.
@@ -289,8 +495,8 @@ inside a preformatted block, so it renders as literal text rather than markup.
 Credentials and raw HTTP caches SHALL be excluded from
 summaries and artifacts. Each source's current generation report SHALL be
 retained as an artifact under a name distinct from other sources' for 14 days on
-success and failure when available, and the run summary SHALL list catalog
-changes and skipped listings. Missing reports after early failure SHALL NOT
+success and failure when available, and the run summary SHALL list the
+catalog's added, removed and changed entries and the skipped listings. Missing reports after early failure SHALL NOT
 imply successful validation. Actions SHALL expose failed generation, test,
 validation and PR-operation stages for each source.
 
@@ -309,8 +515,9 @@ automatically changing repository settings.
 
 #### Scenario: Skipped listings are visible
 
-- **WHEN** a Quiver row names a forge generation cannot form a URL for
-- **THEN** the run summary lists that row
+- **WHEN** a Quiver row names a forge generation cannot form a URL for, or a
+  new listed project is screened out for publishing no APK asset
+- **THEN** the run summary lists that row or project with its reason
 
 #### Scenario: Checks run without the write credential
 

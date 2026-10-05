@@ -220,8 +220,6 @@ generated provenance in reports without claiming a fresh APK check.
 
 ## REMOVED Requirements
 
-## REMOVED Requirements
-
 ### Requirement: HTTP credentials are optional and scoped to exact hosts
 
 **Reason**: Generation no longer queries repository APIs or downloads APKs, so no request needs a credential.

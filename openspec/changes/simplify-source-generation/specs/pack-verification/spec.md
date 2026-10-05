@@ -72,9 +72,6 @@ renders, and ingestion enforces the GitLab URL rules.
 - **THEN** offline verification succeeds without claiming that the settings
   behave correctly in Obtainium
 
-
-## REMOVED Requirements
-
 #### Scenario: An entry's source type has no committed defaults
 
 - **WHEN** a rendered entry carries `overrideSource: Codeberg`, or none
