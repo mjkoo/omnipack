@@ -18,6 +18,9 @@ an in-place asset replacement that leaves the source version unchanged.
 A successful structural result SHALL NOT be described as proof of safe
 identity, installation, re-import, or update behavior.
 
+These are obligations on documentation, so document review, not an automated
+test, checks the scenarios of this requirement.
+
 When a pack's selection for a family moves to another publisher's build,
 curation SHALL distinguish package identity from update compatibility. An
 in-place upgrade claim SHALL be supported by dated observations of released APK
@@ -173,6 +176,6 @@ Pruning an unwanted Quiver app uses the project deny list, as for any source.
 
 ### Requirement: Curation evidence states its limits
 
-**Reason**: Package-id corrections are no longer composition rules backed by recorded APK evidence; the owner fixes a wrong source id by hand with an overlay `id` patch when Obtainium shows a duplicate or an id error, so curation no longer maintains package-id mismatch records.
+**Reason**: Curation evidence no longer corrects composition ids. Package-id corrections are no longer composition rules backed by recorded APK evidence; the owner fixes a wrong source id by hand with an overlay `id` patch when Obtainium shows a duplicate or an id error. Dated manifest evidence remains, as the package identities behind a maintained policy that the replacement requirement records.
 
 **Migration**: Replaced by "Curation records state their evidence and limits".

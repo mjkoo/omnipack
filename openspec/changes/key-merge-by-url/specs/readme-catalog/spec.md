@@ -4,7 +4,8 @@
 
 The catalog SHALL contain one row per pair that offline verification's pairing
 produces across both exports, plus one row per entry that pairing leaves
-unpaired. Rows sharing a family label SHALL never be merged. Track-only
+unpaired. Entries of different family labels SHALL never share a row, even
+when they share a package id or name. Track-only
 entries SHALL be labelled and paired by the same projections as installable
 entries, and a single entry with no dual pair, which verification reports as a
 nonfatal single-only coverage finding, SHALL still get its own row. Columns SHALL be

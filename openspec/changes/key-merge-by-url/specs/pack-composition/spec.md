@@ -70,11 +70,14 @@ the family's dual-screen build whether or not the two builds share a project
 URL. A missing, excluded, wrong-family or target-ineligible pinned candidate
 SHALL fail the build. A pin cannot match more than one candidate, because
 different records sharing one original identity fail before any pin is read.
-A pin SHALL NOT implicitly override an exclusion or eligibility restriction. Multiple pins for one family and target
-SHALL fail. A pin whose candidate was removed by a denial or is eligible for no
-variant belongs to no formed family, so it SHALL fail as a conflict with that
-exclusion, identifying the pin and the denial or the ineligibility, before the
-build-time formed-family comparison.
+A pin SHALL NOT implicitly override an exclusion or eligibility restriction.
+Multiple pins for one family and target SHALL fail. A pin whose candidate is
+eligible for no variant or was removed by a denial belongs to no formed family,
+so it SHALL fail as a conflict with that exclusion before the build-time
+formed-family comparison. The failure SHALL identify the pin and the
+ineligibility when the candidate is eligible for no variant, even when its URL
+is also denied, since a denial of such a candidate removes nothing; otherwise
+it SHALL identify the pin and the denial.
 
 A pin SHALL name the family its candidate belongs to, as "Composition policy
 assigns app families by project URL" defines: its explicit `app:` family, or
@@ -112,6 +115,13 @@ formed family.
   removes or its source makes eligible for no variant
 - **THEN** the build fails with the pin and the denial or the ineligibility
   identified rather than as wrong-family
+
+#### Scenario: A pin names a denied candidate eligible for no variant
+
+- **WHEN** a pin names a candidate eligible for no variant whose project URL is
+  also denied
+- **THEN** the build fails with the pin and the ineligibility identified, and
+  the denial removes nothing
 
 #### Scenario: A pin selects a rule-less candidate projected into an explicit family
 
@@ -683,8 +693,8 @@ where matched. Losing or excluded candidates SHALL NOT satisfy overlay targets.
 Every family selected in single is expected to have a selected build in dual.
 After selection, the system SHALL check family coverage and SHALL record, as a
 single-only coverage finding, every family selected in single that has no
-selected build in dual, naming the family and its single selection's package
-id and project URL. Such a family SHALL still be published in single, and the
+selected build in dual, naming the family, its single selection's package id
+after overlays and its project URL. Such a family SHALL still be published in single, and the
 finding SHALL NOT fail the build, so one family's gap never blocks the rest of
 the run. The system SHALL NOT copy a build ineligible for dual into dual to
 close the gap. Upstream eligibility restrictions, unresolved generated links,

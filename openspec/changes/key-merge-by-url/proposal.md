@@ -77,16 +77,17 @@ with the family rules that already exist.
   overlay records drop their `id` selector field.
 - Retired: the build failure for different candidates tied at the winning
   rank, transitive family formation through shared package ids, package-id
-  correction rules in composition and the effective-id concept, the failure for two explicit
-  families joined through a shared package id, the rule forbidding a
-  candidate's id from equalling a track-only candidate's id, the rule
-  forbidding a family assignment on a track-only candidate, the build failure
-  for a single-screen family without a dual build, the `package:<id>`
+  correction rules in composition and the effective-id concept, the failure
+  for two explicit families joined through a shared package id, the rule
+  forbidding a candidate's id from equalling a track-only candidate's id, the
+  rule forbidding a family assignment on a track-only candidate, the build
+  failure for a single-screen family without a dual build, the `package:<id>`
   family namespace, the composition check that selected entries pair
   (unreachable once composition and offline labelling read the same rules),
   the two-pass offline pairing, the rendering, build and verification failures
-  for a package id repeated within a pack, and maintained package-id mismatch
-  records in curation docs.
+  for a package id repeated within a pack, and curation evidence as a source
+  of composition id corrections; dated manifest evidence stays in curation
+  docs as the package identities behind a maintained policy.
 
 Package ids stay ordinary entry data that selectors name and packs emit.
 Source generation and its generated catalogs are unchanged; a separate later
@@ -180,8 +181,9 @@ None.
   `docs/verification.md` and `docs/quiver-ports.md`, and any other page naming
   `package:` families or package denials.
 - Tests: the frozen codm source-generation reproduction
-  (`tests/fixtures/source-generation/codm/` and the frozen-baseline checks in
-  `tests/test_source_generation_fixtures.py`) is deleted rather than migrated;
+  (`tests/fixtures/source-generation/codm/`) is deleted rather than migrated,
+  and `tests/test_source_generation_fixtures.py` is renamed to
+  `tests/test_codm_catalog.py` with the frozen-baseline checks removed;
   behavior tests use synthetic inputs and live-data outcome checks pair the
   committed configuration with the latest capture under
   `tests/fixtures/reconciliation/`, whose expected `formed-families.json` is

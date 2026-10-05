@@ -153,8 +153,9 @@ Today a family selected in single without a dual build fails the whole build.
 Under URL keying an upstream single-only original at one URL and a dual-only
 fork at another URL sharing its package id no longer pair, so that upstream
 pattern produces exactly this gap. The family is still published in single,
-the build records a single-only coverage finding naming the family and its
-single selection's id and URL, `pack report` shows it, and offline
+and the build records a single-only coverage finding naming the family and its
+single selection's URL and package id. That id is the one after overlays, which
+the rendered entry carries. `pack report` shows the finding, and offline
 verification reports the unpaired single entry as a nonfatal finding instead
 of failing; the README already gives an unpaired entry its own row. The fix
 is a family rule joining the URLs, as for Cemu. Failing was rejected for the

@@ -33,7 +33,7 @@ at the pin's URL patches `id`, the pin SHALL be checked against the patched id,
 since rendered entries carry it. A package id carried by more than one entry
 within a variant SHALL be reported as a nonfatal finding naming the variant,
 the package id and the entries, and SHALL NOT affect pairing or coverage.
-Stale exclusions SHALL remain nonfatal.
+A denial matching no rendered entry SHALL NOT be a finding.
 
 Each offline finding SHALL be either an error or a nonfatal finding. The
 single-only coverage and repeated package id findings are nonfatal; every other
