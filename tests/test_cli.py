@@ -995,6 +995,62 @@ def test_build_fetches_catalogs_without_credentials_or_http_config(
     assert all(request.get_header("Authorization") is None for request in requests)
 
 
+def _quiver_entry(package_id: str) -> dict[str, object]:
+    return {
+        "id": package_id,
+        "url": "https://github.com/fixture/quiver",
+        "name": "quiver",
+        "overrideSource": "GitHub",
+        "categories": ["Decomps/Recomps"],
+        "additionalSettings": {},
+    }
+
+
+@pytest.mark.parametrize(
+    "catalog",
+    [
+        pytest.param(None, id="missing"),
+        pytest.param("not json", id="malformed"),
+        pytest.param(
+            json.dumps(
+                {
+                    "apps": [
+                        _quiver_entry("org.fixture.a"),
+                        _quiver_entry("org.fixture.b"),
+                    ]
+                }
+            ),
+            id="repeated-url",
+        ),
+    ],
+)
+def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog: str | None
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    published = [
+        tmp_path / "dist/single-screen.json",
+        tmp_path / "dist/dual-screen.json",
+        tmp_path / "README.md",
+    ]
+    before = [path.read_bytes() for path in published]
+
+    path = tmp_path / "config/catalogs/quiver.json"
+    if catalog is None:
+        path.unlink()
+    else:
+        path.write_text(catalog, encoding="utf-8")
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert (report["status"], report["stage"]) == ("failed", "ingestion")
+    assert report["error"].startswith("quiver: ")
+    assert report["changes"] is None
+    assert [path.read_bytes() for path in published] == before
+
+
 @pytest.mark.parametrize(
     ("missing", "source"),
     [

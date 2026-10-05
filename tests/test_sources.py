@@ -25,9 +25,10 @@ from omnipack.sources import (
     codm,
     extras,
     ingest_all,
+    quiver,
     rjny,
 )
-from omnipack.urls import gitlab_project_path
+from omnipack.urls import gitlab_project_path, normalize_project_url
 
 FIXTURES = Path(__file__).parent / "fixtures"
 
@@ -313,6 +314,28 @@ def test_source_record_rejects_composition_policy_fields(
         "composition policy in config/composition.json owns app families "
         "and per-pack selection"
     ) in message
+    # Policy cannot override a source record, so nothing points there as a fix.
+    assert not any(
+        verb in message.lower() for verb in ("edit", "update", "change", "add ", "fix")
+    )
+
+
+@pytest.mark.parametrize(
+    "flags",
+    [
+        {"includeInStandard": True},
+        {"includeInDualScreen": True},
+        {"includeInStandard": True, "includeInDualScreen": True},
+        {"includeInStandard": False},
+        {"includeInDualScreen": False},
+    ],
+)
+def test_rjny_entry_excluded_from_export_is_dropped_whatever_its_other_flags(
+    flags: dict[str, bool],
+) -> None:
+    excluded = _record_with("meta", {"excludeFromExport": True, **flags})
+    kept = {**_record_with("meta", {}), "id": "app.kept"}
+    assert [app.id for app in _fetch_rjny([excluded, kept])] == ["app.kept"]
 
 
 def test_rjny_excluded_record_is_not_guarded_but_neither_pack_record_is() -> None:
@@ -378,24 +401,38 @@ def test_package_id_field_is_ingested_and_rendered_unchanged() -> None:
     assert rendered["id"] == upstream_app.id
 
 
-@pytest.mark.parametrize("source", ["extras", "codm2000"])
-def test_non_rjny_catalog_metadata_is_dropped_but_unmodeled_fields_render(
-    source: str, tmp_path: Path
+def _fetch_quiver(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
+    (tmp_path / "quiver.json").write_text(json.dumps({"apps": records}))
+    return quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+
+
+EVERY_SOURCE_FETCH = [
+    pytest.param(lambda record, _: _fetch_rjny([record]), id="rjny"),
+    pytest.param(lambda record, _: _fetch_bboi([record], []), id="bboi-standard"),
+    pytest.param(lambda record, _: _fetch_bboi([], [record]), id="bboi-dual"),
+    pytest.param(lambda record, path: _fetch_codm(path, [record]), id="codm2000"),
+    pytest.param(lambda record, path: _fetch_quiver(path, [record]), id="quiver"),
+    pytest.param(lambda record, _: extras.fetch([record]), id="extras"),
+]
+
+
+@pytest.mark.parametrize("fetch", EVERY_SOURCE_FETCH)
+def test_catalog_metadata_is_dropped_but_unmodeled_fields_render(
+    fetch: Callable[[dict[str, object], Path], list[App]], tmp_path: Path
 ) -> None:
     record: dict[str, object] = {
-        "id": f"app.{source}",
-        "name": source,
-        "url": f"https://github.com/owner/{source}",
+        "id": "org.example.entry",
+        "name": "Entry",
+        "url": "https://github.com/owner/entry",
+        "overrideSource": "GitHub",
         "meta": {"presentation": "catalog-only"},
         "unmodeled": {"retained": True},
     }
-    if source == "extras":
-        [app] = extras.fetch([record])
-    else:
-        [app] = _fetch_codm(tmp_path, [record])
+    [app] = fetch(record, tmp_path)
+    assert app.raw == {"unmodeled": {"retained": True}}
 
     [rendered] = json.loads(
-        render([ComposedApp(f"package:{app.id}", _import_data(app))])
+        render([ComposedApp(normalize_project_url(app.url), _import_data(app))])
     )["apps"]
     assert "meta" not in rendered
     assert rendered["unmodeled"] == {"retained": True}

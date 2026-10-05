@@ -3,6 +3,8 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+import pytest
+
 from omnipack import build as build_module
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import (
@@ -128,7 +130,11 @@ def test_previous_entry_whose_url_does_not_normalize_keeps_its_raw_url(
     }
 
 
-def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> None:
+@pytest.mark.parametrize("package_id", ["new.pkg", "old.pkg"])
+def test_family_switch_reports_package_diff_and_new_winner(
+    tmp_path: Path, package_id: str
+) -> None:
+    """The new winner may carry a new package id or keep the old one."""
     from omnipack.merge import compose
     from omnipack.model import App, SourceType
 
@@ -138,7 +144,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     write_previous(tmp_path, {"apps": [old, removed]}, {"apps": [old, removed]})
     current_url = "https://example.test/new"
     candidate = App(
-        "new.pkg",
+        package_id,
         current_url,
         "Replacement",
         SourceType.HTML,
@@ -151,7 +157,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
             "match": {
                 "source": "extras",
                 "origin": "extras",
-                "id": "new.pkg",
+                "id": package_id,
                 "url": current_url,
             },
             "family": "app:shared",
@@ -168,7 +174,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
     report = json.loads((tmp_path / ".build/report.json").read_text())
     for variant in Variant:
         assert report["changes"][variant.value] == {
-            "added": [{"id": "new.pkg", "url": "example.test/new"}],
+            "added": [{"id": package_id, "url": "example.test/new"}],
             "removed": [
                 {"id": "old.pkg", "url": "example.test/old"},
                 {"id": "retired.pkg", "url": "example.test/retired"},
@@ -178,7 +184,7 @@ def test_family_switch_reports_package_diff_and_new_winner(tmp_path: Path) -> No
             item for item in report["selections"] if item["variant"] == variant.value
         ]
         assert selection["family"] == "app:shared"
-        assert selection["id"] == "new.pkg"
+        assert selection["id"] == package_id
         assert selection["url"] == current_url
 
 
