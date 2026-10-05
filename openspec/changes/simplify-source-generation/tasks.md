@@ -10,7 +10,7 @@
 
 ## 3. Removal
 
-- [ ] 3.1 Delete the replaced generation modules, `config/http.json` support, project policy parsing and their tests, and remove credential handling from HTTP fetching; the bounded, redirect-checking fetch is deleted with `source_http.py` and its tests, not reimplemented, and generation reads through the build's plain HTTP client; verify that no source file imports the deleted modules and that `uv run pytest` passes
+- [x] 3.1 Delete the replaced generation modules, `config/http.json` support, project policy parsing and their tests, and remove credential handling from HTTP fetching; the bounded, redirect-checking fetch is deleted with `source_http.py` and its tests, not reimplemented, and generation reads through the build's plain HTTP client; verify that no source file imports the deleted modules and that `uv run pytest` passes
 - [ ] 3.2 Reduce `scripts/source_proposal.py` and `.github/workflows/source-maintenance.yml` to the new report: PR body and run summary list the added, removed and changed entries and skipped listings with their reasons, and the `pack generate-source` step's `GITHUB_TOKEN` env is removed so generation runs without an API token; verify with source proposal tests whose PR body and run summary show an added, a removed and a changed entry, and with a workflow test asserting the `pack generate-source` step carries no token
 
 ## 4. Configuration migration

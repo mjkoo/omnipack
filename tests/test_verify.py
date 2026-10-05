@@ -141,26 +141,6 @@ def test_report_write_error_is_wrapped(tmp_path: Path) -> None:
         verify.run_verification(tmp_path)
 
 
-def test_http_config_is_not_read_or_fingerprinted(tmp_path, monkeypatch) -> None:
-    copy_inputs(tmp_path)
-    (tmp_path / "config/http.json").write_text(
-        json.dumps({"credentials": {"example.test": 1}})
-    )
-    read_bytes = Path.read_bytes
-    monkeypatch.setattr(
-        Path,
-        "read_bytes",
-        lambda self: (
-            pytest.fail("unexpected read")
-            if self.name == "http.json"
-            else read_bytes(self)
-        ),
-    )
-    result = verify.run_verification(tmp_path)
-    assert result["status"] == "success"
-    assert "http" not in result["inputs"]
-
-
 def test_nonobject_exclusion_completes_failed_evidence(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     (tmp_path / "config/deny.json").write_text("[null]")

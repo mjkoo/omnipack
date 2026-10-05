@@ -102,21 +102,6 @@ def test_quiver_duplicate_package_id_fails_named(tmp_path: Path) -> None:
         quiver.fetch(tmp_path, {"catalog": "quiver.json"})
 
 
-@pytest.mark.parametrize("repo", ["Owner/Shared", "owner/shared.git"])
-def test_quiver_duplicate_normalized_project_url_fails_named(
-    tmp_path: Path, repo: str
-) -> None:
-    write_catalog(
-        tmp_path,
-        [entry("org.example.one", "owner/shared"), entry("org.example.two", repo)],
-    )
-    with pytest.raises(
-        SourceError,
-        match=r"quiver.*duplicate normalized project URL github\.com/owner/shared",
-    ):
-        quiver.fetch(tmp_path, {"catalog": "quiver.json"})
-
-
 @pytest.mark.parametrize("field", ["family", "variant"])
 def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
     write_catalog(tmp_path, [entry("org.example.one", "owner/one", **{field: "x"})])
@@ -127,17 +112,27 @@ def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
 @pytest.mark.parametrize(
     "record",
     [
+        entry("a1b2c3d4e5f6", "owner/one"),
         entry("org.example.one", "owner/one", additionalSettings={"trackOnly": True}),
-        entry("org.example.one", "owner/one", overrideSource="GitLab"),
-        entry("org.example.one", "owner/one", url="https://gitlab.com/owner/one"),
+        entry(
+            "org.example.one",
+            "owner/one",
+            url="https://gitlab.com/group/one",
+            overrideSource="GitLab",
+        ),
     ],
+    ids=["placeholder-id", "track-only", "gitlab"],
 )
-def test_quiver_rejects_noninstallable_or_non_github_records(
+def test_quiver_keeps_any_valid_committed_record(
     tmp_path: Path, record: dict[str, object]
 ) -> None:
     write_catalog(tmp_path, [record])
-    with pytest.raises(SourceError, match="quiver"):
-        quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+    [app] = quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+    assert (app.id, app.url, app.source_type) == (
+        record["id"],
+        record["url"],
+        record["overrideSource"],
+    )
 
 
 def test_quiver_candidates_reach_composition_with_url_and_package_overlaps(
@@ -276,9 +271,7 @@ def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> Non
 
 
 def assert_canonical_quiver_catalog(catalog: Path) -> None:
-    from omnipack.quiver_catalog import load_quiver_catalog
-
-    entries = load_quiver_catalog(catalog)
+    entries = json.loads(catalog.read_bytes())["apps"]
     assert catalog.read_bytes() == render_catalog(entries), (
         f"{catalog} differs from the canonical rendering of its entries"
     )

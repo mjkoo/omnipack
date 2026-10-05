@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from collections.abc import Iterator
+from email.message import Message
 from pathlib import Path
 from typing import Any
 
@@ -18,7 +19,7 @@ from omnipack.generation import (
     render_entries,
     trim_name,
 )
-from omnipack.http import HttpError
+from omnipack.http import HttpClient, HttpError, HttpResponse
 from omnipack.report_model import Status
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.source_catalog import render_catalog
@@ -419,3 +420,22 @@ def test_a_run_whose_candidate_keeps_nothing_fails_with_the_skipped_rows(
 def test_the_command_rejects_an_unknown_source() -> None:
     with pytest.raises(SystemExit):
         cli.main(["generate-source", "rjny"])
+
+
+def test_generation_sends_no_credentials_when_a_token_is_set(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_config(tmp_path)
+    monkeypatch.setenv("GITHUB_TOKEN", "secret")
+    requests: list[Any] = []
+
+    def transport(_client: HttpClient, request: Any, _timeout: float) -> HttpResponse:
+        requests.append(request)
+        body = (TABLE + "| [A](https://github.com/o/a) | x |\n").encode()
+        return HttpResponse(request.full_url, 200, Message(), body)
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
+    report = generate(tmp_path, GeneratedSource.CODM)
+    assert report["status"] == Status.SUCCESS
+    assert [request.full_url for request in requests] == [README_URL]
+    assert all(request.get_header("Authorization") is None for request in requests)

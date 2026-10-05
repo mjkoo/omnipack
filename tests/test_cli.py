@@ -277,9 +277,9 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     if invalid_gate:
         assert report["stage"] == "offline verification"
     assert not ({"generated", "unresolved", "retainedFailures"} & report.keys())
-    assert {(item["kind"], item["id"]) for item in report["sourceAdmissions"]} == {
-        ("apk", "app.generated"),
-        ("apk", "app.retained"),
+    assert {item["id"] for item in report["sourceAdmissions"]} == {
+        "app.generated",
+        "app.retained",
     }
     assert report["changes"]["single"] == {
         "added": changed("app.fixture"),
@@ -1125,28 +1125,10 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
         assert (tmp_path / edited).read_bytes() == edits[edited]
 
 
-@pytest.mark.parametrize(
-    "http_config",
-    [
-        None,
-        b"not json",
-        json.dumps(
-            {
-                "credentials": {
-                    "raw.githubusercontent.com": "GITHUB_TOKEN",
-                    "codeberg.org": "GITHUB_TOKEN",
-                }
-            }
-        ).encode(),
-    ],
-    ids=["absent", "unreadable", "registered"],
-)
-def test_build_fetches_catalogs_without_credentials_or_http_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, http_config: bytes | None
+def test_build_fetches_catalogs_without_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     responses = write_fixture_pipeline(tmp_path)
-    if http_config is not None:
-        (tmp_path / "config/http.json").write_bytes(http_config)
     monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
     requests: list[Request] = []
 
@@ -1180,17 +1162,6 @@ def _quiver_entry(package_id: str) -> dict[str, object]:
     [
         pytest.param(None, id="missing"),
         pytest.param("not json", id="malformed"),
-        pytest.param(
-            json.dumps(
-                {
-                    "apps": [
-                        _quiver_entry("org.fixture.a"),
-                        _quiver_entry("org.fixture.b"),
-                    ]
-                }
-            ),
-            id="repeated-url",
-        ),
         pytest.param(
             json.dumps(
                 {
@@ -1400,7 +1371,7 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
     ) in output
     assert "Stale exclusion: example.test/absent; reason: unmatched denial" in output
     assert (
-        "Admission: codm2000; URL: https://github.com/fixture/generated; kind: apk; committed id: app.generated"
+        "Admission: codm2000; URL: https://github.com/fixture/generated; committed id: app.generated"
         in output
     )
     assert path.read_bytes() == before

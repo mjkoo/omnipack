@@ -7,7 +7,6 @@ from typing import Any
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import Variant
-from omnipack.package_id import _is_valid_package_id
 from omnipack.source_catalog import render_catalog
 from omnipack.sources import codm
 from omnipack.sources.extras import fetch as fetch_extras
@@ -33,21 +32,6 @@ def test_committed_catalog_is_valid_canonical_and_composable(
     urls = [normalize_project_url(app["url"]) for app in catalog["apps"]]
     assert len(ids) == len(set(ids)), f"{path} repeats an entry id"
     assert len(urls) == len(set(urls)), f"{path} repeats a project URL"
-    for app in catalog["apps"]:
-        settings = json.loads(app["additionalSettings"])
-        entry = f"{path} entry {app['id']!r}"
-        if settings.get("trackOnly"):
-            assert app["id"].isdecimal(), f"{entry} is not a numeric tracker id"
-            assert (
-                settings["versionDetection"],
-                settings["includeZips"],
-                settings["autoApkFilterByArch"],
-            ) == (False, False, False), f"{entry} has installable tracker settings"
-        else:
-            assert settings.get("trackOnly", False) is False, (
-                f"{entry} has bad trackOnly"
-            )
-            assert _is_valid_package_id(app["id"]), f"{entry} is not a package id"
     raw = (ROOT / path).read_bytes()
     assert render_catalog(catalog["apps"]) == raw, (
         f"{path} differs from the canonical rendering of its entries"

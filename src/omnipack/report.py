@@ -195,11 +195,11 @@ def format_reports(root: Path) -> str:
         for key in build["staleCategoryAssignments"]:
             lines.append(f"Stale category assignment: {key}")
         for item in build["sourceAdmissions"]:
-            if not _strings(item, ("source", "url", "kind", "id")):
+            if not _strings(item, ("source", "url", "id")):
                 raise ReportFormatError("malformed build source admission")
             lines.append(
                 f"Admission: {item['source']}; URL: {item['url']}; "
-                f"kind: {item['kind']}; committed id: {item['id']}"
+                f"committed id: {item['id']}"
             )
         if build.get("stage"):
             lines.append(f"Stage: {build['stage']}")

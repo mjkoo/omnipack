@@ -199,17 +199,17 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
 
 def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) -> None:
     root = _repo(tmp_path)
-    policy_path = root / "config/codm-projects.json"
-    policy_path.write_text('{"schemaVersion": 1, "projects": {}}\n')
-    _git(root, "add", "--", "config/codm-projects.json")
-    _git(root, "commit", "-qm", "policy")
+    overlay_path = root / "config/overlay.json"
+    overlay_path.write_text("[]\n")
+    _git(root, "add", "--", "config/overlay.json")
+    _git(root, "commit", "-qm", "overlay")
     base = _git(root, "rev-parse", "HEAD")
     _write_candidate(
         root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
     )
-    # The reviewed policy, a pack and the README differ from HEAD in the
-    # working tree when `stage` runs.
-    policy_path.write_text('{"schemaVersion": 1, "projects": {"x": {}}}\n')
+    # The overlay, a pack and the README differ from HEAD in the working tree
+    # when `stage` runs.
+    overlay_path.write_text('[{"url": "https://example.test/x", "patch": {}}]\n')
     (root / "dist/single-screen.json").write_text('{"apps": [1]}\n')
     (root / "README.md").write_text("changed guide\n")
 
@@ -224,7 +224,7 @@ def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) ->
     assert _git(root, "diff", "--cached", "--name-only") == ""
     assert _git(root, "diff", "--name-only").splitlines() == [
         "README.md",
-        "config/codm-projects.json",
+        "config/overlay.json",
         "dist/single-screen.json",
     ]
 

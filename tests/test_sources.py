@@ -707,12 +707,12 @@ def test_codm_loads_every_committed_entry_and_reports_admission(
     assert apps[2].additional_settings == {"includePrereleases": True}
     assert len(urls) == 3
     assert report.admitted == [
-        {"source": "codm2000", "url": record["url"], "kind": "apk", "id": record["id"]}
+        {"source": "codm2000", "url": record["url"], "id": record["id"]}
         for record in catalog["apps"]
     ]
 
 
-def test_codm_reports_committed_apk_and_tracker_identities(tmp_path: Path) -> None:
+def test_codm_reports_every_committed_identity(tmp_path: Path) -> None:
     records = [
         {
             "id": "app.apk",
@@ -731,9 +731,9 @@ def test_codm_reports_committed_apk_and_tracker_identities(tmp_path: Path) -> No
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
     report = IngestionReport()
     codm.fetch(tmp_path, {"catalog": "catalog.json"}, report)
-    assert [(item["kind"], item["id"]) for item in report.admitted] == [
-        ("apk", "app.apk"),
-        ("track-only", "123"),
+    assert [(item["url"], item["id"]) for item in report.admitted] == [
+        ("https://github.com/owner/app", "app.apk"),
+        ("https://github.com/owner/mod", "123"),
     ]
 
 
