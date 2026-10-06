@@ -29,9 +29,12 @@ codm reads the README at `readme_url` and takes every `http` or `https` link
 inside its Project tables, whatever host it points to. Links outside a Project
 table or inside a code block are ignored, and so is a badge image inside a
 link. A link no project URL can be formed from, such as one with an invalid
-port, is reported and skipped. Project tables follow GitHub Markdown table
-syntax: outer pipes are optional, delimiter cells need only one hyphen, and a
-table runs until a blank line, a heading or a code block. A missing or
+port or no host, is reported and skipped. Project tables follow GitHub Markdown
+table syntax: the header's first cell is `Project`, matched with case, outer
+pipes are optional, delimiter cells need only one hyphen, and a table runs
+until a blank line, a heading or a code block; a row of another table never
+starts one. Inline links may carry a title or an angle-bracket destination;
+reference-style links are not read. A missing or
 malformed Project table fails the run, even beside a valid one, because a
 partial read would propose removing the projects of the table it could not
 read.

@@ -129,6 +129,53 @@ def test_codm_reads_a_project_table_in_compact_markdown_syntax() -> None:
     ]
 
 
+@pytest.mark.parametrize(
+    "other",
+    [
+        "| Name | S |\n|---|---|\n| Project | y |\n| [C](https://github.com/c/c) | z |\n",
+        "project | is lowercase prose [C](https://github.com/c/c)\n",
+        "Project | prose without a delimiter [C](https://github.com/c/c)\n",
+    ],
+    ids=["row-of-another-table", "lowercase-prose", "unpiped-prose"],
+)
+def test_text_that_is_not_a_project_header_starts_no_project_table(
+    other: str,
+) -> None:
+    readme = TABLE + "| [A](https://github.com/a/a) | x |\n\n" + other
+    assert [listing.url for listing in codm(readme)] == ["https://github.com/a/a"]
+
+
+def test_codm_reads_a_single_column_project_table() -> None:
+    readme = "| Project\n| ---\n| [A](https://github.com/a/a)\n"
+    assert [listing.url for listing in codm(readme)] == ["https://github.com/a/a"]
+
+
+def test_codm_reads_titled_angle_bracket_and_parenthesized_links() -> None:
+    readme = TABLE + (
+        '| [A](https://github.com/a/a "Title") | x |\n'
+        "| [B](<https://github.com/b/b>) | y |\n"
+        "| [C](https://example.org/c_(game)) | z |\n"
+    )
+    assert codm(readme) == [
+        Listing("https://github.com/a/a", "A"),
+        Listing("https://github.com/b/b", "B"),
+        Listing("https://example.org/c_(game)", "C"),
+    ]
+
+
+def test_an_indented_row_continues_its_project_table() -> None:
+    readme = TABLE + (
+        "| [A](https://github.com/a/a) | x |\n"
+        "    | [B](https://github.com/b/b) | y |\n"
+        "| [C](https://github.com/c/c) | z |\n"
+    )
+    assert [listing.url for listing in codm(readme)] == [
+        "https://github.com/a/a",
+        "https://github.com/b/b",
+        "https://github.com/c/c",
+    ]
+
+
 def test_a_heading_ends_a_project_table() -> None:
     readme = (
         TABLE

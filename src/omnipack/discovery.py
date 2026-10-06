@@ -114,10 +114,15 @@ def _config_text(config: Mapping[str, object], key: str) -> str:
 
 # --- codm: links inside the README's Project tables -----------------------
 
-_LINK = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
+# An inline link: its destination bare (balanced parentheses allowed) or in
+# angle brackets, then an optional quoted title.
+_LINK = re.compile(
+    r"\[([^\]]*)\]\(\s*"
+    r"(?:<(https?://[^<>\s]+)>|(https?://(?:[^()\s]|\([^()\s]*\))+))"
+    r"""(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)"""
+)
 _IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
 _DELIMITER_CELL = re.compile(r"\s*:?-+:?\s*")
-_PROJECT_HEADER = re.compile(r"^\s*\|?\s*Project\s*\|", re.IGNORECASE)
 _HEADING = re.compile(r"^ {0,3}#")
 # A pipe not escaped by a backslash, including pipes in inline code.
 _PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|")
@@ -160,30 +165,48 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
     index = 0
     while index < len(lines):
         header = lines[index]
-        if not _PROJECT_HEADER.match(header):
-            index += 1
-            continue
         delimiter = lines[index + 1] if index + 1 < len(lines) else ""
-        cells = _cells(delimiter)
-        if "|" not in delimiter or not all(
-            _DELIMITER_CELL.fullmatch(cell) for cell in cells
-        ):
-            raise DiscoveryError("a Project table has a missing or invalid delimiter")
-        if len(_cells(header)) != len(cells):
-            raise DiscoveryError("a Project table's header and delimiter disagree")
-        found = True
-        index += 2
-        while (
-            index < len(lines)
-            and lines[index].strip()
-            and not _HEADING.match(lines[index])
-        ):
-            # A badge image inside a link is decoration, not a project.
-            for text, url in _LINK.findall(_IMAGE.sub("", lines[index])):
-                yield Listing(url, text)
+        project = "|" in header and _cells(header)[0].strip() == "Project"
+        if project and (header.lstrip().startswith("|") or _is_delimiter(delimiter)):
+            if not _is_delimiter(delimiter):
+                raise DiscoveryError(
+                    "a Project table has a missing or invalid delimiter"
+                )
+            if len(_cells(header)) != len(_cells(delimiter)):
+                raise DiscoveryError("a Project table's header and delimiter disagree")
+            found = True
+            end = _table_end(lines, index + 2)
+            for row in lines[index + 2 : end]:
+                # A badge image inside a link is decoration, not a project.
+                for text, angled, bare in _LINK.findall(_IMAGE.sub("", row)):
+                    yield Listing(angled or bare, text)
+            index = end
+        elif "|" in header and _is_delimiter(delimiter):
+            # Another table: none of its rows is a Project table header.
+            index = _table_end(lines, index + 2)
+        else:
             index += 1
     if not found:
         raise DiscoveryError("README has no Project table")
+
+
+def _is_delimiter(line: str) -> bool:
+    cells = _cells(line)
+    return (
+        "|" in line
+        and bool(cells)
+        and all(_DELIMITER_CELL.fullmatch(cell) for cell in cells)
+    )
+
+
+def _table_end(lines: list[str], index: int) -> int:
+    """The index after a table's last row: rows run until a blank line or a
+    heading, and hidden code lines are blank."""
+    while (
+        index < len(lines) and lines[index].strip() and not _HEADING.match(lines[index])
+    ):
+        index += 1
+    return index
 
 
 def _cells(line: str) -> list[str]:
@@ -204,11 +227,16 @@ def _cells(line: str) -> list[str]:
 
 
 def _outside_code(lines: list[str]) -> list[str]:
-    """Keep line boundaries while hiding fenced and indented code examples."""
+    """Keep line boundaries while hiding fenced and indented code examples.
+
+    As in Markdown, an indented line opens a code block only after a blank
+    line, so an indented row continues the table or paragraph above it.
+    """
     visible: list[str] = []
     fence = ""
     for line in lines:
         expanded = line.expandtabs(4)
+        after_blank = not visible or not visible[-1].strip()
         if fence:
             if re.fullmatch(
                 r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*",
@@ -216,7 +244,7 @@ def _outside_code(lines: list[str]) -> list[str]:
             ):
                 fence = ""
             visible.append("")
-        elif expanded.startswith("    "):
+        elif expanded.startswith("    ") and after_blank:
             visible.append("")
         elif match := re.match(r"^ {0,3}(`{3,}|~{3,})(.*)$", expanded):
             delimiter, info = match.groups()
