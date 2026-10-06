@@ -109,8 +109,9 @@ denial handles it.
 
 Composition fails when an overlay record has no selected entry at its URL
 (`overlay has no selected target`). A catalog-only proposal that removes a
-project an overlay record patches therefore fails its checks; remove the
-overlay record on main first, then rerun the proposal.
+project an overlay record patches, when no other source serves its URL,
+therefore fails its checks; remove the overlay record on main first, then
+rerun the proposal.
 
 ## Generate and inspect a candidate
 

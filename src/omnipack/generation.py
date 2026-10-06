@@ -24,6 +24,7 @@ from omnipack.discovery import (
     Listing,
     Skip,
     SkippedRow,
+    SkipReason,
     discover,
 )
 from omnipack.http import HttpClient, HttpResponse
@@ -48,7 +49,7 @@ class InputRecord(TypedDict):
 class SkippedListing(SkippedRow):
     """A skipped row as the report records it, with the reason it was skipped."""
 
-    reason: str
+    reason: SkipReason
 
 
 class Changes(TypedDict):
@@ -277,7 +278,7 @@ def _skipped(skipped: tuple[Skip, ...]) -> list[SkippedListing]:
             "project": skip.listing["project"],
             "repository": skip.listing["repository"],
             "repositorySource": skip.listing["repositorySource"],
-            "reason": str(skip.reason),
+            "reason": skip.reason,
         }
         for skip in skipped
     ]

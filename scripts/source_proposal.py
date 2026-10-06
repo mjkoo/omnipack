@@ -76,8 +76,9 @@ BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
 # GitHub rejects a pull request body longer than this many characters.
 PR_BODY_LIMIT = 65536
-# GitHub rejects a step summary over 1 MiB; this leaves room for the rest.
-SUMMARY_LIMIT = 1_000_000
+# GitHub rejects a step summary over 1 MiB. The bound counts characters, and
+# a character takes at most four bytes in UTF-8, so this stays under it.
+SUMMARY_LIMIT = 250_000
 # Shown when the candidate's bytes differ from the catalog's but no entry was
 # added, removed or changed, so a reviewer is not left with three empty lists.
 BYTES_ONLY_CHANGE = "Catalog bytes changed without entry changes"
