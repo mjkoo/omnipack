@@ -133,9 +133,13 @@ catalogs, the source README, the Quiver lists, the overlay and the committed
 source catalog, so two spellings of one project must not be treated as two
 projects. The system SHALL compare URLs in a normalized form
 obtained by discarding the scheme, lowercasing the host, dropping a leading
-`www.` from the host, dropping a trailing slash and a trailing `.git` from the
-path, and reducing a GitHub project link to its owner and repository compared
-without regard to case. The scheme SHALL NOT participate in the comparison, so
+`www.` from the host, dropping a port equal to the scheme's default (443 for
+`https`, 80 for `http`), dropping a trailing slash and a trailing `.git` from
+the path, reducing a GitHub project link to its owner and repository compared
+without regard to case, and reducing a gitlab.com link to the project path
+before any `/-/` segment, the route marker GitLab reserves inside a project.
+A trailing `.git` SHALL be matched without regard to case only on github.com,
+where path case is folded, and exactly elsewhere. The scheme SHALL NOT participate in the comparison, so
 that `http` and `https` spellings of one project compare equal. Case SHALL be
 folded only in the host and in a GitHub link's owner and repository; the case
 of any other path SHALL be preserved, so that two URLs on another host
@@ -143,10 +147,11 @@ differing only in path case remain different projects.
 
 Reducing a GitHub link to its owner and repository SHALL discard the rest of
 its path, its query and its fragment, because a GitHub project is identified by
-owner and repository alone. An explicit port SHALL be retained on every host,
-github.com included, so two links that differ only in an explicit port SHALL be
-different projects. On any other host the normalized form SHALL also retain a
-query and a fragment, so two links to one host and path that differ in any of
+owner and repository alone, and reducing a gitlab.com link SHALL likewise
+discard its query and fragment. Any port other than the scheme's default SHALL
+be retained on every host, github.com included, so two links that differ only
+in such a port SHALL be different projects. On any host other than github.com
+and gitlab.com the normalized form SHALL also retain a query and a fragment, so two links to one host and path that differ in any of
 them SHALL be different projects: the system cannot know which parts of another
 host's link identify the project. The pipeline SHALL use this form wherever it
 compares URLs: deciding whether another source already contributes a link,
@@ -186,15 +191,30 @@ is acceptable: no stage rejects an entry for its URL's host or path.
 - **WHEN** two URLs address the same host and path and differ only in a query
   or a fragment
 - **THEN** they are the same project on github.com, whose links reduce to owner
-  and repository, and different projects on any other host, whose query and
-  fragment are retained
+  and repository, and on gitlab.com, whose links reduce to the project path,
+  and different projects on any other host, whose query and fragment are
+  retained
 
 #### Scenario: Links differ only in an explicit port
 
 - **WHEN** two URLs address the same host and path and one of them carries an
-  explicit port
+  explicit port other than its scheme's default
 - **THEN** they are different projects on every host, github.com included,
-  because the normalized form retains an explicit port wherever it appears
+  because the normalized form retains such a port wherever it appears
+
+#### Scenario: A link names its scheme's default port
+
+- **WHEN** one source gives `https://github.com:443/owner/repo` and another
+  gives `https://github.com/owner/repo`
+- **THEN** both normalize to the same URL, because a scheme's default port is
+  dropped
+
+#### Scenario: A gitlab.com link points inside a project
+
+- **WHEN** one source gives `https://gitlab.com/group/app/-/releases#v1` and
+  another gives `https://gitlab.com/group/app`
+- **THEN** both normalize to the same URL, because a gitlab.com link is
+  reduced to the project path before its `/-/` segment
 
 ### Requirement: Committed Quiver entries are baseline builds with generated provenance
 

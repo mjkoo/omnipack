@@ -11,13 +11,17 @@ current through reviewed proposals.
 The supported generated sources are codm and Quiver, each configured with its
 upstream input and its committed catalog path. For codm, generation SHALL read
 the configured README and take the inline links inside its Project tables,
-`[text](url)` with an optional title or an angle-bracket destination;
-reference-style links are not read. A link outside those tables, or inside a
-fenced or indented code block, SHALL NOT introduce a project. A Project table
+`[text](url)` with an optional title or an angle-bracket destination, whose
+text may hold escaped or balanced brackets and whose scheme is matched without
+regard to case; reference-style links are not read. A link outside those
+tables, inside a fenced or indented code block, an HTML comment or a code span,
+or opened by an escaped bracket, SHALL NOT introduce a project, since Markdown
+renders none of them as a link. A leading byte order mark is ignored. A Project table
 follows GitHub Flavored Markdown table syntax: a header row whose first cell is
 `Project`, matched with case, then a delimiter row of cells holding one or more
 hyphens with optional colons, with outer pipes optional on every row; its rows
-continue until a blank line, a heading or a code block. A row of another table
+continue until a blank line or the start of another block: a heading, a code
+block, an HTML comment, a blockquote, a list item or a thematic break. A row of another table
 is never a Project table header, even when its first cell is `Project`. A
 header row beginning with a pipe starts a Project table whatever follows it,
 while one without a leading pipe starts a Project table only when a valid
@@ -42,8 +46,10 @@ the client's own. A Quiver row names its project by its `repository` and
 regard to case: `github` forms `https://github.com/<repository>` and `gitlab`
 forms `https://gitlab.com/<repository>`. The `repository` SHALL be a valid
 path for its forge: for GitHub exactly an owner and a name, for GitLab one or
-more namespace segments followed by a project, every segment nonempty and free
-of whitespace. A row whose `repositorySource` names any other forge, or whose
+more namespace segments followed by a project, every segment nonempty, neither
+`.` nor `..` and free of whitespace and URL syntax, and the URL it forms SHALL
+be a repository of that forge as source type derivation reads it, so every
+kept row's entry carries its forge's source type. A row whose `repositorySource` names any other forge, or whose
 `repository` is missing, not a string or not a valid path for its forge, SHALL
 be reported and skipped; the skip alone SHALL NOT fail generation, which fails
 only when no entry is left.
@@ -100,6 +106,18 @@ be read or is malformed.
   omit the leading and trailing pipes
 - **THEN** every row's links become projects, and a link in a paragraph after
   the table's following blank line does not
+
+#### Scenario: A link follows a table in a blockquote or list
+
+- **WHEN** a Project table row is followed directly, with no blank line, by a
+  blockquote, list item or thematic break holding a link
+- **THEN** that line ends the table and its link does not become a project
+
+#### Scenario: A link Markdown does not render
+
+- **WHEN** a Project table row holds a link inside a code span or an HTML
+  comment, or opened by an escaped bracket, beside a rendered link
+- **THEN** only the rendered link becomes a project
 
 #### Scenario: Another table has a row named Project
 
@@ -218,12 +236,13 @@ a denial for its URL. Each entry SHALL carry:
   the project URL of a listing, and when several listings collapse into one
   entry, the smallest of their project URLs in code point order, so the order
   and case of upstream rows do not choose the URL. A listing's project URL is
-  its scheme, its host lowercased without a leading `www.`, any explicit port,
+  its scheme, its host lowercased without a leading `www.`, any port other
+  than its scheme's default,
   and the project path URL normalization identifies, in the listing's case:
   for a GitHub link its owner and repository alone, never a releases, tags,
-  blob or release-asset path, and on any other host the path without a
-  trailing slash or `.git`, with the query and fragment that normalization
-  retains;
+  blob or release-asset path, for a gitlab.com link its project path before
+  any `/-/` route, and on any other host the path without a trailing slash or
+  `.git`, with the query and fragment that normalization retains;
 - `overrideSource` GitHub for a github.com repository URL and GitLab for a
   gitlab.com project URL, and no `overrideSource` otherwise, so Obtainium
   detects the source from the URL;
@@ -311,6 +330,13 @@ out is never a committed entry, so screening proposes no removal.
   committed catalog holds no entry with that normalized URL
 - **THEN** the entry's URL is the project URL `https://github.com/Owner/Repo`,
   not the release-asset link, and its author is `Owner`
+
+#### Scenario: A listing links a gitlab.com release page
+
+- **WHEN** a listing links `https://gitlab.com/Group/App/-/releases?page=2`
+  and the committed catalog holds no entry with that normalized URL
+- **THEN** the entry's URL is `https://gitlab.com/Group/App`, its
+  `overrideSource` is GitLab and its author is `Group`
 
 #### Scenario: Listing order does not choose the name
 
