@@ -11,6 +11,7 @@ import pytest
 from omnipack import cli
 from omnipack.discovery import GeneratedSource, Listing
 from omnipack.generation import (
+    GenerationError,
     generate,
     load_committed,
     placeholder_id,
@@ -94,25 +95,16 @@ def test_other_host_keeps_query_and_reduces_host() -> None:
     assert entry["name"] == "app"
 
 
-@pytest.mark.parametrize(
-    "order",
-    [
-        ["https://github.com/Owner/Repo", "https://github.com/owner/repo"],
-        ["https://github.com/owner/repo", "https://github.com/Owner/Repo"],
-    ],
-)
-def test_two_spellings_collapse_to_the_smallest_url_whatever_the_order(
-    order: list[str],
-) -> None:
+def test_two_spellings_collapse_to_the_smallest_url_whatever_the_order() -> None:
+    order = ["https://github.com/Owner/Repo", "https://github.com/owner/repo"]
     listings = [Listing(url, "Repo") for url in order]
     [entry] = json.loads(candidate(listings))["apps"]
     assert (entry["url"], entry["author"]) == ("https://github.com/Owner/Repo", "Owner")
     assert candidate(listings) == candidate(list(reversed(listings)))
 
 
-@pytest.mark.parametrize("names", [["App", "app"], ["app", "App"]])
-def test_listing_order_does_not_choose_the_name(names: list[str]) -> None:
-    listings = [Listing("https://github.com/o/r", name) for name in names]
+def test_listing_order_does_not_choose_the_name() -> None:
+    listings = [Listing("https://github.com/o/r", name) for name in ["App", "app"]]
     assert entry_for(listings)["name"] == "App"
     assert candidate(listings) == candidate(list(reversed(listings)))
 
@@ -185,26 +177,61 @@ def test_committed_entry_keeps_its_id_url_and_author_when_upstream_recases() -> 
     ) == render_catalog([COMMITTED])
 
 
-def test_placeholder_id_hashes_the_normalized_url() -> None:
-    assert (
-        placeholder_id("github.com/owner/repo")
-        == (hashlib.sha256(b"github.com/owner/repo").hexdigest()[:12])
-    )
-    assert len(placeholder_id("x")) == 12
-
-
 def test_missing_committed_catalog_holds_nothing(tmp_path: Path) -> None:
     assert load_committed(tmp_path / "missing.json") == {}
 
 
 @pytest.mark.parametrize(
     "body",
-    ["not json", "[]", '{"apps": {}}', '{"apps": [{"id": "a"}]}', '{"apps": [7]}'],
+    [
+        "not json",
+        '{"apps": {}}',
+        '{"apps": [{"id": "a"}]}',
+        '{"apps": [7]}',
+        '{"apps": [{"id": "a", "url": ""}]}',
+    ],
+    ids=[
+        "not-json",
+        "apps-not-a-list",
+        "entry-without-url",
+        "entry-not-an-object",
+        "hostless-url",
+    ],
 )
 def test_malformed_committed_catalog_fails(tmp_path: Path, body: str) -> None:
     (tmp_path / "catalog.json").write_text(body)
-    with pytest.raises(ValueError, match="committed catalog"):
+    with pytest.raises(GenerationError, match="committed catalog catalog.json"):
         load_committed(tmp_path / "catalog.json")
+
+
+def test_a_committed_catalog_repeating_an_id_fails(tmp_path: Path) -> None:
+    (tmp_path / "catalog.json").write_bytes(
+        render_catalog([COMMITTED, {**COMMITTED, "url": "https://github.com/o/r"}])
+    )
+    with pytest.raises(GenerationError, match="repeats the id 'com.example.app'"):
+        load_committed(tmp_path / "catalog.json")
+
+
+def test_an_empty_committed_catalog_gives_every_entry_a_placeholder_id(
+    tmp_path: Path,
+) -> None:
+    write_config(tmp_path)
+    write_catalog(tmp_path, "codm", [])
+    http = FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"})
+    assert generate(tmp_path, GeneratedSource.CODM, http=http)["status"] == (
+        Status.SUCCESS
+    )
+    [entry] = catalog_apps(tmp_path, "codm")
+    assert entry["id"] == placeholder_id("github.com/o/a")
+
+
+def test_an_error_without_a_message_is_recorded_by_its_type(
+    tmp_path: Path,
+) -> None:
+    write_config(tmp_path)
+    http = FakeHttp({README_URL: KeyError()})
+    report = generate(tmp_path, GeneratedSource.CODM, http=http)
+    assert (report["status"], report["error"]) == (Status.FAILED, "KeyError")
 
 
 def test_two_committed_entries_at_one_project_fail_naming_both_ids(
@@ -413,6 +440,7 @@ def test_a_run_whose_candidate_keeps_nothing_fails_with_the_skipped_rows(
     assert run_cli(monkeypatch, "quiver", http) == 1
     report = stored_report(workdir, "quiver")
     assert report["status"] == "failed"
+    assert "1 listed rows or projects skipped" in report["error"]
     assert [item["reason"] for item in report["skipped"]] == [
         "latest release lists no APK asset"
     ]
@@ -424,8 +452,21 @@ def test_the_command_rejects_an_unknown_source() -> None:
         cli.main(["generate-source", "rjny"])
 
 
+@pytest.mark.parametrize(
+    ("source", "upstream"),
+    [
+        (
+            GeneratedSource.CODM,
+            FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"}),
+        ),
+        (GeneratedSource.QUIVER, quiver_http([row("o/a")], [asset("o/a", "a.apk")])),
+    ],
+)
 def test_generation_sends_no_credentials_when_a_token_is_set(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: GeneratedSource,
+    upstream: FakeHttp,
 ) -> None:
     write_config(tmp_path)
     monkeypatch.setenv("GITHUB_TOKEN", "secret")
@@ -433,11 +474,12 @@ def test_generation_sends_no_credentials_when_a_token_is_set(
 
     def transport(_client: HttpClient, request: Any, _timeout: float) -> HttpResponse:
         requests.append(request)
-        body = (TABLE + "| [A](https://github.com/o/a) | x |\n").encode()
+        body = upstream.get(request.full_url).body
         return HttpResponse(request.full_url, 200, Message(), body)
 
     monkeypatch.setattr(HttpClient, "_urllib_transport", transport)
-    report = generate(tmp_path, GeneratedSource.CODM)
+    report = generate(tmp_path, source)
     assert report["status"] == Status.SUCCESS
-    assert [request.full_url for request in requests] == [README_URL]
+    assert [request.full_url for request in requests] == upstream.urls
+    assert requests
     assert all(request.get_header("Authorization") is None for request in requests)

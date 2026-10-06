@@ -20,18 +20,35 @@ from urllib.parse import urlsplit
 
 from omnipack.discovery import (
     DiscoveryError,
-    EmptyDiscovery,
     GeneratedSource,
     Listing,
     Skip,
-    config_text,
+    SkippedRow,
     discover,
 )
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.report_model import Status
 from omnipack.source_catalog import render_catalog, rendered_entry
+from omnipack.sources import load_json
 from omnipack.sources.common import HttpGetter, derived_source_type
 from omnipack.urls import normalize_project_url, project_url
+
+
+class GenerationError(ValueError):
+    """The source configuration or the committed catalog cannot be used."""
+
+
+class InputRecord(TypedDict):
+    """An input generation read, with the SHA-256 of its bytes once read."""
+
+    url: str
+    sha256: NotRequired[str]
+
+
+class SkippedListing(SkippedRow):
+    """A skipped row as the report records it, with the reason it was skipped."""
+
+    reason: str
 
 
 class Changes(TypedDict):
@@ -45,13 +62,13 @@ class Changes(TypedDict):
 class GenerationReport(TypedDict):
     status: Status
     source: GeneratedSource
-    inputs: list[dict[str, str]]
-    skipped: list[dict[str, Any]]
+    inputs: list[InputRecord]
+    skipped: list[SkippedListing]
     changes: NotRequired[Changes]
     error: NotRequired[str]
 
 
-def output_directory(root: Path, source: GeneratedSource) -> Path:
+def _output_directory(root: Path, source: GeneratedSource) -> Path:
     return root / ".build/source-generation" / source
 
 
@@ -63,7 +80,7 @@ def generate(
     No earlier candidate survives a run, so a failed run never leaves one to be
     mistaken for current.
     """
-    output = output_directory(root, source)
+    output = _output_directory(root, source)
     if output.exists():
         shutil.rmtree(output)
     output.mkdir(parents=True)
@@ -75,24 +92,30 @@ def generate(
         "skipped": [],
     }
     try:
-        sources = json.loads((root / "config/sources.json").read_bytes())
+        sources = load_json(root / "config/sources.json", "source configuration")
         config = sources.get(source) if isinstance(sources, dict) else None
         if not isinstance(config, dict):
-            raise DiscoveryError(f"{source} source configuration must be an object")
-        committed = load_committed(root / config_text(config, "catalog"))
-        try:
-            discovery = discover(source, config, reader, frozenset(committed))
-        except EmptyDiscovery as error:
-            report["skipped"] = _skipped(error.skipped)
-            raise
+            raise GenerationError(f"{source} source configuration must be an object")
+        catalog_path = config.get("catalog")
+        if not isinstance(catalog_path, str) or not catalog_path.strip():
+            raise GenerationError(
+                f"{source} source configuration catalog must be a nonempty string"
+            )
+        committed = load_committed(root / catalog_path)
+        discovery = discover(source, config, reader, frozenset(committed))
         report["skipped"] = _skipped(discovery.skipped)
+        if not discovery.listings:
+            raise DiscoveryError(
+                f"discovery keeps no project ({len(discovery.skipped)} listed rows "
+                "or projects skipped)"
+            )
         entries = render_entries(discovery.listings, committed)
         catalog = render_catalog(entries)
         report["changes"] = _changes(entries, committed)
         (output / "catalog.json").write_bytes(catalog)
         report["status"] = Status.SUCCESS
     except Exception as error:  # noqa: BLE001 - the report records every failure
-        report["error"] = str(error)
+        report["error"] = str(error) or type(error).__name__
     (output / "report.json").write_text(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
@@ -111,7 +134,7 @@ def load_committed(path: Path) -> dict[str, dict[str, Any]]:
     try:
         document = json.loads(path.read_bytes())
     except (OSError, UnicodeDecodeError, json.JSONDecodeError) as error:
-        raise DiscoveryError(f"committed catalog {path.name} is unreadable") from error
+        raise GenerationError(f"committed catalog {path.name} is unreadable") from error
     apps = document.get("apps") if isinstance(document, dict) else None
     if not isinstance(apps, list) or not all(
         isinstance(entry, dict)
@@ -119,23 +142,28 @@ def load_committed(path: Path) -> dict[str, dict[str, Any]]:
         and isinstance(entry.get("url"), str)
         for entry in apps
     ):
-        raise DiscoveryError(f"committed catalog {path.name} is malformed")
+        raise GenerationError(f"committed catalog {path.name} is malformed")
+    try:
+        keys = [normalize_project_url(entry["url"]) for entry in apps]
+    except ValueError as error:
+        raise GenerationError(
+            f"committed catalog {path.name} is malformed: {error}"
+        ) from error
     by_url: dict[str, dict[str, Any]] = {}
     ids: set[str] = set()
-    for entry in apps:
-        normalized = normalize_project_url(entry["url"])
+    for entry, normalized in zip(apps, keys, strict=True):
         if normalized in by_url:
             competing = sorted(
                 item["id"]
-                for item in apps
-                if normalize_project_url(item["url"]) == normalized
+                for item, key in zip(apps, keys, strict=True)
+                if key == normalized
             )
-            raise DiscoveryError(
+            raise GenerationError(
                 f"committed catalog holds several entries for {normalized}: "
                 + ", ".join(competing)
             )
         if entry["id"] in ids:
-            raise DiscoveryError(f"committed catalog repeats the id {entry['id']!r}")
+            raise GenerationError(f"committed catalog repeats the id {entry['id']!r}")
         ids.add(entry["id"])
         by_url[normalized] = entry
     return by_url
@@ -242,8 +270,17 @@ def _changes(
     }
 
 
-def _skipped(skipped: tuple[Skip, ...]) -> list[dict[str, Any]]:
-    return [{**skip.listing, "reason": str(skip.reason)} for skip in skipped]
+def _skipped(skipped: tuple[Skip, ...]) -> list[SkippedListing]:
+    return [
+        {
+            "list": skip.listing["list"],
+            "project": skip.listing["project"],
+            "repository": skip.listing["repository"],
+            "repositorySource": skip.listing["repositorySource"],
+            "reason": str(skip.reason),
+        }
+        for skip in skipped
+    ]
 
 
 class _RecordingHttp:
@@ -252,10 +289,10 @@ class _RecordingHttp:
 
     def __init__(self, http: HttpGetter) -> None:
         self.http = http
-        self.inputs: list[dict[str, str]] = []
+        self.inputs: list[InputRecord] = []
 
     def get(self, url: str) -> HttpResponse:
-        record = {"url": url}
+        record: InputRecord = {"url": url}
         self.inputs.append(record)
         response = self.http.get(url)
         record["sha256"] = hashlib.sha256(response.body).hexdigest()

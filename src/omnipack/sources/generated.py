@@ -9,16 +9,16 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from pathlib import Path
-from typing import Any
 
 from omnipack.model import App, Variant
+from omnipack.sources import IngestionReport, load_json
 from omnipack.sources.common import SourceError, normalize_record
 
 
 def fetch_generated(
     root: Path,
     config: Mapping[str, object],
-    report: Any | None,
+    report: IngestionReport | None,
     *,
     source: str,
     provenance: str,
@@ -33,8 +33,6 @@ def fetch_generated(
     catalog_path = config.get("catalog")
     if not isinstance(catalog_path, str) or not catalog_path.strip():
         raise SourceError(source, "configured location is empty")
-    from omnipack.sources import load_json
-
     document = load_json(root / catalog_path, source)
     if not isinstance(document, dict) or not isinstance(document.get("apps"), list):
         raise SourceError(source, "catalog must be an object with an apps list")

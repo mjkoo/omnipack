@@ -13,7 +13,7 @@ import re
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import TypedDict
 from urllib.parse import urlsplit
 
 from omnipack.sources.common import HttpGetter
@@ -44,11 +44,20 @@ class Listing:
     name: str | None
 
 
+class SkippedRow(TypedDict):
+    """A Quiver list row as discovery read it, before any URL was formed."""
+
+    list: str
+    project: object
+    repository: object
+    repositorySource: object
+
+
 @dataclass(frozen=True, slots=True)
 class Skip:
     """A listed row or project that contributes no entry, and why."""
 
-    listing: dict[str, Any]
+    listing: SkippedRow
     reason: SkipReason
 
 
@@ -64,16 +73,6 @@ class DiscoveryError(ValueError):
     """A discovery input cannot be read or is not the shape its source publishes."""
 
 
-class EmptyDiscovery(DiscoveryError):
-    """Discovery keeps no project, so the candidate would remove every entry."""
-
-    def __init__(self, skipped: tuple[Skip, ...]) -> None:
-        self.skipped = skipped
-        super().__init__(
-            f"discovery keeps no project ({len(skipped)} listed rows or projects skipped)"
-        )
-
-
 def discover(
     source: GeneratedSource,
     config: Mapping[str, object],
@@ -87,13 +86,10 @@ def discover(
     hold is kept whatever its latest release lists, so screening only gates
     admission and never removes a committed entry the upstream still lists.
     """
-    discovery = _DISCOVERERS[source](config, http, committed)
-    if not discovery.listings:
-        raise EmptyDiscovery(discovery.skipped)
-    return discovery
+    return _DISCOVERERS[source](config, http, committed)
 
 
-def config_text(config: Mapping[str, object], key: str) -> str:
+def _config_text(config: Mapping[str, object], key: str) -> str:
     value = config.get(key)
     if not isinstance(value, str) or not value.strip():
         raise DiscoveryError(f"source configuration {key} must be a nonempty string")
@@ -111,11 +107,11 @@ _PROJECT_HEADER = re.compile(r"^\s*\|\s*Project\s*\|", re.IGNORECASE)
 def _discover_codm(
     config: Mapping[str, object], http: HttpGetter, _committed: frozenset[str]
 ) -> Discovery:
-    readme = http.get(config_text(config, "readme_url")).body
-    return Discovery(tuple(project_table_links(readme)), ())
+    readme = http.get(_config_text(config, "readme_url")).body
+    return Discovery(tuple(_project_table_links(readme)), ())
 
 
-def project_table_links(readme: bytes) -> Iterator[Listing]:
+def _project_table_links(readme: bytes) -> Iterator[Listing]:
     """Yield every link inside the README's Project tables.
 
     Every Project table must be well formed: a partial read would propose
@@ -184,7 +180,7 @@ _FORGE_HOSTS = {"github": "github.com", "gitlab": "gitlab.com"}
 def _discover_quiver(
     config: Mapping[str, object], http: HttpGetter, committed: frozenset[str]
 ) -> Discovery:
-    index_url = config_text(config, "index_url")
+    index_url = _config_text(config, "index_url")
     root = _catalog_root(index_url)
     if root is None:
         raise DiscoveryError("quiver index_url must be an HTTPS catalog JSON URL")
@@ -201,13 +197,13 @@ def _discover_quiver(
             if not isinstance(row, dict):
                 raise DiscoveryError(f"quiver list {list_id} has a malformed row")
             name = row.get("project")
-            listing = {
+            listing: SkippedRow = {
                 "list": list_id,
                 "project": name,
                 "repository": row.get("repository"),
                 "repositorySource": row.get("repositorySource"),
             }
-            url = forge_url(row.get("repositorySource"), row.get("repository"))
+            url = _forge_url(row.get("repositorySource"), row.get("repository"))
             if isinstance(url, SkipReason):
                 skipped.append(Skip(listing, url))
                 continue
@@ -223,7 +219,7 @@ def _discover_quiver(
     return Discovery(tuple(listings), tuple(skipped))
 
 
-def forge_url(forge: object, repository: object) -> str | SkipReason:
+def _forge_url(forge: object, repository: object) -> str | SkipReason:
     """Form a project URL from a forge name and repository path.
 
     An absent forge means GitHub, and forge names match without regard to
@@ -289,7 +285,7 @@ def _asset_index(document: object) -> dict[str, bool]:
             or not all(isinstance(name, str) for name in entry["assetNames"])
         ):
             raise DiscoveryError("release asset-name file has a malformed entry")
-        url = forge_url(entry["provider"], entry["repository"])
+        url = _forge_url(entry["provider"], entry["repository"])
         if isinstance(url, SkipReason):
             continue
         normalized = normalize_project_url(url)
