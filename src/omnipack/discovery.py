@@ -114,16 +114,27 @@ def _config_text(config: Mapping[str, object], key: str) -> str:
 
 # --- codm: links inside the README's Project tables -----------------------
 
-# An inline link: its destination bare (balanced parentheses allowed) or in
-# angle brackets, then an optional quoted title.
+# An inline link: its text may hold escapes and balanced brackets, and its
+# destination is bare (balanced parentheses allowed) or in angle brackets, then
+# an optional quoted title. A bracket escaped by a backslash opens no link.
 _LINK = re.compile(
-    r"\[([^\]]*)\]\(\s*"
-    r"(?:<(https?://[^<>\s]+)>|(https?://(?:[^()\s]|\([^()\s]*\))+))"
+    r"(?<!\\)\[((?:[^\[\]\\]|\\.|\[(?:[^\[\]\\]|\\.)*\])*)\]\(\s*"
+    r"(?:<((?i:https?)://[^<>\s]+)>|((?i:https?)://(?:[^()\s]|\([^()\s]*\))+))"
     r"""(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)"""
 )
 _IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+# Markdown renders no link inside a code span or an HTML comment.
+_CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)")
+_COMMENT = re.compile(r"<!--.*?-->")
+_ESCAPED = re.compile(r"\\([!-/:-@\[-`{-~])")
+# A literal backslash, hidden while matching so it escapes nothing after it.
+_BACKSLASH = "\0"
 _DELIMITER_CELL = re.compile(r"\s*:?-+:?\s*")
-_HEADING = re.compile(r"^ {0,3}#")
+# A line opening another block ends a table: a heading, a blockquote, a list
+# item or a thematic break.
+_BLOCK_START = re.compile(
+    r"^ {0,3}(?:#|>|(?:[-+*]|\d{1,9}[.)])(?:\s|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$)"
+)
 # A pipe not escaped by a backslash, including pipes in inline code.
 _PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|")
 
@@ -158,7 +169,7 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
     removing the projects of a table it could not read.
     """
     try:
-        lines = _outside_code(readme.decode("utf-8").splitlines())
+        lines = _outside_code(readme.decode("utf-8-sig").splitlines())
     except UnicodeDecodeError as error:
         raise DiscoveryError("README is not UTF-8") from error
     found = False
@@ -177,9 +188,7 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
             found = True
             end = _table_end(lines, index + 2)
             for row in lines[index + 2 : end]:
-                # A badge image inside a link is decoration, not a project.
-                for text, angled, bare in _LINK.findall(_IMAGE.sub("", row)):
-                    yield Listing(angled or bare, text)
+                yield from _row_links(row)
             index = end
         elif "|" in header and _is_delimiter(delimiter):
             # Another table: none of its rows is a Project table header.
@@ -188,6 +197,16 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
             index += 1
     if not found:
         raise DiscoveryError("README has no Project table")
+
+
+def _row_links(row: str) -> Iterator[Listing]:
+    """Yield the links Markdown renders in a table row."""
+    row = _COMMENT.sub("", _CODE_SPAN.sub("", row))
+    # A badge image inside a link is decoration, not a project.
+    row = _IMAGE.sub("", row).replace("\\\\", _BACKSLASH)
+    for text, angled, bare in _LINK.findall(row):
+        name = _ESCAPED.sub(r"\1", text).replace(_BACKSLASH, "\\")
+        yield Listing((angled or bare).replace(_BACKSLASH, "\\\\"), name)
 
 
 def _is_delimiter(line: str) -> bool:
@@ -200,10 +219,12 @@ def _is_delimiter(line: str) -> bool:
 
 
 def _table_end(lines: list[str], index: int) -> int:
-    """The index after a table's last row: rows run until a blank line or a
-    heading, and hidden code lines are blank."""
+    """The index after a table's last row: rows run until a blank line or
+    another block starts, and hidden code and comment lines are blank."""
     while (
-        index < len(lines) and lines[index].strip() and not _HEADING.match(lines[index])
+        index < len(lines)
+        and lines[index].strip()
+        and not _BLOCK_START.match(lines[index])
     ):
         index += 1
     return index
@@ -227,17 +248,25 @@ def _cells(line: str) -> list[str]:
 
 
 def _outside_code(lines: list[str]) -> list[str]:
-    """Keep line boundaries while hiding fenced and indented code examples.
+    """Keep line boundaries while hiding code examples and HTML comments.
 
     As in Markdown, an indented line opens a code block only after a blank
-    line, so an indented row continues the table or paragraph above it.
+    line, so an indented row continues the table or paragraph above it, and a
+    line opening an HTML comment hides every line through the one closing it.
     """
     visible: list[str] = []
     fence = ""
+    comment = False
     for line in lines:
         expanded = line.expandtabs(4)
         after_blank = not visible or not visible[-1].strip()
-        if fence:
+        if comment:
+            comment = "-->" not in line
+            visible.append("")
+        elif match := re.match(r"^ {0,3}<!--(.*)$", expanded):
+            comment = "-->" not in match.group(1)
+            visible.append("")
+        elif fence:
             if re.fullmatch(
                 r" {0,3}" + re.escape(fence[0]) + "{" + str(len(fence)) + r",}\s*",
                 expanded,

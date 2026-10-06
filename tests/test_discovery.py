@@ -176,11 +176,52 @@ def test_an_indented_row_continues_its_project_table() -> None:
     ]
 
 
-def test_a_heading_ends_a_project_table() -> None:
-    readme = (
-        TABLE
-        + "| [A](https://github.com/a/a) | x |\n# Next\n[C](https://github.com/c/c)\n"
+def test_codm_reads_link_text_with_brackets_and_an_uppercase_scheme() -> None:
+    readme = TABLE + (
+        "| [App [beta]](https://github.com/a/a) | x |\n"
+        "| [App \\[rc\\]](https://github.com/b/b) | y |\n"
+        "| [C](HTTPS://github.com/c/c) | z |\n"
     )
+    assert codm(readme) == [
+        Listing("https://github.com/a/a", "App [beta]"),
+        Listing("https://github.com/b/b", "App [rc]"),
+        Listing("HTTPS://github.com/c/c", "C"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "block",
+    ["# Next", "> see", "- item", "* item", "1. item", "---", "***", "<!-- note -->"],
+    ids=[
+        "heading",
+        "blockquote",
+        "dash-list",
+        "star-list",
+        "ordered-list",
+        "dash-break",
+        "star-break",
+        "comment",
+    ],
+)
+def test_another_block_ends_a_project_table(block: str) -> None:
+    readme = TABLE + (
+        f"| [A](https://github.com/a/a) | x |\n{block}\n"
+        "[C](https://github.com/c/c) | y\n"
+    )
+    assert [listing.url for listing in codm(readme)] == ["https://github.com/a/a"]
+
+
+def test_codm_reads_only_the_links_markdown_renders() -> None:
+    readme = TABLE + (
+        "| `[A](https://github.com/a/a)` <!-- [B](https://github.com/b/b) --> "
+        "\\[C](https://github.com/c/c) [D](https://github.com/d/d) | x |\n"
+        "<!--\n| [E](https://github.com/e/e) | y |\n-->\n"
+    )
+    assert [listing.url for listing in codm(readme)] == ["https://github.com/d/d"]
+
+
+def test_a_byte_order_mark_does_not_hide_the_first_table() -> None:
+    readme = "\ufeff" + TABLE + "| [A](https://github.com/a/a) | x |\n"
     assert [listing.url for listing in codm(readme)] == ["https://github.com/a/a"]
 
 
