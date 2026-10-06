@@ -90,8 +90,8 @@ of listing order, as a canonical catalog:
   case-insensitive order wins.
 - The author is the first path segment for a URL with an `overrideSource`, and
   empty otherwise.
-- Entries carry no categories and no settings; the build fills in the source
-  type's defaults.
+- Entries carry no categories and no settings; the build fills defaults for
+  GitHub, GitLab and HTML entries, and others keep exactly their own settings.
 
 Per-app names and settings for generated entries are
 [overlay](composition.md#denials-and-patches) records in `config/overlay.json`,
@@ -148,7 +148,8 @@ with their ids, and a repeated id), or when the candidate would keep no entry.
 A missing committed catalog holds nothing, so every entry gets a placeholder
 id.
 A failed run writes only its report: no candidate survives from it or from an
-earlier run.
+earlier run. When the output directory itself cannot be prepared, the run
+writes nothing and prints the error.
 
 ## Proposal workflow
 

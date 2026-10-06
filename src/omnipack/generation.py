@@ -91,12 +91,23 @@ def generate(
     """Write a candidate catalog and its report, or only the report on failure.
 
     No earlier candidate survives a run, so a failed run never leaves one to be
-    mistaken for current, and a failed report never lists changes.
+    mistaken for current, and a failed report never lists changes. An output
+    directory that cannot be prepared leaves nowhere to write even the report,
+    so that failure is only returned.
     """
     output = _output_directory(root, source)
-    if output.exists():
-        shutil.rmtree(output)
-    output.mkdir(parents=True)
+    try:
+        if output.exists():
+            shutil.rmtree(output)
+        output.mkdir(parents=True)
+    except OSError as error:
+        return {
+            "status": Status.FAILED,
+            "source": source,
+            "inputs": [],
+            "skipped": [],
+            "error": f"cannot prepare {output}: {error}",
+        }
     reader = _RecordingHttp(http or HttpClient())
     report: GenerationReport = {
         "status": Status.FAILED,

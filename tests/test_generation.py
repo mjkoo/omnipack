@@ -624,6 +624,23 @@ def test_a_candidate_that_cannot_be_written_reports_no_changes(
     ]
 
 
+def test_an_output_directory_that_cannot_be_prepared_fails_in_one_line(
+    workdir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    blocked = candidate_path(workdir, "codm").parent
+    blocked.parent.mkdir(parents=True, exist_ok=True)
+    blocked.write_text("not a directory")
+    http = FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"})
+    assert run_cli(monkeypatch, "codm", http) == 1
+    error = capsys.readouterr().err
+    assert error.startswith("source generation failed: cannot prepare ")
+    assert error.count("\n") == 1
+    assert http.urls == []
+    assert blocked.read_text() == "not a directory"
+
+
 def test_the_command_rejects_an_unknown_source() -> None:
     with pytest.raises(SystemExit):
         cli.main(["generate-source", "rjny"])
