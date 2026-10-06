@@ -116,8 +116,11 @@ def _config_text(config: Mapping[str, object], key: str) -> str:
 
 _LINK = re.compile(r"\[([^\]]*)\]\((https?://[^)\s]+)\)")
 _IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
-_DELIMITER = re.compile(r"^\s*\|(?:\s*:?-{3,}:?\s*\|)+\s*$")
-_PROJECT_HEADER = re.compile(r"^\s*\|\s*Project\s*\|", re.IGNORECASE)
+_DELIMITER_CELL = re.compile(r"\s*:?-+:?\s*")
+_PROJECT_HEADER = re.compile(r"^\s*\|?\s*Project\s*\|", re.IGNORECASE)
+_HEADING = re.compile(r"^ {0,3}#")
+# A pipe not escaped by a backslash, including pipes in inline code.
+_PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|")
 
 
 def _discover_codm(
@@ -155,22 +158,43 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
             index += 1
             continue
         delimiter = lines[index + 1] if index + 1 < len(lines) else ""
-        if _DELIMITER.fullmatch(delimiter) is None:
+        cells = _cells(delimiter)
+        if "|" not in delimiter or not all(
+            _DELIMITER_CELL.fullmatch(cell) for cell in cells
+        ):
             raise DiscoveryError("a Project table has a missing or invalid delimiter")
-        # Escaped pipes are cell content, including pipes in inline code.
-        pipes = list(re.finditer(r"(?<!\\)(?:\\\\)*\|", header.rstrip()))
-        columns = len(pipes) - (pipes[-1].end() == len(header.rstrip()))
-        if columns != delimiter.count("|") - 1:
+        if len(_cells(header)) != len(cells):
             raise DiscoveryError("a Project table's header and delimiter disagree")
         found = True
         index += 2
-        while index < len(lines) and lines[index].lstrip().startswith("|"):
+        while (
+            index < len(lines)
+            and lines[index].strip()
+            and not _HEADING.match(lines[index])
+        ):
             # A badge image inside a link is decoration, not a project.
             for text, url in _LINK.findall(_IMAGE.sub("", lines[index])):
                 yield Listing(url, text)
             index += 1
     if not found:
         raise DiscoveryError("README has no Project table")
+
+
+def _cells(line: str) -> list[str]:
+    """Split a table row into cells; the outer pipes are optional."""
+    text = line.strip()
+    pipes = list(_PIPE.finditer(text))
+    cells: list[str] = []
+    start = 0
+    for pipe in pipes:
+        cells.append(text[start : pipe.end() - 1])
+        start = pipe.end()
+    cells.append(text[start:])
+    if text.startswith("|"):
+        cells.pop(0)
+    if pipes and pipes[-1].end() == len(text) and cells:
+        cells.pop()
+    return cells
 
 
 def _outside_code(lines: list[str]) -> list[str]:

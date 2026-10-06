@@ -99,7 +99,7 @@ def test_codm_link_inside_an_indented_code_block_is_not_a_project() -> None:
     "broken",
     [
         "| Project | Game |\n| [B](https://github.com/b/b) | y |\n",
-        "| Project | Game |\n|--|\n",
+        "| Project | Game |\n|-x-|---|\n",
     ],
     ids=["missing-delimiter", "invalid-delimiter"],
 )
@@ -107,6 +107,28 @@ def test_a_malformed_project_table_beside_a_valid_one_fails(broken: str) -> None
     readme = TABLE + "| [A](https://github.com/a/a) | x |\n\n" + broken
     with pytest.raises(DiscoveryError, match="delimiter"):
         codm(readme)
+
+
+def test_codm_reads_a_project_table_in_compact_markdown_syntax() -> None:
+    readme = (
+        "Project | Game\n-|:-:\n"
+        "[A](https://github.com/a/a) | x\n"
+        "| [B](https://github.com/b/b) | y |\n"
+        "\n"
+        "After the table [C](https://github.com/c/c)\n"
+    )
+    assert [listing.url for listing in codm(readme)] == [
+        "https://github.com/a/a",
+        "https://github.com/b/b",
+    ]
+
+
+def test_a_heading_ends_a_project_table() -> None:
+    readme = (
+        TABLE
+        + "| [A](https://github.com/a/a) | x |\n# Next\n[C](https://github.com/c/c)\n"
+    )
+    assert [listing.url for listing in codm(readme)] == ["https://github.com/a/a"]
 
 
 def test_a_readme_without_a_project_table_fails() -> None:

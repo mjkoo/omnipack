@@ -29,9 +29,12 @@ codm reads the README at `readme_url` and takes every `http` or `https` link
 inside its Project tables, whatever host it points to. Links outside a Project
 table or inside a code block are ignored, and so is a badge image inside a
 link. A link no project URL can be formed from, such as one with an invalid
-port, is reported and skipped. A missing or malformed Project table fails the
-run, even beside a valid one, because a partial read would propose removing the
-projects of the table it could not read.
+port, is reported and skipped. Project tables follow GitHub Markdown table
+syntax: outer pipes are optional, delimiter cells need only one hyphen, and a
+table runs until a blank line, a heading or a code block. A missing or
+malformed Project table fails the run, even beside a valid one, because a
+partial read would propose removing the projects of the table it could not
+read.
 
 Quiver reads the index at `index_url`, every list the index references and the
 release asset-name file the index names by `platformMetadataUrl`. Every one of
