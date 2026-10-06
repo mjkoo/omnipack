@@ -398,6 +398,29 @@ def test_a_committed_entry_that_cannot_be_rendered_leaves_no_candidate(
     assert not candidate_path(workdir, "codm").exists()
 
 
+@pytest.mark.parametrize(
+    ("failure", "message"),
+    [
+        ({LIST_URL: HttpError("list unavailable")}, "list unavailable"),
+        ({ASSETS_URL: {"entries": {}}}, "release asset-name file is malformed"),
+    ],
+    ids=["list-unavailable", "asset-file-malformed"],
+)
+def test_a_failed_quiver_input_leaves_no_candidate(
+    workdir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    failure: dict[str, Any],
+    message: str,
+) -> None:
+    http = quiver_http([row("a/b")], [asset("a/b", "a.apk")], **failure)
+    assert run_cli(monkeypatch, "quiver", http) == 1
+    report = stored_report(workdir, "quiver")
+    assert report["status"] == Status.FAILED
+    assert message in report["error"]
+    assert "changes" not in report
+    assert not candidate_path(workdir, "quiver").exists()
+
+
 def test_a_failed_rerun_leaves_no_candidate_and_records_the_error(
     workdir: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
 ) -> None:
