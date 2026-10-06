@@ -87,6 +87,15 @@ def test_release_asset_deep_link_becomes_the_repository_root() -> None:
     assert (entry["url"], entry["author"]) == ("https://github.com/Owner/Repo", "Owner")
 
 
+def test_gitlab_release_page_becomes_the_project() -> None:
+    entry = entry_for([Listing("https://gitlab.com/Group/App/-/releases?page=2", "A")])
+    assert (entry["url"], entry["author"], entry["overrideSource"]) == (
+        "https://gitlab.com/Group/App",
+        "Group",
+        "GitLab",
+    )
+
+
 def test_other_host_keeps_query_and_reduces_host() -> None:
     entry = entry_for([Listing("https://www.Example.test/store/app/?id=a#top", None)])
     assert entry["url"] == "https://example.test/store/app?id=a#top"

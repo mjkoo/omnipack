@@ -4,18 +4,23 @@ from __future__ import annotations
 
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+
 
 def project_url(url: str) -> str:
     """Reduce a link to the project URL that normalization identifies.
 
     The result keeps the scheme and the path's case, lowercases the host and
-    drops a leading `www.`, keeps an explicit port, and drops a trailing slash
-    and `.git`. A GitHub link is reduced to its owner and repository, so a
-    releases, tags, blob or release-asset link becomes the repository root.
-    On any other host the query and fragment are kept, since which parts of
-    such a link identify the project cannot be known.
+    drops a leading `www.`, drops the scheme's default port but keeps any
+    other, and drops a trailing slash and `.git`. A GitHub link is reduced to
+    its owner and repository, so a releases, tags, blob or release-asset link
+    becomes the repository root, and a gitlab.com link to the project path
+    before GitLab's reserved `-` route segment. On any other host the query
+    and fragment are kept, since which parts of such a link identify the
+    project cannot be known.
     """
     parsed = _split_url(url)
+    scheme = parsed.scheme.lower()
     host = (parsed.hostname or "").lower()
     host = host.removeprefix("www.")
 
@@ -24,13 +29,21 @@ def project_url(url: str) -> str:
     if host == "github.com":
         path = "/".join(path.split("/")[:3])
         query = fragment = ""
-    if path.lower().endswith(".git"):
+    elif host == "gitlab.com":
+        segments = path.split("/")
+        if "-" in segments:
+            path = "/".join(segments[: segments.index("-")])
+        query = fragment = ""
+    # `.GIT` means `.git` only where path case is folded.
+    if path.endswith(".git") or (
+        host == "github.com" and path.lower().endswith(".git")
+    ):
         path = path[:-4]
 
-    authority = host
-    if parsed.port is not None:
+    authority = f"[{host}]" if ":" in host else host
+    if parsed.port is not None and parsed.port != _DEFAULT_PORTS.get(scheme):
         authority = f"{authority}:{parsed.port}"
-    return urlunsplit((parsed.scheme.lower(), authority, path, query, fragment))
+    return urlunsplit((scheme, authority, path, query, fragment))
 
 
 def normalize_project_url(url: str) -> str:
