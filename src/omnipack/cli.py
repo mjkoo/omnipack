@@ -125,7 +125,7 @@ def report(_args: argparse.Namespace) -> int:
 
 
 def generate_source(args: argparse.Namespace) -> int:
-    result = generate(Path.cwd(), GeneratedSource(args.source))
+    result = generate(Path.cwd(), args.source)
     if result["status"] == Status.FAILED:
         print(f"source generation failed: {result.get('error')}", file=sys.stderr)
         return 1
@@ -152,7 +152,9 @@ def _parser() -> argparse.ArgumentParser:
     generate_parser = subparsers.add_parser(
         "generate-source", help="generate a source catalog candidate"
     )
-    generate_parser.add_argument("source", choices=[str(s) for s in GeneratedSource])
+    generate_parser.add_argument(
+        "source", type=GeneratedSource, choices=list(GeneratedSource)
+    )
     generate_parser.set_defaults(func=generate_source)
 
     return parser

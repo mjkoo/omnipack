@@ -522,5 +522,5 @@ def _import_data(app: App) -> dict[str, Any]:
         }
     )
     if app.source_type is not None:
-        data["overrideSource"] = str(app.source_type)
+        data["overrideSource"] = app.source_type
     return data
