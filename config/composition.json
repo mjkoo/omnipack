@@ -39,7 +39,7 @@
         "url": "https://github.com/TwilitRealm/dusklight"
       },
       "family": "app:dusklight",
-      "rationale": "The standard Dusklight build. Quiver's verified entry for the same repository serves single, and the dual asset at another repository is preferred for dual."
+      "rationale": "The standard Dusklight build. Quiver's entry for the same repository serves single, and the dual asset at another repository is preferred for dual."
     },
     {
       "match": {
