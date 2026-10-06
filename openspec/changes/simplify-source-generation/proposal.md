@@ -30,8 +30,8 @@ only a newly listed project gets an Obtainium placeholder id.
   reported and skipped.
 - **BREAKING** Every project discovery keeps becomes one minimal entry,
   whatever its host: the committed entry's URL for a URL the committed
-  catalog already holds, or else the listing's project URL with any deep link
-  reduced to the repository root (the smallest when several collapse), `overrideSource` GitHub or GitLab where the URL makes that
+  catalog already holds, or else the listing's project URL with a GitHub deep
+  link reduced to the repository root (the smallest when several collapse), `overrideSource` GitHub or GitLab where the URL makes that
   unambiguous and unset otherwise (Obtainium detects it), the listing's name
   with trailing emoji and symbols trimmed or the URL's last segment, default
   settings, no categories, and the committed entry's id for a URL the committed
