@@ -2,9 +2,12 @@ from __future__ import annotations
 
 import json
 import re
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import (
@@ -15,6 +18,7 @@ from omnipack.model import App, Category, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.urls import normalize_project_url
+from tests import current_config_support
 from tests.current_config_support import (
     CurrentConfiguration,
     current_configuration_fixture,  # noqa: F401
@@ -281,6 +285,13 @@ def test_open_nectar_keeps_its_published_id(
 
 
 GENERATED_ORIGINS = {"codm-generated", "quiver-generated"}
+KANTO_GEAR_ABOUT = (
+    "Kanto Gear is a Gen1Recomp Lua mod distributed as a ZIP, not an Android "
+    "application. Install or update through official Gen1Recomp at "
+    "https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import. "
+    "Obtainium only tracks release notifications; acknowledgement does not install "
+    "the resource or detect its installed version."
+)
 # Per-app choices for generated entries, kept as overlay records so they hold
 # whatever settings and names a regenerated catalog carries.
 GENERATED_OVERRIDES = {
@@ -317,6 +328,7 @@ GENERATED_OVERRIDES = {
             "versionDetection": False,
             "includeZips": False,
             "autoApkFilterByArch": False,
+            "about": KANTO_GEAR_ABOUT,
         },
     ),
     "github.com/999sian/melee-pc": ("Melee PC", {"includePrereleases": True}),
@@ -334,8 +346,10 @@ GENERATED_OVERRIDES = {
 def test_generated_entries_take_their_settings_and_categories_from_configuration(
     current_configuration: CurrentConfiguration,
 ) -> None:
+    # Generated entries lose their names, settings and categories, so every
+    # value checked below can only come from configuration.
     regenerated = [
-        replace(app, additional_settings={}, categories=())
+        replace(app, name="regenerated", additional_settings={}, categories=())
         if app.origin in GENERATED_ORIGINS
         else app
         for app in current_configuration.candidates
@@ -347,18 +361,20 @@ def test_generated_entries_take_their_settings_and_categories_from_configuration
         policy=parse_composition_policy(current_configuration.policy),
     )
     assert_categories_follow_the_taxonomy(result)
-    observed = set()
+    origins = {
+        (normalize_project_url(selection.url), selection.variant): selection.origin
+        for selection in result.report.selections
+    }
     for variant in Variant:
         for entry in json.loads(render(result.apps[variant]))["apps"]:
             key = normalize_project_url(entry["url"])
             if key not in GENERATED_OVERRIDES:
                 continue
+            assert origins[key, variant] in GENERATED_ORIGINS, key
             name, settings = GENERATED_OVERRIDES[key]
             actual = json.loads(entry["additionalSettings"])
             assert entry["name"] == name, key
             assert {setting: actual[setting] for setting in settings} == settings, key
-            observed.add(key)
-    assert observed == set(GENERATED_OVERRIDES)
 
 
 def test_configuration_names_only_files_that_exist() -> None:
@@ -369,9 +385,9 @@ def test_configuration_names_only_files_that_exist() -> None:
             assert (ROOT / named).is_file(), f"{path.name} names missing {named}"
 
 
-def _with_quiver_catalog(monkeypatch, change) -> CurrentConfiguration:
-    from tests import current_config_support
-
+def _with_quiver_catalog(
+    monkeypatch: pytest.MonkeyPatch, change: Callable[[list[App]], list[App]]
+) -> CurrentConfiguration:
     fetch = current_config_support.quiver.fetch
     monkeypatch.setattr(
         current_config_support.quiver, "fetch", lambda *args: change(fetch(*args))
@@ -380,7 +396,7 @@ def _with_quiver_catalog(monkeypatch, change) -> CurrentConfiguration:
 
 
 def test_catalog_only_addition_of_an_uncategorized_family_is_reported(
-    monkeypatch,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     url = "https://example.test/regression/new-port"
     added = App(
@@ -402,7 +418,7 @@ def test_catalog_only_addition_of_an_uncategorized_family_is_reported(
 
 
 def test_catalog_only_removal_of_a_categorized_entry_is_reported(
-    current_configuration: CurrentConfiguration, monkeypatch
+    current_configuration: CurrentConfiguration, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     overlaid = {
         normalize_project_url(record["url"])
