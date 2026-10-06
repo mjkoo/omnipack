@@ -180,3 +180,23 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
     assert ("1234567890", Variant.SINGLE) not in settings
+
+
+def test_committed_entry_off_a_forge_ingests_with_no_source_type(
+    tmp_path: Path,
+) -> None:
+    entry = {
+        "id": "a1b2c3d4e5f6",
+        "url": "https://christt105.itch.io/poketch",
+        "author": "",
+        "name": "Pokétch",
+        "additionalSettings": {},
+        "categories": [],
+    }
+    (tmp_path / "codm.json").write_bytes(render_catalog([entry]))
+    [app] = codm.fetch(tmp_path, {"catalog": "codm.json"})
+    assert (app.id, app.url, app.source_type) == (
+        "a1b2c3d4e5f6",
+        "https://christt105.itch.io/poketch",
+        None,
+    )
