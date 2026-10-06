@@ -19,7 +19,9 @@ import pytest
 
 from scripts import source_proposal as proposal_module
 from scripts.source_proposal import (
+    BYTES_ONLY_CHANGE,
     SOURCES,
+    SUMMARY_LIMIT,
     VALIDATION_STEPS,
     SourceName,
     render_pr_body,
@@ -328,6 +330,47 @@ def test_report_whose_status_is_not_success_fails_with_no_commit(
     assert outcome.summary == "stage failed: generation did not succeed"
     assert _git(root, "rev-parse", "HEAD") == base
     assert not bundle_path.exists()
+
+
+@pytest.mark.parametrize(
+    ("catalog_text", "changed"),
+    [('{"apps": [{"id": "a"}]}\n', True), ('{"apps": []}\n', False)],
+    ids=["changed-bytes", "unchanged"],
+)
+def test_a_byte_change_without_entry_changes_is_called_out(
+    tmp_path: Path, catalog_text: str, changed: bool
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, catalog_text, _report())
+    outcome = run_stage(
+        root, base, "https://github.example/runs/3", tmp_path / "b.bundle"
+    )
+    assert outcome.changed is changed
+    assert (BYTES_ONLY_CHANGE in _pre_block(outcome.summary)) is outcome.changed
+    if outcome.changed:
+        body_path = tmp_path / "pr-body.md"
+        _write_body(root, body_path, base)
+        assert BYTES_ONLY_CHANGE in _pre_block(body_path.read_text())
+
+
+def test_run_summary_bounds_a_huge_skipped_list(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    count = 6000
+    skipped = tuple(_skip(f"project-{index}", "x" * 200) for index in range(count))
+    _write_candidate(root, '{"apps": []}\n', _report(skipped=skipped))
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["summarize"]) == 0
+    summary = (tmp_path / "summary.md").read_text()
+    assert len(summary) <= SUMMARY_LIMIT
+    pre_block = _pre_block(summary)
+    kept = pre_block.count("project-")
+    assert 0 < kept < count
+    assert f"and {count - kept} more" in pre_block
 
 
 def test_summary_caps_a_huge_skipped_list_inside_the_pre_block(
@@ -1247,7 +1290,7 @@ def test_summary_of_a_failed_generation_shows_its_error_and_skips(
     monkeypatch.setenv("GENERATION_RESULT", "failure")
     assert proposal_module.main(["summarize", "--source", "quiver"]) == 0
     summary = _pre_block((tmp_path / "summary.md").read_text())
-    assert "Error: discovery keeps no project &lt;none&gt;" in summary
+    assert "Error: discovery keeps no project &lt;none&gt;\n\nAdded:" in summary
     assert _skip_line("Zip only") in summary
 
 

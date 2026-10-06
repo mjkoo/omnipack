@@ -76,6 +76,11 @@ BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
 # GitHub rejects a pull request body longer than this many characters.
 PR_BODY_LIMIT = 65536
+# GitHub rejects a step summary over 1 MiB; this leaves room for the rest.
+SUMMARY_LIMIT = 1_000_000
+# Shown when the candidate's bytes differ from the catalog's but no entry was
+# added, removed or changed, so a reviewer is not left with three empty lists.
+BYTES_ONLY_CHANGE = "Catalog bytes changed without entry changes"
 
 # The values GitHub reports for a step's `outcome`.
 StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
@@ -127,7 +132,8 @@ class StageOutcome:
             removed=self.removed,
             changed=self.changed_urls,
             skipped=self.skipped,
-            limit=None,
+            catalog_changed=self.changed,
+            limit=SUMMARY_LIMIT,
         )
 
 
@@ -282,6 +288,7 @@ def _render_report(
     changed: Sequence[str],
     skipped: Sequence[str],
     errors: Sequence[str] = (),
+    catalog_changed: bool = False,
     limit: int | None = PR_BODY_LIMIT,
 ) -> str:
     lines: list[str] = []
@@ -291,7 +298,12 @@ def _render_report(
     lines.append(f"Base SHA: {base_sha}")
     lines.append("")
     lines.append("<pre>")
-    lines.extend(html.escape(line) for line in errors)
+    if errors:
+        lines.extend(html.escape(line) for line in errors)
+        lines.append("")
+    if catalog_changed and not (added or removed or changed):
+        lines.append(BYTES_ONLY_CHANGE)
+        lines.append("")
     lines.append("Added:")
     lines.extend(html.escape(url) for url in added)
     lines.append("")
@@ -308,7 +320,7 @@ def _render_report(
         return text
 
     # Bound every upstream section, leaving room for a complete omission line
-    # and closing tag. The full diagnostics remain in the summary and artifact.
+    # and closing tag. The full diagnostics remain in the generation report.
     split = lines.index("<pre>") + 1
     prefix, details = lines[:split], lines[split:] + skipped_lines
     longest_omission = f"and {len(details)} more"
@@ -681,7 +693,8 @@ def render_pr_body(
     """The escaped PR body: the run, base, changes, skipped listings and results.
 
     The report section is bounded so the whole body, including the validation
-    results, stays within GitHub's length limit.
+    results, stays within GitHub's length limit. A body is written only for a
+    candidate that changed the catalog.
     """
     validation = _render_validation(results)
     added, removed, changed = _report_changes(report)
@@ -692,6 +705,7 @@ def render_pr_body(
         removed=removed,
         changed=changed,
         skipped=_report_skipped(report),
+        catalog_changed=True,
         limit=PR_BODY_LIMIT - len(validation) - 1,
     )
     return report_text + "\n" + validation
@@ -728,7 +742,7 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
             changed=changed,
             skipped=_report_skipped(report),
             errors=_report_error(report),
-            limit=None,
+            limit=SUMMARY_LIMIT - len(validation) - 1,
         )
         if all(result == "success" for result in results.values()):
             body_path = _handoff_directory(environ) / BODY_NAME
