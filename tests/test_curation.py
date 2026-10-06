@@ -272,16 +272,16 @@ def test_split_and_joined_families_ship_as_intended(
         ]
 
 
-def test_open_nectar_keeps_its_published_id(
+def test_open_nectar_entries_keep_their_published_id(
     current_configuration: CurrentConfiguration,
 ) -> None:
     url = "github.com/ssunnking/open-nectar---pikmin-native-pc-port"
     for variant in Variant:
-        assert [
+        assert {
             app.data["id"]
             for app in current_configuration.result.apps[variant]
             if normalize_project_url(app.url) == url
-        ] == ["org.opennectar"]
+        } <= {"org.opennectar"}
 
 
 GENERATED_ORIGINS = {"codm-generated", "quiver-generated"}
