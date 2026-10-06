@@ -299,6 +299,7 @@ def test_self_hosted_gitlab_entry_is_hydrated_with_gitlab_defaults() -> None:
 
 
 def test_render_rejects_a_null_source_type() -> None:
+    """An explicit null is a malformed declaration, unlike an absent source type."""
     app = composed()
     app.data["overrideSource"] = None
     with pytest.raises(RenderError, match="overrideSource"):

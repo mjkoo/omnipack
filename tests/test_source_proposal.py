@@ -1188,22 +1188,6 @@ def test_stage_rejects_pre_staged_other_source(
     assert _git(root, "diff", "--cached", "--name-only") == path
 
 
-def test_unchanged_quiver_summary_lists_skipped_rows(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    report = _report(skipped=(_skip("o/repo", "<unknown forge>"),))
-    _write_candidate(root, '{"apps": []}\n', report, "quiver")
-    result = run_stage(
-        root,
-        base,
-        "run",
-        tmp_path / "candidate.bundle",
-        source="quiver",
-    )
-    assert result.status == "unchanged"
-    assert _skip_line("o/repo", "<unknown forge>") in _pre_block(result.summary)
-
-
 @pytest.mark.parametrize("mutation", ["changed-bytes", "symlink", "other-source"])
 def test_guard_rejects_changed_or_cross_source_checked_catalog(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str

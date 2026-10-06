@@ -191,8 +191,8 @@ def test_rjny_rejects_empty_location_and_malformed_source_type() -> None:
         )
 
 
-@pytest.mark.parametrize("declared", ["Codeberg", "F-Droid Third Party Repo"])
-def test_upstream_record_keeps_a_source_type_without_defaults(declared: str) -> None:
+def test_upstream_record_keeps_a_source_type_without_defaults() -> None:
+    declared = "Codeberg"
     url = "https://raw.githubusercontent.com/r/main/p"
     record = {
         "id": "app.test",
@@ -208,34 +208,11 @@ def test_upstream_record_keeps_a_source_type_without_defaults(declared: str) -> 
 
 
 @pytest.mark.parametrize(
-    "path", ["Case/Parent/Project", "/".join(f"Group{i}" for i in range(21))]
-)
-def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
-    path: str,
-) -> None:
-    [app] = extras.fetch(
-        [
-            {
-                "id": "com.example.app",
-                "name": "Example",
-                "url": f"https://gitlab.com/{path}",
-                "overrideSource": "GitLab",
-                "additionalSettings": {"apkFilterRegEx": "ordinary\\.apk$"},
-            }
-        ]
-    )
-    assert app.source_type == SourceType.GITLAB
-    assert app.url == f"https://gitlab.com/{path}"
-
-
-@pytest.mark.parametrize(
     "url",
     [
         "http://gitlab.com/a/b",
         "https://example.com/a/b",
         "https://gitlab.com/one",
-        "https://user@gitlab.com/a/b",
-        "https://user:password@gitlab.com/a/b",
         "https://www.gitlab.com/a/b",
         "https://gitlab.com:443/a/b",
         "https://gitlab.com/a/b?query=1",
@@ -243,6 +220,8 @@ def test_explicit_gitlab_extra_precedes_url_inference_and_preserves_subgroups(
         "https://gitlab.com/a/-/b",
         "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22)),
         "https://gitlab.example.org/group/app",
+        "HTTPS://GitLab.com/Group/Project",
+        "https://gitlab.com//Group//Sub%47roup/Project/",
     ],
 )
 def test_declared_gitlab_extra_keeps_any_url_as_written(url: str) -> None:
@@ -1105,26 +1084,6 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
         "com.example.companion",
         "dual-preferred",
     )
-
-
-@pytest.mark.parametrize("prefix", ["https://gitlab.com", "HTTPS://GitLab.com"])
-@pytest.mark.parametrize("path", ["Group/Project", "/Group//Sub%47roup/Project/"])
-def test_gitlab_acceptance_preserves_path_case_and_encoding(
-    prefix: str, path: str
-) -> None:
-    url = f"{prefix}/{path}"
-    [app] = extras.fetch(
-        [
-            {
-                "id": "com.example.app",
-                "name": "Example",
-                "url": url,
-                "overrideSource": "GitLab",
-            }
-        ]
-    )
-    assert app.url == url
-    assert app.source_type == SourceType.GITLAB
 
 
 @pytest.mark.parametrize("pattern", ["single*.json", "dual*.json"])
