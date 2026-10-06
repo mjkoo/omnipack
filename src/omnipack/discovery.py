@@ -16,7 +16,7 @@ from enum import StrEnum
 from typing import TypedDict
 from urllib.parse import urlsplit
 
-from omnipack.sources.common import HttpGetter
+from omnipack.sources.common import HttpGetter, SourceType, derived_source_type
 from omnipack.urls import normalize_project_url
 
 
@@ -287,7 +287,10 @@ def _outside_code(lines: list[str]) -> list[str]:
 
 # --- Quiver: index, lists and the release asset-name file ---------------
 
-_FORGE_HOSTS = {"github": "github.com", "gitlab": "gitlab.com"}
+_FORGES = {
+    "github": ("github.com", SourceType.GITHUB),
+    "gitlab": ("gitlab.com", SourceType.GITLAB),
+}
 
 
 def _discover_quiver(
@@ -337,24 +340,31 @@ def _forge_url(forge: object, repository: object) -> str | SkipReason:
 
     An absent forge means GitHub, and forge names match without regard to
     case. A GitHub repository is exactly an owner and a name; a GitLab one is
-    one or more namespaces and a project.
+    one or more namespaces and a project. The URL must be a repository of its
+    forge as source type derivation reads it, so its entry carries that type.
     """
     if forge is None:
         forge = "github"
-    host = _FORGE_HOSTS.get(forge.lower()) if isinstance(forge, str) else None
-    if host is None:
+    found = _FORGES.get(forge.lower()) if isinstance(forge, str) else None
+    if found is None:
         return SkipReason.UNKNOWN_FORGE
+    host, source_type = found
     if not isinstance(repository, str):
         return SkipReason.INVALID_REPOSITORY
     segments = repository.split("/")
+    url = f"https://{host}/{repository}"
     if (
         # URL syntax in a segment would change which project the URL names.
-        any(not segment or re.search(r"[\s?#%]", segment) for segment in segments)
+        any(
+            not segment or segment in {".", ".."} or re.search(r"[\s?#%]", segment)
+            for segment in segments
+        )
         or len(segments) < 2
         or (host == "github.com" and len(segments) != 2)
+        or derived_source_type(url) != source_type
     ):
         return SkipReason.INVALID_REPOSITORY
-    return f"https://{host}/{repository}"
+    return url
 
 
 def _index_locations(

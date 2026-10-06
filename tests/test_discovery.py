@@ -372,6 +372,11 @@ def test_gitlab_row_in_a_nested_group_keeps_its_whole_path() -> None:
         ),
         (row("owner//repo", repositorySource="gitlab"), SkipReason.INVALID_REPOSITORY),
         (row("owner/my repo"), SkipReason.INVALID_REPOSITORY),
+        (row("owner/.."), SkipReason.INVALID_REPOSITORY),
+        (row("group/./app", repositorySource="gitlab"), SkipReason.INVALID_REPOSITORY),
+        (row("owner_x/repo"), SkipReason.INVALID_REPOSITORY),
+        (row("orgs/repo"), SkipReason.INVALID_REPOSITORY),
+        (row("group/-/app", repositorySource="gitlab"), SkipReason.INVALID_REPOSITORY),
     ],
     ids=[
         "unknown-forge",
@@ -385,6 +390,11 @@ def test_gitlab_row_in_a_nested_group_keeps_its_whole_path() -> None:
         "percent-escape",
         "gitlab-empty-segment",
         "whitespace",
+        "dot-dot-segment",
+        "dot-segment",
+        "github-owner-underscore",
+        "github-site-route",
+        "gitlab-route-marker",
     ],
 )
 def test_an_unformable_row_is_skipped_with_its_reason(

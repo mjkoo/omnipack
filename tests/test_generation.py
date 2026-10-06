@@ -464,14 +464,14 @@ def test_quiver_command_reports_skipped_rows_and_screened_out_projects(
     http = quiver_http(
         [
             row("kept/old", project="Committed"),
-            row("new/port", project="New"),
-            row("new/zip", project="Zip only"),
+            row("fresh/port", project="New"),
+            row("fresh/zip", project="Zip only"),
             row("a/b", project="Elsewhere", repositorySource="codeberg"),
         ],
         [
             asset("kept/old", "old.zip"),
-            asset("new/port", "port.apk"),
-            asset("new/zip", "port.zip"),
+            asset("fresh/port", "port.apk"),
+            asset("fresh/zip", "port.zip"),
         ],
     )
     assert run_cli(monkeypatch, "quiver", http) == 0
@@ -482,8 +482,8 @@ def test_quiver_command_reports_skipped_rows_and_screened_out_projects(
         "https://github.com/kept/old",
     )
     assert (new["id"], new["url"]) == (
-        hashlib.sha256(b"github.com/new/port").hexdigest()[:12],
-        "https://github.com/new/port",
+        hashlib.sha256(b"github.com/fresh/port").hexdigest()[:12],
+        "https://github.com/fresh/port",
     )
     report = stored_report(workdir, "quiver")
     assert [(item["project"], item["reason"]) for item in report["skipped"]] == [
@@ -586,7 +586,7 @@ def test_screening_out_every_project_fails_when_no_committed_one_is_listed(
         workdir, "quiver", [{**COMMITTED, "url": "https://github.com/no/longer"}]
     )
     http = quiver_http(
-        [row("new/zip", project="Zip only")], [asset("new/zip", "z.zip")]
+        [row("fresh/zip", project="Zip only")], [asset("fresh/zip", "z.zip")]
     )
     assert run_cli(monkeypatch, "quiver", http) == 1
     report = stored_report(workdir, "quiver")
