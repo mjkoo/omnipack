@@ -20,7 +20,7 @@ from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 
 class HttpError(RuntimeError):
-    """A request failed or exceeded a configured response bound."""
+    """A request failed or returned an unusable response."""
 
 
 class HttpStatusError(HttpError):
@@ -34,7 +34,7 @@ class HttpStatusError(HttpError):
 
 
 class TransientHttpError(HttpError):
-    """A transient acquisition failure eligible for a caller-owned retry policy."""
+    """A request that still failed transiently after the client's retries."""
 
     def __init__(self, url: str, attempts: int) -> None:
         self.url = url
@@ -45,7 +45,7 @@ class TransientHttpError(HttpError):
 
 @dataclass(frozen=True, slots=True)
 class HttpResponse:
-    """The response data needed by catalog and APK consumers."""
+    """The response data callers read: final URL, status, headers and body."""
 
     url: str
     status: int
@@ -87,7 +87,7 @@ class HttpClient:
 
     def get(self, url: str) -> HttpResponse:
         """Fetch one URL, retrying transient failures up to the configured bound."""
-        request = build_request(url, user_agent=self.user_agent)
+        request = _build_request(url, user_agent=self.user_agent)
         attempts = self.retries + 1
         for number in range(attempts):
             try:
@@ -106,10 +106,10 @@ class HttpClient:
         self, request: urllib.request.Request, timeout: float
     ) -> HttpResponse:
         with urllib.request.urlopen(request, timeout=timeout) as stream:
-            return complete_response(stream, stream.read())
+            return _complete_response(stream, stream.read())
 
 
-def build_request(url: str, *, user_agent: str) -> urllib.request.Request:
+def _build_request(url: str, *, user_agent: str) -> urllib.request.Request:
     """Build a request that carries no credentials."""
     parsed = urlsplit(url)
     if parsed.username is not None or parsed.password is not None:
@@ -117,7 +117,7 @@ def build_request(url: str, *, user_agent: str) -> urllib.request.Request:
     return urllib.request.Request(url, headers={"User-Agent": user_agent})
 
 
-def complete_response(stream: Any, body: bytes) -> HttpResponse:
+def _complete_response(stream: Any, body: bytes) -> HttpResponse:
     """Wrap a body read from a urllib response, rejecting a truncated read."""
     # A sized read returns a short body instead of raising when the
     # connection closes before Content-Length is satisfied.
