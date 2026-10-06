@@ -130,9 +130,13 @@ def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() ->
     assert decoded_apps(catalog) == [gitlab, gitlab]
 
 
-def test_entry_without_a_source_type_is_labelled_by_its_host() -> None:
+@pytest.mark.parametrize("absent", [True, False], ids=["absent", "empty"])
+def test_entry_without_a_source_type_is_labelled_by_its_host(absent: bool) -> None:
     itch = app("a1b2c3d4e5f6", "Pokétch", "https://christt105.itch.io/poketch")
-    del itch["overrideSource"]
+    if absent:
+        del itch["overrideSource"]
+    else:
+        itch["overrideSource"] = ""
     catalog = generate_catalog(pack(itch), pack(dict(itch)), policy())
     assert catalog.decode().count(">christt105&#46;itch&#46;io</a>") == 2
     assert decoded_apps(catalog) == [itch, itch]

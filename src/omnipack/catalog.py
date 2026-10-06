@@ -177,8 +177,10 @@ def _cell(record: dict[str, Any] | None) -> str:
     if record is None:
         return "-"
     # An entry without a source type, which Obtainium detects from the URL,
-    # is labelled by its host.
-    source = record.get("overrideSource", urlsplit(record["url"]).hostname)
+    # is labelled by its host; an empty source type counts as none.
+    source = record.get("overrideSource")
+    if source is None or source == "":
+        source = urlsplit(record["url"]).hostname
     if not isinstance(source, str) or not source:
         raise CatalogError(f"app {record.get('id')!r} has invalid source label")
     source_url = escape(quote(record["url"], safe=":/?&=#%+@;,"), quote=True)
