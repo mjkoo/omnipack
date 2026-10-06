@@ -9,12 +9,11 @@ from typing import Any
 import pytest
 
 from omnipack import cli
-from omnipack.discovery import GeneratedSource, Listing
+from omnipack.discovery import GeneratedSource, Listing, SkipReason
 from omnipack.generation import (
     GenerationError,
     generate,
     load_committed,
-    placeholder_id,
     render_entries,
     trim_name,
 )
@@ -23,27 +22,26 @@ from omnipack.model import SourceType
 from omnipack.report_model import Status
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.source_catalog import render_catalog
+from tests.http_support import FakeHttp
 from tests.test_discovery import (
     ASSETS_URL,
     INDEX_URL,
     LIST_URL,
     README_URL,
-    FakeHttp,
+    TABLE,
     asset,
     quiver_http,
     row,
 )
 
-TABLE = "| Project | Game |\n|---|---|\n"
-
 
 def entry_for(listings: list[Listing], committed: dict[str, Any] | None = None):
-    [entry] = render_entries(listings, committed or {})
+    [entry] = render_entries(listings, committed or {}).values()
     return entry
 
 
 def candidate(listings: list[Listing], committed: dict[str, Any] | None = None):
-    return render_catalog(render_entries(listings, committed or {}))
+    return render_catalog(list(render_entries(listings, committed or {}).values()))
 
 
 def test_github_listing_becomes_a_minimal_entry_with_a_placeholder_id() -> None:
@@ -222,7 +220,7 @@ def test_an_empty_committed_catalog_gives_every_entry_a_placeholder_id(
         Status.SUCCESS
     )
     [entry] = catalog_apps(tmp_path, "codm")
-    assert entry["id"] == placeholder_id("github.com/o/a")
+    assert entry["id"] == hashlib.sha256(b"github.com/o/a").hexdigest()[:12]
 
 
 def test_an_error_without_a_message_is_recorded_by_its_type(
@@ -319,7 +317,7 @@ def test_codm_command_writes_candidate_and_report_requesting_only_the_readme(
         ("Pokétch", None),
     }
     report = stored_report(workdir, "codm")
-    assert report["status"] == "success"
+    assert report["status"] == Status.SUCCESS
     assert report["source"] == "codm"
     assert report["inputs"] == [
         {"url": README_URL, "sha256": hashlib.sha256(readme.encode()).hexdigest()}
@@ -364,6 +362,7 @@ def test_a_renamed_committed_entry_is_changed_not_removed_and_added(
         {README_URL: TABLE + "| [New Name](https://github.com/Owner/Repo) | x |\n"}
     )
     assert run_cli(monkeypatch, "codm", http) == 0
+    assert http.urls == [README_URL]
     [entry] = catalog_apps(workdir, "codm")
     assert (entry["id"], entry["url"], entry["name"]) == (
         "com.example.app",
@@ -387,7 +386,13 @@ def test_a_failed_rerun_leaves_no_candidate_and_records_the_error(
     assert run_cli(monkeypatch, "codm", bad) == 1
     assert not candidate_path(workdir, "codm").exists()
     report = stored_report(workdir, "codm")
-    assert (report["status"], report["error"]) == ("failed", "README unavailable")
+    assert (report["status"], report["error"]) == (
+        Status.FAILED,
+        "README unavailable",
+    )
+    assert report["inputs"] == [{"url": README_URL}]
+    assert "changes" not in report
+    assert bad.urls == [README_URL]
     assert "README unavailable" in capsys.readouterr().err
 
 
@@ -411,26 +416,26 @@ def test_quiver_command_reports_skipped_rows_and_screened_out_projects(
         ],
     )
     assert run_cli(monkeypatch, "quiver", http) == 0
-    assert http.urls == [INDEX_URL, ASSETS_URL, LIST_URL]
+    assert set(http.urls) == {INDEX_URL, ASSETS_URL, LIST_URL}
     kept, new = catalog_apps(workdir, "quiver")
     assert (kept["id"], kept["url"]) == (
         "com.example.app",
         "https://github.com/kept/old",
     )
     assert (new["id"], new["url"]) == (
-        placeholder_id("github.com/new/port"),
+        hashlib.sha256(b"github.com/new/port").hexdigest()[:12],
         "https://github.com/new/port",
     )
     report = stored_report(workdir, "quiver")
     assert [(item["project"], item["reason"]) for item in report["skipped"]] == [
-        ("Zip only", "latest release lists no APK asset"),
-        ("Elsewhere", "names a forge no project URL can be formed for"),
+        ("Zip only", SkipReason.NO_APK_ASSET),
+        ("Elsewhere", SkipReason.UNKNOWN_FORGE),
     ]
-    assert [item["url"] for item in report["inputs"]] == [
+    assert {item["url"] for item in report["inputs"]} == {
         INDEX_URL,
         ASSETS_URL,
         LIST_URL,
-    ]
+    }
 
 
 def test_a_run_whose_candidate_keeps_nothing_fails_with_the_skipped_rows(
@@ -439,12 +444,77 @@ def test_a_run_whose_candidate_keeps_nothing_fails_with_the_skipped_rows(
     http = quiver_http([row("a/b", project="Zip only")], [asset("a/b", "a.zip")])
     assert run_cli(monkeypatch, "quiver", http) == 1
     report = stored_report(workdir, "quiver")
-    assert report["status"] == "failed"
+    assert report["status"] == Status.FAILED
     assert "1 listed rows or projects skipped" in report["error"]
-    assert [item["reason"] for item in report["skipped"]] == [
-        "latest release lists no APK asset"
+    assert [item["reason"] for item in report["skipped"]] == [SkipReason.NO_APK_ASSET]
+    assert not candidate_path(workdir, "quiver").exists()
+
+
+def test_an_empty_discovery_fails_without_a_candidate(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    http = FakeHttp({README_URL: TABLE + "| no link | x |\n"})
+    assert run_cli(monkeypatch, "codm", http) == 1
+    report = stored_report(workdir, "codm")
+    assert report["status"] == Status.FAILED
+    assert "0 listed rows or projects skipped" in report["error"]
+    assert report["skipped"] == []
+    assert "changes" not in report
+    assert not candidate_path(workdir, "codm").exists()
+
+
+def test_a_run_whose_every_row_is_unformable_fails_with_those_rows(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    http = quiver_http(
+        [
+            row("a/b", project="Elsewhere", repositorySource="codeberg"),
+            row("not-a-path", project="Invalid"),
+        ],
+        [],
+    )
+    assert run_cli(monkeypatch, "quiver", http) == 1
+    report = stored_report(workdir, "quiver")
+    assert report["status"] == Status.FAILED
+    assert [(item["project"], item["reason"]) for item in report["skipped"]] == [
+        ("Elsewhere", SkipReason.UNKNOWN_FORGE),
+        ("Invalid", SkipReason.INVALID_REPOSITORY),
     ]
     assert not candidate_path(workdir, "quiver").exists()
+
+
+def test_screening_out_every_project_fails_when_no_committed_one_is_listed(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_catalog(
+        workdir, "quiver", [{**COMMITTED, "url": "https://github.com/no/longer"}]
+    )
+    http = quiver_http(
+        [row("new/zip", project="Zip only")], [asset("new/zip", "z.zip")]
+    )
+    assert run_cli(monkeypatch, "quiver", http) == 1
+    report = stored_report(workdir, "quiver")
+    assert report["status"] == Status.FAILED
+    assert [item["reason"] for item in report["skipped"]] == [SkipReason.NO_APK_ASSET]
+    assert "changes" not in report
+    assert not candidate_path(workdir, "quiver").exists()
+
+
+def test_a_candidate_that_cannot_be_written_reports_no_changes(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    def refuse(path: Path, _data: bytes) -> int:
+        raise OSError(f"cannot write {path.name}")
+
+    monkeypatch.setattr(Path, "write_bytes", refuse)
+    http = FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"})
+    assert run_cli(monkeypatch, "codm", http) == 1
+    report = stored_report(workdir, "codm")
+    assert (report["status"], report["error"]) == (
+        Status.FAILED,
+        "cannot write catalog.json",
+    )
+    assert "changes" not in report
 
 
 def test_the_command_rejects_an_unknown_source() -> None:

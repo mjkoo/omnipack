@@ -80,7 +80,8 @@ def generate(
     """Write a candidate catalog and its report, or only the report on failure.
 
     No earlier candidate survives a run, so a failed run never leaves one to be
-    mistaken for current.
+    mistaken for current. A failed report never lists changes, since no
+    candidate carries them.
     """
     output = _output_directory(root, source)
     if output.exists():
@@ -112,9 +113,8 @@ def generate(
                 "or projects skipped)"
             )
         entries = render_entries(discovery.listings, committed)
-        catalog = render_catalog(entries)
+        (output / "catalog.json").write_bytes(render_catalog(list(entries.values())))
         report["changes"] = _changes(entries, committed)
-        (output / "catalog.json").write_bytes(catalog)
         report["status"] = Status.SUCCESS
     except Exception as error:  # noqa: BLE001 - the report records every failure
         report["error"] = str(error) or type(error).__name__
@@ -156,15 +156,16 @@ def load_committed(path: Path) -> dict[str, dict[str, Any]]:
 
 def render_entries(
     listings: Sequence[Listing], committed: Mapping[str, Mapping[str, Any]]
-) -> list[dict[str, Any]]:
-    """One minimal entry per normalized URL, independent of listing order."""
+) -> dict[str, dict[str, Any]]:
+    """One minimal entry per normalized URL, in normalized URL order and
+    independent of listing order."""
     grouped: dict[str, list[Listing]] = {}
     for listing in listings:
         grouped.setdefault(normalize_project_url(listing.url), []).append(listing)
-    return [
-        minimal_entry(normalized, group, committed.get(normalized))
+    return {
+        normalized: minimal_entry(normalized, group, committed.get(normalized))
         for normalized, group in sorted(grouped.items())
-    ]
+    }
 
 
 def minimal_entry(
@@ -192,7 +193,7 @@ def minimal_entry(
         "categories": [],
     }
     if source_type is not None:
-        entry["overrideSource"] = str(source_type)
+        entry["overrideSource"] = source_type
     return entry
 
 
@@ -205,8 +206,8 @@ def placeholder_id(normalized: str) -> str:
     return hashlib.sha256(normalized.encode()).hexdigest()[:12]
 
 
-# Joiners, variation selectors, keycaps, skin tones and tag characters that
-# complete an emoji without being symbols themselves.
+# The joiner, variation selectors and keycap that complete an emoji without
+# being symbols themselves; skin tones and tag characters are ranges below.
 _EMOJI_PARTS = frozenset("\u200d\ufe0e\ufe0f\u20e3")
 
 
@@ -236,9 +237,9 @@ def _fallback_name(url: str, segments: list[str]) -> str:
 
 
 def _changes(
-    entries: list[dict[str, Any]], committed: Mapping[str, Mapping[str, Any]]
+    candidate: Mapping[str, dict[str, Any]],
+    committed: Mapping[str, Mapping[str, Any]],
 ) -> Changes:
-    candidate = {normalize_project_url(entry["url"]): entry for entry in entries}
     return {
         "added": sorted(
             entry["url"] for key, entry in candidate.items() if key not in committed

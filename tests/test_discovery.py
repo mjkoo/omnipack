@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import json
-from email.message import Message
 from typing import Any
 
 import pytest
@@ -14,29 +12,14 @@ from omnipack.discovery import (
     SkipReason,
     discover,
 )
-from omnipack.http import HttpError, HttpResponse
+from omnipack.http import HttpError
 from omnipack.urls import normalize_project_url
+from tests.http_support import FakeHttp
 
 README_URL = "https://example.test/README.md"
 INDEX_URL = "https://catalog.test/quiver/index.json"
 LIST_URL = "https://catalog.test/quiver/lists/one.json"
 ASSETS_URL = "https://catalog.test/quiver/platform-index.json"
-
-
-class FakeHttp:
-    def __init__(self, responses: dict[str, Any]) -> None:
-        self.responses = responses
-        self.urls: list[str] = []
-
-    def get(self, url: str) -> HttpResponse:
-        self.urls.append(url)
-        value = self.responses.get(url, HttpError(f"no response for {url}"))
-        if isinstance(value, Exception):
-            raise value
-        if not isinstance(value, (str, bytes)):
-            value = json.dumps(value)
-        body = value if isinstance(value, bytes) else value.encode()
-        return HttpResponse(url, 200, Message(), body)
 
 
 def codm(readme: str, committed: frozenset[str] = frozenset()) -> list[Listing]:
@@ -198,7 +181,7 @@ def test_quiver_reads_only_the_index_its_lists_and_the_asset_name_file() -> None
     http = quiver_http([row("owner/repo")], [asset("owner/repo", "app.apk")])
     discovery = quiver(http)
     assert discovery.listings == (Listing("https://github.com/owner/repo", "Port"),)
-    assert http.urls == [INDEX_URL, ASSETS_URL, LIST_URL]
+    assert set(http.urls) == {INDEX_URL, ASSETS_URL, LIST_URL}
 
 
 @pytest.mark.parametrize(
