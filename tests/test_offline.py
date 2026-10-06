@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from omnipack.model import SourceType
 from omnipack.offline import Finding, OfflineInputs, validate_offline
 from omnipack.report_model import Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
@@ -24,7 +25,7 @@ def app(package_id: str = "org.example.app", source: str = "GitHub") -> dict[str
         "url": "https://example.com/app",
         "author": "Example",
         "name": "Example",
-        "additionalSettings": json.dumps(SETTINGS_DEFAULTS[source]),
+        "additionalSettings": json.dumps(SETTINGS_DEFAULTS[SourceType(source)]),
         "categories": ["Emulator"],
         "overrideSource": source,
         "allowIdChange": True,
@@ -201,7 +202,7 @@ def test_required_entry_fields_are_validated(mutate, code: str) -> None:
 
 def test_object_additional_settings_names_variant_id_and_field() -> None:
     value = app()
-    value["additionalSettings"] = SETTINGS_DEFAULTS["GitHub"]
+    value["additionalSettings"] = SETTINGS_DEFAULTS[SourceType.GITHUB]
     findings = validate_offline(inputs([value]))
     assert {
         (

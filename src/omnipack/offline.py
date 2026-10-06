@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from omnipack.model import SourceType
 from omnipack.report_model import FindingRecord, Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
@@ -363,7 +364,7 @@ def _validate_additional(
     index: int,
     findings: list[Finding],
 ) -> None:
-    for key, default in SETTINGS_DEFAULTS[source].items():
+    for key, default in SETTINGS_DEFAULTS[SourceType(source)].items():
         if key in settings and type(settings[key]) is not type(default):
             _add(
                 findings,
@@ -375,7 +376,7 @@ def _validate_additional(
                 index,
                 key,
             )
-    if source != "HTML":
+    if source != SourceType.HTML:
         return
     steps = settings.get("intermediateLink")
     if isinstance(steps, list):

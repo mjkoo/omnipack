@@ -15,8 +15,12 @@ class Variant(str, Enum):
 
 
 class SourceType(StrEnum):
-    """The Obtainium source types the pack derives from a URL and holds
-    default settings for. An entry may carry any other type Obtainium reads."""
+    """The Obtainium source types the pack names.
+
+    The pack derives only GitHub and GitLab from a URL, and holds default
+    settings for GitHub, GitLab and HTML. An entry may carry any other type
+    Obtainium reads.
+    """
 
     GITHUB = "GitHub"
     HTML = "HTML"

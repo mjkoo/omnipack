@@ -18,6 +18,7 @@ from omnipack.generation import (
     trim_name,
 )
 from omnipack.http import HttpClient, HttpError, HttpResponse
+from omnipack.model import SourceType
 from omnipack.report_model import Status
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.source_catalog import render_catalog
@@ -56,7 +57,10 @@ def test_github_listing_becomes_a_minimal_entry_with_a_placeholder_id() -> None:
         "overrideSource": "GitHub",
     }
     [rendered] = json.loads(candidate([Listing(entry["url"], "Repo App")]))["apps"]
-    assert json.loads(rendered["additionalSettings"]) == SETTINGS_DEFAULTS["GitHub"]
+    assert (
+        json.loads(rendered["additionalSettings"])
+        == SETTINGS_DEFAULTS[SourceType.GITHUB]
+    )
 
 
 def test_gitlab_listing_declares_gitlab_and_its_top_level_group() -> None:

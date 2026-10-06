@@ -6,6 +6,7 @@ from pathlib import Path
 
 import pytest
 
+from omnipack.model import SourceType
 from omnipack.overlay import ComposedApp
 from omnipack.render import (
     RenderError,
@@ -60,11 +61,15 @@ def test_defaults_match_every_source_key_set_in_upstream_exports() -> None:
                 json.loads(app["additionalSettings"])
             )
 
-    assert {source: set(SETTINGS_DEFAULTS[source]) for source in observed} == observed
+    assert {
+        source: set(SETTINGS_DEFAULTS[SourceType(source)]) for source in observed
+    } == observed
 
 
-@pytest.mark.parametrize("source", ["GitHub", "HTML", "GitLab"])
-def test_hydration_fills_sparse_settings_in_canonical_order(source: str) -> None:
+@pytest.mark.parametrize("source", list(SourceType))
+def test_hydration_fills_sparse_settings_in_canonical_order(
+    source: SourceType,
+) -> None:
     hydrated = hydrate_settings(source, {"trackOnly": True, "futureKey": 42})
 
     assert list(hydrated) == [*SETTINGS_DEFAULTS[source], "futureKey"]
@@ -99,7 +104,10 @@ def test_render_hydrates_when_app_settings_are_missing() -> None:
 
     rendered = document([app])["apps"][0]
 
-    assert json.loads(rendered["additionalSettings"]) == SETTINGS_DEFAULTS["GitHub"]
+    assert (
+        json.loads(rendered["additionalSettings"])
+        == SETTINGS_DEFAULTS[SourceType.GITHUB]
+    )
 
 
 @pytest.mark.parametrize("field,value", [("name", None), ("url", 7), ("url", "")])
@@ -285,7 +293,7 @@ def test_self_hosted_gitlab_entry_is_hydrated_with_gitlab_defaults() -> None:
     [rendered] = document([app])["apps"]
     assert rendered["url"] == "https://gitlab.example.org/group/app"
     assert json.loads(rendered["additionalSettings"]) == {
-        **SETTINGS_DEFAULTS["GitLab"],
+        **SETTINGS_DEFAULTS[SourceType.GITLAB],
         "apkFilterRegEx": "app",
     }
 

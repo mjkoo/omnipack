@@ -57,7 +57,7 @@ def hydrate_settings(source_type: str | None, values: dict[str, Any]) -> dict[st
     An entry whose source type the pack holds no defaults for, or that has
     none, keeps exactly the settings it carries.
     """
-    defaults = SETTINGS_DEFAULTS.get(source_type or "", {})
+    defaults = SETTINGS_DEFAULTS.get(source_type, {}) if source_type else {}
     result = deepcopy(defaults)
     for key in defaults:
         if key in values:
