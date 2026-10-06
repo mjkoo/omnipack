@@ -55,9 +55,10 @@ live publication acceptance.
 ## Quiver-discovered ports
 
 [Quiver port setup](quiver-ports.md) lists required game data and known setup
-limitations for the additional baseline ports. Discovery skips pause a particular
-Quiver lookup and retain matching accepted entries. To exclude an app from both
-packs regardless of source, deny its project URL in `config/deny.json`.
+limitations for the additional baseline ports. Their names and settings are
+overlay records and their categories are category map keys, so a catalog refresh
+keeps them. To exclude an app from both packs regardless of source, deny its
+project URL in `config/deny.json`.
 
 ## Port setup
 
@@ -302,11 +303,17 @@ still show a one-time update after re-import; external installation may not
 update Obtainium's recorded source version. Replacing an asset under an unchanged
 source version is not detectable through source-version comparison.
 
-Generic whole-pack live resolution, effective-version format lint and
-upstream-health publication gating are retired. The codm and Quiver source
-generators still resolve reviewed APK projects before their catalog changes are
-accepted; normal builds consume those committed catalogs. Structural checks retain
-setting types without evaluating patterns, versions or release availability.
+Neither builds nor source generation resolve releases or inspect APKs, and
+publication is not gated on upstream health. The codm and Quiver generators read
+only their upstream lists; normal builds consume the committed catalogs.
+Structural checks retain setting types without evaluating patterns, versions or
+release availability.
+
+Generated catalogs are held only to validity, composition, building and
+verifying, and canonical bytes. Category coverage, meaning uncategorized
+families and stale category keys, is reported by the build rather than failed
+by tests, so a catalog-only proposal that adds or removes a project needs no
+other edit to pass.
 Investigate changed source behavior in Obtainium and record new observations
 with their dates and provenance.
 
