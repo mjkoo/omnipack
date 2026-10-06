@@ -12,9 +12,14 @@ The supported generated sources are codm and Quiver, each configured with its
 upstream input and its committed catalog path. For codm, generation SHALL read
 the configured README and take the links inside its Project tables; a link
 outside those tables, or inside a fenced or indented code block, SHALL NOT
-introduce a project. Every Project table SHALL be well formed: a README with no
-Project table, or with a Project table whose delimiter row is missing or
-invalid, SHALL fail generation, even when another Project table is valid. A
+introduce a project. A Project table follows GitHub Flavored Markdown table
+syntax: a header row whose first cell is `Project`, then a delimiter row of
+cells holding one or more hyphens with optional colons, with outer pipes
+optional on every row; its rows continue until a blank line, a heading or a
+code block. Every Project table SHALL be well formed: a README with no Project
+table, or with a Project table whose delimiter row is missing, invalid or has a
+different number of cells than its header, SHALL fail generation, even when
+another Project table is valid. A
 link no project URL can be formed from, such as one with an invalid port or
 host, SHALL be reported and skipped; the skip alone SHALL NOT fail generation,
 which fails only when no entry is left.
@@ -44,6 +49,10 @@ projects, generation SHALL screen on them. Quiver's asset-name file holds one
 entry per listed repository, with its `provider` (`github` or `gitlab`),
 `repository`, `releaseTag` and `assetNames`; an entry matches the listed
 project whose URL its `provider` and `repository` form, by normalized URL.
+Generation reads only an entry's `provider`, `repository` and `assetNames`: an
+entry missing one of them, or naming an asset that is not a string, SHALL make
+the file malformed, while an entry whose `provider` and `repository` form no
+project URL SHALL be ignored, since it matches no listed project.
 Generation SHALL keep a listed project when its matching entry names an asset
 whose name ends in `.apk`, compared without regard to case, or when the
 committed catalog already holds an entry with the project's normalized URL.
@@ -80,6 +89,13 @@ be read or is malformed.
   repository link
 - **THEN** the malformed link is reported and skipped, and generation succeeds
   with the valid project
+
+#### Scenario: A Project table in compact Markdown syntax
+
+- **WHEN** a Project table's delimiter cells hold a single hyphen and its rows
+  omit the leading and trailing pipes
+- **THEN** every row's links become projects, and a link in a paragraph after
+  the table's following blank line does not
 
 #### Scenario: One of multiple Project tables is malformed
 
@@ -201,8 +217,9 @@ a denial for its URL. Each entry SHALL carry:
   gitlab.com project URL, and no `overrideSource` otherwise, so Obtainium
   detects the source from the URL;
 - the name the listing gives (a codm link's text, a Quiver row's `project`),
-  with trailing emoji and symbol characters and surrounding whitespace
-  trimmed, or else, when the listing gives none or nothing remains after
+  with trailing emoji and other-symbol characters, such as pictographs and
+  emoji modifiers, and surrounding whitespace trimmed, keeping punctuation,
+  math and currency signs, or else, when the listing gives none or nothing remains after
   trimming, the last path segment of the URL; when listings of one URL give
   different names, the first trimmed name in case-insensitive order, with
   names equal ignoring case ordered by code point (`App` before `app`), so the

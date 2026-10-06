@@ -131,8 +131,9 @@ fills missing keys on import is an open question, recorded under Risks.
 A codm Project table link's text and a Quiver row's `project` are the
 upstream curator's name for the app; the URL's last path segment is the
 fallback. Curators decorate names (a codm link reads "Kanto Gear 🤖"), so
-generation trims trailing emoji and symbol characters and surrounding
-whitespace from every listing-derived name, the same way for every source.
+generation trims trailing emoji and other-symbol characters (keeping
+punctuation, math and currency signs, as in `C++`) and surrounding whitespace
+from every listing-derived name, the same way for every source.
 Several listings of one URL with different names take the first in
 case-insensitive order, with names equal ignoring case (`App` and `app`)
 ordered by code point, so `App` wins whichever row upstream lists first and

@@ -26,10 +26,10 @@ upstream catalog records and overlay patches, and rendering copies them without
 checking their types, so offline verification is their only check before
 publication.
 
-Default-key completeness, the rendered pack settings and category colours, and
-GitLab project URL rules SHALL be outside offline verification. Rendering fills
-every default key and derives every category colour from the entries it
-renders, and ingestion enforces the GitLab URL rules.
+Default-key completeness and the rendered pack settings and category colours
+SHALL be outside offline verification. Rendering fills every default key and
+derives every category colour from the entries it renders. A project URL is
+accepted on any host, so there are no GitLab URL rules to verify.
 
 #### Scenario: A rendered settings object is not string encoded
 
