@@ -91,8 +91,7 @@ def generate(
     """Write a candidate catalog and its report, or only the report on failure.
 
     No earlier candidate survives a run, so a failed run never leaves one to be
-    mistaken for current. A failed report never lists changes, since no
-    candidate carries them.
+    mistaken for current, and a failed report never lists changes.
     """
     output = _output_directory(root, source)
     if output.exists():
@@ -124,8 +123,12 @@ def generate(
                 "or projects skipped)"
             )
         entries = render_entries(discovery.listings, committed)
-        (output / "catalog.json").write_bytes(render_catalog(list(entries.values())))
-        report["changes"] = _changes(entries, committed)
+        # Render and compare first: either can raise on a committed entry, and
+        # a failed run must leave no candidate.
+        catalog = render_catalog(list(entries.values()))
+        changes = _changes(entries, committed)
+        (output / "catalog.json").write_bytes(catalog)
+        report["changes"] = changes
         report["status"] = Status.SUCCESS
     except Exception as error:  # noqa: BLE001 - the report records every failure
         report["error"] = str(error) or type(error).__name__

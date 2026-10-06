@@ -361,8 +361,14 @@ def test_a_renamed_committed_entry_is_changed_not_removed_and_added(
     http = FakeHttp(
         {README_URL: TABLE + "| [New Name](https://github.com/Owner/Repo) | x |\n"}
     )
+    committed = {
+        path: path.read_bytes() for path in (workdir / "config").rglob("*.json")
+    }
     assert run_cli(monkeypatch, "codm", http) == 0
     assert http.urls == [README_URL]
+    assert {
+        path: path.read_bytes() for path in (workdir / "config").rglob("*.json")
+    } == committed
     [entry] = catalog_apps(workdir, "codm")
     assert (entry["id"], entry["url"], entry["name"]) == (
         "com.example.app",
@@ -374,6 +380,22 @@ def test_a_renamed_committed_entry_is_changed_not_removed_and_added(
         "removed": ["https://github.com/o/gone"],
         "changed": ["https://github.com/owner/repo"],
     }
+
+
+def test_a_committed_entry_that_cannot_be_rendered_leaves_no_candidate(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (workdir / "config/codm.json").write_text(
+        json.dumps({"apps": [{**COMMITTED, "additionalSettings": "not json"}]})
+    )
+    http = FakeHttp(
+        {README_URL: TABLE + "| [Name](https://github.com/owner/repo) | x |\n"}
+    )
+    assert run_cli(monkeypatch, "codm", http) == 1
+    report = stored_report(workdir, "codm")
+    assert report["status"] == Status.FAILED
+    assert "changes" not in report
+    assert not candidate_path(workdir, "codm").exists()
 
 
 def test_a_failed_rerun_leaves_no_candidate_and_records_the_error(
