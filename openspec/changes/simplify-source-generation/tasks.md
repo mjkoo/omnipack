@@ -22,4 +22,4 @@
 ## 5. Documentation
 
 - [x] 5.1 Rewrite `docs/source-generation.md` for the reduced generator and update `docs/quiver-ports.md`, `docs/curation.md`, `docs/development.md` and `docs/composition.md` (source types); verify with a search for project policy, skips, credentials, package-id resolution, supported source types and the deleted file names in `docs/`, and `just check-links`
-- [ ] 5.2 Run `just check-all` and confirm it passes
+- [x] 5.2 Run `just check-all` and confirm it passes
