@@ -109,9 +109,8 @@ class StageOutcome:
     added: tuple[str, ...] = ()
     removed: tuple[str, ...] = ()
     changed_urls: tuple[str, ...] = ()
-    retained_failures: tuple[tuple[str, str], ...] = ()
+    skipped: tuple[str, ...] = ()
     reason: str = ""
-    diagnostics: tuple[str, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -127,8 +126,7 @@ class StageOutcome:
             added=self.added,
             removed=self.removed,
             changed=self.changed_urls,
-            retained_failures=self.retained_failures,
-            diagnostics=self.diagnostics,
+            skipped=self.skipped,
             limit=None,
         )
 
@@ -182,8 +180,7 @@ def run_stage(
         return _stage_failure("report", "generation did not succeed", base_sha)
 
     added, removed, changed_urls = _report_changes(report)
-    retained_failures = _report_retained_failures(report)
-    diagnostics = _report_diagnostics(report)
+    skipped = _report_skipped(report)
 
     try:
         base_entry = git_text(root, "ls-tree", base_sha, "--", descriptor.catalog)
@@ -229,8 +226,7 @@ def run_stage(
         added,
         removed,
         changed_urls,
-        retained_failures,
-        diagnostics=diagnostics,
+        skipped,
     )
 
 
@@ -258,44 +254,23 @@ def _report_changes(
     )
 
 
-def _report_retained_failures(
-    report: Mapping[str, object],
-) -> tuple[tuple[str, str], ...]:
-    raw = report.get("retainedFailures")
+def _report_skipped(report: Mapping[str, object]) -> tuple[str, ...]:
+    """One line per skipped listing: what it was, then why it was skipped."""
+    raw = report.get("skipped")
     if not isinstance(raw, list):
         return ()
-    failures: list[tuple[str, str]] = []
+    lines: list[str] = []
     for item in raw:
         if isinstance(item, dict):
-            url = item.get("url")
-            message = item.get("message")
-            if isinstance(url, str) and isinstance(message, str):
-                failures.append((url, message))
-    return tuple(failures)
+            listing = {key: value for key, value in item.items() if key != "reason"}
+            text = json.dumps(listing, ensure_ascii=False, sort_keys=True)
+            lines.append(f"{text}: {item.get('reason')}")
+    return tuple(lines)
 
 
-def _report_diagnostics(report: Mapping[str, object]) -> tuple[str, ...]:
-    return tuple(
-        f"{key}: {json.dumps(report[key], ensure_ascii=False, sort_keys=True)}"
-        for key in (
-            "error",
-            "inputs",
-            "inactiveRules",
-            "skipped",
-            "unsupportedRows",
-            "unsupportedLinks",
-            "noAndroid",
-            "unavailableRepositories",
-            "unresolved",
-            "effectivePolicy",
-            "coverage",
-            "apk",
-            "tracking",
-            "filteredAssets",
-            "filterDisagreements",
-        )
-        if key in report
-    )
+def _report_error(report: Mapping[str, object]) -> tuple[str, ...]:
+    error = report.get("error")
+    return (f"Error: {error}",) if isinstance(error, str) else ()
 
 
 def _render_report(
@@ -305,8 +280,8 @@ def _render_report(
     added: Sequence[str],
     removed: Sequence[str],
     changed: Sequence[str],
-    retained_failures: Sequence[tuple[str, str]],
-    diagnostics: Sequence[str] = (),
+    skipped: Sequence[str],
+    errors: Sequence[str] = (),
     limit: int | None = PR_BODY_LIMIT,
 ) -> str:
     lines: list[str] = []
@@ -316,6 +291,7 @@ def _render_report(
     lines.append(f"Base SHA: {base_sha}")
     lines.append("")
     lines.append("<pre>")
+    lines.extend(html.escape(line) for line in errors)
     lines.append("Added:")
     lines.extend(html.escape(url) for url in added)
     lines.append("")
@@ -325,20 +301,16 @@ def _render_report(
     lines.append("Changed:")
     lines.extend(html.escape(url) for url in changed)
     lines.append("")
-    lines.append("Retained failures:")
-    failure_lines = [
-        f"{html.escape(url)}: {html.escape(message)}"
-        for url, message in retained_failures
-    ]
-    failure_lines.extend(html.escape(line) for line in diagnostics)
-    text = "\n".join([*lines, *failure_lines, "</pre>"]) + "\n"
+    lines.append("Skipped:")
+    skipped_lines = [html.escape(line) for line in skipped]
+    text = "\n".join([*lines, *skipped_lines, "</pre>"]) + "\n"
     if limit is None or len(text) <= limit:
         return text
 
     # Bound every upstream section, leaving room for a complete omission line
     # and closing tag. The full diagnostics remain in the summary and artifact.
     split = lines.index("<pre>") + 1
-    prefix, details = lines[:split], lines[split:] + failure_lines
+    prefix, details = lines[:split], lines[split:] + skipped_lines
     longest_omission = f"and {len(details)} more"
     budget = limit - len("\n".join([*prefix, longest_omission, "</pre>"]) + "\n")
     kept: list[str] = []
@@ -706,7 +678,7 @@ def render_pr_body(
     run_url: str,
     results: Mapping[str, StepResult],
 ) -> str:
-    """The escaped PR body: the run, base, changes, diagnostics and results.
+    """The escaped PR body: the run, base, changes, skipped listings and results.
 
     The report section is bounded so the whole body, including the validation
     results, stays within GitHub's length limit.
@@ -719,8 +691,7 @@ def render_pr_body(
         added=added,
         removed=removed,
         changed=changed,
-        retained_failures=_report_retained_failures(report),
-        diagnostics=_report_diagnostics(report),
+        skipped=_report_skipped(report),
         limit=PR_BODY_LIMIT - len(validation) - 1,
     )
     return report_text + "\n" + validation
@@ -755,8 +726,8 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
             added=added,
             removed=removed,
             changed=changed,
-            retained_failures=_report_retained_failures(report),
-            diagnostics=_report_diagnostics(report),
+            skipped=_report_skipped(report),
+            errors=_report_error(report),
             limit=None,
         )
         if all(result == "success" for result in results.values()):

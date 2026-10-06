@@ -100,11 +100,11 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
                 else:
                     assert step in action_steps(check, "actions/upload-artifact")
                     assert step["with"]["if-no-files-found"] == "ignore"
-    token_steps = [s for s in check["steps"] if "GITHUB_TOKEN" in s.get("env", {})]
-    assert len(token_steps) == (1 if source else 0)
+    # Generation reads public upstream lists, so no check step holds a token.
+    assert not [s for s in check["steps"] if "GITHUB_TOKEN" in s.get("env", {})]
     if source:
-        assert token_steps[0]["id"] == "generation"
-        assert token_steps[0]["env"]["GITHUB_TOKEN"] == "${{ github.token }}"
+        [generation] = [s for s in check["steps"] if s.get("id") == "generation"]
+        assert "env" not in generation
     assert "GH_TOKEN" not in str(check["steps"])
     assert "secrets." not in str(check["steps"])
     assert len(action_steps(check, "astral-sh/setup-uv")) == 1

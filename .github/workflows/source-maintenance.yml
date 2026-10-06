@@ -44,8 +44,6 @@ jobs:
 
       - id: generation
         name: Generate one source candidate
-        env:
-          GITHUB_TOKEN: ${{ github.token }}
         run: uv run --no-sync pack generate-source "$SOURCE"
 
       - id: stage
