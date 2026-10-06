@@ -319,7 +319,8 @@ def _forge_url(forge: object, repository: object) -> str | SkipReason:
         return SkipReason.INVALID_REPOSITORY
     segments = repository.split("/")
     if (
-        any(not segment or re.search(r"\s", segment) for segment in segments)
+        # URL syntax in a segment would change which project the URL names.
+        any(not segment or re.search(r"[\s?#%]", segment) for segment in segments)
         or len(segments) < 2
         or (host == "github.com" and len(segments) != 2)
     ):

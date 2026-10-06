@@ -127,7 +127,7 @@ def generate(
         # a failed run must leave no candidate.
         catalog = render_catalog(list(entries.values()))
         changes = _changes(entries, committed)
-        (output / "catalog.json").write_bytes(catalog)
+        _write_whole(output / "catalog.json", catalog)
         report["changes"] = changes
         report["status"] = Status.SUCCESS
     except Exception as error:  # noqa: BLE001 - the report records every failure
@@ -136,6 +136,18 @@ def generate(
         json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
     )
     return report
+
+
+def _write_whole(path: Path, data: bytes) -> None:
+    """Write a file whole or not at all, so a failed write leaves no partial
+    candidate behind."""
+    partial = path.with_name(path.name + ".partial")
+    try:
+        partial.write_bytes(data)
+        partial.replace(path)
+    except OSError:
+        partial.unlink(missing_ok=True)
+        raise
 
 
 def load_committed(path: Path) -> dict[str, dict[str, Any]]:

@@ -715,7 +715,7 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
     validation = _render_validation(results)
     base = environ.get("BASE_SHA", "")
     if FULL_SHA.fullmatch(base) is None:
-        base = "unavailable (staging did not succeed)"
+        base = "unavailable (no staged base revision)"
     try:
         report = json.loads(Path(descriptor.report).read_bytes())
         if not isinstance(report, dict):

@@ -585,18 +585,20 @@ def test_screening_out_every_project_fails_when_no_committed_one_is_listed(
 def test_a_candidate_that_cannot_be_written_reports_no_changes(
     workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def refuse(path: Path, _data: bytes) -> int:
-        raise OSError(f"cannot write {path.name}")
+    def fail_partway(path: Path, data: bytes) -> int:
+        with path.open("wb") as file:
+            file.write(data[:5])
+        raise OSError("disk full")
 
-    monkeypatch.setattr(Path, "write_bytes", refuse)
+    monkeypatch.setattr(Path, "write_bytes", fail_partway)
     http = FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"})
     assert run_cli(monkeypatch, "codm", http) == 1
     report = stored_report(workdir, "codm")
-    assert (report["status"], report["error"]) == (
-        Status.FAILED,
-        "cannot write catalog.json",
-    )
+    assert (report["status"], report["error"]) == (Status.FAILED, "disk full")
     assert "changes" not in report
+    assert list(candidate_path(workdir, "codm").parent.iterdir()) == [
+        candidate_path(workdir, "codm").parent / "report.json"
+    ]
 
 
 def test_the_command_rejects_an_unknown_source() -> None:
