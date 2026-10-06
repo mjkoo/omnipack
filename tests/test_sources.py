@@ -31,22 +31,9 @@ from omnipack.sources import (
     rjny,
 )
 from omnipack.urls import normalize_project_url
+from tests.http_support import FakeHttp
 
 FIXTURES = Path(__file__).parent / "fixtures"
-
-
-class FakeHttp:
-    def __init__(self, responses: dict[str, Any]) -> None:
-        self.responses = responses
-        self.urls: list[str] = []
-
-    def get(self, url: str, **_kwargs: Any) -> HttpResponse:
-        self.urls.append(url)
-        value = self.responses[url]
-        if isinstance(value, Exception):
-            raise value
-        body = value if isinstance(value, bytes) else value.encode()
-        return HttpResponse(url, 200, Message(), body)
 
 
 def fixture(name: str) -> str:

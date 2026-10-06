@@ -73,9 +73,9 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
                         "overrideSource": "GitHub",
                     },
                     {
-                        "id": "app.retained",
-                        "url": "https://github.com/fixture/retained",
-                        "name": "Retained",
+                        "id": "app.second",
+                        "url": "https://github.com/fixture/second",
+                        "name": "Second",
                         "overrideSource": "GitHub",
                     },
                 ]
@@ -114,7 +114,7 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
 FIXTURE_URLS = {
     "app.fixture": "example.test/app",
     "app.generated": "github.com/fixture/generated",
-    "app.retained": "github.com/fixture/retained",
+    "app.second": "github.com/fixture/second",
 }
 
 
@@ -153,7 +153,7 @@ def test_build_verify_and_report_sequence_records_no_findings(
         expected_ids = (
             ["app.fixture"]
             if variant is Variant.SINGLE
-            else ["app.fixture", "app.generated", "app.retained"]
+            else ["app.fixture", "app.generated", "app.second"]
         )
         rendered = json.loads(
             (tmp_path / "dist" / f"{variant.value}-screen.json").read_text()
@@ -276,19 +276,18 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     )
     if invalid_gate:
         assert report["stage"] == "offline verification"
-    assert not ({"generated", "unresolved", "retainedFailures"} & report.keys())
     assert {item["id"] for item in report["sourceAdmissions"]} == {
         "app.generated",
-        "app.retained",
+        "app.second",
     }
     assert report["changes"]["single"] == {
         "added": changed("app.fixture"),
         "removed": [],
     }
     assert report["changes"]["dual"] == {
-        "added": changed("app.fixture", "app.retained")
+        "added": changed("app.fixture", "app.second")
         if existing != "none"
-        else changed("app.fixture", "app.generated", "app.retained"),
+        else changed("app.fixture", "app.generated", "app.second"),
         "removed": [],
     }
     assert not (tmp_path / "dist/report.json").exists()

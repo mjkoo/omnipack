@@ -264,12 +264,18 @@ def test_render_canonicalizes_nested_objects_and_preserves_array_order() -> None
     ]
 
 
-@pytest.mark.parametrize("source", ["Codeberg", None])
+@pytest.mark.parametrize(
+    ("source", "url"),
+    [
+        ("Codeberg", "https://codeberg.org/owner/app"),
+        (None, "https://christt105.itch.io/poketch"),
+    ],
+)
 def test_entry_without_defaults_renders_exactly_its_own_settings(
-    source: str | None,
+    source: str | None, url: str
 ) -> None:
     app = composed(
-        url="https://christt105.itch.io/poketch",
+        url=url,
         settings={"trackOnly": "kept as written", "custom": 1},
     )
     if source is None:

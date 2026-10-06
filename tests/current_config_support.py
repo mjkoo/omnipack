@@ -14,7 +14,7 @@ from omnipack.merge import CompositionResult, compose
 from omnipack.model import App
 from omnipack.sources import bboi, codm, quiver, rjny
 from omnipack.sources.extras import fetch as fetch_extras
-from tests.test_sources import FakeHttp
+from tests.http_support import FakeHttp
 
 ROOT = Path(__file__).parents[1]
 CAPTURED = ROOT / "tests/fixtures/reconciliation"
