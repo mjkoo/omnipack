@@ -1146,40 +1146,45 @@ def test_build_fetches_catalogs_without_credentials(
     assert all(request.get_header("Authorization") is None for request in requests)
 
 
-def _quiver_entry(package_id: str) -> dict[str, object]:
+def _generated_entry(package_id: str, url: str) -> dict[str, object]:
     return {
         "id": package_id,
-        "url": "https://github.com/fixture/quiver",
-        "name": "quiver",
+        "url": url,
+        "name": "generated",
         "overrideSource": "GitHub",
-        "categories": ["Decomps/Recomps"],
+        "categories": [],
         "additionalSettings": {},
     }
 
 
+def _catalog(*entries: dict[str, object]) -> str:
+    return json.dumps({"apps": list(entries)})
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
 @pytest.mark.parametrize(
     "catalog",
     [
         pytest.param(None, id="missing"),
         pytest.param("not json", id="malformed"),
         pytest.param(
-            json.dumps(
-                {
-                    "apps": [
-                        _quiver_entry("org.fixture.a"),
-                        {
-                            **_quiver_entry("org.fixture.a"),
-                            "url": "https://github.com/fixture/other",
-                        },
-                    ]
-                }
+            _catalog(
+                _generated_entry("org.fixture.a", "https://github.com/fixture/one"),
+                _generated_entry("org.fixture.a", "https://github.com/fixture/other"),
             ),
             id="repeated-id",
         ),
+        pytest.param(
+            _catalog(
+                _generated_entry("org.fixture.a", "https://github.com/fixture/one"),
+                _generated_entry("org.fixture.b", "https://github.com/Fixture/One/"),
+            ),
+            id="repeated-url",
+        ),
     ],
 )
-def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog: str | None
+def test_broken_generated_catalog_fails_build_and_keeps_published_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str, catalog: str | None
 ) -> None:
     responses = write_fixture_pipeline(tmp_path)
     monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
@@ -1192,7 +1197,7 @@ def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
     ]
     before = [path.read_bytes() for path in published]
 
-    path = tmp_path / "config/catalogs/quiver.json"
+    path = tmp_path / f"config/catalogs/{source}.json"
     if catalog is None:
         path.unlink()
     else:
@@ -1200,7 +1205,7 @@ def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
     assert main(["build"]) == 1
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert (report["status"], report["stage"]) == ("failed", "ingestion")
-    assert report["error"].startswith("quiver: ")
+    assert report["error"].startswith(f"{source}: ")
     assert report["changes"] is None
     assert [path.read_bytes() for path in published] == before
 

@@ -87,7 +87,15 @@ there. Every committed entry SHALL become a candidate whether or not another
 source lists the same project, and ingestion SHALL NOT read or apply the
 composition policy: family formation, dual preference, precedence, pins and
 project denials in pack-composition decide between a codm2000 build and
-another source's build of the same app.
+another source's build of the same app. A missing, unreadable or malformed
+catalog, a repeated entry ID or two entries at one normalized project URL
+SHALL fail the build while preserving previous outputs.
+
+#### Scenario: Broken committed codm catalog
+
+- **WHEN** the configured catalog is missing, malformed, repeats an entry ID or
+  holds two entries at one normalized project URL
+- **THEN** the build fails naming codm and leaves published outputs unchanged
 
 #### Scenario: Another source lists the same project
 
@@ -192,8 +200,9 @@ is acceptable: no stage rejects an entry for its URL's host or path.
 
 Routine ingestion SHALL read Quiver entries from its configured committed
 Obtainium catalog without requesting Quiver lists, repository hosts or APKs.
-A missing, unreadable or malformed catalog or repeated entry ID SHALL fail the
-build while preserving previous outputs. Valid entries SHALL carry source
+A missing, unreadable or malformed catalog, a repeated entry ID or two entries
+at one normalized project URL SHALL fail the build while preserving previous
+outputs. Valid entries SHALL carry source
 `quiver`, generated origin `quiver-generated`, their committed ids and their
 GitHub or GitLab source type. They SHALL be
 baseline candidates eligible for both packs, subject to ordinary normalization,
@@ -210,7 +219,8 @@ generated provenance in reports without claiming a fresh APK check.
 
 #### Scenario: Broken committed Quiver catalog
 
-- **WHEN** the configured catalog is missing, malformed or repeats an entry ID
+- **WHEN** the configured catalog is missing, malformed, repeats an entry ID or
+  holds two entries at one normalized project URL
 - **THEN** the build fails naming Quiver and leaves published outputs unchanged
 
 #### Scenario: Quiver record carries policy fields

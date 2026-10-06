@@ -32,6 +32,7 @@ from omnipack.report_model import Status
 from omnipack.source_catalog import render_catalog, rendered_entry
 from omnipack.sources import load_json
 from omnipack.sources.common import HttpGetter, derived_source_type
+from omnipack.sources.generated import catalog_urls
 from omnipack.urls import normalize_project_url, project_url
 
 
@@ -145,29 +146,12 @@ def load_committed(path: Path) -> dict[str, dict[str, Any]]:
     ):
         raise GenerationError(f"committed catalog {path.name} is malformed")
     try:
-        keys = [normalize_project_url(entry["url"]) for entry in apps]
+        urls = catalog_urls([(entry["id"], entry["url"]) for entry in apps])
     except ValueError as error:
         raise GenerationError(
             f"committed catalog {path.name} is malformed: {error}"
         ) from error
-    by_url: dict[str, dict[str, Any]] = {}
-    ids: set[str] = set()
-    for entry, normalized in zip(apps, keys, strict=True):
-        if normalized in by_url:
-            competing = sorted(
-                item["id"]
-                for item, key in zip(apps, keys, strict=True)
-                if key == normalized
-            )
-            raise GenerationError(
-                f"committed catalog holds several entries for {normalized}: "
-                + ", ".join(competing)
-            )
-        if entry["id"] in ids:
-            raise GenerationError(f"committed catalog repeats the id {entry['id']!r}")
-        ids.add(entry["id"])
-        by_url[normalized] = entry
-    return by_url
+    return dict(zip(urls, apps, strict=True))
 
 
 def render_entries(

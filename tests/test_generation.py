@@ -208,7 +208,7 @@ def test_a_committed_catalog_repeating_an_id_fails(tmp_path: Path) -> None:
     (tmp_path / "catalog.json").write_bytes(
         render_catalog([COMMITTED, {**COMMITTED, "url": "https://github.com/o/r"}])
     )
-    with pytest.raises(GenerationError, match="repeats the id 'com.example.app'"):
+    with pytest.raises(GenerationError, match="duplicate id 'com.example.app'"):
         load_committed(tmp_path / "catalog.json")
 
 

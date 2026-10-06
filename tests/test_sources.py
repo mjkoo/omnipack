@@ -489,7 +489,12 @@ def test_codm_declared_source_type_wins_and_omitted_type_is_derived(
 ) -> None:
     declared = _record_with("ordinary", True)
     declared["overrideSource"] = "HTML"
-    inferred = {**declared, "id": "app.inferred", "name": "Inferred"}
+    inferred = {
+        **declared,
+        "id": "app.inferred",
+        "url": "https://github.com/owner/inferred",
+        "name": "Inferred",
+    }
     del inferred["overrideSource"]
 
     apps = _fetch_codm(tmp_path, [declared, inferred])
