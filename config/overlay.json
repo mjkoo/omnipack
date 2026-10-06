@@ -336,6 +336,12 @@
     }
   },
   {
+    "url": "https://github.com/SSunnKing/Open-Nectar---Pikmin-Native-PC-Port",
+    "patch": {
+      "id": "org.opennectar"
+    }
+  },
+  {
     "url": "https://github.com/StevenMXZ/Winlator-Ludashi",
     "patch": {
       "id": "com.winlator.vanilla",

@@ -268,6 +268,18 @@ def test_split_and_joined_families_ship_as_intended(
         ]
 
 
+def test_open_nectar_keeps_its_published_id(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    url = "github.com/ssunnking/open-nectar---pikmin-native-pc-port"
+    for variant in Variant:
+        assert [
+            app.data["id"]
+            for app in current_configuration.result.apps[variant]
+            if normalize_project_url(app.url) == url
+        ] == ["org.opennectar"]
+
+
 GENERATED_ORIGINS = {"codm-generated", "quiver-generated"}
 # Per-app choices for generated entries, kept as overlay records so they hold
 # whatever settings and names a regenerated catalog carries.
