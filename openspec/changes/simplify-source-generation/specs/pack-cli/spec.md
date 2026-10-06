@@ -7,8 +7,8 @@ source. Each invocation SHALL run that source's discovery, write a candidate
 catalog and a report under `.build/source-generation/<source>/`, and exit zero
 when generation succeeds and nonzero when it fails. A failed invocation SHALL
 leave no candidate catalog, so an earlier run's candidate is never offered as
-current. The report SHALL be written on success and failure alike and SHALL
-record the source, its inputs, the error when generation failed, the
+current. The report SHALL be written on success and failure alike, unless its
+output directory cannot be created, and SHALL record the source, its inputs, the error when generation failed, the
 skipped listings each with its reason, including listed projects discovery
 screened out for publishing no APK asset, and, on success, the entries added to
 and removed from the committed catalog and the entries changed in place: an

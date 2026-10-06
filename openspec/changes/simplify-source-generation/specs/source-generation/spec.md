@@ -10,17 +10,21 @@ current through reviewed proposals.
 
 The supported generated sources are codm and Quiver, each configured with its
 upstream input and its committed catalog path. For codm, generation SHALL read
-the configured README and take the links inside its Project tables; a link
-outside those tables, or inside a fenced or indented code block, SHALL NOT
-introduce a project. A Project table follows GitHub Flavored Markdown table
-syntax: a header row whose first cell is `Project`, then a delimiter row of
-cells holding one or more hyphens with optional colons, with outer pipes
-optional on every row; its rows continue until a blank line, a heading or a
-code block. Every Project table SHALL be well formed: a README with no Project
-table, or with a Project table whose delimiter row is missing, invalid or has a
-different number of cells than its header, SHALL fail generation, even when
-another Project table is valid. A
-link no project URL can be formed from, such as one with an invalid port or
+the configured README and take the inline links inside its Project tables,
+`[text](url)` with an optional title or an angle-bracket destination;
+reference-style links are not read. A link outside those tables, or inside a
+fenced or indented code block, SHALL NOT introduce a project. A Project table
+follows GitHub Flavored Markdown table syntax: a header row whose first cell is
+`Project`, matched with case, then a delimiter row of cells holding one or more
+hyphens with optional colons, with outer pipes optional on every row; its rows
+continue until a blank line, a heading or a code block. A row of another table
+is never a Project table header, even when its first cell is `Project`. A
+header row beginning with a pipe starts a Project table whatever follows it,
+while one without a leading pipe starts a Project table only when a valid
+delimiter row follows. Every Project table SHALL be well formed: a README with
+no Project table, or with a Project table whose delimiter row is missing,
+invalid or has a different number of cells than its header, SHALL fail
+generation, even when another Project table is valid. A link no project URL can be formed from, such as one with an invalid port or
 host, SHALL be reported and skipped; the skip alone SHALL NOT fail generation,
 which fails only when no entry is left.
 
@@ -96,6 +100,13 @@ be read or is malformed.
   omit the leading and trailing pipes
 - **THEN** every row's links become projects, and a link in a paragraph after
   the table's following blank line does not
+
+#### Scenario: Another table has a row named Project
+
+- **WHEN** a README holds a valid Project table and another table one of whose
+  rows has `Project` as its first cell
+- **THEN** that row starts no Project table, and generation succeeds with the
+  Project table's links
 
 #### Scenario: One of multiple Project tables is malformed
 
@@ -357,7 +368,7 @@ SHALL block those writes. When a successful generation reproduces main's
 committed catalog for that source, closing an open PR from that source's
 source-update branch SHALL be the only permitted write, and it SHALL require no
 tests, build or verification. Generated pack outputs and the pack README SHALL
-be diagnostics for this run, not part of the proposal. The proposed catalog
+serve only this run's checks and SHALL NOT be part of the proposal. The proposed catalog
 SHALL be byte-identical to the checked candidate: the read-only job SHALL commit
 the candidate before the checks and confirm afterwards that the workspace
 catalog still matches that commit, and the write job SHALL push only that exact

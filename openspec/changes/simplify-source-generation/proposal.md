@@ -33,7 +33,7 @@ only a newly listed project gets an Obtainium placeholder id.
   catalog already holds, or else the listing's project URL with a GitHub deep
   link reduced to the repository root (the smallest when several collapse), `overrideSource` GitHub or GitLab where the URL makes that
   unambiguous and unset otherwise (Obtainium detects it), the listing's name
-  with trailing emoji and symbols trimmed or the URL's last segment, default
+  with trailing emoji and other-symbol characters trimmed or the URL's last segment, default
   settings, no categories, and the committed entry's id for a URL the committed
   catalog already holds, or else an Obtainium placeholder id (the first twelve
   hex characters of the SHA-256 of the normalized URL), which Obtainium replaces
@@ -123,7 +123,9 @@ generation test modules deleted and replaced by about 400 lines.
   settings become defaults plus overlays, with every published winner's
   settings unchanged by the migration; newly listed projects carry
   placeholder ids; names may change to the upstream listing's, trimmed of
-  trailing emoji; codm's other-host links are added, and newly listed Quiver
+  trailing emoji; codm's other-host links are added, apart from three that
+Obtainium cannot install from (a Minecraft mod page on Modrinth, a Nexus Mods
+page and a Google Play page), which are denied by URL, and newly listed Quiver
   projects whose upstream lists no APK asset are kept out and reported, while
   committed entries the upstream still lists stay. Repeated-package-id
   reports cannot see a newly listed generated entry, which carries a
