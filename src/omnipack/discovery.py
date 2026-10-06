@@ -130,14 +130,20 @@ def _discover_codm(
     listings: list[Listing] = []
     skipped: list[LinkSkip] = []
     for listing in _project_table_links(readme):
-        try:
-            normalize_project_url(listing.url)
-        except ValueError:
+        if _forms_project_url(listing.url):
+            listings.append(listing)
+        else:
             link: SkippedLink = {"name": listing.name or "", "url": listing.url}
             skipped.append(LinkSkip(link, SkipReason.INVALID_URL))
-        else:
-            listings.append(listing)
     return Discovery(tuple(listings), tuple(skipped))
+
+
+def _forms_project_url(url: str) -> bool:
+    """Whether a link names a host and normalizes to a project URL."""
+    try:
+        return bool(urlsplit(url).hostname) and bool(normalize_project_url(url))
+    except ValueError:
+        return False
 
 
 def _project_table_links(readme: bytes) -> Iterator[Listing]:

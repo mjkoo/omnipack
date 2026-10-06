@@ -60,6 +60,8 @@ def test_codm_link_no_project_url_can_be_formed_from_is_skipped() -> None:
     readme = TABLE + (
         "| [Port](https://example.org:99999/app) | x |\n"
         "| [Bracket](https://[bad/app) | y |\n"
+        "| [No host](https:///app) | w |\n"
+        "| [Port only](https://:80/app) | v |\n"
         "| [Valid](https://github.com/o/app) | z |\n"
     )
     discovery = discover(
@@ -76,6 +78,10 @@ def test_codm_link_no_project_url_can_be_formed_from_is_skipped() -> None:
         ),
         LinkSkip(
             {"name": "Bracket", "url": "https://[bad/app"}, SkipReason.INVALID_URL
+        ),
+        LinkSkip({"name": "No host", "url": "https:///app"}, SkipReason.INVALID_URL),
+        LinkSkip(
+            {"name": "Port only", "url": "https://:80/app"}, SkipReason.INVALID_URL
         ),
     )
 
