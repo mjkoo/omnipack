@@ -303,9 +303,8 @@ still show a one-time update after re-import; external installation may not
 update Obtainium's recorded source version. Replacing an asset under an unchanged
 source version is not detectable through source-version comparison.
 
-Neither builds nor source generation resolve releases or inspect APKs, and
-publication is not gated on upstream health. The codm and Quiver generators read
-only their upstream lists; normal builds consume the committed catalogs.
+The codm and Quiver generators read only their upstream lists; normal builds
+consume the committed catalogs.
 Structural checks retain setting types without evaluating patterns, versions or
 release availability.
 

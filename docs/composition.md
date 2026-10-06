@@ -190,8 +190,7 @@ The map is keyed by family, so a mapping survives a fork switch and covers both
 packs. Only map an app whose source categories are missing or wrong; most
 sources already use the set's spellings. Generated codm2000 and Quiver
 entries carry no source category, so each one the packs select needs a map
-key. Overlays cannot set
-categories.
+key. Overlays cannot set categories.
 
 Neither outcome below fails the build; the build report lists both, and
 `pack report` displays them:
@@ -281,8 +280,9 @@ lists each denial that removed candidates, once under its URL with the families
 it removed, and `staleExclusions` each denial that matched nothing.
 `repeatedIds`, `singleOnlyFamilies` and `sameRankTies` hold the nonfatal
 outcomes described above. `sourceAdmissions` lists each committed codm and
-Quiver entry the build admitted, with its source, URL and committed id. `uncategorizedFamilies` and `staleCategoryAssignments`
-are the [category outcomes](#categories); a build that fails before categories
+Quiver entry the build admitted, with its source, URL and committed id.
+`uncategorizedFamilies` and `staleCategoryAssignments` are the
+[category outcomes](#categories); a build that fails before categories
 are assigned records both empty, along with the single-only and repeated-id
 lists, while its stage and error say the checks did not run.
 `offlineVerification` holds the offline gate's status, its errors in `findings`,

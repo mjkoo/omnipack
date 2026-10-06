@@ -80,7 +80,8 @@ of listing order, as a canonical catalog:
   case-insensitive order wins.
 - The author is the first path segment for a GitHub or GitLab URL, and empty
   otherwise.
-- Entries carry no categories, and settings only the source type's defaults.
+- Entries carry no categories and no settings; the build fills in the source
+  type's defaults.
 
 Per-app names and settings for generated entries are
 [overlay](composition.md#denials-and-patches) records in `config/overlay.json`,
@@ -106,6 +107,11 @@ A repository renamed upstream yields a removal of the old URL and a new
 placeholder-id entry at the new one. A family rule, an overlay `id` patch or a
 denial handles it.
 
+Composition fails when an overlay record has no selected entry at its URL
+(`overlay has no selected target`). A catalog-only proposal that removes a
+project an overlay record patches therefore fails its checks; remove the
+overlay record on main first, then rerun the proposal.
+
 ## Generate and inspect a candidate
 
 Run from the repository root:
@@ -117,18 +123,19 @@ uv run pack generate-source quiver
 
 Neither source needs a credential. Inspect
 `.build/source-generation/<source>/report.json`, including on unchanged runs.
-It records the run's status and source, every input read with the SHA-256 of
-its bytes, any error, and every skipped listing with its reason; on success it
-also records `changes`, the added, removed and changed-in-place entries by
-catalog URL. On success the directory also holds `catalog.json`, the candidate
-catalog. `pack report` remains the build and structural-verification report
-viewer and does not cover source generation.
+It records the run's status and source, every input read, with the SHA-256 of
+its bytes once read, any error, and every skipped listing with its reason; on
+success it also records `changes`, the added, removed and changed-in-place
+entries by catalog URL. On success the directory also holds `catalog.json`, the
+candidate catalog. `pack report` remains the build and structural-verification
+report viewer and does not cover source generation.
 
-A run fails only when an input is unreadable or malformed, when the committed
-catalog is unreadable or malformed (including two entries at one normalized
-URL, which the error names with their ids), or when the candidate would keep no
-entry. A failed run writes only its report: no candidate survives from it or
-from an earlier run.
+A run fails only when the source configuration is missing or malformed, when
+an input is unreadable or malformed, when the committed catalog is unreadable or
+malformed (including two entries at one normalized URL, which the error names
+with their ids, and a repeated id), or when the candidate would keep no entry.
+A failed run writes only its report: no candidate survives from it or from an
+earlier run.
 
 ## Proposal workflow
 
@@ -218,8 +225,10 @@ No automatic merge, direct-main write, issue or release operation occurs.
 The body links the checking workflow run, records the base SHA, and lists the
 added, removed and changed catalog URLs, the skipped listings and the actual
 validation results. Upstream strings are HTML-escaped inside a preformatted
-block. Long diagnostic bodies end with an omission count; the full summary and
-the uploaded generation report remain available for review.
+block. When the catalog's bytes changed but no entry was added, removed or
+changed, the block says `Catalog bytes changed without entry changes`. Long
+diagnostic bodies end with an omission count; the uploaded generation report
+remains available for review.
 
 ### Stage summary lines
 
@@ -303,20 +312,22 @@ changed automatically by any workflow.
 
 `check` performs no remote writes: its only token is the read-only job token
 (`contents: read`) used by checkout; generation reads only public upstream
-inputs and receives no token. No step receives a write token. Only `publish` holds `contents: write` and `pull-requests: write`,
-and only its one step receives `GH_TOKEN`; its checkout uses the job token
-only to fetch the triggering revision, and `persist-credentials: false`
-keeps it out of `.git/config`. `scripts/source_proposal.py`
-serves both jobs and, like `scripts/nightly_write.py`, imports only the
-standard library and the shared helpers in `scripts/workflow_support.py`,
-and runs on the runner's preinstalled `python3` in the write job. Source
-text, project URLs, asset names and other upstream-derived strings are
-treated as data: credentials, downloaded APKs and raw HTTP
-caches are excluded from summaries and artifacts.
+inputs and receives no token. No step receives a write token. Only `publish`
+holds `contents: write` and `pull-requests: write`, and only its one step
+receives `GH_TOKEN`; its checkout uses the job token only to fetch the
+triggering revision, and `persist-credentials: false` keeps it out of
+`.git/config`. `scripts/source_proposal.py` serves both jobs and, like
+`scripts/nightly_write.py`, imports only the standard library and the shared
+helpers in `scripts/workflow_support.py`, and runs on the runner's preinstalled
+`python3` in the write job. Source text, project URLs, asset names and other
+upstream-derived strings are treated as data: credentials, downloaded APKs and
+raw HTTP caches are excluded from summaries and artifacts.
 
 The run summary lists Added, Removed, Changed and Skipped, one line per
 skipped listing giving its JSON description and then the reason, and for a
-failed generation an `Error:` line with the report's error. Inspect the
+failed generation an `Error:` line with the report's error. Like the PR body,
+it ends with an omission count when it would exceed GitHub's step summary
+limit, and the stage summary calls out a byte-only catalog change. Inspect the
 skipped listings and catalog changes even when the result is unchanged. The
 run summary also records the actual validation outcomes and explicitly marks
 checks skipped for unchanged candidates.

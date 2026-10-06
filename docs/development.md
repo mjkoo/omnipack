@@ -129,7 +129,8 @@ by rebuilding, never by hand. Merge README prose outside those markers by hand
 and re-read it; the build preserves those bytes. For a source catalog conflict,
 take main's catalog as the base, rerun generation, inspect the new candidate and
 diagnostics, copy it using the acceptance recipe above, then build. Never
-hand-resolve the catalog. Nightly writes only the packs and README, never a source catalog.
+hand-resolve the catalog. Nightly writes only the packs and README, never a
+source catalog.
 
 The [automated source proposal](source-generation.md#proposal-workflow) is the
 catalog-only exception: its builds are checks, and nightly rebuilds outputs
@@ -143,8 +144,8 @@ pack sources, including the committed codm and Quiver catalogs, and writes both
 import files to `dist/` and regenerates the README catalog after validating their
 serialized bytes offline. It does not fetch the codm README, the Quiver index or
 release APKs. Keep exactly one standalone pair of catalog markers in README; the
-build preserves all bytes outside them. The build and source generation fetch public inputs without
-credentials.
+build preserves all bytes outside them. The build and source generation fetch
+public inputs without credentials.
 
 The JSON diagnostics are in `.build/report.json`, including each
 family's selection with the candidates it was chosen over and the selection
@@ -187,8 +188,8 @@ See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
 
 See [source generation](source-generation.md) for upstream inputs and
-screening, generating isolated candidates, accepting source data, and operating the
-separate source proposal workflow. See [source generation validation](../openspec/changes/archive/2026-09-11-generate-reviewed-readme-catalog/source-generation-validation.md)
+screening, generating isolated candidates, accepting source data, and operating
+the separate source proposal workflow. See [source generation validation](../openspec/changes/archive/2026-09-11-generate-reviewed-readme-catalog/source-generation-validation.md)
 for the dated controlled, live-build, and device evidence.
 
 See [maintained app curation](curation.md) for version policies and known
