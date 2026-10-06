@@ -112,12 +112,22 @@ def _report(
     }
 
 
+def _listing(project: str) -> dict[str, object]:
+    """A skipped row as generation reports it; an absent forge is null."""
+    return {
+        "list": "one",
+        "project": project,
+        "repository": "owner/repo",
+        "repositorySource": None,
+    }
+
+
 def _skip(project: str, reason: str = "latest release lists no APK asset") -> dict:
-    return {"list": "one", "project": project, "reason": reason}
+    return {**_listing(project), "reason": reason}
 
 
 def _skip_line(project: str, reason: str = "latest release lists no APK asset") -> str:
-    listing = json.dumps({"list": "one", "project": project}, ensure_ascii=False)
+    listing = json.dumps(_listing(project), ensure_ascii=False, sort_keys=True)
     return html.escape(f"{listing}: {reason}")
 
 
@@ -397,6 +407,70 @@ def test_summary_caps_a_huge_skipped_list_inside_the_pre_block(
     assert body_text.endswith("guard: success\n")
 
 
+def test_run_summary_and_body_show_added_removed_and_changed_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    report = _report(
+        added=("https://github.com/o/new",),
+        removed=("https://github.com/o/gone",),
+        changed=("https://github.com/o/renamed",),
+    )
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', report)
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+    for step in VALIDATION_STEPS:
+        monkeypatch.setenv(step.upper() + "_RESULT", "success")
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("CHANGED", "true")
+    assert proposal_module.main(["summarize"]) == 0
+    summary = _pre_block((tmp_path / "summary.md").read_text())
+    body = _pre_block((runner_temp / "source-handoff" / "pr-body.md").read_text())
+    for rendered in (summary, body):
+        assert "Added:\nhttps://github.com/o/new\n" in rendered
+        assert "Removed:\nhttps://github.com/o/gone\n" in rendered
+        assert "Changed:\nhttps://github.com/o/renamed\n" in rendered
+        assert BYTES_ONLY_CHANGE not in rendered
+
+
+@pytest.mark.parametrize("changed", ["true", "false"])
+def test_run_summary_calls_out_a_byte_only_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changed: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', _report())
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("CHANGED", changed)
+    assert proposal_module.main(["summarize"]) == 0
+    summary = _pre_block((tmp_path / "summary.md").read_text())
+    assert (BYTES_ONLY_CHANGE in summary) is (changed == "true")
+
+
+def test_a_bounded_summary_keeps_every_section_and_counts_only_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    count = 2000
+    added = tuple(f"https://example.test/{'x' * 200}/{index}" for index in range(count))
+    report = _report(added=added, skipped=(_skip("late"),))
+    _write_candidate(root, '{"apps": []}\n', report)
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["summarize"]) == 0
+    summary = (tmp_path / "summary.md").read_text()
+    assert len(summary) <= SUMMARY_LIMIT
+    pre_block = _pre_block(summary)
+    for header in ("Added:", "Removed:", "Changed:", "Skipped:"):
+        assert header in pre_block.splitlines()
+    kept = pre_block.count("https://example.test/")
+    kept += _skip_line("late") in pre_block
+    assert 0 < kept < count + 1
+    assert f"and {count + 1 - kept} more" in pre_block
+
+
 def _stage_environment(
     monkeypatch: pytest.MonkeyPatch, root: Path, tmp_path: Path, base: str
 ) -> Path:
@@ -595,9 +669,7 @@ def test_candidate_with_skips_reproducing_main_closes_open_proposal(
     assert stage.changed is False
     assert stage.sha == base
     assert stage.base_sha == base
-    assert stage.skipped == (
-        '{"list": "one", "project": "Desktop"}: latest release lists no APK asset',
-    )
+    assert _skip_line("Desktop") in _pre_block(stage.summary)
 
     bare = _bare_from(seed, tmp_path)
     write_side = shallow_checkout(tmp_path, bare, base)
@@ -1290,7 +1362,8 @@ def test_summary_of_a_failed_generation_shows_its_error_and_skips(
     monkeypatch.setenv("GENERATION_RESULT", "failure")
     assert proposal_module.main(["summarize", "--source", "quiver"]) == 0
     summary = _pre_block((tmp_path / "summary.md").read_text())
-    assert "Error: discovery keeps no project &lt;none&gt;\n\nAdded:" in summary
+    assert "Error: discovery keeps no project &lt;none&gt;\n\nSkipped:" in summary
+    assert "Added:" not in summary
     assert _skip_line("Zip only") in summary
 
 

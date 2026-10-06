@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, get_args
 
@@ -112,10 +112,7 @@ class StageOutcome:
     stage: StageName
     base_sha: str | None
     sha: str | None
-    added: tuple[str, ...] = ()
-    removed: tuple[str, ...] = ()
-    changed_urls: tuple[str, ...] = ()
-    skipped: tuple[str, ...] = ()
+    report: Mapping[str, object] = field(default_factory=dict)
     reason: str = ""
 
     @property
@@ -127,12 +124,9 @@ class StageOutcome:
         if self.status == "failed":
             return f"stage failed: {self.reason or self.stage}"
         return _render_report(
+            self.report,
             base_sha=self.base_sha or "",
             run_url=None,
-            added=self.added,
-            removed=self.removed,
-            changed=self.changed_urls,
-            skipped=self.skipped,
             catalog_changed=self.changed,
             limit=SUMMARY_LIMIT,
         )
@@ -186,9 +180,6 @@ def run_stage(
     ):
         return _stage_failure("report", "generation did not succeed", base_sha)
 
-    added, removed, changed_urls = _report_changes(report)
-    skipped = _report_skipped(report)
-
     try:
         base_entry = git_text(root, "ls-tree", base_sha, "--", descriptor.catalog)
         if not base_entry.startswith("100644 blob "):
@@ -225,16 +216,7 @@ def run_stage(
             return _stage_failure("bundle", "could not write the bundle", base_sha)
 
     status: StageStatus = "changed" if changed else "unchanged"
-    return StageOutcome(
-        status,
-        "complete",
-        base_sha,
-        sha,
-        added,
-        removed,
-        changed_urls,
-        skipped,
-    )
+    return StageOutcome(status, "complete", base_sha, sha, report)
 
 
 _FILE_PROBLEMS: Mapping[FileProblem, str] = {
@@ -250,10 +232,12 @@ def _stage_failure(stage: StageName, reason: str, base_sha: str | None) -> Stage
 
 def _report_changes(
     report: Mapping[str, object],
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]] | None:
+    """The added, removed and changed URLs, or None when the report has no
+    changes because generation failed before writing a candidate."""
     changes = report.get("changes")
     if not isinstance(changes, dict):
-        return (), (), ()
+        return None
     return (
         tuple(url for url in changes.get("added", ()) or () if isinstance(url, str)),
         tuple(url for url in changes.get("removed", ()) or () if isinstance(url, str)),
@@ -275,65 +259,74 @@ def _report_skipped(report: Mapping[str, object]) -> tuple[str, ...]:
     return tuple(lines)
 
 
-def _report_error(report: Mapping[str, object]) -> tuple[str, ...]:
-    error = report.get("error")
-    return (f"Error: {error}",) if isinstance(error, str) else ()
-
-
 def _render_report(
+    report: Mapping[str, object],
     *,
     base_sha: str,
     run_url: str | None,
-    added: Sequence[str],
-    removed: Sequence[str],
-    changed: Sequence[str],
-    skipped: Sequence[str],
-    errors: Sequence[str] = (),
-    catalog_changed: bool = False,
-    limit: int | None = PR_BODY_LIMIT,
+    catalog_changed: bool,
+    limit: int,
 ) -> str:
-    lines: list[str] = []
-    if run_url is not None:
-        lines.append(f"Workflow run: {run_url}")
-        lines.append("")
-    lines.append(f"Base SHA: {base_sha}")
-    lines.append("")
-    lines.append("<pre>")
-    if errors:
-        lines.extend(html.escape(line) for line in errors)
-        lines.append("")
-    if catalog_changed and not (added or removed or changed):
-        lines.append(BYTES_ONLY_CHANGE)
-        lines.append("")
-    lines.append("Added:")
-    lines.extend(html.escape(url) for url in added)
-    lines.append("")
-    lines.append("Removed:")
-    lines.extend(html.escape(url) for url in removed)
-    lines.append("")
-    lines.append("Changed:")
-    lines.extend(html.escape(url) for url in changed)
-    lines.append("")
-    lines.append("Skipped:")
-    skipped_lines = [html.escape(line) for line in skipped]
-    text = "\n".join([*lines, *skipped_lines, "</pre>"]) + "\n"
-    if limit is None or len(text) <= limit:
-        return text
+    """Render a generation report inside an escaped `<pre>` block.
 
-    # Bound every upstream section, leaving room for a complete omission line
-    # and closing tag. The full diagnostics remain in the generation report.
-    split = lines.index("<pre>") + 1
-    prefix, details = lines[:split], lines[split:] + skipped_lines
-    longest_omission = f"and {len(details)} more"
-    budget = limit - len("\n".join([*prefix, longest_omission, "</pre>"]) + "\n")
-    kept: list[str] = []
-    for line in details:
-        if len(line) + 1 > budget:
-            break
-        kept.append(line)
-        budget -= len(line) + 1
-    omission = f"and {len(details) - len(kept)} more"
-    return "\n".join([*prefix, *kept, omission, "</pre>"]) + "\n"
+    A failed report has no changes, so it shows no change sections rather
+    than empty ones. When the text would exceed `limit`, entries that do not
+    fit are left out and counted, while every section header stays.
+    """
+    head: list[str] = []
+    if run_url is not None:
+        head += [f"Workflow run: {run_url}", ""]
+    head += [f"Base SHA: {base_sha}", "", "<pre>"]
+    notes: list[str] = []
+    error = report.get("error")
+    if isinstance(error, str):
+        notes.append(f"Error: {error}")
+    sections: list[tuple[str, Sequence[str]]] = []
+    changes = _report_changes(report)
+    if changes is not None:
+        added, removed, changed = changes
+        if catalog_changed and not (added or removed or changed):
+            notes.append(BYTES_ONLY_CHANGE)
+        sections += [("Added:", added), ("Removed:", removed), ("Changed:", changed)]
+    sections.append(("Skipped:", _report_skipped(report)))
+    escaped_notes = [html.escape(note) for note in notes]
+    escaped_sections = [
+        (header, [html.escape(line) for line in lines]) for header, lines in sections
+    ]
+
+    def render(kept_notes: list[str], kept: list[list[str]], omitted: int) -> str:
+        lines = list(head)
+        for note in kept_notes:
+            lines += [note, ""]
+        for index, (header, _) in enumerate(escaped_sections):
+            if index:
+                lines.append("")
+            lines += [header, *kept[index]]
+        if omitted:
+            lines.append(f"and {omitted} more")
+        return "\n".join([*lines, "</pre>"]) + "\n"
+
+    full = render(escaped_notes, [lines for _, lines in escaped_sections], 0)
+    if len(full) <= limit:
+        return full
+    # Keep what fits, in order, leaving room for the longest omission line.
+    # The full diagnostics remain in the generation report.
+    total = len(escaped_notes) + sum(len(lines) for _, lines in escaped_sections)
+    budget = limit - len(render([], [[] for _ in escaped_sections], total))
+    kept_notes: list[str] = []
+    for note in escaped_notes:
+        if len(note) + 2 <= budget:
+            kept_notes.append(note)
+            budget -= len(note) + 2
+    kept: list[list[str]] = []
+    for _, lines in escaped_sections:
+        kept.append([])
+        for line in lines:
+            if len(line) + 1 <= budget:
+                kept[-1].append(line)
+                budget -= len(line) + 1
+    omitted = total - len(kept_notes) - sum(len(lines) for lines in kept)
+    return render(kept_notes, kept, omitted)
 
 
 def _commit_candidate(
@@ -698,14 +691,10 @@ def render_pr_body(
     candidate that changed the catalog.
     """
     validation = _render_validation(results)
-    added, removed, changed = _report_changes(report)
     report_text = _render_report(
+        report,
         base_sha=base_sha,
         run_url=run_url,
-        added=added,
-        removed=removed,
-        changed=changed,
-        skipped=_report_skipped(report),
         catalog_changed=True,
         limit=PR_BODY_LIMIT - len(validation) - 1,
     )
@@ -734,15 +723,11 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
     except (OSError, ValueError, TypeError):
         summary = f"Source: {source}\nBase SHA: {base}\ngeneration report unavailable\n"
     else:
-        added, removed, changed = _report_changes(report)
         summary = _render_report(
+            report,
             base_sha=base,
             run_url=run_url(environ),
-            added=added,
-            removed=removed,
-            changed=changed,
-            skipped=_report_skipped(report),
-            errors=_report_error(report),
+            catalog_changed=environ.get("CHANGED") == "true",
             limit=SUMMARY_LIMIT - len(validation) - 1,
         )
         if all(result == "success" for result in results.values()):

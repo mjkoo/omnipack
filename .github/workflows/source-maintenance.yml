@@ -78,6 +78,7 @@ jobs:
         if: always()
         env:
           BASE_SHA: ${{ steps.stage.outputs.base }}
+          CHANGED: ${{ steps.stage.outputs.changed }}
           GENERATION_RESULT: ${{ steps.generation.outcome }}
           STAGING_RESULT: ${{ steps.stage.outcome }}
           TESTS_RESULT: ${{ steps.tests.outcome }}
