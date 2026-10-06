@@ -1160,6 +1160,54 @@ def _catalog(*entries: dict[str, object]) -> str:
     return json.dumps({"apps": list(entries)})
 
 
+def test_a_candidate_dropping_a_pinned_entry_fails_build_and_keeps_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    (tmp_path / "config/composition.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "candidates": [],
+                "pins": [
+                    {
+                        "family": "github.com/fixture/generated",
+                        "variant": "dual",
+                        "match": {
+                            "source": "codm2000",
+                            "origin": "codm-generated",
+                            "id": "app.generated",
+                            "url": "https://github.com/fixture/generated",
+                        },
+                        "rationale": "Keep the generated build in dual.",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    published = [
+        tmp_path / "dist/single-screen.json",
+        tmp_path / "dist/dual-screen.json",
+        tmp_path / "README.md",
+    ]
+    before = [path.read_bytes() for path in published]
+
+    (tmp_path / "config/catalogs/codm.json").write_text(
+        _catalog(_generated_entry("app.second", "https://github.com/fixture/second")),
+        encoding="utf-8",
+    )
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["status"] == "failed"
+    assert "pin for family 'github.com/fixture/generated'" in report["error"]
+    assert "is missing" in report["error"]
+    assert [path.read_bytes() for path in published] == before
+
+
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 @pytest.mark.parametrize(
     "catalog",

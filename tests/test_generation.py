@@ -398,6 +398,20 @@ def test_a_committed_entry_that_cannot_be_rendered_leaves_no_candidate(
     assert not candidate_path(workdir, "codm").exists()
 
 
+def test_unavailable_discovery_fails_and_leaves_the_committed_catalog(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_catalog(workdir, "codm", [COMMITTED])
+    committed = (workdir / "config/codm.json").read_bytes()
+    http = FakeHttp({README_URL: HttpError("README unavailable")})
+    assert run_cli(monkeypatch, "codm", http) == 1
+    report = stored_report(workdir, "codm")
+    assert report["status"] == Status.FAILED
+    assert "README unavailable" in report["error"]
+    assert not candidate_path(workdir, "codm").exists()
+    assert (workdir / "config/codm.json").read_bytes() == committed
+
+
 @pytest.mark.parametrize(
     ("failure", "message"),
     [

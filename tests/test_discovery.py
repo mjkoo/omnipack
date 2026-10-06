@@ -535,6 +535,14 @@ def test_a_location_outside_the_index_directory_is_a_malformed_index(
             "release asset-name file has a malformed entry",
         ),
         (
+            {ASSETS_URL: {"entries": [{"repository": "a/b", "assetNames": []}]}},
+            "release asset-name file has a malformed entry",
+        ),
+        (
+            {ASSETS_URL: {"entries": [{"provider": "github", "assetNames": []}]}},
+            "release asset-name file has a malformed entry",
+        ),
+        (
             {
                 INDEX_URL: {
                     "version": 2,
@@ -555,6 +563,8 @@ def test_a_location_outside_the_index_directory_is_a_malformed_index(
         "assets-entries-not-a-list",
         "assets-entry-without-names",
         "assets-name-not-a-string",
+        "assets-entry-without-provider",
+        "assets-entry-without-repository",
         "index-without-asset-file",
         "index-wrong-version",
     ],
@@ -566,3 +576,19 @@ def test_an_unreadable_or_malformed_input_fails(
     http = quiver_http([row("a/b")], [asset("a/b", "a.apk")], **failure)
     with pytest.raises((DiscoveryError, HttpError), match=message):
         quiver(http, frozenset({"github.com/a/b"}))
+
+
+@pytest.mark.parametrize(
+    "unmatched",
+    [asset("a/b", "a.apk", provider="codeberg"), asset("a/b/c", "a.apk")],
+    ids=["unknown-provider", "github-three-segments"],
+)
+def test_an_asset_entry_forming_no_project_url_is_ignored(
+    unmatched: dict[str, Any],
+) -> None:
+    http = quiver_http([row("ok/repo")], [unmatched, asset("ok/repo", "ok.apk")])
+    discovery = quiver(http)
+    assert [listing.url for listing in discovery.listings] == [
+        "https://github.com/ok/repo"
+    ]
+    assert discovery.skipped == ()
