@@ -463,6 +463,43 @@ def test_an_empty_discovery_fails_without_a_candidate(
     assert not candidate_path(workdir, "codm").exists()
 
 
+def test_a_codm_link_no_project_url_can_be_formed_from_is_reported_and_skipped(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    http = FakeHttp(
+        {
+            README_URL: TABLE
+            + "| [Bad port](https://example.org:99999/app) | x |\n"
+            + "| [Valid](https://github.com/o/app) | y |\n"
+        }
+    )
+    assert run_cli(monkeypatch, "codm", http) == 0
+    report = stored_report(workdir, "codm")
+    assert report["status"] == Status.SUCCESS
+    assert report["skipped"] == [
+        {
+            "name": "Bad port",
+            "url": "https://example.org:99999/app",
+            "reason": SkipReason.INVALID_URL,
+        }
+    ]
+    assert [app["url"] for app in catalog_apps(workdir, "codm")] == [
+        "https://github.com/o/app"
+    ]
+
+
+def test_a_readme_whose_only_link_is_malformed_fails_without_a_candidate(
+    workdir: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    http = FakeHttp({README_URL: TABLE + "| [Bad](https://host:abc/app) | x |\n"})
+    assert run_cli(monkeypatch, "codm", http) == 1
+    report = stored_report(workdir, "codm")
+    assert report["status"] == Status.FAILED
+    assert "1 listed rows or projects skipped" in report["error"]
+    assert [item["reason"] for item in report["skipped"]] == [SkipReason.INVALID_URL]
+    assert not candidate_path(workdir, "codm").exists()
+
+
 def test_a_run_whose_every_row_is_unformable_fails_with_those_rows(
     workdir: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:

@@ -26,11 +26,12 @@ The `codm` and `quiver` sources in `config/sources.json` each name their
 upstream input and their committed `catalog`.
 
 codm reads the README at `readme_url` and takes every `http` or `https` link
-inside its Project tables, whatever host it points to. Links outside a Project table or inside a
-code block are ignored, and so is a badge image inside a link. A missing or
-malformed Project table fails the run, even beside a valid one, because a
-partial read would propose removing the projects of the table it could not
-read.
+inside its Project tables, whatever host it points to. Links outside a Project
+table or inside a code block are ignored, and so is a badge image inside a
+link. A link no project URL can be formed from, such as one with an invalid
+port, is reported and skipped. A missing or malformed Project table fails the
+run, even beside a valid one, because a partial read would propose removing the
+projects of the table it could not read.
 
 Quiver reads the index at `index_url`, every list the index references and the
 release asset-name file the index names by `platformMetadataUrl`. Every one of

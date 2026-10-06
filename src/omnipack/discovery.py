@@ -32,6 +32,7 @@ class SkipReason(StrEnum):
 
     UNKNOWN_FORGE = "names a forge no project URL can be formed for"
     INVALID_REPOSITORY = "has a missing or invalid repository"
+    INVALID_URL = "links a URL no project URL can be formed from"
     NO_ASSET_ENTRY = "has no entry in the release asset-name file"
     NO_APK_ASSET = "latest release lists no APK asset"
 
@@ -53,6 +54,13 @@ class SkippedRow(TypedDict):
     repositorySource: object
 
 
+class SkippedLink(TypedDict):
+    """A README link as discovery read it."""
+
+    name: str
+    url: str
+
+
 @dataclass(frozen=True, slots=True)
 class Skip:
     """A listed row or project that contributes no entry, and why."""
@@ -62,11 +70,19 @@ class Skip:
 
 
 @dataclass(frozen=True, slots=True)
+class LinkSkip:
+    """A README link that contributes no entry, and why."""
+
+    link: SkippedLink
+    reason: SkipReason
+
+
+@dataclass(frozen=True, slots=True)
 class Discovery:
     """The listings a source keeps and the rows or projects it skipped."""
 
     listings: tuple[Listing, ...]
-    skipped: tuple[Skip, ...]
+    skipped: tuple[Skip | LinkSkip, ...]
 
 
 class DiscoveryError(ValueError):
@@ -108,7 +124,17 @@ def _discover_codm(
     config: Mapping[str, object], http: HttpGetter, _committed: frozenset[str]
 ) -> Discovery:
     readme = http.get(_config_text(config, "readme_url")).body
-    return Discovery(tuple(_project_table_links(readme)), ())
+    listings: list[Listing] = []
+    skipped: list[LinkSkip] = []
+    for listing in _project_table_links(readme):
+        try:
+            normalize_project_url(listing.url)
+        except ValueError:
+            link: SkippedLink = {"name": listing.name or "", "url": listing.url}
+            skipped.append(LinkSkip(link, SkipReason.INVALID_URL))
+        else:
+            listings.append(listing)
+    return Discovery(tuple(listings), tuple(skipped))
 
 
 def _project_table_links(readme: bytes) -> Iterator[Listing]:

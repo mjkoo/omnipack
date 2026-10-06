@@ -21,8 +21,10 @@ from urllib.parse import urlsplit
 from omnipack.discovery import (
     DiscoveryError,
     GeneratedSource,
+    LinkSkip,
     Listing,
     Skip,
+    SkippedLink,
     SkippedRow,
     SkipReason,
     discover,
@@ -47,10 +49,19 @@ class InputRecord(TypedDict):
     sha256: NotRequired[str]
 
 
-class SkippedListing(SkippedRow):
-    """A skipped row as the report records it, with the reason it was skipped."""
+class SkippedRowRecord(SkippedRow):
+    """A skipped list row as the report records it, with the reason."""
 
     reason: SkipReason
+
+
+class SkippedLinkRecord(SkippedLink):
+    """A skipped README link as the report records it, with the reason."""
+
+    reason: SkipReason
+
+
+SkippedListing = SkippedRowRecord | SkippedLinkRecord
 
 
 class Changes(TypedDict):
@@ -256,17 +267,24 @@ def _changes(
     }
 
 
-def _skipped(skipped: tuple[Skip, ...]) -> list[SkippedListing]:
-    return [
-        {
-            "list": skip.listing["list"],
-            "project": skip.listing["project"],
-            "repository": skip.listing["repository"],
-            "repositorySource": skip.listing["repositorySource"],
+def _skipped(skipped: tuple[Skip | LinkSkip, ...]) -> list[SkippedListing]:
+    return [_skip_record(skip) for skip in skipped]
+
+
+def _skip_record(skip: Skip | LinkSkip) -> SkippedListing:
+    if isinstance(skip, LinkSkip):
+        return {
+            "name": skip.link["name"],
+            "url": skip.link["url"],
             "reason": skip.reason,
         }
-        for skip in skipped
-    ]
+    return {
+        "list": skip.listing["list"],
+        "project": skip.listing["project"],
+        "repository": skip.listing["repository"],
+        "repositorySource": skip.listing["repositorySource"],
+        "reason": skip.reason,
+    }
 
 
 class _RecordingHttp:

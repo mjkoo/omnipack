@@ -8,7 +8,9 @@ from omnipack.discovery import (
     Discovery,
     DiscoveryError,
     GeneratedSource,
+    LinkSkip,
     Listing,
+    Skip,
     SkipReason,
     discover,
 )
@@ -52,6 +54,30 @@ def test_codm_takes_every_link_in_the_project_tables_whatever_its_host() -> None
         Listing("https://play.google.com/store/apps/details?id=a", "Hermit"),
         Listing("https://github.com/cylonid/NativeAlphaForAndroid", "Native Alpha"),
     ]
+
+
+def test_codm_link_no_project_url_can_be_formed_from_is_skipped() -> None:
+    readme = TABLE + (
+        "| [Port](https://example.org:99999/app) | x |\n"
+        "| [Bracket](https://[bad/app) | y |\n"
+        "| [Valid](https://github.com/o/app) | z |\n"
+    )
+    discovery = discover(
+        GeneratedSource.CODM,
+        {"readme_url": README_URL},
+        FakeHttp({README_URL: readme}),
+        frozenset(),
+    )
+    assert discovery.listings == (Listing("https://github.com/o/app", "Valid"),)
+    assert discovery.skipped == (
+        LinkSkip(
+            {"name": "Port", "url": "https://example.org:99999/app"},
+            SkipReason.INVALID_URL,
+        ),
+        LinkSkip(
+            {"name": "Bracket", "url": "https://[bad/app"}, SkipReason.INVALID_URL
+        ),
+    )
 
 
 def test_codm_badge_image_inside_a_link_is_not_a_project() -> None:
@@ -244,14 +270,17 @@ def test_an_unformable_row_is_skipped_with_its_reason(
     assert [listing.url for listing in discovery.listings] == [
         "https://github.com/ok/repo"
     ]
-    [skip] = discovery.skipped
-    assert skip.reason is reason
-    assert skip.listing == {
-        "list": "one",
-        "project": "Port",
-        "repository": bad["repository"],
-        "repositorySource": bad.get("repositorySource"),
-    }
+    assert discovery.skipped == (
+        Skip(
+            {
+                "list": "one",
+                "project": "Port",
+                "repository": bad["repository"],
+                "repositorySource": bad.get("repositorySource"),
+            },
+            reason,
+        ),
+    )
 
 
 def test_an_apk_asset_is_recognized_without_regard_to_case() -> None:
@@ -290,8 +319,11 @@ def test_a_new_project_without_an_apk_asset_is_screened_out(
         "https://github.com/ok/repo"
     ]
     assert [
-        (skip.listing["repository"], skip.reason) for skip in discovery.skipped
+        (skip.listing["repository"], skip.reason)
+        for skip in discovery.skipped
+        if isinstance(skip, Skip)
     ] == [("owner/repo", reason)]
+    assert len(discovery.skipped) == 1
 
 
 @pytest.mark.parametrize("assets", [[asset("owner/repo", "app.zip")], []])
