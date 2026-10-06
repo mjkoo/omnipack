@@ -14,7 +14,10 @@ the configured README and take the links inside its Project tables; a link
 outside those tables, or inside a fenced or indented code block, SHALL NOT
 introduce a project. Every Project table SHALL be well formed: a README with no
 Project table, or with a Project table whose delimiter row is missing or
-invalid, SHALL fail generation, even when another Project table is valid.
+invalid, SHALL fail generation, even when another Project table is valid. A
+link no project URL can be formed from, such as one with an invalid port or
+host, SHALL be reported and skipped; the skip alone SHALL NOT fail generation,
+which fails only when no entry is left.
 
 For Quiver, generation SHALL read the configured index, every list it
 references and the release asset-name file it names by `platformMetadataUrl`,
@@ -60,8 +63,8 @@ download or inspect APKs. A discovery that fails SHALL fail generation without
 writing a candidate catalog. Skipping a row or screening out a project fails
 nothing for that row or project, but when the candidate generation would write
 keeps no entry, however that happens (an upstream list with no rows, every row
-skipped as unformable or for an unknown forge, or every listed project screened
-out while the upstream lists no committed project), generation SHALL fail
+or link skipped as unformable or for an unknown forge, or every listed project
+screened out while the upstream lists no committed project), generation SHALL fail
 without writing a candidate catalog, so it never proposes removing every entry.
 Nothing else SHALL fail generation, apart from a committed catalog that cannot
 be read or is malformed.
@@ -70,6 +73,13 @@ be read or is malformed.
 
 - **WHEN** the README links a repository outside its Project tables
 - **THEN** that repository does not become a project
+
+#### Scenario: A README link no project URL can be formed from
+
+- **WHEN** a Project table links `https://example.org:99999/app` beside a valid
+  repository link
+- **THEN** the malformed link is reported and skipped, and generation succeeds
+  with the valid project
 
 #### Scenario: One of multiple Project tables is malformed
 
