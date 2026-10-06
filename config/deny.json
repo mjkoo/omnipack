@@ -18,5 +18,17 @@
   {
     "url": "https://github.com/Producdevity/gamehub-lite",
     "reason": "Community patch of GameSir's closed-source GameHub with doubtful provenance, and a compromise would reach the Steam and other store accounts it signs into; GameNative is the open-source alternative."
+  },
+  {
+    "url": "https://modrinth.com/mod/journeymap-web-map",
+    "reason": "A Minecraft mod page, not an Android app."
+  },
+  {
+    "url": "https://nexusmods.com/fallout4/mods/67428",
+    "reason": "A Nexus Mods page Obtainium cannot install from; the APK must come from a reupload."
+  },
+  {
+    "url": "https://play.google.com/store/apps/details?id=com.chimbori.hermitcrab&pli=1",
+    "reason": "A Google Play page Obtainium cannot install from; Native Alpha is the open-source alternative already in the pack."
   }
 ]
