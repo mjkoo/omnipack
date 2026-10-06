@@ -8,7 +8,10 @@
   {
     "url": "https://github.com/999sian/melee-pc",
     "patch": {
-      "name": "Melee PC"
+      "name": "Melee PC",
+      "additionalSettings": {
+        "includePrereleases": true
+      }
     }
   },
   {
@@ -25,6 +28,19 @@
       "additionalSettings": {
         "versionExtractionRegEx": "[0-9]+(?:\\.[0-9]+)+",
         "matchGroupToUse": "0"
+      }
+    }
+  },
+  {
+    "url": "https://github.com/AverageConsumer/kanto-gear",
+    "patch": {
+      "name": "Kanto Gear (mod updates)",
+      "additionalSettings": {
+        "trackOnly": true,
+        "versionDetection": false,
+        "includeZips": false,
+        "autoApkFilterByArch": false,
+        "about": "Kanto Gear is a Gen1Recomp Lua mod distributed as a ZIP, not an Android application. Install or update through official Gen1Recomp at https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import. Obtainium only tracks release notifications; acknowledgement does not install the resource or detect its installed version."
       }
     }
   },
@@ -56,6 +72,19 @@
     "url": "https://github.com/Carlox33/The-Simpsons-Hit-and-Run-Android",
     "patch": {
       "id": "com.c4rlox.simpsons"
+    }
+  },
+  {
+    "url": "https://github.com/castdrian/showdown-ds",
+    "patch": {
+      "name": "Showdown!",
+      "additionalSettings": {
+        "includePrereleases": true,
+        "apkFilterRegEx": "^showdown-v[0-9].*\\.apk$",
+        "versionExtractionRegEx": "^v?(.+)$",
+        "matchGroupToUse": "1",
+        "fallbackToOlderReleases": false
+      }
     }
   },
   {
@@ -141,7 +170,8 @@
       "name": "LEGO Island Portable",
       "additionalSettings": {
         "releaseDateAsVersion": true,
-        "versionDetection": false
+        "versionDetection": false,
+        "apkFilterRegEx": "^app-release[.]apk$"
       }
     }
   },
@@ -197,6 +227,19 @@
     }
   },
   {
+    "url": "https://github.com/mastercook777/Heimdall-AYN-Thor-Assistant",
+    "patch": {
+      "name": "Heimdall",
+      "additionalSettings": {
+        "includePrereleases": true,
+        "filterReleaseTitlesByRegEx": "^Heimdall v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:alpha|beta)\\.[0-9]+)?$",
+        "apkFilterRegEx": "^heimdall-v[0-9].*\\.apk$",
+        "versionExtractionRegEx": "^v?(.+)$",
+        "matchGroupToUse": "1"
+      }
+    }
+  },
+  {
     "url": "https://github.com/Matteo842/CrashBandicoot-Launcher",
     "patch": {
       "name": "Crash Bandicoot"
@@ -222,6 +265,15 @@
     "url": "https://github.com/rosbean/balatro-dualscreen",
     "patch": {
       "name": "Balatro Dual Screen"
+    }
+  },
+  {
+    "url": "https://github.com/rsigristc/DW3-DS-Android",
+    "patch": {
+      "name": "DW2003 Dual Screen",
+      "additionalSettings": {
+        "apkFilterRegEx": "^DW2003-Dual-Screen-v[0-9].*\\.apk$"
+      }
     }
   },
   {
@@ -270,7 +322,8 @@
       "additionalSettings": {
         "releaseDateAsVersion": true,
         "useLatestAssetDateAsReleaseDate": true,
-        "versionDetection": false
+        "versionDetection": false,
+        "apkFilterRegEx": "^(?!.*_OLD[.]apk$).*"
       }
     }
   },
