@@ -160,9 +160,9 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    # Composition keyed by project URL changed what verification checks, so
-    # evidence from an earlier verifier must read as stale.
-    assert VERIFIER_VERSION == "3.0.0"
+    # Verification no longer limits source types, which changed its findings,
+    # so evidence from an earlier verifier must read as stale.
+    assert VERIFIER_VERSION == "4.0.0"
     assert report["schemaVersion"] == 5
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
