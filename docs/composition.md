@@ -3,7 +3,7 @@
 Each output contains at most one selected build per logical app family. Families
 form after family rules and denials, over the candidates that survive and are
 eligible for at least one pack. A candidate's family is keyed by its project URL,
-in the normalized form `github.com/owner/repo`: every candidate at one URL that
+in a normalized host-and-path form such as `github.com/owner/repo`: every candidate at one URL that
 no rule places elsewhere belongs to the family named by that URL, whichever
 source lists it and whatever package id it carries. A shared package id joins
 nothing, so two repositories that reuse one package id stay separate families

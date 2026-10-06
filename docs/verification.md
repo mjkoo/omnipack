@@ -37,8 +37,9 @@ only for a complete run without errors; report persistence failure also causes a
 nonzero exit and a stderr diagnostic.
 
 Verification never rebuilds or changes the packs, README, configuration or
-`.build/report.json`. Building performs source ingestion but does not discover
-package IDs; codm and Quiver discovery belong to source generation.
+`.build/report.json`. Building reads the committed codm and Quiver catalogs
+and never their upstream lists; reading those lists belongs to source
+generation.
 
 `pack report` labels supported evidence stale when any input fingerprint or the
 verifier identity differs. A verification report with any schema other than the

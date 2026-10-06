@@ -25,8 +25,8 @@ follows them.
 The `codm` and `quiver` sources in `config/sources.json` each name their
 upstream input and their committed `catalog`.
 
-codm reads the README at `readme_url` and takes every link inside its Project
-tables, whatever host it points to. Links outside a Project table or inside a
+codm reads the README at `readme_url` and takes every `http` or `https` link
+inside its Project tables, whatever host it points to. Links outside a Project table or inside a
 code block are ignored, and so is a badge image inside a link. A missing or
 malformed Project table fails the run, even beside a valid one, because a
 partial read would propose removing the projects of the table it could not
@@ -67,19 +67,19 @@ of listing order, as a canonical catalog:
   URL are kept verbatim, so composition rules, pins and installed apps that
   know it keep working.
 - Otherwise the URL is the reduced project URL (a GitHub deep link becomes the
-  repository root; when several listings collapse to one URL, the smallest in
-  code point order wins), and the id is an Obtainium placeholder: the first
+  repository root, while a link on any other host keeps its path; when several
+  listings collapse to one URL, the smallest in code point order wins), and the id is an Obtainium placeholder: the first
   twelve hex characters of the SHA-256 of the normalized URL. Obtainium
   replaces it with the APK's package id on first install.
 - `overrideSource` is GitHub for a github.com repository and GitLab for a
-  gitlab.com project; any other URL leaves it unset, and Obtainium detects the
-  source.
+  gitlab.com project; any other URL, a gitlab.com link into a project's `/-/`
+  routes included, leaves it unset, and Obtainium detects the source.
 - The name is the listing's name with trailing emoji and other symbols trimmed
-  (punctuation, `+` and currency signs are kept), or the last URL path segment
-  when no listing names it. When listings give several names, the first in
+  (punctuation, `+` and currency signs are kept), or the last URL path segment,
+  or the host for a URL without a path, when no listing names it. When listings give several names, the first in
   case-insensitive order wins.
-- The author is the first path segment for a GitHub or GitLab URL, and empty
-  otherwise.
+- The author is the first path segment for a URL with an `overrideSource`, and
+  empty otherwise.
 - Entries carry no categories and no settings; the build fills in the source
   type's defaults.
 
@@ -135,6 +135,8 @@ A run fails only when the source configuration is missing or malformed, when
 an input is unreadable or malformed, when the committed catalog is unreadable or
 malformed (including two entries at one normalized URL, which the error names
 with their ids, and a repeated id), or when the candidate would keep no entry.
+A missing committed catalog holds nothing, so every entry gets a placeholder
+id.
 A failed run writes only its report: no candidate survives from it or from an
 earlier run.
 

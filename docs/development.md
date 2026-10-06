@@ -189,8 +189,7 @@ exclusion, overlay, migration, and rollback behavior.
 
 See [source generation](source-generation.md) for upstream inputs and
 screening, generating isolated candidates, accepting source data, and operating
-the separate source proposal workflow. See [source generation validation](../openspec/changes/archive/2026-09-11-generate-reviewed-readme-catalog/source-generation-validation.md)
-for the dated controlled, live-build, and device evidence.
+the separate source proposal workflow.
 
 See [maintained app curation](curation.md) for version policies and known
 identity findings, and [curation validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md) for
