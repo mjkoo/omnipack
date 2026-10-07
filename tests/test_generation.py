@@ -9,7 +9,7 @@ from typing import Any
 import pytest
 
 from omnipack import cli
-from omnipack.discovery import GeneratedSource, Listing, SkipReason
+from omnipack.discovery import Listing, SkipReason
 from omnipack.generation import (
     GenerationError,
     generate,
@@ -22,6 +22,7 @@ from omnipack.model import SourceType
 from omnipack.report_model import Status
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.source_catalog import render_catalog
+from omnipack.source_registry import GeneratedSource
 from tests.http_support import FakeHttp
 from tests.test_discovery import (
     ASSETS_URL,

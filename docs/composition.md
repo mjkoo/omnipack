@@ -28,13 +28,13 @@ build, when it has one, is what the single-screen pack uses. Absent a pin, a
 family's dual-screen build, when one exists, replaces its baseline build in the
 dual-screen pack; a family with no dual-screen build uses its baseline build
 there. An app may instead have only a dual-screen build, which appears only in
-the dual-screen pack, as an app only codm2000 supplies does.
+the dual-screen pack, as an app only codm supplies does.
 
 Each source alone decides which kind a build is:
 
 - BBoi by asset: standard-asset records are baseline builds for both packs, and
   dual-asset records are dual-screen builds;
-- codm2000 entries are always dual-screen builds;
+- codm entries are always dual-screen builds;
 - Quiver entries are always baseline builds for both packs;
 - RJNY by its export flags: an entry in both exports is a baseline build for both
   packs, an entry only in the dual-screen export is a dual-screen build, and an
@@ -109,7 +109,7 @@ dual-only tracker at an app's URL joins the app's family and, being a
 dual-screen build, replaces the app in dual.
 
 A match names original `source`, `origin`, `id`, and project `url`. Sources are
-`rjny`, `bboi`, `extras`, `codm2000` and `quiver`. Their origins are
+`rjny`, `bboi`, `extras`, `codm` and `quiver`. Their origins are
 `rjny-catalog`, `bboi-standard-asset` or `bboi-dual-asset`, `extras`,
 `codm-generated` and `quiver-generated`.
 Project URLs use the shared normalization rule. A rule matches one candidate's
@@ -128,7 +128,7 @@ shape:
     "family": "app:example",
     "rationale": "The standard build of the example app"
   }, {
-    "match": {"source": "codm2000", "origin": "codm-generated", "id": "org.example.app.ds", "url": "https://github.com/fork/app-ds"},
+    "match": {"source": "codm", "origin": "codm-generated", "id": "org.example.app.ds", "url": "https://github.com/fork/app-ds"},
     "family": "app:example",
     "rationale": "The dual-screen fork of the same app"
   }],
@@ -189,7 +189,7 @@ this order:
 
 The map is keyed by family, so a mapping survives a fork switch and covers both
 packs. Only map an app whose source categories are missing or wrong; most
-sources already use the set's spellings. Generated codm2000 and Quiver
+sources already use the set's spellings. Generated codm and Quiver
 entries carry no source category, so each one the packs select needs a map
 key. Overlays cannot set categories.
 
@@ -298,7 +298,7 @@ and its nonfatal findings in `nonfatalFindings`. For example:
     "family": "app:example", "variant": "dual", "id": "org.example.app",
     "url": "https://github.com/example/app", "source": "bboi",
     "origin": "bboi-standard-asset", "reason": "pin",
-    "considered": [{"source": "codm2000", "origin": "codm-generated", "id": "org.example.app.ds", "url": "https://github.com/fork/app-ds"}]
+    "considered": [{"source": "codm", "origin": "codm-generated", "id": "org.example.app.ds", "url": "https://github.com/fork/app-ds"}]
   }],
   "denylistRemovals": [{"url": "github.com/example/retired", "reason": "No supported build", "families": ["github.com/example/retired"]}]
 }

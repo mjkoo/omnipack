@@ -8,8 +8,9 @@ from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import Variant
 from omnipack.source_catalog import render_catalog
-from omnipack.sources import codm
+from omnipack.source_registry import GeneratedSource
 from omnipack.sources.extras import fetch as fetch_extras
+from omnipack.sources.generated import fetch_generated
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
@@ -57,7 +58,9 @@ def test_catalog_addition_and_removal_leave_single_screen_selection_unchanged(
             f"com.example.{name}", f"https://github.com/example/{name}", name, {}
         )
         (directory / "codm.json").write_text(json.dumps({"apps": [entry]}))
-        generated = codm.fetch(directory, {"catalog": "codm.json"})
+        generated = fetch_generated(
+            GeneratedSource.CODM, directory, {"catalog": "codm.json"}
+        )
         results.append(
             compose(
                 [*higher, *generated],
@@ -113,7 +116,9 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     ) -> CompositionResult:
         directory.mkdir()
         (directory / "codm.json").write_text(json.dumps({"apps": apps}))
-        generated = codm.fetch(directory, {"catalog": "codm.json"})
+        generated = fetch_generated(
+            GeneratedSource.CODM, directory, {"catalog": "codm.json"}
+        )
         return compose([*higher, *generated], [], [], policy=policy)
 
     baseline = compose_catalog([], tmp_path / "baseline")
@@ -164,7 +169,7 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
 
     prerelease = after[("github.com/example/prerelease-app", Variant.DUAL)]
     assert (prerelease.source, prerelease.origin, prerelease.id) == (
-        "codm2000",
+        "codm",
         "codm-generated",
         "com.example.prerelease",
     )
@@ -173,7 +178,7 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     assert ("com.example.prerelease", Variant.SINGLE) not in settings
 
     tracker = after[("github.com/example/fixture-mod", Variant.DUAL)]
-    assert (tracker.source, tracker.id) == ("codm2000", "1234567890")
+    assert (tracker.source, tracker.id) == ("codm", "1234567890")
     tracked = settings[("1234567890", Variant.DUAL)]
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
@@ -192,7 +197,7 @@ def test_committed_entry_off_a_forge_ingests_with_no_source_type(
         "categories": [],
     }
     (tmp_path / "codm.json").write_bytes(render_catalog([entry]))
-    [app] = codm.fetch(tmp_path, {"catalog": "codm.json"})
+    [app] = fetch_generated(GeneratedSource.CODM, tmp_path, {"catalog": "codm.json"})
     assert (app.id, app.url, app.source_type) == (
         "a1b2c3d4e5f6",
         "https://christt105.itch.io/poketch",

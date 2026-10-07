@@ -20,7 +20,6 @@ from urllib.parse import urlsplit
 
 from omnipack.discovery import (
     DiscoveryError,
-    GeneratedSource,
     LinkSkip,
     Listing,
     Skip,
@@ -32,6 +31,7 @@ from omnipack.discovery import (
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.report_model import Status
 from omnipack.source_catalog import render_catalog, rendered_entry
+from omnipack.source_registry import GeneratedSource
 from omnipack.sources import load_json
 from omnipack.sources.common import HttpGetter, derived_source_type
 from omnipack.sources.generated import catalog_urls

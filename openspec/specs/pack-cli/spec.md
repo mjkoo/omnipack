@@ -17,7 +17,7 @@ succeeds. Handwritten README content SHALL be preserved byte-for-byte. Missing
 or malformed catalog markers SHALL fail the build. The
 build SHALL NOT perform live verification. Network requests for upstream JSON
 catalogs SHALL remain part of building.
-The codm2000 source SHALL be read from committed JSON; README scraping, APK
+The codm source SHALL be read from committed JSON; README scraping, APK
 discovery and package-ID resolution SHALL NOT occur during building.
 
 #### Scenario: Successful build

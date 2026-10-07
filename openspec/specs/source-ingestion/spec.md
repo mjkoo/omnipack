@@ -14,7 +14,7 @@ the host-scoped credential rules used by source-generation requests.
 The system SHALL read each upstream from the location recorded in the source
 configuration: the RJNY catalog from the configured path on the configured
 branch, the BBoi34 catalog from the single-screen and dual-screen JSON assets
-of the latest release of the configured repository, and the codm2000 catalog
+of the latest release of the configured repository, and the codm catalog
 from its configured committed Obtainium JSON file. The latest release SHALL be
 the one the upstream itself publishes as latest, so ingestion SHALL NOT rank
 releases by a version read from an asset name, and SHALL NOT reuse a release it
@@ -46,7 +46,7 @@ resolve package IDs.
 
 #### Scenario: README or APK hosting is unavailable
 
-- **WHEN** committed codm2000 JSON is valid and other catalog sources are available
+- **WHEN** committed codm JSON is valid and other catalog sources are available
 - **THEN** ingestion succeeds without requesting README or APK data
 
 ### Requirement: URLs are compared in a normalized form
@@ -164,7 +164,7 @@ is acceptable: no stage rejects an entry for its URL's host or path.
 A pack that is silently missing a whole upstream is worse than no rebuild at
 all, because it would drop every app that upstream contributes. The system
 SHALL abort the build when any source cannot be fetched or parsed, and SHALL
-NOT write either import file in that case. The build report SHALL still record the failure. The committed codm2000
+NOT write either import file in that case. The build report SHALL still record the failure. The committed codm
 catalog is a required local source: missing, malformed or unreadable content
 SHALL fail the build without falling back to README generation. Builds SHALL
 NOT modify that catalog.
@@ -183,8 +183,8 @@ NOT modify that catalog.
 
 #### Scenario: Committed source catalog is missing
 
-- **WHEN** the configured codm2000 JSON file is missing or malformed
-- **THEN** the build fails naming codm2000 and preserves previous outputs
+- **WHEN** the configured codm JSON file is missing or malformed
+- **THEN** the build fails naming codm and preserves previous outputs
 
 ### Requirement: RJNY export flags select entries per variant
 
@@ -252,7 +252,7 @@ published in single and reported as a single-only coverage finding.
 
 An upstream catalog contributing two entries that share a package id SHALL have
 both retained for composition to resolve, because ingestion cannot know which
-of them a family rule, a pin or a denial will select. The committed codm2000
+of them a family rule, a pin or a denial will select. The committed codm
 catalog SHALL instead fail ingestion when it repeats an entry id, naming the id
 and both project URLs, because it is reviewed before it is committed and a
 repeated id there is an error in the catalog rather than a choice for
@@ -282,7 +282,7 @@ composition.
 
 #### Scenario: The committed catalog repeats an entry id
 
-- **WHEN** the committed codm2000 catalog contains two entries carrying the
+- **WHEN** the committed codm catalog contains two entries carrying the
   same id
 - **THEN** ingestion fails naming that id and both entries' project URLs,
   rather than retaining both or keeping whichever appears first
@@ -389,7 +389,7 @@ compares and patches them uniformly.
 This requirement SHALL apply to every record a source normalizes,
 and SHALL NOT apply to an RJNY entry marked as excluded from export, which is
 dropped before normalization. Every such record, from each upstream catalog, the
-committed codm2000 catalog and the hand-written extras, SHALL be
+committed codm catalog and the hand-written extras, SHALL be
 an Obtainium app object as its source publishes it, and the extras
 `dualScreen` field SHALL be the only field defined by this system that
 ingestion reads from a source record. A source record carrying `family` or
@@ -401,7 +401,7 @@ families and per-pack selection. The error SHALL NOT
 direct or imply that the failure can be corrected by editing composition
 policy. The failure SHALL persist while the configured source location serves
 a record carrying the field, and the system SHALL provide no override for an
-individual record or field; an extras entry or a committed codm2000 record is
+individual record or field; an extras entry or a committed codm record is
 corrected by editing it. The one other field name
 ingestion reserves is `meta`, which the RJNY catalog uses for its export flags
 and presentation overrides and which is not part of an Obtainium app object:
@@ -442,7 +442,7 @@ unchanged for rendering, from every source.
 
 #### Scenario: A record outside RJNY carries catalog metadata
 
-- **WHEN** an otherwise valid extras or committed codm2000 record carries a
+- **WHEN** an otherwise valid extras or committed codm record carries a
   top-level `meta`
 - **THEN** ingestion accepts the record and the rendered entry carries no `meta`
 
@@ -525,7 +525,7 @@ the defaults defined for GitLab, never those defined for HTML.
 
 #### Scenario: An entry with no upstream record derives its source type
 
-- **WHEN** an extras entry or a committed codm2000 entry that omits
+- **WHEN** an extras entry or a committed codm entry that omits
   `overrideSource` addresses a github.com repository
 - **THEN** it carries the GitHub source type, while an entry addressing an
   itch.io page carries no source type
@@ -535,9 +535,9 @@ the defaults defined for GitLab, never those defined for HTML.
 - **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
 - **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
 
-#### Scenario: A committed codm2000 entry declares its source type
+#### Scenario: A committed codm entry declares its source type
 
-- **WHEN** a committed codm2000 entry addressing a github.com repository declares
+- **WHEN** a committed codm entry addressing a github.com repository declares
   the HTML source type
 - **THEN** the ingested entry carries the HTML source type rather than the type
   its URL would derive
@@ -563,16 +563,16 @@ the defaults defined for GitLab, never those defined for HTML.
 
 ### Requirement: Committed codm entries are dual-screen candidates
 
-The system SHALL ingest the committed codm2000 catalog as Obtainium JSON,
+The system SHALL ingest the committed codm catalog as Obtainium JSON,
 without fetching the codm README; generation from the README is the separate
-source-generation operation. Each entry SHALL keep codm2000 provenance, the
+source-generation operation. Each entry SHALL keep codm provenance, the
 generated origin, its committed id, URL, name and settings, so composition
-rules and overlays that select it match it. During routine ingestion, codm2000
+rules and overlays that select it match it. During routine ingestion, codm
 entries SHALL be dual-screen builds, eligible for dual only and preferred
 there. Every committed entry SHALL become a candidate whether or not another
 source lists the same project, and ingestion SHALL NOT read or apply the
 composition policy: family formation, dual preference, precedence, pins and
-project denials in pack-composition decide between a codm2000 build and
+project denials in pack-composition decide between a codm build and
 another source's build of the same app. A missing, unreadable or malformed
 catalog, a repeated entry ID or two entries at one normalized project URL
 SHALL fail the build while preserving previous outputs.
@@ -586,9 +586,9 @@ SHALL fail the build while preserving previous outputs.
 #### Scenario: Another source lists the same project
 
 - **WHEN** a higher-precedence source supplies a candidate with a normalized
-  URL equal to a committed codm2000 entry's
+  URL equal to a committed codm entry's
 - **THEN** the committed entry still enters composition as a dual-screen
-  codm2000 candidate, and pack-composition selects between the two builds
+  codm candidate, and pack-composition selects between the two builds
 
 #### Scenario: A selected project is removed
 

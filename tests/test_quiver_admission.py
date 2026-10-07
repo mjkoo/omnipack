@@ -12,7 +12,8 @@ from omnipack.composition_policy import (
 from omnipack.merge import compose
 from omnipack.model import Variant
 from omnipack.render import render
-from omnipack.sources import quiver
+from omnipack.source_registry import GeneratedSource
+from omnipack.sources.generated import fetch_generated
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
@@ -28,8 +29,10 @@ def test_emerald_family_pairs_new_baseline_with_existing_dual(
     current_configuration: CurrentConfiguration,
 ) -> None:
     current = current_configuration
-    quiver_apps = quiver.fetch(
-        ROOT, json.loads((ROOT / "config/sources.json").read_text())["quiver"]
+    quiver_apps = fetch_generated(
+        GeneratedSource.QUIVER,
+        ROOT,
+        json.loads((ROOT / "config/sources.json").read_text())["quiver"],
     )
     [emerald] = [
         app
@@ -40,7 +43,7 @@ def test_emerald_family_pairs_new_baseline_with_existing_dual(
     [codm] = [
         app
         for app in current.candidates
-        if app.provenance.source == "codm2000" and app.url == CODM_EMERALD
+        if app.provenance.source == "codm" and app.url == CODM_EMERALD
     ]
     assert codm.id == "com.pokeemerald.dualscreen"
     chosen = {
@@ -59,7 +62,7 @@ def test_emerald_family_pairs_new_baseline_with_existing_dual(
     assert any(
         selection.family == "app:pokemon-emerald"
         and selection.variant is Variant.DUAL
-        and selection.source == "codm2000"
+        and selection.source == "codm"
         for selection in current.result.report.selections
     )
 

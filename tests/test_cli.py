@@ -1174,7 +1174,7 @@ def test_a_candidate_dropping_a_pinned_entry_fails_build_and_keeps_outputs(
                         "family": "github.com/fixture/generated",
                         "variant": "dual",
                         "match": {
-                            "source": "codm2000",
+                            "source": "codm",
                             "origin": "codm-generated",
                             "id": "app.generated",
                             "url": "https://github.com/fixture/generated",
@@ -1430,7 +1430,7 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
     ) in output
     assert "Stale exclusion: example.test/absent; reason: unmatched denial" in output
     assert (
-        "Admission: codm2000; URL: https://github.com/fixture/generated; committed id: app.generated"
+        "Admission: codm; URL: https://github.com/fixture/generated; committed id: app.generated"
         in output
     )
     assert path.read_bytes() == before

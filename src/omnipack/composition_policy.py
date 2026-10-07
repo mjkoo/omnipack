@@ -10,30 +10,12 @@ from typing import Any
 
 from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
 from omnipack.overlay import OverlayPatch
+from omnipack.source_registry import ORIGINS, Source
 from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 from omnipack.urls import normalize_project_url, parse_project_url
 
 RenderedKey = tuple[str, str]
 PinKey = tuple[str, Variant]
-
-SOURCES = frozenset({"rjny", "bboi", "extras", "codm2000", "quiver"})
-ORIGINS = frozenset(
-    {
-        "rjny-catalog",
-        "bboi-standard-asset",
-        "bboi-dual-asset",
-        "extras",
-        "codm-generated",
-        "quiver-generated",
-    }
-)
-_SOURCE_ORIGINS = {
-    "rjny": frozenset({"rjny-catalog"}),
-    "bboi": frozenset({"bboi-standard-asset", "bboi-dual-asset"}),
-    "extras": frozenset({"extras"}),
-    "codm2000": frozenset({"codm-generated"}),
-    "quiver": frozenset({"quiver-generated"}),
-}
 
 
 _EXPLICIT_FAMILY = re.compile(r"app:[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -382,9 +364,13 @@ def _selector(value: object, label: str) -> CandidateSelector:
     _fields(record, {"source", "origin", "id", "url"}, label)
     source = _text(record.get("source"), f"{label}.source")
     origin = _text(record.get("origin"), f"{label}.origin")
-    if source not in SOURCES:
-        raise CompositionPolicyError(f"{label}.source has unknown source {source!r}")
-    if origin not in ORIGINS or origin not in _SOURCE_ORIGINS[source]:
+    try:
+        origins = ORIGINS[Source(source)]
+    except ValueError:
+        raise CompositionPolicyError(
+            f"{label}.source has unknown source {source!r}"
+        ) from None
+    if origin not in origins:
         raise CompositionPolicyError(
             f"{label}.origin {origin!r} is invalid for source {source!r}"
         )

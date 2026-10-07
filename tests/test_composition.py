@@ -57,7 +57,7 @@ def app(
         "rjny": "rjny-catalog",
         "bboi": "bboi-standard-asset",
         "extras": "extras",
-        "codm2000": "codm-generated",
+        "codm": "codm-generated",
         "quiver": "quiver-generated",
     }
     return App(
@@ -539,7 +539,7 @@ def test_a_family_rule_covers_rule_less_builds_at_its_url() -> None:
     url = "https://github.com/owner/project"
     ruled = app("bboi.pkg", "bboi", family="app:x", url=url)
     quiver = app("quiver.pkg", "quiver", url=url)
-    codm = app("codm.pkg", "codm2000", url=url, eligibility=DUAL_ONLY)
+    codm = app("codm.pkg", "codm", url=url, eligibility=DUAL_ONLY)
     result = compose(
         [ruled, quiver, codm], [], [], policy=build_policy(rules_for([ruled]))
     )
@@ -572,7 +572,7 @@ def test_rule_less_tracker_joins_the_family_ruled_onto_its_url() -> None:
     installable = app("app.pkg", family="app:x", url=url)
     tracker = app(
         "1234",
-        "codm2000",
+        "codm",
         url=url,
         eligibility=DUAL_ONLY,
         additional_settings=TRACK_ONLY,
@@ -590,7 +590,7 @@ def test_split_rules_let_a_tracker_and_an_installable_build_both_ship() -> None:
     installable = app("app.pkg", family="app:a", url=url)
     tracker = app(
         "1234",
-        "codm2000",
+        "codm",
         family="app:a-tracker",
         url=url,
         eligibility=DUAL_ONLY,
@@ -605,7 +605,7 @@ def test_owner_rules_join_an_app_and_a_tracker_at_different_urls() -> None:
     installable = app("app.pkg", family="app:x")
     tracker = app(
         "1234",
-        "codm2000",
+        "codm",
         family="app:x",
         eligibility=DUAL_ONLY,
         additional_settings=TRACK_ONLY,
@@ -1047,9 +1047,7 @@ def test_considered_lists_only_other_available_candidates() -> None:
     winner = app("winner", "extras", family="app:x")
     loser = app("loser", "rjny", family="app:x")
     denied = app("denied", "bboi", family="app:x")
-    single_only = app(
-        "single.only", "codm2000", family="app:x", eligibility=SINGLE_ONLY
-    )
+    single_only = app("single.only", "codm", family="app:x", eligibility=SINGLE_ONLY)
     result = compose([winner, loser, denied, single_only], deny(denied.url), [])
     considered = {
         item.variant: [candidate.id for candidate in item.considered]

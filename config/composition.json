@@ -59,11 +59,11 @@
         "url": "https://github.com/Simon358/ctr-native-android"
       },
       "family": "app:ctr",
-      "rationale": "The Simon build is the standard CTR candidate; the codm2000 dual-screen build at another repository joins it."
+      "rationale": "The Simon build is the standard CTR candidate; the codm dual-screen build at another repository joins it."
     },
     {
       "match": {
-        "source": "codm2000",
+        "source": "codm",
         "origin": "codm-generated",
         "id": "com.ctrnative",
         "url": "https://github.com/igawa6/ctr-native-android"
@@ -178,7 +178,7 @@
     },
     {
       "match": {
-        "source": "codm2000",
+        "source": "codm",
         "origin": "codm-generated",
         "id": "com.pokeemerald.dualscreen",
         "url": "https://github.com/Goldoire/pokeemerald-dualscreen"
@@ -247,7 +247,7 @@
         "id": "app.nanostack.pixelguide",
         "url": "https://github.com/rexmont/Pixel-Guide-Android"
       },
-      "rationale": "Keep RJNY's Pixel Guide rendering in dual when the codm2000 build is also admitted."
+      "rationale": "Keep RJNY's Pixel Guide rendering in dual when the codm build is also admitted."
     },
     {
       "family": "github.com/emulnk/emulnk",
@@ -258,7 +258,7 @@
         "id": "com.emulnk",
         "url": "https://github.com/EmuLnk/emulnk"
       },
-      "rationale": "Keep RJNY's EmuLnk rendering in dual when the codm2000 build is also admitted."
+      "rationale": "Keep RJNY's EmuLnk rendering in dual when the codm build is also admitted."
     },
     {
       "family": "app:super-metroid",

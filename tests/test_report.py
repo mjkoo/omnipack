@@ -493,7 +493,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
         ],
         "sourceAdmissions": [
             {
-                "source": "codm2000",
+                "source": "codm",
                 "url": f"https://example.test/{i}",
                 "id": f"committed.{i}",
             }
@@ -574,7 +574,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             f"winner: rjny/rjny-catalog tied.{i} at example.test/tied/{i}\n"
         ) in output
         assert (
-            f"Admission: codm2000; URL: https://example.test/{i}; committed id: committed.{i}\n"
+            f"Admission: codm; URL: https://example.test/{i}; committed id: committed.{i}\n"
             in output
         )
         assert (
@@ -837,7 +837,7 @@ SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.tes
         ),
         (
             "sourceAdmissions",
-            {"source": "codm2000", "url": "https://example.test"},
+            {"source": "codm", "url": "https://example.test"},
         ),
         ("uncategorizedFamilies", {"family": "app:x"}),
         ("uncategorizedFamilies", {"family": "app:x", "variants": []}),

@@ -74,7 +74,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     write_previous(tmp_path, {"apps": [old, kept]}, {"apps": [kept]})
     write_config(tmp_path)
     admitted = {
-        "source": "codm2000",
+        "source": "codm",
         "url": "https://github.com/owner/app",
         "id": "owner.app",
     }

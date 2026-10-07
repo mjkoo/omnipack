@@ -6,7 +6,6 @@ from typing import get_args
 
 import pytest
 
-from omnipack.discovery import GeneratedSource
 from omnipack.offline import Finding
 from omnipack.report_model import (
     BuildStage,
@@ -14,6 +13,7 @@ from omnipack.report_model import (
     OfflineStatus,
     Status,
 )
+from omnipack.source_registry import GeneratedSource
 from scripts.source_proposal import GENERATION_SUCCESS_STATUS, SourceName
 
 

@@ -240,7 +240,7 @@ def test_family_rule_covers_every_build_at_its_url() -> None:
     )
     codm = candidate(
         id="org.example.codm",
-        provenance=Provenance("codm2000", "catalog"),
+        provenance=Provenance("codm", "catalog"),
         origin="codm-generated",
     )
     assert families(parsed, [other_source(), quiver, codm]) == [

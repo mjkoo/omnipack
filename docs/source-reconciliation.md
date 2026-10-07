@@ -227,7 +227,7 @@ outside this update; no device writes were performed while preparing it.
 
 ## Why incorrect identities and old choices were present
 
-Most mismatches originated in the BBoi/codm2000 source catalogs or generated
+Most mismatches originated in the BBoi/codm source catalogs or generated
 catalog identities. The pack previously validated metadata and version syntax
 without checking those selected APK manifests. Some known mismatches, including
 Symphony and Shipwright, were explicitly deferred during version-policy work.

@@ -16,15 +16,9 @@ from enum import StrEnum
 from typing import TypedDict
 from urllib.parse import urlsplit
 
+from omnipack.source_registry import GeneratedSource
 from omnipack.sources.common import HttpGetter, SourceType, derived_source_type
 from omnipack.urls import normalize_project_url
-
-
-class GeneratedSource(StrEnum):
-    """The sources whose committed catalogs are generated from an upstream list."""
-
-    CODM = "codm"
-    QUIVER = "quiver"
 
 
 class SkipReason(StrEnum):

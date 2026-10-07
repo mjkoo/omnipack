@@ -29,9 +29,10 @@ from omnipack.overlay import (
 )
 from omnipack.render import canonical_serialization
 from omnipack.report_model import SelectionReason
+from omnipack.source_registry import PRECEDENCE
 from omnipack.urls import normalize_project_url, parse_project_url
 
-_PRECEDENCE = {"codm2000": 0, "bboi": 1, "quiver": 2, "rjny": 3, "extras": 4}
+_PRECEDENCE: dict[str, int] = {source: rank for rank, source in enumerate(PRECEDENCE)}
 
 
 class CompositionError(ValueError):

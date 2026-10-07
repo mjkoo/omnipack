@@ -7,7 +7,6 @@ import pytest
 from omnipack.discovery import (
     Discovery,
     DiscoveryError,
-    GeneratedSource,
     LinkSkip,
     Listing,
     Skip,
@@ -15,6 +14,7 @@ from omnipack.discovery import (
     discover,
 )
 from omnipack.http import HttpError
+from omnipack.source_registry import GeneratedSource
 from omnipack.urls import normalize_project_url
 from tests.http_support import FakeHttp
 
