@@ -12,8 +12,10 @@ The supported generated sources are codm and Quiver, each configured with its
 upstream input and its committed catalog path. For codm, generation SHALL read
 the configured README and take the inline links inside its Project tables,
 `[text](url)` with an optional title or an angle-bracket destination, whose
-text may hold escaped or balanced brackets and whose scheme is matched without
-regard to case; reference-style links are not read. A link outside those
+text may hold escaped or balanced brackets and whose `http` or `https` scheme
+is matched without regard to case; reference-style links are not read, and a
+relative link or a link of another scheme names no project and is neither
+listed nor reported. A link outside those
 tables, inside a fenced or indented code block, an HTML comment or a code span,
 or opened by an escaped bracket, SHALL NOT introduce a project, since Markdown
 renders none of them as a link. A leading byte order mark is ignored. A Project table
@@ -47,7 +49,8 @@ regard to case: `github` forms `https://github.com/<repository>` and `gitlab`
 forms `https://gitlab.com/<repository>`. The `repository` SHALL be a valid
 path for its forge: for GitHub exactly an owner and a name, for GitLab one or
 more namespace segments followed by a project, every segment nonempty, neither
-`.` nor `..` and free of whitespace and URL syntax, and the URL it forms SHALL
+`.` nor `..` and holding only ASCII letters, digits, `_`, `.` and `-`, so no
+segment carries whitespace or URL syntax, and the URL it forms SHALL
 be a repository of that forge as source type derivation reads it, so every
 kept row's entry carries its forge's source type. A row whose `repositorySource` names any other forge, or whose
 `repository` is missing, not a string or not a valid path for its forge, SHALL
@@ -165,6 +168,13 @@ be read or is malformed.
 
 - **WHEN** a Quiver row's `repository` is null
 - **THEN** the row is reported and skipped, and generation succeeds
+
+#### Scenario: A repository segment holds URL syntax
+
+- **WHEN** a GitLab row's `repository` is `g/a\b`, `g/<x>`, `gr@up/app` or
+  `group/a:b`
+- **THEN** the row is reported and skipped as an invalid repository, since such
+  a URL could name a different path than the row lists
 
 #### Scenario: A GitLab repository sits in a nested group
 

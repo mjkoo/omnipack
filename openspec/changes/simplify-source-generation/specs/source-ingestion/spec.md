@@ -31,7 +31,8 @@ and a gitlab.com project takes GitLab. Any other entry without a declaration
 SHALL carry no source type, leaving detection to Obtainium. The system SHALL
 NOT fail an entry for the source type it declares or lacks; a malformed
 declaration, one that is not a string, SHALL fail the build with the entry and
-value identified.
+value identified. An empty or whitespace-only declaration SHALL count as no
+declaration, so the entry derives its source type or carries none.
 
 An entry declaring GitLab SHALL keep the URL as written, so a project on any
 GitLab instance, gitlab.com or self-hosted, reaches the pack as Obtainium's
@@ -68,6 +69,13 @@ the defaults defined for GitLab, never those defined for HTML.
 
 - **WHEN** an upstream record declares `overrideSource: Codeberg`
 - **THEN** the build keeps the entry with that source type and does not fail
+
+#### Scenario: A record declares an empty source type
+
+- **WHEN** an upstream record declares `overrideSource: ""`
+- **THEN** an entry addressing a github.com repository carries the GitHub
+  source type, an entry addressing an itch.io page carries no source type, and
+  no entry carries an empty source type
 
 #### Scenario: An upstream record declares no source type
 
@@ -139,7 +147,7 @@ the path, reducing a GitHub project link to its owner and repository compared
 without regard to case, and reducing a gitlab.com project link to the
 project path before any `/-/` segment, the route marker GitLab reserves inside
 a project. A gitlab.com link whose path holds fewer than two nonempty
-segments, or whose first nonempty segment is one of GitLab's site routes (`-`,
+segments before any `-` segment, or whose first nonempty segment is one of GitLab's site routes (`-`,
 `groups`, `users`, `explore`, `dashboard`, `search`, `help` or `admin`), names
 no project and SHALL NOT be reduced; it is a site page, compared like another
 host's link.
@@ -229,6 +237,13 @@ is acceptable: no stage rejects an entry for its URL's host or path.
   a GitLab site route rather than a project's namespace, and it derives no
   source type
 
+#### Scenario: A gitlab.com group link points inside the group
+
+- **WHEN** a source gives `https://gitlab.com/group/-/epics`
+- **THEN** it is not reduced to `gitlab.com/group`, because only one nonempty
+  segment precedes its `-` segment, so it names a group rather than a project,
+  and it derives no source type
+
 ### Requirement: Committed Quiver entries are baseline builds with generated provenance
 
 Routine ingestion SHALL read Quiver entries from its configured committed
@@ -236,8 +251,8 @@ Obtainium catalog without requesting Quiver lists, repository hosts or APKs.
 A missing, unreadable or malformed catalog, a repeated entry ID or two entries
 at one normalized project URL SHALL fail the build while preserving previous
 outputs. Valid entries SHALL carry source
-`quiver`, generated origin `quiver-generated`, their committed ids and their
-GitHub or GitLab source type. They SHALL be
+`quiver`, generated origin `quiver-generated`, their committed ids and the
+source type each declares. They SHALL be
 baseline candidates eligible for both packs, subject to ordinary normalization,
 composition policy, denials and overlays. Every valid entry SHALL reach
 composition, including entries sharing another source's project URL. Routine
