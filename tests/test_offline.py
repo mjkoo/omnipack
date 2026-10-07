@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from omnipack.model import SourceType
 from omnipack.offline import Finding, OfflineInputs, validate_offline
 from omnipack.report_model import Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
@@ -24,7 +25,7 @@ def app(package_id: str = "org.example.app", source: str = "GitHub") -> dict[str
         "url": "https://example.com/app",
         "author": "Example",
         "name": "Example",
-        "additionalSettings": json.dumps(SETTINGS_DEFAULTS[source]),
+        "additionalSettings": json.dumps(SETTINGS_DEFAULTS[SourceType(source)]),
         "categories": ["Emulator"],
         "overrideSource": source,
         "allowIdChange": True,
@@ -181,10 +182,7 @@ def test_every_entry_must_allow_an_id_change(value: object) -> None:
         (lambda value: value.update(url="https://[invalid"), "invalid_url"),
         (lambda value: value.update(author=1), "invalid_field"),
         (lambda value: value.update(categories=[1]), "invalid_categories"),
-        (
-            lambda value: value.update(overrideSource="F-Droid Third Party Repo"),
-            "unsupported_source",
-        ),
+        (lambda value: value.update(overrideSource=1), "invalid_source"),
     ],
     ids=(
         "missing-name",
@@ -204,7 +202,7 @@ def test_required_entry_fields_are_validated(mutate, code: str) -> None:
 
 def test_object_additional_settings_names_variant_id_and_field() -> None:
     value = app()
-    value["additionalSettings"] = SETTINGS_DEFAULTS["GitHub"]
+    value["additionalSettings"] = SETTINGS_DEFAULTS[SourceType.GITHUB]
     findings = validate_offline(inputs([value]))
     assert {
         (
@@ -246,11 +244,9 @@ def test_malformed_source_produces_findings_without_stopping_other_entries(
     other.pop("name")
     findings = validate_offline(inputs([malformed], [other]))
     assert {
-        ("single", "malformed", "overrideSource", "unsupported_source"),
+        ("single", "malformed", "overrideSource", "invalid_source"),
         ("dual", "other", "name", "missing_field"),
     } <= located(findings)
-    [unsupported] = [item for item in findings if item.code == "unsupported_source"]
-    assert repr(source) in unsupported.message
 
 
 @pytest.mark.parametrize("field", ["overrideSource", "additionalSettings"])
@@ -291,9 +287,8 @@ def test_complete_native_gitlab_entry_passes_offline_validation() -> None:
     assert validate_offline(inputs([value], [dict(value)])) == ()
 
 
-def test_gitlab_url_rules_are_outside_offline_verification() -> None:
+def test_deep_gitlab_paths_are_outside_offline_verification() -> None:
     value = app("deep", source="GitLab")
-    # Deeper than ingestion accepts for a GitLab project.
     value["url"] = "https://gitlab.com/" + "/".join(f"Group{i}" for i in range(22))
     assert validate_offline(inputs([value], [dict(value)])) == ()
 
@@ -754,3 +749,30 @@ def test_entry_at_a_denied_url_is_reported_per_variant() -> None:
         )
         for variant in ("single", "dual")
     ]
+
+
+@pytest.mark.parametrize(
+    ("url", "source"),
+    [
+        ("https://codeberg.org/owner/app", "Codeberg"),
+        ("https://christt105.itch.io/poketch", None),
+    ],
+)
+def test_entry_without_committed_defaults_needs_only_an_object_of_settings(
+    url: str, source: str | None
+) -> None:
+    value = {**app(), "url": url, "additionalSettings": json.dumps({"trackOnly": 1})}
+    if source is None:
+        del value["overrideSource"]
+    else:
+        value["overrideSource"] = source
+    assert not errors(validate_offline(inputs([value])))
+    value["additionalSettings"] = json.dumps([])
+    assert "invalid_additional_settings" in codes(validate_offline(inputs([value])))
+
+
+def test_self_hosted_gitlab_entry_is_type_checked_against_gitlab_defaults() -> None:
+    value = {**app(source="GitLab"), "url": "https://gitlab.example.org/group/app"}
+    assert not errors(validate_offline(inputs([value])))
+    value = with_settings(value, fallbackToOlderReleases="yes")
+    assert "wrong_setting_type" in codes(validate_offline(inputs([value])))

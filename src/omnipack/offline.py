@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
+from omnipack.model import SourceType
 from omnipack.report_model import FindingRecord, Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
@@ -72,10 +73,9 @@ def validate_offline(inputs: OfflineInputs) -> tuple[Finding, ...]:
     """Validate a pair and its composition configuration without I/O.
 
     Rendering fills every default setting key and derives the category
-    colours from the entries it renders, and ingestion enforces GitLab project
-    URLs, so none of those is checked again here. Setting values are checked:
-    upstream records and overlay patches supply them, and rendering copies them
-    without checking their types.
+    colours from the entries it renders, so neither is checked again here.
+    Setting values are checked: upstream records and overlay patches supply
+    them, and rendering copies them without checking their types.
     """
     findings: list[Finding] = []
     documents = {
@@ -248,17 +248,19 @@ def _validate_entry(
             "categories",
         )
     source = raw.get("overrideSource")
-    if not isinstance(source, str) or source not in SETTINGS_DEFAULTS:
+    if "overrideSource" in raw and not isinstance(source, str):
         _add(
             findings,
             "entry",
-            "unsupported_source",
-            f"unsupported source {source!r}",
+            "invalid_source",
+            "overrideSource must be a string",
             variant,
             entry_id,
             index,
             "overrideSource",
         )
+    # Settings are type-checked only against committed defaults.
+    if not isinstance(source, str) or source not in SETTINGS_DEFAULTS:
         source = None
     if raw.get("allowIdChange") is not True:
         _add(
@@ -362,7 +364,7 @@ def _validate_additional(
     index: int,
     findings: list[Finding],
 ) -> None:
-    for key, default in SETTINGS_DEFAULTS[source].items():
+    for key, default in SETTINGS_DEFAULTS[SourceType(source)].items():
         if key in settings and type(settings[key]) is not type(default):
             _add(
                 findings,
@@ -374,7 +376,7 @@ def _validate_additional(
                 index,
                 key,
             )
-    if source != "HTML":
+    if source != SourceType.HTML:
         return
     steps = settings.get("intermediateLink")
     if isinstance(steps, list):

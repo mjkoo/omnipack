@@ -7,7 +7,7 @@ import re
 from dataclasses import dataclass
 from html import escape
 from typing import Any
-from urllib.parse import quote, urlencode
+from urllib.parse import quote, urlencode, urlsplit
 
 from omnipack.composition_policy import (
     CompositionPolicy,
@@ -176,7 +176,11 @@ def _inline_html_text(value: str) -> str:
 def _cell(record: dict[str, Any] | None) -> str:
     if record is None:
         return "-"
+    # An entry without a source type, which Obtainium detects from the URL,
+    # is labelled by its host.
     source = record.get("overrideSource")
+    if source is None:
+        source = urlsplit(record["url"]).hostname
     if not isinstance(source, str) or not source:
         raise CatalogError(f"app {record.get('id')!r} has invalid source label")
     source_url = escape(quote(record["url"], safe=":/?&=#%+@;,"), quote=True)

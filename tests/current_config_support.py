@@ -12,9 +12,10 @@ import pytest
 from omnipack.composition_policy import load_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App
+from omnipack.source_catalog import render_catalog
 from omnipack.sources import bboi, codm, quiver, rjny
 from omnipack.sources.extras import fetch as fetch_extras
-from tests.test_sources import FakeHttp
+from tests.http_support import FakeHttp
 
 ROOT = Path(__file__).parents[1]
 CAPTURED = ROOT / "tests/fixtures/reconciliation"
@@ -22,6 +23,14 @@ CAPTURED = ROOT / "tests/fixtures/reconciliation"
 
 def load_json(path: Path) -> Any:
     return json.loads(path.read_text())
+
+
+def assert_canonical_catalog(catalog: Path) -> None:
+    """Fail unless a committed source catalog is its entries' canonical bytes."""
+    entries = json.loads(catalog.read_bytes())["apps"]
+    assert catalog.read_bytes() == render_catalog(entries), (
+        f"{catalog} differs from the canonical rendering of its entries"
+    )
 
 
 @dataclass(frozen=True, slots=True)

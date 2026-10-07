@@ -51,7 +51,13 @@ def _repo(tmp_path: Path, name: str = "repo") -> Path:
         relative: README_BYTES if relative == "README.md" else f"base:{relative}\n"
         for relative in ALLOWED_PATHS
     }
-    files.update({"tracked.txt": "base\n", ".gitignore": ".build/\n"})
+    files.update(
+        {
+            "tracked.txt": "base\n",
+            "config/catalogs/codm.json": '{"apps": []}\n',
+            ".gitignore": ".build/\n",
+        }
+    )
     return repository(tmp_path, files, name=name)
 
 
@@ -218,7 +224,7 @@ def test_prepare_cli_writes_changed_false_for_a_no_op(
 
 @pytest.mark.parametrize(
     "case",
-    ["out-of-scope", "deleted", "symlink", "executable", "absent-at-base"],
+    ["out-of-scope", "catalog", "deleted", "symlink", "executable", "absent-at-base"],
 )
 def test_unsafe_build_output_fails_allowlist(tmp_path: Path, case: str) -> None:
     root = _repo(tmp_path)
@@ -230,6 +236,12 @@ def test_unsafe_build_output_fails_allowlist(tmp_path: Path, case: str) -> None:
     process = ScriptedProcess(root)
     if case == "out-of-scope":
         process.on_build.append(lambda: (root / "tracked.txt").write_text("mutated\n"))
+    elif case == "catalog":
+        process.on_build.append(
+            lambda: (root / "config/catalogs/codm.json").write_text(
+                '{"apps": [{"id": "new"}]}\n'
+            )
+        )
     elif case == "deleted":
         process.on_build.append(lambda: (root / ALLOWED_PATHS[0]).unlink())
     elif case == "symlink":

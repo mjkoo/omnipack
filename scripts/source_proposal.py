@@ -15,7 +15,7 @@ import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Literal, get_args
 
@@ -76,6 +76,12 @@ BUNDLE_NAME = "candidate.bundle"
 BODY_NAME = "pr-body.md"
 # GitHub rejects a pull request body longer than this many characters.
 PR_BODY_LIMIT = 65536
+# GitHub rejects a step summary over 1 MiB. The bound counts characters, and
+# a character takes at most four bytes in UTF-8, so this stays under it.
+SUMMARY_LIMIT = 250_000
+# Shown when the candidate's bytes differ from the catalog's but no entry was
+# added, removed or changed, so a reviewer is not left with three empty lists.
+BYTES_ONLY_CHANGE = "Catalog bytes changed without entry changes"
 
 # The values GitHub reports for a step's `outcome`.
 StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
@@ -106,12 +112,8 @@ class StageOutcome:
     stage: StageName
     base_sha: str | None
     sha: str | None
-    added: tuple[str, ...] = ()
-    removed: tuple[str, ...] = ()
-    changed_urls: tuple[str, ...] = ()
-    retained_failures: tuple[tuple[str, str], ...] = ()
+    report: Mapping[str, object] = field(default_factory=dict)
     reason: str = ""
-    diagnostics: tuple[str, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -122,14 +124,11 @@ class StageOutcome:
         if self.status == "failed":
             return f"stage failed: {self.reason or self.stage}"
         return _render_report(
+            self.report,
             base_sha=self.base_sha or "",
             run_url=None,
-            added=self.added,
-            removed=self.removed,
-            changed=self.changed_urls,
-            retained_failures=self.retained_failures,
-            diagnostics=self.diagnostics,
-            limit=None,
+            catalog_changed=self.changed,
+            limit=SUMMARY_LIMIT,
         )
 
 
@@ -181,10 +180,6 @@ def run_stage(
     ):
         return _stage_failure("report", "generation did not succeed", base_sha)
 
-    added, removed, changed_urls = _report_changes(report)
-    retained_failures = _report_retained_failures(report)
-    diagnostics = _report_diagnostics(report)
-
     try:
         base_entry = git_text(root, "ls-tree", base_sha, "--", descriptor.catalog)
         if not base_entry.startswith("100644 blob "):
@@ -221,17 +216,7 @@ def run_stage(
             return _stage_failure("bundle", "could not write the bundle", base_sha)
 
     status: StageStatus = "changed" if changed else "unchanged"
-    return StageOutcome(
-        status,
-        "complete",
-        base_sha,
-        sha,
-        added,
-        removed,
-        changed_urls,
-        retained_failures,
-        diagnostics=diagnostics,
-    )
+    return StageOutcome(status, "complete", base_sha, sha, report)
 
 
 _FILE_PROBLEMS: Mapping[FileProblem, str] = {
@@ -247,10 +232,12 @@ def _stage_failure(stage: StageName, reason: str, base_sha: str | None) -> Stage
 
 def _report_changes(
     report: Mapping[str, object],
-) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]]:
+) -> tuple[tuple[str, ...], tuple[str, ...], tuple[str, ...]] | None:
+    """The added, removed and changed URLs, or None when the report has no
+    changes because generation failed before writing a candidate."""
     changes = report.get("changes")
     if not isinstance(changes, dict):
-        return (), (), ()
+        return None
     return (
         tuple(url for url in changes.get("added", ()) or () if isinstance(url, str)),
         tuple(url for url in changes.get("removed", ()) or () if isinstance(url, str)),
@@ -258,97 +245,88 @@ def _report_changes(
     )
 
 
-def _report_retained_failures(
-    report: Mapping[str, object],
-) -> tuple[tuple[str, str], ...]:
-    raw = report.get("retainedFailures")
+def _report_skipped(report: Mapping[str, object]) -> tuple[str, ...]:
+    """One line per skipped listing: what it was, then why it was skipped."""
+    raw = report.get("skipped")
     if not isinstance(raw, list):
         return ()
-    failures: list[tuple[str, str]] = []
+    lines: list[str] = []
     for item in raw:
         if isinstance(item, dict):
-            url = item.get("url")
-            message = item.get("message")
-            if isinstance(url, str) and isinstance(message, str):
-                failures.append((url, message))
-    return tuple(failures)
-
-
-def _report_diagnostics(report: Mapping[str, object]) -> tuple[str, ...]:
-    return tuple(
-        f"{key}: {json.dumps(report[key], ensure_ascii=False, sort_keys=True)}"
-        for key in (
-            "error",
-            "inputs",
-            "inactiveRules",
-            "skipped",
-            "unsupportedRows",
-            "unsupportedLinks",
-            "noAndroid",
-            "unavailableRepositories",
-            "unresolved",
-            "effectivePolicy",
-            "coverage",
-            "apk",
-            "tracking",
-            "filteredAssets",
-            "filterDisagreements",
-        )
-        if key in report
-    )
+            listing = {key: value for key, value in item.items() if key != "reason"}
+            text = json.dumps(listing, ensure_ascii=False, sort_keys=True)
+            lines.append(f"{text}: {item.get('reason')}")
+    return tuple(lines)
 
 
 def _render_report(
+    report: Mapping[str, object],
     *,
     base_sha: str,
     run_url: str | None,
-    added: Sequence[str],
-    removed: Sequence[str],
-    changed: Sequence[str],
-    retained_failures: Sequence[tuple[str, str]],
-    diagnostics: Sequence[str] = (),
-    limit: int | None = PR_BODY_LIMIT,
+    catalog_changed: bool,
+    limit: int,
 ) -> str:
-    lines: list[str] = []
-    if run_url is not None:
-        lines.append(f"Workflow run: {run_url}")
-        lines.append("")
-    lines.append(f"Base SHA: {base_sha}")
-    lines.append("")
-    lines.append("<pre>")
-    lines.append("Added:")
-    lines.extend(html.escape(url) for url in added)
-    lines.append("")
-    lines.append("Removed:")
-    lines.extend(html.escape(url) for url in removed)
-    lines.append("")
-    lines.append("Changed:")
-    lines.extend(html.escape(url) for url in changed)
-    lines.append("")
-    lines.append("Retained failures:")
-    failure_lines = [
-        f"{html.escape(url)}: {html.escape(message)}"
-        for url, message in retained_failures
-    ]
-    failure_lines.extend(html.escape(line) for line in diagnostics)
-    text = "\n".join([*lines, *failure_lines, "</pre>"]) + "\n"
-    if limit is None or len(text) <= limit:
-        return text
+    """Render a generation report inside an escaped `<pre>` block.
 
-    # Bound every upstream section, leaving room for a complete omission line
-    # and closing tag. The full diagnostics remain in the summary and artifact.
-    split = lines.index("<pre>") + 1
-    prefix, details = lines[:split], lines[split:] + failure_lines
-    longest_omission = f"and {len(details)} more"
-    budget = limit - len("\n".join([*prefix, longest_omission, "</pre>"]) + "\n")
-    kept: list[str] = []
-    for line in details:
-        if len(line) + 1 > budget:
-            break
-        kept.append(line)
-        budget -= len(line) + 1
-    omission = f"and {len(details) - len(kept)} more"
-    return "\n".join([*prefix, *kept, omission, "</pre>"]) + "\n"
+    A failed report has no changes, so it shows no change sections rather
+    than empty ones. When the text would exceed `limit`, entries that do not
+    fit are left out and counted, while every section header stays.
+    """
+    head: list[str] = []
+    if run_url is not None:
+        head += [f"Workflow run: {run_url}", ""]
+    head += [f"Base SHA: {base_sha}", "", "<pre>"]
+    notes: list[str] = []
+    error = report.get("error")
+    if isinstance(error, str):
+        notes.append(f"Error: {error}")
+    sections: list[tuple[str, Sequence[str]]] = []
+    changes = _report_changes(report)
+    if changes is not None:
+        added, removed, changed = changes
+        if catalog_changed and not (added or removed or changed):
+            notes.append(BYTES_ONLY_CHANGE)
+        sections += [("Added:", added), ("Removed:", removed), ("Changed:", changed)]
+    sections.append(("Skipped:", _report_skipped(report)))
+    escaped_notes = [html.escape(note) for note in notes]
+    escaped_sections = [
+        (header, [html.escape(line) for line in lines]) for header, lines in sections
+    ]
+
+    def render(kept_notes: list[str], kept: list[list[str]], omitted: int) -> str:
+        lines = list(head)
+        for note in kept_notes:
+            lines += [note, ""]
+        for index, (header, _) in enumerate(escaped_sections):
+            if index:
+                lines.append("")
+            lines += [header, *kept[index]]
+        if omitted:
+            lines.append(f"and {omitted} more")
+        return "\n".join([*lines, "</pre>"]) + "\n"
+
+    full = render(escaped_notes, [lines for _, lines in escaped_sections], 0)
+    if len(full) <= limit:
+        return full
+    # Keep what fits, in order, leaving room for the longest omission line.
+    # The full diagnostics remain in the generation report.
+    total = len(escaped_notes) + sum(len(lines) for _, lines in escaped_sections)
+    budget = limit - len(render([], [[] for _ in escaped_sections], total))
+    kept_notes: list[str] = []
+    for note in escaped_notes:
+        if len(note) + 2 <= budget:
+            kept_notes.append(note)
+            budget -= len(note) + 2
+    kept: list[list[str]] = []
+    for _, lines in escaped_sections:
+        kept.append([])
+        for line in lines:
+            if len(line) + 1 <= budget:
+                kept[-1].append(line)
+                budget -= len(line) + 1
+    omitted = total - len(kept_notes) - sum(len(lines) for lines in kept)
+    return render(kept_notes, kept, omitted)
 
 
 def _commit_candidate(
@@ -706,21 +684,18 @@ def render_pr_body(
     run_url: str,
     results: Mapping[str, StepResult],
 ) -> str:
-    """The escaped PR body: the run, base, changes, diagnostics and results.
+    """The escaped PR body: the run, base, changes, skipped listings and results.
 
     The report section is bounded so the whole body, including the validation
-    results, stays within GitHub's length limit.
+    results, stays within GitHub's length limit. A body is written only for a
+    candidate that changed the catalog.
     """
     validation = _render_validation(results)
-    added, removed, changed = _report_changes(report)
     report_text = _render_report(
+        report,
         base_sha=base_sha,
         run_url=run_url,
-        added=added,
-        removed=removed,
-        changed=changed,
-        retained_failures=_report_retained_failures(report),
-        diagnostics=_report_diagnostics(report),
+        catalog_changed=True,
         limit=PR_BODY_LIMIT - len(validation) - 1,
     )
     return report_text + "\n" + validation
@@ -740,7 +715,7 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
     validation = _render_validation(results)
     base = environ.get("BASE_SHA", "")
     if FULL_SHA.fullmatch(base) is None:
-        base = "unavailable (staging did not succeed)"
+        base = "unavailable (no staged base revision)"
     try:
         report = json.loads(Path(descriptor.report).read_bytes())
         if not isinstance(report, dict):
@@ -748,16 +723,12 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
     except (OSError, ValueError, TypeError):
         summary = f"Source: {source}\nBase SHA: {base}\ngeneration report unavailable\n"
     else:
-        added, removed, changed = _report_changes(report)
         summary = _render_report(
+            report,
             base_sha=base,
             run_url=run_url(environ),
-            added=added,
-            removed=removed,
-            changed=changed,
-            retained_failures=_report_retained_failures(report),
-            diagnostics=_report_diagnostics(report),
-            limit=None,
+            catalog_changed=environ.get("CHANGED") == "true",
+            limit=SUMMARY_LIMIT - len(validation) - 1,
         )
         if all(result == "success" for result in results.values()):
             body_path = _handoff_directory(environ) / BODY_NAME

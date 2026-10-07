@@ -1,19 +1,24 @@
 from __future__ import annotations
 
 import json
+import re
+from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+
+import pytest
 
 from omnipack.catalog import generate_catalog
 from omnipack.composition_policy import (
     parse_composition_policy,
 )
-from omnipack.merge import compose
-from omnipack.model import Category, Variant
+from omnipack.merge import CompositionResult, compose
+from omnipack.model import App, Category, Provenance, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.urls import normalize_project_url
+from tests import current_config_support
 from tests.current_config_support import (
     CurrentConfiguration,
     current_configuration_fixture,  # noqa: F401
@@ -212,18 +217,33 @@ def test_maintained_version_override_survives_refreshed_source_settings(
     assert observed == protected
 
 
+def assert_categories_follow_the_taxonomy(result: CompositionResult) -> None:
+    """Every selected entry carries taxonomy categories, Track Only exactly when
+    it is track-only, or none while the build reports its family uncategorized.
+
+    A family without a category key and a key without a selected family are
+    reported by the build, not failed, so a valid generated catalog that adds
+    or removes a project needs no other edit to be accepted.
+    """
+    uncategorized = {
+        (item.family, variant)
+        for item in result.report.uncategorized_families
+        for variant in item.variants
+    }
+    for variant, values in result.apps.items():
+        for app in values:
+            categories = app.data["categories"]
+            assert bool(categories) != ((app.family, variant) in uncategorized)
+            assert set(categories) <= set(Category)
+            track_only = app.data["additionalSettings"].get("trackOnly") is True
+            if categories:
+                assert (categories == [Category.TRACK_ONLY]) == track_only
+
+
 def test_current_composition_categorizes_every_entry_from_the_taxonomy(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    result = current_configuration.result
-    assert result.report.uncategorized_families == []
-    assert result.report.stale_category_assignments == []
-    for values in result.apps.values():
-        for app in values:
-            assert app.data["categories"]
-            assert set(app.data["categories"]) <= set(Category)
-            track_only = app.data["additionalSettings"].get("trackOnly") is True
-            assert (app.data["categories"] == [Category.TRACK_ONLY]) == track_only
+    assert_categories_follow_the_taxonomy(current_configuration.result)
 
 
 def test_split_and_joined_families_ship_as_intended(
@@ -250,3 +270,178 @@ def test_split_and_joined_families_ship_as_intended(
             if variant is Variant.SINGLE
             else "github.com/sapphirerhodonite/cemu"
         ]
+
+
+def test_open_nectar_entries_keep_their_published_id(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    url = "github.com/ssunnking/open-nectar---pikmin-native-pc-port"
+    for variant in Variant:
+        assert {
+            app.data["id"]
+            for app in current_configuration.result.apps[variant]
+            if normalize_project_url(app.url) == url
+        } <= {"org.opennectar"}
+
+
+GENERATED_ORIGINS = {"codm-generated", "quiver-generated"}
+KANTO_GEAR_ABOUT = (
+    "Kanto Gear is a Gen1Recomp Lua mod distributed as a ZIP, not an Android "
+    "application. Install or update through official Gen1Recomp at "
+    "https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import. "
+    "Obtainium only tracks release notifications; acknowledgement does not install "
+    "the resource or detect its installed version."
+)
+# Per-app choices for generated entries, kept as overlay records so they hold
+# whatever settings and names a regenerated catalog carries.
+GENERATED_OVERRIDES = {
+    "github.com/castdrian/showdown-ds": (
+        "Showdown!",
+        {
+            "includePrereleases": True,
+            "apkFilterRegEx": r"^showdown-v[0-9].*\.apk$",
+            "versionExtractionRegEx": "^v?(.+)$",
+            "matchGroupToUse": "1",
+            "fallbackToOlderReleases": False,
+        },
+    ),
+    "github.com/mastercook777/heimdall-ayn-thor-assistant": (
+        "Heimdall",
+        {
+            "includePrereleases": True,
+            "filterReleaseTitlesByRegEx": (
+                r"^Heimdall v[0-9]+\.[0-9]+\.[0-9]+(?:-(?:alpha|beta)\.[0-9]+)?$"
+            ),
+            "apkFilterRegEx": r"^heimdall-v[0-9].*\.apk$",
+            "versionExtractionRegEx": "^v?(.+)$",
+            "matchGroupToUse": "1",
+        },
+    ),
+    "github.com/rsigristc/dw3-ds-android": (
+        "DW2003 Dual Screen",
+        {"apkFilterRegEx": r"^DW2003-Dual-Screen-v[0-9].*\.apk$"},
+    ),
+    "github.com/averageconsumer/kanto-gear": (
+        "Kanto Gear (mod updates)",
+        {
+            "trackOnly": True,
+            "versionDetection": False,
+            "includeZips": False,
+            "autoApkFilterByArch": False,
+            "about": KANTO_GEAR_ABOUT,
+        },
+    ),
+    "github.com/999sian/melee-pc": ("Melee PC", {"includePrereleases": True}),
+    "github.com/slickamogus/silent-hill-decomp": (
+        "Silent Hill Decomp",
+        {"apkFilterRegEx": "^(?!.*_OLD[.]apk$).*"},
+    ),
+    "github.com/isledecomp/isle-portable": (
+        "LEGO Island Portable",
+        {"apkFilterRegEx": "^app-release[.]apk$"},
+    ),
+}
+
+
+def test_generated_entries_take_their_settings_and_categories_from_configuration(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    # Generated entries lose their names, settings and categories, so every
+    # value checked below can only come from configuration.
+    regenerated = [
+        replace(app, name="regenerated", additional_settings={}, categories=())
+        if app.origin in GENERATED_ORIGINS
+        else app
+        for app in current_configuration.candidates
+    ]
+    result = compose(
+        regenerated,
+        read(ROOT / "config/deny.json"),
+        read(ROOT / "config/overlay.json"),
+        policy=parse_composition_policy(current_configuration.policy),
+    )
+    assert_categories_follow_the_taxonomy(result)
+    origins = {
+        (normalize_project_url(selection.url), selection.variant): selection.origin
+        for selection in result.report.selections
+    }
+    for variant in Variant:
+        for entry in json.loads(render(result.apps[variant]))["apps"]:
+            key = normalize_project_url(entry["url"])
+            if key not in GENERATED_OVERRIDES:
+                continue
+            assert origins[key, variant] in GENERATED_ORIGINS, key
+            name, settings = GENERATED_OVERRIDES[key]
+            actual = json.loads(entry["additionalSettings"])
+            assert entry["name"] == name, key
+            assert {setting: actual[setting] for setting in settings} == settings, key
+
+
+def test_configuration_names_only_files_that_exist() -> None:
+    for path in sorted((ROOT / "config").rglob("*.json")):
+        for named in sorted(
+            set(re.findall(r"config/[\w./-]+\.json", path.read_text()))
+        ):
+            assert (ROOT / named).is_file(), f"{path.name} names missing {named}"
+
+
+def _with_quiver_catalog(
+    monkeypatch: pytest.MonkeyPatch, change: Callable[[list[App]], list[App]]
+) -> CurrentConfiguration:
+    fetch = current_config_support.quiver.fetch
+    monkeypatch.setattr(
+        current_config_support.quiver, "fetch", lambda *args: change(fetch(*args))
+    )
+    return current_config_support.build_current_configuration()
+
+
+def test_catalog_only_addition_of_an_uncategorized_family_is_reported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    url = "https://example.test/regression/new-port"
+    added = App(
+        "a1b2c3d4e5f6",
+        url,
+        "New Port",
+        None,
+        (),
+        Provenance("quiver", url),
+        frozenset(Variant),
+        origin="quiver-generated",
+    )
+    current = _with_quiver_catalog(monkeypatch, lambda apps: [*apps, added])
+    assert_categories_follow_the_taxonomy(current.result)
+    assert ("example.test/regression/new-port", (Variant.SINGLE, Variant.DUAL)) in [
+        (item.family, item.variants)
+        for item in current.result.report.uncategorized_families
+    ]
+
+
+def test_catalog_only_removal_of_a_categorized_entry_is_reported(
+    current_configuration: CurrentConfiguration, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    overlaid = {
+        normalize_project_url(record["url"])
+        for record in read(ROOT / "config/overlay.json")
+    }
+    # A family only a Quiver entry serves and a category key categorizes,
+    # whatever the committed catalog holds.
+    selections = current_configuration.result.report.selections
+    family = min(
+        selection.family
+        for selection in selections
+        if selection.family in current_configuration.policy["categories"]
+        and selection.family not in overlaid
+        and all(
+            other.source == "quiver"
+            and other.family == normalize_project_url(other.url)
+            for other in selections
+            if other.family == selection.family
+        )
+    )
+    current = _with_quiver_catalog(
+        monkeypatch,
+        lambda apps: [app for app in apps if normalize_project_url(app.url) != family],
+    )
+    assert_categories_follow_the_taxonomy(current.result)
+    assert family in current.result.report.stale_category_assignments

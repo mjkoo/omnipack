@@ -5,142 +5,131 @@ source discovery lists or APKs. Generation is a separate operation that writes
 candidate catalogs and reports for review. It never changes the committed
 catalogs, packs, README or git history itself.
 
-| Source | Discovery | Policy | Accepted catalog | Candidate and report directory | Proposal branch |
-| --- | --- | --- | --- | --- | --- |
-| `codm` | codm README project tables | `config/codm-projects.json` | `config/catalogs/codm.json` | `.build/source-generation/codm/` | `automation/codm-catalog` |
-| `quiver` | Quiver catalog index and every required list | `config/quiver-projects.json` | `config/catalogs/quiver.json` | `.build/source-generation/quiver/` | `automation/quiver-catalog` |
+| Source | Upstream input | Accepted catalog | Candidate and report directory | Proposal branch |
+| --- | --- | --- | --- | --- |
+| `codm` | codm README Project tables | `config/catalogs/codm.json` | `.build/source-generation/codm/` | `automation/codm-catalog` |
+| `quiver` | Quiver catalog index, its lists and its release asset-name file | `config/catalogs/quiver.json` | `.build/source-generation/quiver/` | `automation/quiver-catalog` |
 
 ## Stateless generation
 
-Generation keeps no state between runs and has no forced-refresh mode: every
-run re-reads its discovery input, the reviewed policy and fresh release data, and
-resolves every eligible project from scratch, without reusing an identity or
-a skip decision recorded by an earlier run. There is no metadata file binding
-the committed catalog to particular README or policy bytes, and nothing to
-force a refresh, because there is nothing that generation would otherwise
-skip.
+Generation reads only what each upstream publishes, through the same plain,
+credential-free HTTP client the build uses, plus the committed catalog. It
+never queries a repository host, downloads an APK or inspects a manifest:
+Obtainium decides what a listed link can track. Generation keeps no state
+between runs and has no forced-refresh mode; every run re-reads its inputs and
+renders the candidate from scratch. Redirects are followed as the client
+follows them.
 
-### Retained failures
+## Inputs
 
-An accepted project that fails to resolve on a given run (an unreachable release,
-a disagreeing or unreadable APK, and so on) keeps its entry from the committed
-catalog, reported as a retained failure, but only when the current policy
-would render that same entry: for an APK project, using the committed
-package ID; for a track-only project, using the rule's own tracker ID. Both
-compare against the committed URL. A resolution failure without an entry that
-can be retained fails the whole run and offers no candidate catalog. A later run retries every
-failure automatically; there is no maintainer action to acknowledge or retry
-one.
+The `codm` and `quiver` sources in `config/sources.json` each name their
+upstream input and their committed `catalog`.
 
-The exception is a new APK project with no Android release. When its check
-conclusively finds no permitted release (including a missing latest release
-under the default stable selection) or a selected release with no eligible
-direct APK, both sources report it as a `noAndroid` skip: it adds no entry and
-the run continues. Transport, authentication, rate-limit and unreadable-APK
-errors are not evidence that a project has no Android release and still fail
-the run. A desktop-only or mod-only repository listed upstream therefore does
-not block the source's catalog refresh.
+codm reads the README at `readme_url` and takes every `http` or `https` link
+inside its Project tables, whatever host it points to. Links outside a Project
+table are ignored, as are links Markdown does not render (inside a code block,
+a code span or an HTML comment, or opened by an escaped bracket) and a badge
+image inside a link. A link no project URL can be formed from, such as one with an invalid
+port or no host, is reported and skipped. Project tables follow GitHub Markdown
+table syntax: the header's first cell is `Project`, matched with case, outer
+pipes are optional, delimiter cells need only one hyphen, and a table runs
+until a blank line or the start of another block (a heading, a code block, an
+HTML comment, a blockquote, a list item or a thematic break); a row of another
+table never starts one. Inline links may carry a title or an angle-bracket
+destination, and their text may hold escaped or balanced brackets;
+reference-style links are not read. A missing or
+malformed Project table fails the run, even beside a valid one, because a
+partial read would propose removing the projects of the table it could not
+read.
 
-A run in which every project's lookup fails, for example under a GitHub API
-rate limit, is not a visible failure when every project already has a
-matching committed entry and its policy and display name are unchanged: every one is then
-retained, so the candidate catalog reproduces the committed catalog exactly.
-The proposal workflow reports its ordinary "unchanged" outcome, closing any
-open proposal, and the run itself reports success. The only signal that
-anything went wrong is the retained-failures list in that run's summary and
-generation report; there is no separate failure indicator. A new project, or
-one whose effective policy changed, has no entry to retain, so the same
-outage fails that run visibly.
+Quiver reads the index at `index_url`, every list the index references and the
+release asset-name file the index names by `platformMetadataUrl`. Every one of
+those locations must sit within the index's own host and directory, or the
+index is malformed. In each row, an absent `repositorySource` means GitHub, and
+forge names match without regard to case: `github` forms
+`https://github.com/<repository>`, where the repository is exactly an owner and
+a name, and `gitlab` forms `https://gitlab.com/<repository>`, with one or more
+namespaces and a project. Every path segment must be nonempty, neither `.` nor
+`..`, and hold only ASCII letters, digits, `_`, `.` and `-`, and the URL formed
+must be a repository of its forge, so its entry carries that forge's source
+type. A row naming another forge, or whose repository is missing, not a string
+or breaks these rules, is reported and skipped.
 
-### Quiver discovery, skips and removals
+## Screening
 
-Quiver reads every list from the configured catalog index. Missing or malformed
-required lists fail the complete run. Generation does not read the index's
-platform metadata; only a fresh release and APK check decides a project. Supported GitHub rows are normalized and
-canonical repository aliases are collapsed, preserving row provenance. Unsupported
-rows, such as GitLab repositories, are reported without GitHub requests.
+Where an upstream publishes release asset names, generation screens new
+projects with them. Quiver's asset-name file lists each repository's latest
+release assets: a project the committed catalog does not hold is admitted only
+when that list includes an asset ending in `.apk`, compared without regard to
+case. A committed project the upstream still lists is always kept, whatever its
+latest release holds, because Obtainium falls back to older releases. A project
+missing from the file or without an APK asset is reported and skipped.
 
-For a new Quiver project, a repository metadata response of HTTP 404 or 451 is
-an `unavailableRepositories` outcome, distinct from the `noAndroid` skip
-described under retained failures. Accepted entries with unchanged
-policy and display name can be retained on these failures or missing artifacts.
-An accepted repository returning 404 or 451 is removed, as is an accepted entry
-no discovered row names. Fresh entries use the current canonical repository URL,
-with GitHub's own capitalization for the URL and author; retained entries preserve accepted bytes and match by canonical or listed URL,
-never by package ID. An alias outage that prevents either URL from matching
-blocks the run visibly.
+codm publishes no asset names, so its links are not screened. A link Obtainium
+cannot use, such as a Google Play, Modrinth or Nexus Mods page, ships until the
+owner denies its URL in `config/deny.json`. A denial applies to every source
+listing that URL; a denied project can remain in a source candidate catalog
+while composition excludes it.
 
-`config/quiver-projects.json` has schema version 1, optional per-repository
-exceptions in `projects`, and reasoned discovery `skips`. An omitted project rule
-uses stable APK discovery. Exceptions may set a port name, a category
-(`Decomps/Recomps`, the default, or `PC Ports`), prerelease selection or supported
-filename/release filters. A family's key in the composition
-[category map](composition.md#categories) overrides that category. Quiver
-supports APK entries only.
-All selected APK manifests must be readable and agree on one package ID. Upstream
-`project` names the port; the game title and upstream asset filters do not control
-admission or consumer filtering. Duplicate upstream filter disagreement is a
-diagnostic, not a selection rule.
+## Rendered entries
 
-A listed-URL skip is matched before any repository request. It pauses discovery
-and retains a matching accepted entry byte-for-byte. Another row that resolves
-to the entry a skip or a retained failure already kept is not resolved again; the
-report lists it under that skip or retained failure. A literal unsupported-row
-skip may instead name `repository` and `repositorySource`. Every skip needs a
-reason. Neither kind prunes apps from this source or any other source. Use the
-project deny list in `config/deny.json` for permanent exclusion from both packs:
-a denial applies to every source listing that project URL, though a repository
-rename escapes it until the new URL is denied too. A denied project can remain
-in a source candidate catalog while composition excludes it.
+Generation renders one minimal entry per normalized project URL, independent
+of listing order, as a canonical catalog:
 
-### Retained failures and an open proposal
+- For a URL the committed catalog already holds, the committed entry's id and
+  URL are kept verbatim, so composition rules, pins and installed apps that
+  know it keep working.
+- Otherwise the URL is the reduced project URL (a GitHub deep link becomes the
+  repository root and a gitlab.com link into a project's `/-/` routes becomes
+  the project, while a gitlab.com site page (one starting with a reserved route
+  such as `groups` or `-`, or naming no project) and a link on any other host
+  keep their path; when several listings collapse to one URL, an
+  `https` URL wins over an `http` one, then the smallest in code point order),
+  and the id is an Obtainium placeholder: the first
+  twelve hex characters of the SHA-256 of the normalized URL. Obtainium
+  replaces it with the APK's package id on first install.
+- `overrideSource` is GitHub for a github.com repository and GitLab for a
+  gitlab.com project; any other URL leaves it unset, and Obtainium detects the
+  source.
+- The name is the listing's name with trailing emoji and other symbols trimmed
+  (punctuation, `+` and currency signs are kept), or the last URL path segment,
+  or the host for a URL without a path, when no listing names it. When listings give several names, the first in
+  case-insensitive order wins.
+- The author is the first path segment for a URL with an `overrideSource`, and
+  empty otherwise.
+- Entries carry no categories, and their settings are their source type's
+  defaults: GitHub or GitLab defaults, or none for an entry without a source
+  type.
 
-Retention always compares against `main`'s committed catalog, never against
-an open proposal's content. When an open proposal carries an update for a
-project (a new entry, or a changed one) and a later run's lookup for that
-same project fails transiently, the rebuilt candidate falls back to the
-committed entry, so the proposal loses that update; if the update was the
-proposal's only change, the workflow closes it. A later run that resolves
-the project proposes the update again: in the still-open PR, whose branch
-and body it updates, or, if the earlier PR was closed, in a new one.
+Per-app names and settings for generated entries are
+[overlay](composition.md#denials-and-patches) records in `config/overlay.json`,
+and categories are keys in the composition
+[category map](composition.md#categories). An overlay patches the selected
+entry at its URL whichever source wins, so a catalog refresh never discards
+them. Examples:
 
-## Inputs and policy
+- Showdown and Heimdall include prereleases, filter APK names and extract
+  versions; Heimdall also filters release titles.
+- Melee PC includes prereleases.
+- DW2003 Dual Screen filters APK assets to the `DW2003-Dual-Screen-v*`
+  family. Each upstream release also attaches a Pocket Companion APK, a
+  separate app for a second handheld that is not catalogued.
+- Silent Hill Decomp excludes its `_OLD` APK assets, and LEGO Island
+  Portable selects `app-release.apk`.
+- Kanto Gear is track-only. Obtainium reports its releases but cannot install
+  the Lua mod or detect its installed version. Install or update Kanto through
+  official [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) using its
+  Mod Index or ZIP import. Gen1Recomp remains the Android host in both packs.
 
-The source configured under `codm` in `config/sources.json` names three
-inputs:
+A repository renamed upstream yields a removal of the old URL and a new
+placeholder-id entry at the new one. A family rule, an overlay `id` patch or a
+denial handles it.
 
-- `readme_url`, the upstream README whose Project catalog tables supply
-  eligible GitHub repositories;
-- `project_policy` (`config/codm-projects.json`), the reviewed per-project
-  policy;
-- `catalog` (`config/catalogs/codm.json`), the committed catalog that normal
-  builds read.
-
-Policy keys use normalized GitHub repository identities. A project with no
-rule defaults to APK discovery using stable releases. A reviewed `apk` rule
-can set a name and supported Obtainium discovery settings such as prerelease
-inclusion, release-title and APK filename filters, version extraction, and
-the consumer `fallbackToOlderReleases` setting. APK package IDs always come
-from inspected manifests; policy cannot supply them. Every eligible APK in
-the selected release must be readable and agree on its package ID.
-
-Regex rules use a restricted shared syntax. Use explicit character classes
-such as `[0-9]` or `[A-Za-z0-9_]`; shorthand classes (`\d`, `\D`, `\s`, `\S`,
-`\w`, `\W`) and word boundaries (`\b`, `\B`) are rejected because their
-Python and Dart matching semantics differ. Existing reviewed rules use
-explicit classes.
-
-For codm only, a `track-only` rule instead supplies a stable resource ID, rationale,
-installation instruction, and optional supported settings. It creates an
-Obtainium release tracker without downloading an APK. Failed APK resolution
-never converts a project into a tracker, and a change of kind requires fresh
-validation for the destination kind, with no cross-kind fallback.
-
-Kanto Gear is intentionally track-only. Obtainium reports its releases but
-cannot install the Lua mod or detect its installed version. Install or
-update Kanto through official [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp)
-using its Mod Index or ZIP import. Gen1Recomp remains the Android host in
-both packs.
+Composition fails when an overlay record has no selected entry at its URL
+(`overlay has no selected target`). A catalog-only proposal that removes a
+project an overlay record patches, when no other source serves its URL,
+therefore fails its checks; remove the overlay record on main first, then
+rerun the proposal.
 
 ## Generate and inspect a candidate
 
@@ -151,48 +140,31 @@ uv run pack generate-source codm
 uv run pack generate-source quiver
 ```
 
-A full local Quiver run needs a GitHub token in practice: complete repository and
-release discovery exceeds GitHub's unauthenticated request allowance. Export a
-read-only `GITHUB_TOKEN` in your shell before running the command; do not put it
-in a policy file or command argument. `config/http.json` scopes this credential
-to the configured GitHub host. The CLI permits an absent token, but a full run
-then normally fails visibly at the rate limit. Automated generation supplies its
-read-only job token to both sources.
+Neither source needs a credential. Inspect
+`.build/source-generation/<source>/report.json`, including on unchanged runs.
+It records the run's status and source, every input read, with the SHA-256 of
+its bytes once read, any error, and every skipped listing with its reason; on
+success it also records `changes`, the added, removed and changed-in-place
+entries by catalog URL. On success the directory also holds `catalog.json`, the
+candidate catalog. `pack report` remains the build and structural-verification
+report viewer and does not cover source generation.
 
-Inspect `.build/source-generation/<source>/report.json`, including on unchanged
-runs. On success, that directory also holds `catalog.json`, the candidate catalog;
-`pack report`
-remains the build and structural-verification report viewer and does not
-cover source generation.
-
-For codm, generation fails with no `catalog.json` written if the README tables are
-malformed or empty, any eligible project is unaccounted for, a new APK project
-fails for any reason other than a `noAndroid` skip, a new tracker cannot be
-resolved, eligible APKs disagree, an ID collides, or a
-project's effective policy changed and its fresh resolution failed. Partial
-catalogs are never written.
-
-Heimdall illustrates the distinction between generator and client behavior.
-The generator selects the newest release matching its reviewed title rule
-and never searches an older release when that release has no eligible APK: an
-accepted entry is retained if its policy is unchanged, and a new project is a
-`noAndroid` skip. The generated Obtainium entry sets
-`fallbackToOlderReleases: true`, allowing the client to search older
-matching releases when its selected release lacks an eligible asset.
-Showdown and EmuLnk explicitly set that client option to false.
-
-DW2003 Dual Screen filters APK assets to the `DW2003-Dual-Screen-v*` family.
-Since v1.4.0 each upstream release also attaches a Pocket Companion APK,
-`com.digitaladventure.dw2003.remote`, a separate app for a second handheld.
-Without the filter the two APKs disagree on their package ID and resolution
-fails; with it the companion is reported as a filtered asset and the entry
-keeps `com.digitaladventure.dw2003`. The companion is not catalogued.
+A run fails only when the source configuration is missing or malformed, when
+an input is unreadable or malformed, when the committed catalog is unreadable or
+malformed (including two entries at one normalized URL, which the error names
+with their ids, and a repeated id), when the candidate would keep no entry, or
+when the candidate cannot be written.
+A missing committed catalog holds nothing, so every entry gets a placeholder
+id.
+A failed run writes only its report: no candidate survives from it or from an
+earlier run. When the output directory itself cannot be prepared, the run
+writes nothing and prints the error.
 
 ## Proposal workflow
 
 Automated source PRs contain only the selected source's accepted catalog. Generated
 packs and README are checked diagnostics, not proposed files or retained artifacts;
-nightly rebuilds outputs after merge. Manual policy PRs include their accepted
+nightly rebuilds outputs after merge. Manual catalog PRs include their accepted
 catalog and changed outputs under the
 [manual review convention](development.md#manual-review-and-pr-contents).
 
@@ -207,8 +179,8 @@ write-capable `publish` job, each limited to 60 minutes.
 The caller grants the reusable workflow only the ceiling needed for publication;
 its check job reduces permissions to `contents: read`. No workflow grants
 permissions at workflow level. Every check step, including checkout, setup,
-generation, tests and build, receives only that read-only job token. The generation
-step explicitly sets `GITHUB_TOKEN: ${{ github.token }}`. Checkouts never persist
+generation, tests and build, has only that read-only job token available, and
+the generation step receives no token at all. Checkouts never persist
 credentials. The environment is synced with uv's Actions cache disabled.
 
 The check job runs the selected source command and stages its candidate:
@@ -242,7 +214,7 @@ The checked bundle and PR body are uploaded only after successful checks as
 report is uploaded when available on success or failure as
 `source-generation-report-<source>-<run-id>` with 14-day retention. Reruns replace
 the same named artifacts. These artifacts contain no APKs, raw HTTP cache,
-credentials, policies, pack exports or README output. A missing report after an
+credentials, pack exports or README output. A missing report after an
 early failure is explicitly reported and does not imply successful validation.
 
 The write job runs no dependency installation, generation, tests, build or
@@ -273,16 +245,20 @@ replaces that source branch with the checked commit. It then edits its existing 
 or opens one to main, titled `chore(catalog): update reviewed <source> source`.
 No automatic merge, direct-main write, issue or release operation occurs.
 
-The body links the checking workflow run, records the base SHA, catalog changes,
-source diagnostics and actual validation results. Upstream strings are HTML-escaped
-inside a preformatted block. Long diagnostic bodies end with an omission count;
-the full summary and retained generation report remain available for review.
+The body links the checking workflow run, records the base SHA, and lists the
+added, removed and changed catalog URLs, the skipped listings and the actual
+validation results. Upstream strings are HTML-escaped inside a preformatted
+block. When the catalog's bytes changed but no entry was added, removed or
+changed, the block says `Catalog bytes changed without entry changes`. Long
+diagnostic bodies end with an omission count; the uploaded generation report
+remains available for review.
 
 ### Stage summary lines
 
-On success, `stage` writes the base SHA, catalog changes, retained failures and
-source diagnostics to the step summary, including when the catalog is unchanged. On failure it writes one line naming
-what failed, and hands nothing off:
+On success, `stage` writes the base SHA and the report's Added, Removed,
+Changed and Skipped lists to the step summary, including when the catalog is
+unchanged. On failure it writes one line naming what failed, and hands nothing
+off:
 
 - `stage failed: could not read HEAD`, or
   `stage failed: HEAD is not GITHUB_SHA`;
@@ -358,29 +334,28 @@ changed automatically by any workflow.
 ## Diagnostics and credentials
 
 `check` performs no remote writes: its only token is the read-only job token
-(`contents: read`) used by checkout and explicitly supplied to generation. No
-step receives a write token. Only `publish` holds `contents: write` and `pull-requests: write`,
-and only its one step receives `GH_TOKEN`; its checkout uses the job token
-only to fetch the triggering revision, and `persist-credentials: false`
-keeps it out of `.git/config`. `scripts/source_proposal.py`
-serves both jobs and, like `scripts/nightly_write.py`, imports only the
-standard library and the shared helpers in `scripts/workflow_support.py`,
-and runs on the runner's preinstalled `python3` in the write job. Source
-text, project URLs, asset names and other upstream-derived strings are
-treated as data: credentials, downloaded APKs and raw HTTP
-caches are excluded from summaries and artifacts.
+(`contents: read`) used by checkout; generation reads only public upstream
+inputs and receives no token. No step receives a write token. Only `publish`
+holds `contents: write` and `pull-requests: write`, and only its one step
+receives `GH_TOKEN`; its checkout uses the job token only to fetch the
+triggering revision, and `persist-credentials: false` keeps it out of
+`.git/config`. `scripts/source_proposal.py` serves both jobs and, like
+`scripts/nightly_write.py`, imports only the standard library and the shared
+helpers in `scripts/workflow_support.py`, and runs on the runner's preinstalled
+`python3` in the write job. Source text, project URLs, asset names and other
+upstream-derived strings are treated as data: credentials, downloaded APKs and
+raw HTTP caches are excluded from summaries and artifacts.
 
-Inspect skips, unsupported rows, no-Android outcomes, unavailable repositories,
-retained failures, unresolved projects, effective policy, discovery coverage,
-APK/tracking observations and catalog changes even when the result is unchanged.
-Both sources report `noAndroid`, `retainedFailures`, `unresolved`,
-`effectivePolicy`, `apk` and `changes`; codm adds `tracking`,
-`unsupportedLinks` and `inactiveRules`, and Quiver adds `skipped`,
-`unsupportedRows`, `unavailableRepositories` and `coverage`. Successful retention or
-a reasoned skip is not a fresh APK check. The run summary also records the actual
-validation outcomes and explicitly marks checks skipped for unchanged candidates.
+The run summary lists Added, Removed, Changed and Skipped, one line per
+skipped listing giving its JSON description and then the reason, and for a
+failed generation an `Error:` line with the report's error. Like the PR body,
+it ends with an omission count when it would exceed GitHub's step summary
+limit, and the stage summary calls out a byte-only catalog change. Inspect the
+skipped listings and catalog changes even when the result is unchanged. The
+run summary also records the actual validation outcomes and explicitly marks
+checks skipped for unchanged candidates.
 
 Nightly pack publication remains independent of this workflow. It reads only
 the committed source catalogs on `main` and publishes
 `dist/single-screen.json`, `dist/dual-screen.json` and the generated
-interior of `README.md`; it never stages a catalog or policy change.
+interior of `README.md`; it never stages a catalog change.

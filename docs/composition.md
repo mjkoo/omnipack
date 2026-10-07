@@ -3,7 +3,7 @@
 Each output contains at most one selected build per logical app family. Families
 form after family rules and denials, over the candidates that survive and are
 eligible for at least one pack. A candidate's family is keyed by its project URL,
-in the normalized form `github.com/owner/repo`: every candidate at one URL that
+in a normalized host-and-path form such as `github.com/owner/repo`: every candidate at one URL that
 no rule places elsewhere belongs to the family named by that URL, whichever
 source lists it and whatever package id it carries. A shared package id joins
 nothing, so two repositories that reuse one package id stay separate families
@@ -51,6 +51,16 @@ or `variant`, even with null values. Ingestion rejects those fields with the
 source, entry and field identified. Composition policy in
 `config/composition.json` owns app families and per-pack selection; editing that
 policy does not repair an invalid source record.
+
+Ingestion keeps any `overrideSource` string an entry declares; a non-string
+fails with the source and entry identified, and an empty or whitespace-only
+string counts as no declaration. An entry that declares none is
+GitHub for a github.com repository and GitLab for a gitlab.com project, and
+otherwise has no source type, leaving detection to Obtainium. A URL declared
+GitLab is kept as written, self-hosted instances included. Rendering fills
+default settings only for GitHub, GitLab and HTML entries; an entry of any
+other type, or of none, keeps exactly its own settings. The README catalog
+labels an entry without a source type by its URL host.
 RJNY entries excluded from export are dropped before normalization, so they are
 not validated. Other unmodeled fields pass through unchanged. The extras adapter
 consumes `dualScreen` to set eligibility, so it never reaches that extra's
@@ -179,9 +189,9 @@ this order:
 
 The map is keyed by family, so a mapping survives a fork switch and covers both
 packs. Only map an app whose source categories are missing or wrong; most
-sources already use the set's spellings. codm2000 entries carry no source
-category, so each one the packs select needs a map key. Overlays cannot set
-categories.
+sources already use the set's spellings. Generated codm2000 and Quiver
+entries carry no source category, so each one the packs select needs a map
+key. Overlays cannot set categories.
 
 Neither outcome below fails the build; the build report lists both, and
 `pack report` displays them:
@@ -271,9 +281,9 @@ lists each denial that removed candidates, once under its URL with the families
 it removed, and `staleExclusions` each denial that matched nothing.
 `repeatedIds`, `singleOnlyFamilies` and `sameRankTies` hold the nonfatal
 outcomes described above. `sourceAdmissions` lists each committed codm and
-Quiver entry the build admitted, with its source, id, URL and whether it is an
-APK or track-only entry. `uncategorizedFamilies` and `staleCategoryAssignments`
-are the [category outcomes](#categories); a build that fails before categories
+Quiver entry the build admitted, with its source, URL and committed id.
+`uncategorizedFamilies` and `staleCategoryAssignments` are the
+[category outcomes](#categories); a build that fails before categories
 are assigned records both empty, along with the single-only and repeated-id
 lists, while its stage and error say the checks did not run.
 `offlineVerification` holds the offline gate's status, its errors in `findings`,

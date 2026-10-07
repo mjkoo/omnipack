@@ -160,9 +160,9 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    # Composition keyed by project URL changed what verification checks, so
-    # evidence from an earlier verifier must read as stale.
-    assert VERIFIER_VERSION == "3.0.0"
+    # Verification no longer limits source types, which changed its findings,
+    # so evidence from an earlier verifier must read as stale.
+    assert VERIFIER_VERSION == "4.0.0"
     assert report["schemaVersion"] == 5
     report["verifier"]["version"] = "different-test-verifier"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
@@ -495,7 +495,6 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             {
                 "source": "codm2000",
                 "url": f"https://example.test/{i}",
-                "kind": "apk",
                 "id": f"committed.{i}",
             }
             for i in range(40)
@@ -575,7 +574,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             f"winner: rjny/rjny-catalog tied.{i} at example.test/tied/{i}\n"
         ) in output
         assert (
-            f"Admission: codm2000; URL: https://example.test/{i}; kind: apk; committed id: committed.{i}\n"
+            f"Admission: codm2000; URL: https://example.test/{i}; committed id: committed.{i}\n"
             in output
         )
         assert (
@@ -838,7 +837,7 @@ SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.tes
         ),
         (
             "sourceAdmissions",
-            {"source": "codm2000", "url": "https://example.test", "kind": "apk"},
+            {"source": "codm2000", "url": "https://example.test"},
         ),
         ("uncategorizedFamilies", {"family": "app:x"}),
         ("uncategorizedFamilies", {"family": "app:x", "variants": []}),

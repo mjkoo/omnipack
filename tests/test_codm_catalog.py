@@ -7,13 +7,13 @@ from typing import Any
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import Variant
-from omnipack.package_id import _is_valid_package_id
 from omnipack.source_catalog import render_catalog
 from omnipack.sources import codm
 from omnipack.sources.extras import fetch as fetch_extras
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
+    assert_canonical_catalog,
     current_configuration_fixture,  # noqa: F401
 )
 
@@ -33,25 +33,7 @@ def test_committed_catalog_is_valid_canonical_and_composable(
     urls = [normalize_project_url(app["url"]) for app in catalog["apps"]]
     assert len(ids) == len(set(ids)), f"{path} repeats an entry id"
     assert len(urls) == len(set(urls)), f"{path} repeats a project URL"
-    for app in catalog["apps"]:
-        settings = json.loads(app["additionalSettings"])
-        entry = f"{path} entry {app['id']!r}"
-        if settings.get("trackOnly"):
-            assert app["id"].isdecimal(), f"{entry} is not a numeric tracker id"
-            assert (
-                settings["versionDetection"],
-                settings["includeZips"],
-                settings["autoApkFilterByArch"],
-            ) == (False, False, False), f"{entry} has installable tracker settings"
-        else:
-            assert settings.get("trackOnly", False) is False, (
-                f"{entry} has bad trackOnly"
-            )
-            assert _is_valid_package_id(app["id"]), f"{entry} is not a package id"
-    raw = (ROOT / path).read_bytes()
-    assert render_catalog(catalog["apps"]) == raw, (
-        f"{path} differs from the canonical rendering of its entries"
-    )
+    assert_canonical_catalog(ROOT / path)
     assert current_configuration.result.apps[Variant.DUAL]
 
 
@@ -196,3 +178,23 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
     assert ("1234567890", Variant.SINGLE) not in settings
+
+
+def test_committed_entry_off_a_forge_ingests_with_no_source_type(
+    tmp_path: Path,
+) -> None:
+    entry = {
+        "id": "a1b2c3d4e5f6",
+        "url": "https://christt105.itch.io/poketch",
+        "author": "",
+        "name": "Pokétch",
+        "additionalSettings": {},
+        "categories": [],
+    }
+    (tmp_path / "codm.json").write_bytes(render_catalog([entry]))
+    [app] = codm.fetch(tmp_path, {"catalog": "codm.json"})
+    assert (app.id, app.url, app.source_type) == (
+        "a1b2c3d4e5f6",
+        "https://christt105.itch.io/poketch",
+        None,
+    )

@@ -11,12 +11,10 @@
   },
   "codm": {
     "readme_url": "https://raw.githubusercontent.com/codm2000/Dual-Screen-Games/main/README.md",
-    "catalog": "config/catalogs/codm.json",
-    "project_policy": "config/codm-projects.json"
+    "catalog": "config/catalogs/codm.json"
   },
   "quiver": {
     "index_url": "https://raw.githubusercontent.com/tgeorgiadis/quiver-community-app-catalog/main/index.json",
-    "catalog": "config/catalogs/quiver.json",
-    "project_policy": "config/quiver-projects.json"
+    "catalog": "config/catalogs/quiver.json"
   }
 }

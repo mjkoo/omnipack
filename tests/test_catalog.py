@@ -130,6 +130,14 @@ def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() ->
     assert decoded_apps(catalog) == [gitlab, gitlab]
 
 
+def test_entry_without_a_source_type_is_labelled_by_its_host() -> None:
+    itch = app("a1b2c3d4e5f6", "Pokétch", "https://christt105.itch.io/poketch")
+    del itch["overrideSource"]
+    catalog = generate_catalog(pack(itch), pack(dict(itch)), policy())
+    assert catalog.decode().count(">christt105&#46;itch&#46;io</a>") == 2
+    assert decoded_apps(catalog) == [itch, itch]
+
+
 def test_catalog_handles_dual_only_ordering_and_escapes_source_text() -> None:
     lower = app("z.id", "alpha", "https://example.test/z", categories=["beta"])
     exact = app("a.id", "Alpha", "https://example.test/a", categories=["Beta"])

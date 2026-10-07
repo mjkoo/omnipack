@@ -29,7 +29,6 @@ def fetch(entries: Sequence[object]) -> list[App]:
             normalize_record(
                 record,
                 source="extras",
-                derive_type=True,
                 eligibility=(
                     frozenset({Variant.DUAL}) if dual_screen else frozenset(Variant)
                 ),

@@ -113,8 +113,8 @@ Build reports SHALL also display family selections with their reasons, and every
 non-blocking outcome the build report records: the apps added and removed since
 the previous output, the denylist entries that excluded a candidate, the
 denylist entries that matched no candidate, the package ids repeated within a
-variant, the single-only coverage findings, the same-rank tie findings, the admitted codm2000 candidates
-with their committed identities, the families with a selected entry left
+variant, the single-only coverage findings, the same-rank tie findings, the admitted generated candidates
+with their committed ids and project URLs, the families with a selected entry left
 without a category together with the variants concerned, and the stale
 category assignments. A non-blocking outcome the build report records
 SHALL NOT be withheld from display, a diagnostic kind the run recorded nothing in SHALL
@@ -165,11 +165,11 @@ removed since the previous output.
 - **WHEN** a valid build report records apps added or removed, a denial that
   excluded a candidate, a denial that matched no candidate, a package id
   repeated within a variant, a single-only coverage finding, a same-rank tie
-  finding, an admitted codm2000 candidate, an uncategorized family, or a stale
+  finding, an admitted generated candidate, an uncategorized family, or a stale
   category assignment
 - **THEN** `pack report` displays each of them with the variant, package id,
-  families, reason, source, project URLs, tied selectors, chosen winner, entry
-  kind or committed identity the report holds for it, displays the candidate
+  families, reason, source, project URLs, tied selectors, chosen winner or
+  committed id the report holds for it, displays the candidate
   comparison with each entry's package id and project URL identified as added
   or removed for its variant, and exits zero
 
@@ -300,11 +300,10 @@ the build. The system SHALL write a build report recording:
   family or a family whose selected entries are all track-only;
 - source ingestion failures.
 
-Resolution-attempt diagnostics SHALL belong to source generation, not routine
-build reports. Build reports SHALL identify admitted codm2000 candidates and
-their committed identities, distinguishing APK package IDs from track-only
-resource IDs, without claiming that they were freshly resolved or their
-releases checked. Conflicts and stale policy selectors SHALL be actionable.
+Upstream-list diagnostics SHALL belong to source generation reports, not
+routine build reports. Build reports SHALL identify the admitted generated candidates
+of each generated source by their committed ids and project URLs, without
+claiming that their projects were inspected. Conflicts and stale policy selectors SHALL be actionable.
 
 The report SHALL be written on a successful build and on a failed one alike,
 and a failed build's report SHALL record the stage that was running and the
@@ -352,8 +351,9 @@ change.
 
 #### Scenario: Committed generated entry is ingested
 
-- **WHEN** a build admits an entry from the committed codm2000 catalog
-- **THEN** its source, entry kind and committed package or resource ID are available in build diagnostics without a fresh-resolution claim
+- **WHEN** a build admits an entry from a committed generated catalog
+- **THEN** its source, committed id and project URL are available in build
+  diagnostics without a claim that its project was inspected
 
 #### Scenario: An app is left without a category
 
@@ -436,64 +436,51 @@ change.
 - **THEN** the build succeeds and the report lists that package id for that
   variant with both entries' families and project URLs
 
-### Requirement: The generate-source command builds the reviewed README source catalog
+### Requirement: The generate-source command writes a candidate catalog and its report
 
-The system SHALL provide `pack generate-source codm`. Each invocation SHALL
-fetch the configured README, validate the reviewed project policy, resolve every
-eligible project, and on success write a complete candidate catalog and a
-diagnostic report under `.build/`. It SHALL NOT write committed source files,
-pack outputs, git history or PRs, and it SHALL NOT persist resolution state
-between invocations. It SHALL exit zero for successful generation and nonzero
-for failed generation. The report SHALL identify unsupported links, inactive
-project rules, effective policy, resolved APK IDs, successful track-only
-resources, retained failures, unresolved projects and catalog changes relative
-to the committed catalog. It SHALL NOT modify the reviewed project policy. A
-complete catalog SHALL account for every eligible project as an APK or an
-explicitly declared tracker; lack of an APK SHALL NOT imply permission to skip
-or track it. Only artifacts produced by the current invocation SHALL be offered
-as its result.
+The system SHALL provide `pack generate-source <source>` for each generated
+source. Each invocation SHALL run that source's discovery, write a candidate
+catalog and a report under `.build/source-generation/<source>/`, and exit zero
+when generation succeeds and nonzero when it fails. A failed invocation SHALL
+leave no candidate catalog, so an earlier run's candidate is never offered as
+current. The report SHALL be written on success and failure alike, unless its
+output directory cannot be created, and SHALL record the source, its inputs, the error when generation failed, the
+skipped listings each with its reason, including listed projects discovery
+screened out for publishing no APK asset, and, on success, the entries added to
+and removed from the committed catalog and the entries changed in place: an
+entry the candidate keeps at a normalized URL the committed catalog holds whose
+rendered bytes differ from the committed entry's, such as one with a new name. The command SHALL NOT write committed files, pack
+outputs, git history or PRs, and SHALL keep no state between invocations.
 
 #### Scenario: Unchanged source
 
-- **WHEN** the README, the policy and every project's resolved identity match the committed catalog
-- **THEN** the command succeeds with a candidate catalog byte-identical to the committed catalog
+- **WHEN** the upstream inputs produce the committed catalog
+- **THEN** the command succeeds with a candidate byte-identical to the
+  committed catalog and a report listing no additions, removals or changed
+  entries
 
-#### Scenario: Incomplete generation
+#### Scenario: An entry changes in place
 
-- **WHEN** a new APK project cannot be resolved or a new declared tracker cannot be validated
-- **THEN** the command fails with current diagnostics and offers no complete candidate for publication
-
-#### Scenario: Policy update needs generation
-
-- **WHEN** project policy changes while README bytes remain identical
-- **THEN** the next invocation generates under the new policy
-
-#### Scenario: A track-only rule needs no APK resolution
-
-- **WHEN** a project's explicit track-only rule and its permitted release validate
-- **THEN** the report records a tracking resource with its synthetic ID, not a resolved Android package
-
-### Requirement: The generate-source command builds a reviewed Quiver candidate
-
-The system SHALL provide `pack generate-source quiver`, applying the Quiver
-source-generation contract and writing its current candidate and diagnostic
-report under `.build/source-generation/quiver/`. It SHALL exit zero only for
-complete successful generation, including reported unchanged-entry retention,
-and nonzero otherwise. Failed invocations SHALL offer no current candidate.
-It SHALL leave committed source data, policy, packs, README and git history
-unchanged and SHALL perform no PR operations. The report SHALL identify source
-coverage, skipped rows, unsupported rows, no-release/no-APK skips,
-unavailable-repository skips, resolved identities, retained failures,
-unresolved projects and proposed catalog changes.
-Reports SHALL distinguish unavailable results from successful empty outcomes.
-This command SHALL NOT change `pack generate-source codm` semantics.
-
-#### Scenario: Generation produces a new candidate
-
-- **WHEN** Quiver generation succeeds with a new APK project
-- **THEN** the candidate and report appear under its build directory and committed inputs and published outputs remain unchanged
+- **WHEN** the upstream renames a project the committed catalog holds at the
+  same normalized URL
+- **THEN** the command succeeds and its report lists that entry as changed,
+  not as removed and added
 
 #### Scenario: A failed rerun follows success
 
-- **WHEN** the next invocation cannot complete discovery
-- **THEN** it exits nonzero with current failure diagnostics and does not offer the earlier candidate as current output
+- **WHEN** an invocation succeeds and the next one cannot read its discovery
+  input
+- **THEN** the second exits nonzero, its report records the error, and no
+  candidate catalog remains under the build directory
+
+#### Scenario: Skipped listings are reported
+
+- **WHEN** a Quiver row names a forge generation cannot form a URL for
+- **THEN** the command succeeds and its report lists that row as skipped
+
+#### Scenario: Screened-out projects are reported
+
+- **WHEN** a listed Quiver project that the committed catalog does not hold
+  has an asset-name entry naming no APK asset
+- **THEN** the command succeeds and its report lists that project as skipped
+  for publishing no APK asset

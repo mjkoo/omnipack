@@ -73,9 +73,9 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
                         "overrideSource": "GitHub",
                     },
                     {
-                        "id": "app.retained",
-                        "url": "https://github.com/fixture/retained",
-                        "name": "Retained",
+                        "id": "app.second",
+                        "url": "https://github.com/fixture/second",
+                        "name": "Second",
                         "overrideSource": "GitHub",
                     },
                 ]
@@ -114,7 +114,7 @@ def write_fixture_pipeline(root: Path) -> dict[str, str]:
 FIXTURE_URLS = {
     "app.fixture": "example.test/app",
     "app.generated": "github.com/fixture/generated",
-    "app.retained": "github.com/fixture/retained",
+    "app.second": "github.com/fixture/second",
 }
 
 
@@ -153,7 +153,7 @@ def test_build_verify_and_report_sequence_records_no_findings(
         expected_ids = (
             ["app.fixture"]
             if variant is Variant.SINGLE
-            else ["app.fixture", "app.generated", "app.retained"]
+            else ["app.fixture", "app.generated", "app.second"]
         )
         rendered = json.loads(
             (tmp_path / "dist" / f"{variant.value}-screen.json").read_text()
@@ -276,19 +276,18 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
     )
     if invalid_gate:
         assert report["stage"] == "offline verification"
-    assert not ({"generated", "unresolved", "retainedFailures"} & report.keys())
-    assert {(item["kind"], item["id"]) for item in report["sourceAdmissions"]} == {
-        ("apk", "app.generated"),
-        ("apk", "app.retained"),
+    assert {item["id"] for item in report["sourceAdmissions"]} == {
+        "app.generated",
+        "app.second",
     }
     assert report["changes"]["single"] == {
         "added": changed("app.fixture"),
         "removed": [],
     }
     assert report["changes"]["dual"] == {
-        "added": changed("app.fixture", "app.retained")
+        "added": changed("app.fixture", "app.second")
         if existing != "none"
-        else changed("app.fixture", "app.generated", "app.retained"),
+        else changed("app.fixture", "app.generated", "app.second"),
         "removed": [],
     }
     assert not (tmp_path / "dist/report.json").exists()
@@ -1125,28 +1124,10 @@ def test_inputs_edited_after_the_build_starts_do_not_reach_its_outputs(
         assert (tmp_path / edited).read_bytes() == edits[edited]
 
 
-@pytest.mark.parametrize(
-    "http_config",
-    [
-        None,
-        b"not json",
-        json.dumps(
-            {
-                "credentials": {
-                    "raw.githubusercontent.com": "GITHUB_TOKEN",
-                    "codeberg.org": "GITHUB_TOKEN",
-                }
-            }
-        ).encode(),
-    ],
-    ids=["absent", "unreadable", "registered"],
-)
-def test_build_fetches_catalogs_without_credentials_or_http_config(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, http_config: bytes | None
+def test_build_fetches_catalogs_without_credentials(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     responses = write_fixture_pipeline(tmp_path)
-    if http_config is not None:
-        (tmp_path / "config/http.json").write_bytes(http_config)
     monkeypatch.setenv("GITHUB_TOKEN", "secret-token")
     requests: list[Request] = []
 
@@ -1164,51 +1145,99 @@ def test_build_fetches_catalogs_without_credentials_or_http_config(
     assert all(request.get_header("Authorization") is None for request in requests)
 
 
-def _quiver_entry(package_id: str) -> dict[str, object]:
+def _generated_entry(package_id: str, url: str) -> dict[str, object]:
     return {
         "id": package_id,
-        "url": "https://github.com/fixture/quiver",
-        "name": "quiver",
+        "url": url,
+        "name": "generated",
         "overrideSource": "GitHub",
-        "categories": ["Decomps/Recomps"],
+        "categories": [],
         "additionalSettings": {},
     }
 
 
+def _catalog(*entries: dict[str, object]) -> str:
+    return json.dumps({"apps": list(entries)})
+
+
+def test_a_candidate_dropping_a_pinned_entry_fails_build_and_keeps_outputs(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    responses = write_fixture_pipeline(tmp_path)
+    (tmp_path / "config/composition.json").write_text(
+        json.dumps(
+            {
+                "schemaVersion": 1,
+                "candidates": [],
+                "pins": [
+                    {
+                        "family": "github.com/fixture/generated",
+                        "variant": "dual",
+                        "match": {
+                            "source": "codm2000",
+                            "origin": "codm-generated",
+                            "id": "app.generated",
+                            "url": "https://github.com/fixture/generated",
+                        },
+                        "rationale": "Keep the generated build in dual.",
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
+    monkeypatch.chdir(tmp_path)
+    assert main(["build"]) == 0
+    published = [
+        tmp_path / "dist/single-screen.json",
+        tmp_path / "dist/dual-screen.json",
+        tmp_path / "README.md",
+    ]
+    before = [path.read_bytes() for path in published]
+
+    (tmp_path / "config/catalogs/codm.json").write_text(
+        _catalog(_generated_entry("app.second", "https://github.com/fixture/second")),
+        encoding="utf-8",
+    )
+    assert main(["build"]) == 1
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["status"] == "failed"
+    assert "pin for family 'github.com/fixture/generated'" in report["error"]
+    assert "is missing" in report["error"]
+    assert [path.read_bytes() for path in published] == before
+
+
+@pytest.mark.parametrize("source", ["codm", "quiver"])
 @pytest.mark.parametrize(
-    "catalog",
+    ("catalog", "error"),
     [
-        pytest.param(None, id="missing"),
-        pytest.param("not json", id="malformed"),
+        pytest.param(None, "", id="missing"),
+        pytest.param("not json", "", id="malformed"),
         pytest.param(
-            json.dumps(
-                {
-                    "apps": [
-                        _quiver_entry("org.fixture.a"),
-                        _quiver_entry("org.fixture.b"),
-                    ]
-                }
+            _catalog(
+                _generated_entry("org.fixture.a", "https://github.com/fixture/one"),
+                _generated_entry("org.fixture.a", "https://github.com/fixture/other"),
             ),
-            id="repeated-url",
+            "",
+            id="repeated-id",
         ),
         pytest.param(
-            json.dumps(
-                {
-                    "apps": [
-                        _quiver_entry("org.fixture.a"),
-                        {
-                            **_quiver_entry("org.fixture.a"),
-                            "url": "https://github.com/fixture/other",
-                        },
-                    ]
-                }
+            _catalog(
+                _generated_entry("org.fixture.a", "https://github.com/fixture/one"),
+                _generated_entry("org.fixture.b", "https://github.com/Fixture/One/"),
             ),
-            id="repeated-id",
+            "several entries for github.com/fixture/one",
+            id="repeated-url",
         ),
     ],
 )
-def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, catalog: str | None
+def test_broken_generated_catalog_fails_build_and_keeps_published_outputs(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    catalog: str | None,
+    error: str,
 ) -> None:
     responses = write_fixture_pipeline(tmp_path)
     monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
@@ -1221,7 +1250,7 @@ def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
     ]
     before = [path.read_bytes() for path in published]
 
-    path = tmp_path / "config/catalogs/quiver.json"
+    path = tmp_path / f"config/catalogs/{source}.json"
     if catalog is None:
         path.unlink()
     else:
@@ -1229,7 +1258,8 @@ def test_broken_quiver_catalog_fails_build_and_keeps_published_outputs(
     assert main(["build"]) == 1
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert (report["status"], report["stage"]) == ("failed", "ingestion")
-    assert report["error"].startswith("quiver: ")
+    assert report["error"].startswith(f"{source}: ")
+    assert error in report["error"]
     assert report["changes"] is None
     assert [path.read_bytes() for path in published] == before
 
@@ -1400,7 +1430,7 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
     ) in output
     assert "Stale exclusion: example.test/absent; reason: unmatched denial" in output
     assert (
-        "Admission: codm2000; URL: https://github.com/fixture/generated; kind: apk; committed id: app.generated"
+        "Admission: codm2000; URL: https://github.com/fixture/generated; committed id: app.generated"
         in output
     )
     assert path.read_bytes() == before

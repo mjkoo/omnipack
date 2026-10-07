@@ -3,19 +3,24 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 
 
-class Variant(str, Enum):
+class Variant(StrEnum):
     """Which rendered pack an entry belongs to."""
 
     SINGLE = "single"
     DUAL = "dual"
 
 
-class SourceType(str, Enum):
-    """Obtainium source implementations supported by the pack."""
+class SourceType(StrEnum):
+    """The Obtainium source types the pack names.
+
+    The pack derives only GitHub and GitLab from a URL, and holds default
+    settings for GitHub, GitLab and HTML. An entry may carry any other type
+    Obtainium reads.
+    """
 
     GITHUB = "GitHub"
     HTML = "HTML"
@@ -59,6 +64,8 @@ class App:
 
     `additional_settings` is always a dict here; sources.render is
     responsible for the Obtainium export's string-encoded form.
+    `source_type` is the declared or derived Obtainium source type, or None
+    when Obtainium detects it from the URL.
     `raw` carries any Obtainium fields not otherwise modeled, keyed by
     their Obtainium field name. `eligibility` holds the packs the build's
     source offers it to. An unset `origin` defaults to the source.
@@ -67,7 +74,7 @@ class App:
     id: str
     url: str
     name: str
-    source_type: SourceType
+    source_type: str | None
     categories: tuple[str, ...]
     provenance: Provenance
     eligibility: frozenset[Variant]

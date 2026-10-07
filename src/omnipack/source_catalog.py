@@ -1,4 +1,4 @@
-"""Catalog rendering and identity checks shared by generated sources."""
+"""Render generated catalogs and compare their entries as the build renders them."""
 
 from __future__ import annotations
 
@@ -30,14 +30,3 @@ def render_catalog(entries: list[dict[str, Any]]) -> bytes:
         data["additionalSettings"] = settings
         apps.append(ComposedApp(normalize_project_url(data["url"]), data))
     return render(apps).encode()
-
-
-def validate_ids(entries: list[dict[str, Any]]) -> None:
-    seen: dict[str, str] = {}
-    for entry in entries:
-        prior = seen.get(entry["id"])
-        if prior is not None:
-            raise ValueError(
-                f"entry ID collision {entry['id']!r} between {prior} and {entry['url']}"
-            )
-        seen[entry["id"]] = entry["url"]

@@ -265,8 +265,7 @@ The publisher SHALL limit commits to `dist/single-screen.json`,
 tracked file is modified, added or deleted, when an allowed file is missing, or
 when an allowed file is not a regular file of mode 100644, such as a symbolic
 link or a file whose executable bit changed.
-Committed source catalogs, reviewed project policy and other configuration SHALL
-NOT be published or modified by nightly. README changes SHALL be restricted to
+Committed source catalogs and other configuration SHALL NOT be published or modified by nightly. README changes SHALL be restricted to
 the interior of exactly one valid catalog marker pair; bytes outside it,
 including the markers, SHALL match the checked-out main. Changed allowed files
 SHALL be published in one commit, and a candidate with no tracked changes SHALL
@@ -282,7 +281,7 @@ or alter repository protection settings to bypass a rejection.
 
 #### Scenario: Candidate changes an out-of-scope tracked input
 
-- **WHEN** a nightly candidate changes a committed source catalog, the reviewed project policy or other configuration
+- **WHEN** a nightly candidate changes a committed source catalog or other configuration
 - **THEN** publication is rejected as an out-of-scope tracked mutation
 
 #### Scenario: Successful no-op

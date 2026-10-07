@@ -76,7 +76,6 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     admitted = {
         "source": "codm2000",
         "url": "https://github.com/owner/app",
-        "kind": "apk",
         "id": "owner.app",
     }
     ingestion = IngestionReport(admitted=[admitted])

@@ -9,6 +9,7 @@ selection behavior against temporary repositories and a bare remote.
 
 from __future__ import annotations
 
+import html
 import json
 import os
 import subprocess
@@ -18,7 +19,9 @@ import pytest
 
 from scripts import source_proposal as proposal_module
 from scripts.source_proposal import (
+    BYTES_ONLY_CHANGE,
     SOURCES,
+    SUMMARY_LIMIT,
     VALIDATION_STEPS,
     SourceName,
     render_pr_body,
@@ -96,7 +99,7 @@ def _report(
     added: tuple[str, ...] = (),
     removed: tuple[str, ...] = (),
     changed: tuple[str, ...] = (),
-    retained_failures: tuple[tuple[str, str], ...] = (),
+    skipped: tuple[dict[str, object], ...] = (),
 ) -> dict:
     return {
         "status": "success",
@@ -105,10 +108,27 @@ def _report(
             "removed": list(removed),
             "changed": list(changed),
         },
-        "retainedFailures": [
-            {"url": url, "message": message} for url, message in retained_failures
-        ],
+        "skipped": list(skipped),
     }
+
+
+def _listing(project: str) -> dict[str, object]:
+    """A skipped row as generation reports it; an absent forge is null."""
+    return {
+        "list": "one",
+        "project": project,
+        "repository": "owner/repo",
+        "repositorySource": None,
+    }
+
+
+def _skip(project: str, reason: str = "latest release lists no APK asset") -> dict:
+    return {**_listing(project), "reason": reason}
+
+
+def _skip_line(project: str, reason: str = "latest release lists no APK asset") -> str:
+    listing = json.dumps(_listing(project), ensure_ascii=False, sort_keys=True)
+    return html.escape(f"{listing}: {reason}")
 
 
 # --- stage ----------------------------------------------------------------
@@ -153,6 +173,12 @@ def _pre_block(text: str) -> str:
     return text[text.index("<pre>") : text.index("</pre>")]
 
 
+UPSTREAM_TEXT = (
+    "[x](https://example.test) ![i](https://example.test/i.png) "
+    '`y` <script>alert(1)</script> & "quoted"'
+)
+
+
 def test_catalog_changes_appear_escaped_in_the_summary_and_body(
     tmp_path: Path,
 ) -> None:
@@ -165,15 +191,7 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
             added=("https://example.test/a?x=1&y=2",),
             removed=("https://example.test/<removed>",),
             changed=("https://example.test/c&d",),
-            retained_failures=(
-                (
-                    "https://example.test/proj",
-                    (
-                        "[x](https://example.test) ![i](https://example.test/i.png) "
-                        '`y` <script>alert(1)</script> & "quoted"'
-                    ),
-                ),
-            ),
+            skipped=(_skip(UPSTREAM_TEXT),),
         ),
     )
     body_path = tmp_path / "pr-body.md"
@@ -187,9 +205,7 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
         "Added:\nhttps://example.test/a?x=1&amp;y=2\n\n"
         "Removed:\nhttps://example.test/&lt;removed&gt;\n\n"
         "Changed:\nhttps://example.test/c&amp;d\n\n"
-        "Retained failures:\nhttps://example.test/proj: "
-        "[x](https://example.test) ![i](https://example.test/i.png) `y` "
-        "&lt;script&gt;alert(1)&lt;/script&gt; &amp; &quot;quoted&quot;\n"
+        f"Skipped:\n{_skip_line(UPSTREAM_TEXT)}\n"
     )
     for rendered in (outcome.summary, body_path.read_text()):
         assert expected in _pre_block(rendered)
@@ -199,17 +215,17 @@ def test_catalog_changes_appear_escaped_in_the_summary_and_body(
 
 def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) -> None:
     root = _repo(tmp_path)
-    policy_path = root / "config/codm-projects.json"
-    policy_path.write_text('{"schemaVersion": 1, "projects": {}}\n')
-    _git(root, "add", "--", "config/codm-projects.json")
-    _git(root, "commit", "-qm", "policy")
+    overlay_path = root / "config/overlay.json"
+    overlay_path.write_text("[]\n")
+    _git(root, "add", "--", "config/overlay.json")
+    _git(root, "commit", "-qm", "overlay")
     base = _git(root, "rev-parse", "HEAD")
     _write_candidate(
         root, '{"apps": [{"id": "a"}]}\n', _report(added=("https://example.test/a",))
     )
-    # The reviewed policy, a pack and the README differ from HEAD in the
-    # working tree when `stage` runs.
-    policy_path.write_text('{"schemaVersion": 1, "projects": {"x": {}}}\n')
+    # The overlay, a pack and the README differ from HEAD in the working tree
+    # when `stage` runs.
+    overlay_path.write_text('[{"url": "https://example.test/x", "patch": {}}]\n')
     (root / "dist/single-screen.json").write_text('{"apps": [1]}\n')
     (root / "README.md").write_text("changed guide\n")
 
@@ -224,7 +240,7 @@ def test_workspace_edits_outside_the_catalog_are_never_staged(tmp_path: Path) ->
     assert _git(root, "diff", "--cached", "--name-only") == ""
     assert _git(root, "diff", "--name-only").splitlines() == [
         "README.md",
-        "config/codm-projects.json",
+        "config/overlay.json",
         "dist/single-screen.json",
     ]
 
@@ -326,17 +342,54 @@ def test_report_whose_status_is_not_success_fails_with_no_commit(
     assert not bundle_path.exists()
 
 
-def test_summary_caps_a_huge_retained_failure_list_inside_the_pre_block(
+@pytest.mark.parametrize(
+    ("catalog_text", "changed"),
+    [('{"apps": [{"id": "a"}]}\n', True), ('{"apps": []}\n', False)],
+    ids=["changed-bytes", "unchanged"],
+)
+def test_a_byte_change_without_entry_changes_is_called_out(
+    tmp_path: Path, catalog_text: str, changed: bool
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, catalog_text, _report())
+    outcome = run_stage(
+        root, base, "https://github.example/runs/3", tmp_path / "b.bundle"
+    )
+    assert outcome.changed is changed
+    assert (BYTES_ONLY_CHANGE in _pre_block(outcome.summary)) is outcome.changed
+    if outcome.changed:
+        body_path = tmp_path / "pr-body.md"
+        _write_body(root, body_path, base)
+        assert BYTES_ONLY_CHANGE in _pre_block(body_path.read_text())
+
+
+def test_run_summary_bounds_a_huge_skipped_list(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _repo(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
-    failures = tuple(
-        (f"https://example.test/project-{index}", "x" * 200) for index in range(1000)
-    )
-    _write_candidate(
-        root, '{"apps": [{"id": "a"}]}\n', _report(retained_failures=failures)
-    )
+    count = 6000
+    skipped = tuple(_skip(f"project-{index}", "x" * 200) for index in range(count))
+    _write_candidate(root, '{"apps": []}\n', _report(skipped=skipped))
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["summarize"]) == 0
+    summary = (tmp_path / "summary.md").read_text()
+    assert len(summary) <= SUMMARY_LIMIT
+    pre_block = _pre_block(summary)
+    kept = pre_block.count("project-")
+    assert 0 < kept < count
+    assert f"and {count - kept} more" in pre_block
+
+
+def test_summary_caps_a_huge_skipped_list_inside_the_pre_block(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    skipped = tuple(_skip(f"project-{index}", "x" * 200) for index in range(1000))
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', _report(skipped=skipped))
     runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
     for step in VALIDATION_STEPS:
         monkeypatch.setenv(step.upper() + "_RESULT", "success")
@@ -347,11 +400,75 @@ def test_summary_caps_a_huge_retained_failure_list_inside_the_pre_block(
     body_text = (runner_temp / "source-handoff" / "pr-body.md").read_text()
     assert len(body_text) <= 65536
     pre_block = body_text[body_text.index("<pre>") : body_text.index("</pre>")]
-    assert "https://example.test/project-0: " in pre_block
-    kept = pre_block.count("https://example.test/project-")
+    assert _skip_line("project-0", "x" * 200) in pre_block
+    kept = pre_block.count("project-")
     assert 0 < kept < 1000
     assert f"and {1000 - kept} more" in pre_block
     assert body_text.endswith("guard: success\n")
+
+
+def test_run_summary_and_body_show_added_removed_and_changed_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    report = _report(
+        added=("https://github.com/o/new",),
+        removed=("https://github.com/o/gone",),
+        changed=("https://github.com/o/renamed",),
+    )
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', report)
+    runner_temp = _stage_environment(monkeypatch, root, tmp_path, base)
+    for step in VALIDATION_STEPS:
+        monkeypatch.setenv(step.upper() + "_RESULT", "success")
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("CHANGED", "true")
+    assert proposal_module.main(["summarize"]) == 0
+    summary = _pre_block((tmp_path / "summary.md").read_text())
+    body = _pre_block((runner_temp / "source-handoff" / "pr-body.md").read_text())
+    for rendered in (summary, body):
+        assert "Added:\nhttps://github.com/o/new\n" in rendered
+        assert "Removed:\nhttps://github.com/o/gone\n" in rendered
+        assert "Changed:\nhttps://github.com/o/renamed\n" in rendered
+        assert BYTES_ONLY_CHANGE not in rendered
+
+
+@pytest.mark.parametrize("changed", ["true", "false"])
+def test_run_summary_calls_out_a_byte_only_change(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, changed: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    _write_candidate(root, '{"apps": [{"id": "a"}]}\n', _report())
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("CHANGED", changed)
+    assert proposal_module.main(["summarize"]) == 0
+    summary = _pre_block((tmp_path / "summary.md").read_text())
+    assert (BYTES_ONLY_CHANGE in summary) is (changed == "true")
+
+
+def test_a_bounded_summary_keeps_every_section_and_counts_only_entries(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    count = 2000
+    added = tuple(f"https://example.test/{'x' * 200}/{index}" for index in range(count))
+    report = _report(added=added, skipped=(_skip("late"),))
+    _write_candidate(root, '{"apps": []}\n', report)
+    _stage_environment(monkeypatch, root, tmp_path, base)
+    monkeypatch.setenv("BASE_SHA", base)
+    assert proposal_module.main(["summarize"]) == 0
+    summary = (tmp_path / "summary.md").read_text()
+    assert len(summary) <= SUMMARY_LIMIT
+    pre_block = _pre_block(summary)
+    for header in ("Added:", "Removed:", "Changed:", "Skipped:"):
+        assert header in pre_block.splitlines()
+    kept = pre_block.count("https://example.test/")
+    kept += _skip_line("late") in pre_block
+    assert 0 < kept < count + 1
+    assert f"and {count + 1 - kept} more" in pre_block
 
 
 def _stage_environment(
@@ -536,20 +653,12 @@ def test_unchanged_closes_an_open_pr_and_makes_no_push_or_pr_write(
     assert _bare_branch_sha(bare) == ""
 
 
-def test_retained_failure_reproducing_main_closes_open_proposal(
+def test_candidate_with_skips_reproducing_main_closes_open_proposal(
     tmp_path: Path,
 ) -> None:
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
-    _write_candidate(
-        seed,
-        '{"apps": []}\n',
-        _report(
-            retained_failures=(
-                ("https://example.test/project", "release lookup failed"),
-            )
-        ),
-    )
+    _write_candidate(seed, '{"apps": []}\n', _report(skipped=(_skip("Desktop"),)))
     stage = run_stage(
         seed,
         base,
@@ -560,9 +669,7 @@ def test_retained_failure_reproducing_main_closes_open_proposal(
     assert stage.changed is False
     assert stage.sha == base
     assert stage.base_sha == base
-    assert stage.retained_failures == (
-        ("https://example.test/project", "release lookup failed"),
-    )
+    assert _skip_line("Desktop") in _pre_block(stage.summary)
 
     bare = _bare_from(seed, tmp_path)
     write_side = shallow_checkout(tmp_path, bare, base)
@@ -869,16 +976,14 @@ def test_malformed_env_values_are_rejected_before_any_fetch_or_write(
     assert gh.calls == []
 
 
-def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
+def test_markdown_bearing_project_name_is_escaped_in_the_pr_body(
     tmp_path: Path,
 ) -> None:
     message = "[x](https://example.test) <b>app.apk</b> & ![i](https://e.test/i.png)"
     seed = _repo(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     _write_candidate(
-        seed,
-        '{"apps": [{"id": "a"}]}\n',
-        _report(retained_failures=(("https://example.test/proj", message),)),
+        seed, '{"apps": [{"id": "a"}]}\n', _report(skipped=(_skip(message),))
     )
     bundle_path = tmp_path / "candidate.bundle"
     body_path = tmp_path / "pr-body.md"
@@ -900,7 +1005,8 @@ def test_markdown_bearing_asset_name_is_escaped_in_the_pr_body(
         "[x](https://example.test) &lt;b&gt;app.apk&lt;/b&gt; &amp; "
         "![i](https://e.test/i.png)"
     )
-    assert f"https://example.test/proj: {escaped}" in _pre_block(body_text)
+    assert escaped in _pre_block(body_text)
+    assert _skip_line(message) in _pre_block(body_text)
     assert message not in body_text
 
 
@@ -1197,36 +1303,6 @@ def test_stage_rejects_pre_staged_other_source(
     assert _git(root, "diff", "--cached", "--name-only") == path
 
 
-def test_unchanged_quiver_diagnostics_include_skips_and_policy(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
-    base = _git(root, "rev-parse", "HEAD")
-    report = _report()
-    report.update(
-        {
-            "skipped": [
-                {
-                    "row": {"repository": "o/repo"},
-                    "reason": "<paused>",
-                    "retained": True,
-                }
-            ],
-            "effectivePolicy": {"o/repo": {}},
-            "noAndroid": [{"url": "o/desktop"}],
-        }
-    )
-    _write_candidate(root, '{"apps": []}\n', report, "quiver")
-    result = run_stage(
-        root,
-        base,
-        "run",
-        tmp_path / "candidate.bundle",
-        source="quiver",
-    )
-    assert result.status == "unchanged"
-    assert "&lt;paused&gt;" in _pre_block(result.summary)
-    assert "o/desktop" in result.summary and "effectivePolicy" in result.summary
-
-
 @pytest.mark.parametrize("mutation", ["changed-bytes", "symlink", "other-source"])
 def test_guard_rejects_changed_or_cross_source_checked_catalog(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, mutation: str
@@ -1255,8 +1331,7 @@ def test_summary_reports_actual_checks_and_escaped_skips_even_when_unchanged(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     root = _repo(tmp_path)
-    report = _report()
-    report["skipped"] = [{"row": {"repository": "o/repo"}, "reason": "<skip>"}]
+    report = _report(skipped=(_skip("o/repo", "<skip>"),))
     _write_candidate(root, '{"apps": []}\n', report, "quiver")
     base = _git(root, "rev-parse", "HEAD")
     _stage_environment(monkeypatch, root, tmp_path, base)
@@ -1271,6 +1346,25 @@ def test_summary_reports_actual_checks_and_escaped_skips_even_when_unchanged(
     assert base in summary
     assert "&lt;skip&gt;" in _pre_block(summary)
     assert "tests: skipped" in summary and "generation: success" in summary
+
+
+def test_summary_of_a_failed_generation_shows_its_error_and_skips(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    report = {
+        "status": "failed",
+        "error": "discovery keeps no project <none>",
+        "skipped": [_skip("Zip only")],
+    }
+    _write_candidate(root, '{"apps": []}\n', report, "quiver")
+    _stage_environment(monkeypatch, root, tmp_path, _git(root, "rev-parse", "HEAD"))
+    monkeypatch.setenv("GENERATION_RESULT", "failure")
+    assert proposal_module.main(["summarize", "--source", "quiver"]) == 0
+    summary = _pre_block((tmp_path / "summary.md").read_text())
+    assert "Error: discovery keeps no project &lt;none&gt;\n\nSkipped:" in summary
+    assert "Added:" not in summary
+    assert _skip_line("Zip only") in summary
 
 
 def test_summary_does_not_claim_validation_when_generation_report_is_missing(

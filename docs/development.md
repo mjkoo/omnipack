@@ -27,14 +27,13 @@ for generation, acceptance and output review.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
   and add a [setup note](curation.md#port-setup) for required user files or components.
-- **Change generated-source discovery:** edit the reviewed rule under its
-  normalized project key in `config/codm-projects.json` or
-  `config/quiver-projects.json`. The upstream discovery list supplies the
-  projects; this policy is not an independent additions list. See the
-  [codm](source-generation.md#inputs-and-policy) and
-  [Quiver](source-generation.md#quiver-discovery-skips-and-removals) policy
-  fields, then generate and accept a candidate as described below before
-  building.
+- **Refresh a generated source:** the codm and Quiver catalogs come from
+  their upstream lists alone; there is no per-project generation policy. Give
+  a generated app its name and settings with an overlay record and its
+  category with a category map key, as for any other source. To refresh a
+  catalog by hand, generate and accept a candidate as described below before
+  building; see [inputs](source-generation.md#inputs) and
+  [rendered entries](source-generation.md#rendered-entries).
 - **Patch selected settings:** add a `{url, patch}` record to
   `config/overlay.json`, using the selected entry's project URL. The record
   patches every selected entry at that URL. `patch.additionalSettings` is an
@@ -78,10 +77,10 @@ for generation, acceptance and output review.
 
 For every manual edit affecting pack contents:
 
-1. For a codm or Quiver policy edit, run `uv run pack generate-source <source>`
-   with `codm` or `quiver`. Inspect that invocation's
-   `.build/source-generation/<source>/report.json` and candidate
-   `catalog.json`, including retained failures and intended project changes.
+1. For a manual codm or Quiver catalog refresh, run
+   `uv run pack generate-source <source>` with `codm` or `quiver`. Inspect that
+   invocation's `.build/source-generation/<source>/report.json` and candidate
+   `catalog.json`, including skipped listings and intended project changes.
    Accept only a successful, reviewed candidate; a failed run has none to accept.
    Copy it deliberately:
 
@@ -106,7 +105,7 @@ For every manual edit affecting pack contents:
    immediately before the build: settings edits that keep every entry's id and
    URL produce no entries, and a second build can empty it. The command lists
    all recorded entries, including admitted committed candidates with their
-   source, project URL, entry kind and committed id. A diagnostic kind with
+   source, project URL and committed id. A diagnostic kind with
    nothing recorded prints nothing; an unavailable comparison is labeled
    unavailable, and a failed build's comparison describes candidates that were
    not published.
@@ -130,8 +129,8 @@ by rebuilding, never by hand. Merge README prose outside those markers by hand
 and re-read it; the build preserves those bytes. For a source catalog conflict,
 take main's catalog as the base, rerun generation, inspect the new candidate and
 diagnostics, copy it using the acceptance recipe above, then build. Never
-hand-resolve the catalog or keep main's catalog as the final resolution of a
-policy edit. Nightly writes only the packs and README, never a source catalog.
+hand-resolve the catalog. Nightly writes only the packs and README, never a
+source catalog.
 
 The [automated source proposal](source-generation.md#proposal-workflow) is the
 catalog-only exception: its builds are checks, and nightly rebuilds outputs
@@ -145,9 +144,8 @@ pack sources, including the committed codm and Quiver catalogs, and writes both
 import files to `dist/` and regenerates the README catalog after validating their
 serialized bytes offline. It does not fetch the codm README, the Quiver index or
 release APKs. Keep exactly one standalone pair of catalog markers in README; the
-build preserves all bytes outside them. The build fetches public catalogs without credentials and never
-reads `config/http.json`. Only source generation reads it, so that an optional
-`GITHUB_TOKEN` authenticates its requests to `api.github.com`.
+build preserves all bytes outside them. The build and source generation fetch
+public inputs without credentials.
 
 The JSON diagnostics are in `.build/report.json`, including each
 family's selection with the candidates it was chosen over and the selection
@@ -162,7 +160,7 @@ README.
 
 Run `uv run pack verify` (or `just verify`) to validate the committed packs,
 README catalog and local configuration without network access.
-Verification does not consult HTTP configuration or credentials. Unsupported
+Verification does not consult credentials. Unsupported
 arguments fail before verification and leave prior evidence intact. Use Obtainium
 to investigate source selection and version behavior.
 Verification leaves distribution files, README, configuration, and the build
@@ -171,7 +169,7 @@ report unchanged. Standalone evidence is written to `.build/verify.json`.
 Run `uv run pack report` to display build and verification results, recorded
 non-blocking build diagnostics,
 observation times, and whether verification matches its fingerprinted inputs.
-Edits outside that set, such as extras, sources, source catalogs or their policy,
+Edits outside that set, such as extras, sources or source catalogs,
 leave evidence reported as current until a rebuild changes the outputs.
 A matching fingerprint does not establish current upstream health.
 
@@ -189,10 +187,9 @@ than the current one requires regeneration with `uv run pack verify` or
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
 
-See [source generation](source-generation.md) for editing reviewed project
-rules, generating isolated candidates, accepting source data, and operating the
-separate source proposal workflow. See [source generation validation](../openspec/changes/archive/2026-09-11-generate-reviewed-readme-catalog/source-generation-validation.md)
-for the dated controlled, live-build, and device evidence.
+See [source generation](source-generation.md) for upstream inputs and
+screening, generating isolated candidates, accepting source data, and operating
+the separate source proposal workflow.
 
 See [maintained app curation](curation.md) for version policies and known
 identity findings, and [curation validation](../openspec/changes/archive/2026-09-09-curate-app-version-policies/curation-validation.md) for

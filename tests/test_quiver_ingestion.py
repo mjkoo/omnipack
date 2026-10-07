@@ -17,6 +17,7 @@ from omnipack.sources import IngestionReport, SourceError, ingest_all, quiver
 from omnipack.verify import run_verification
 from tests.current_config_support import (
     CurrentConfiguration,
+    assert_canonical_catalog,
     build_current_configuration,
     current_configuration_fixture,  # noqa: F401
 )
@@ -69,7 +70,7 @@ def test_committed_quiver_ingests_every_entry_without_network(tmp_path: Path) ->
     assert [app.id for app in apps] == ["org.example.one", "org.example.two"]
     assert all(app.eligibility == frozenset(Variant) for app in apps)
     assert all(
-        app.origin == "quiver-generated" and app.source_type is SourceType.GITHUB
+        app.origin == "quiver-generated" and app.source_type == SourceType.GITHUB
         for app in apps
     )
     assert [item["source"] for item in report.admitted] == ["quiver", "quiver"]
@@ -102,21 +103,6 @@ def test_quiver_duplicate_package_id_fails_named(tmp_path: Path) -> None:
         quiver.fetch(tmp_path, {"catalog": "quiver.json"})
 
 
-@pytest.mark.parametrize("repo", ["Owner/Shared", "owner/shared.git"])
-def test_quiver_duplicate_normalized_project_url_fails_named(
-    tmp_path: Path, repo: str
-) -> None:
-    write_catalog(
-        tmp_path,
-        [entry("org.example.one", "owner/shared"), entry("org.example.two", repo)],
-    )
-    with pytest.raises(
-        SourceError,
-        match=r"quiver.*duplicate normalized project URL github\.com/owner/shared",
-    ):
-        quiver.fetch(tmp_path, {"catalog": "quiver.json"})
-
-
 @pytest.mark.parametrize("field", ["family", "variant"])
 def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
     write_catalog(tmp_path, [entry("org.example.one", "owner/one", **{field: "x"})])
@@ -127,17 +113,27 @@ def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
 @pytest.mark.parametrize(
     "record",
     [
+        entry("a1b2c3d4e5f6", "owner/one"),
         entry("org.example.one", "owner/one", additionalSettings={"trackOnly": True}),
-        entry("org.example.one", "owner/one", overrideSource="GitLab"),
-        entry("org.example.one", "owner/one", url="https://gitlab.com/owner/one"),
+        entry(
+            "org.example.one",
+            "owner/one",
+            url="https://gitlab.com/group/one",
+            overrideSource="GitLab",
+        ),
     ],
+    ids=["placeholder-id", "track-only", "gitlab"],
 )
-def test_quiver_rejects_noninstallable_or_non_github_records(
+def test_quiver_keeps_any_valid_committed_record(
     tmp_path: Path, record: dict[str, object]
 ) -> None:
     write_catalog(tmp_path, [record])
-    with pytest.raises(SourceError, match="quiver"):
-        quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+    [app] = quiver.fetch(tmp_path, {"catalog": "quiver.json"})
+    assert (app.id, app.url, app.source_type) == (
+        record["id"],
+        record["url"],
+        record["overrideSource"],
+    )
 
 
 def test_quiver_candidates_reach_composition_with_url_and_package_overlaps(
@@ -275,33 +271,22 @@ def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> Non
     ]
 
 
-def assert_canonical_quiver_catalog(catalog: Path) -> None:
-    from omnipack.quiver_catalog import load_quiver_catalog
-
-    entries = load_quiver_catalog(catalog)
-    assert catalog.read_bytes() == render_catalog(entries), (
-        f"{catalog} differs from the canonical rendering of its entries"
-    )
-
-
 def test_committed_quiver_catalog_is_canonical_without_a_fixed_roster() -> None:
     root = Path(__file__).resolve().parents[1]
-    assert_canonical_quiver_catalog(root / "config/catalogs/quiver.json")
+    assert_canonical_catalog(root / "config/catalogs/quiver.json")
 
 
-def test_a_valid_but_noncanonical_quiver_catalog_fails_the_check(
-    tmp_path: Path,
-) -> None:
+def test_a_valid_but_noncanonical_catalog_fails_the_check(tmp_path: Path) -> None:
     entries = [entry("org.example.one", "owner/one")]
-    catalog = tmp_path / "quiver.json"
+    catalog = tmp_path / "catalog.json"
     catalog.write_bytes(render_catalog(entries))
-    assert_canonical_quiver_catalog(catalog)
+    assert_canonical_catalog(catalog)
 
     catalog.write_text(json.dumps(json.loads(catalog.read_text()), indent=2))
     with pytest.raises(
-        AssertionError, match=r"quiver\.json differs from the canonical"
+        AssertionError, match=r"catalog\.json differs from the canonical"
     ):
-        assert_canonical_quiver_catalog(catalog)
+        assert_canonical_catalog(catalog)
 
 
 def test_current_configuration_fixture_composes_quiver(

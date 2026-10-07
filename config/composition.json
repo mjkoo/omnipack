@@ -39,7 +39,7 @@
         "url": "https://github.com/TwilitRealm/dusklight"
       },
       "family": "app:dusklight",
-      "rationale": "The standard Dusklight build. Quiver's verified entry for the same repository serves single, and the dual asset at another repository is preferred for dual."
+      "rationale": "The standard Dusklight build. Quiver's entry for the same repository serves single, and the dual asset at another repository is preferred for dual."
     },
     {
       "match": {
@@ -355,28 +355,46 @@
     "app:minish-cap": "Decomps/Recomps",
     "app:openmw": "PC Ports",
     "app:pokemon-emerald": "Decomps/Recomps",
+    "github.com/999sian/melee-pc": "Decomps/Recomps",
     "github.com/aabrole/huntersrecomp": "Decomps/Recomps",
+    "github.com/alondero/aerogauge-recomp": "Decomps/Recomps",
+    "github.com/alondero/automobililamborghini-recomp": "Decomps/Recomps",
     "github.com/andreyvelsk/skyrimwebmonitor": "Utilities",
     "github.com/aureliob/banjorecomp-android": "Decomps/Recomps",
+    "github.com/birabittoh/eternalsonatareprise": "Decomps/Recomps",
+    "github.com/bvschaik/julius": "PC Ports",
     "github.com/castdrian/showdown-ds": "Utilities",
     "github.com/chimeragaming/fanmakepokemonmaps_android": "Utilities",
     "github.com/chimeragaming/pixelnavigator": "Utilities",
+    "github.com/chrissotraidis/kartpad": "Decomps/Recomps",
     "github.com/cylonid/nativealphaforandroid": "Utilities",
     "github.com/darkaxt/dualscreendex": "Utilities",
+    "github.com/doukutsu-rs/doukutsu-rs": "PC Ports",
     "github.com/enrique-paulino/dualscreendex": "Utilities",
+    "github.com/eukaryot/sonic3air": "Decomps/Recomps",
     "github.com/exojosh/aynthorsecondscreen": "Utilities",
     "github.com/igawa6/dualsouls": "PC Ports",
     "github.com/igawa6/harvestmoon64recomp": "Decomps/Recomps",
     "github.com/igawa6/tomba2recompds": "Decomps/Recomps",
+    "github.com/isledecomp/isle-portable": "Decomps/Recomps",
     "github.com/jakobkhansen/silksongandroid": "PC Ports",
+    "github.com/jrickey/battleship": "Decomps/Recomps",
     "github.com/kalenjohnson/chrono-duo": "Utilities",
+    "github.com/keriew/augustus": "PC Ports",
     "github.com/mastercook777/heimdall-ayn-thor-assistant": "Utilities",
+    "github.com/matteo842/crashbandicoot-launcher": "Decomps/Recomps",
+    "github.com/openrct2/openrct2": "PC Ports",
     "github.com/rosbean/balatro-dualscreen": "PC Ports",
     "github.com/rsigristc/dw3-ds-android": "Utilities",
     "github.com/samyost1/zelda3-android": "Decomps/Recomps",
+    "github.com/sergiomanzur/regaiden-recomp": "Decomps/Recomps",
+    "github.com/slickamogus/silent-hill-decomp": "Decomps/Recomps",
     "github.com/sofianeelhor/pkforge": "Utilities",
     "github.com/space001000/zomboidds": "Utilities",
+    "github.com/ssunnking/open-nectar---pikmin-native-pc-port": "Decomps/Recomps",
     "github.com/stormpanda/megingiard": "Utilities",
-    "github.com/thor-wayfinder/thor-wayfinder": "Utilities"
+    "github.com/teamgdb/yakumo": "Decomps/Recomps",
+    "github.com/thor-wayfinder/thor-wayfinder": "Utilities",
+    "github.com/vcmi/vcmi": "PC Ports"
   }
 }

@@ -14,7 +14,6 @@ from tests.verification_support import write_verification_inputs
 
 def inputs(root: Path) -> dict[Path, bytes]:
     write_verification_inputs(root)
-    (root / "config/http.json").write_text('{"credentials":{}}\n')
     write_report(root, {}, None, IngestionReport())
     (root / ".cache").mkdir()
     (root / ".cache/sentinel").write_bytes(b"cache bytes\x00")

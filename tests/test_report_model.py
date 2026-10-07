@@ -2,9 +2,11 @@
 
 import json
 from enum import StrEnum
+from typing import get_args
 
 import pytest
 
+from omnipack.discovery import GeneratedSource
 from omnipack.offline import Finding
 from omnipack.report_model import (
     BuildStage,
@@ -12,11 +14,15 @@ from omnipack.report_model import (
     OfflineStatus,
     Status,
 )
-from scripts.source_proposal import GENERATION_SUCCESS_STATUS
+from scripts.source_proposal import GENERATION_SUCCESS_STATUS, SourceName
 
 
 def test_generation_success_matches_the_standalone_script_boundary() -> None:
     assert GENERATION_SUCCESS_STATUS == Status.SUCCESS.value
+
+
+def test_proposal_sources_match_the_generated_sources() -> None:
+    assert set(get_args(SourceName)) == set(GeneratedSource)
 
 
 @pytest.mark.parametrize("vocabulary", [Status, OfflineStatus, InputState, BuildStage])

@@ -19,6 +19,21 @@ from omnipack.urls import normalize_project_url
             "http://WWW.GITHUB.COM/Owner/Repo.git/releases/latest?x=1#download",
             "github.com/owner/repo",
         ),
+        ("https://github.com/Owner/Repo.GIT", "github.com/owner/repo"),
+        ("https://example.com/Owner/Repo.GIT", "example.com/Owner/Repo.GIT"),
+        ("https://gitlab.com/Group/App/-/releases?page=2#v1", "gitlab.com/Group/App"),
+        ("https://gitlab.com/Group/Sub/App.git/-/tags", "gitlab.com/Group/Sub/App"),
+        ("https://[::1]:8443/App", "[::1]:8443/App"),
+        ("https://[::1]/App", "[::1]/App"),
+        (
+            "https://gitlab.com/groups/team/-/epics?x=1",
+            "gitlab.com/groups/team/-/epics?x=1",
+        ),
+        ("https://gitlab.com/-/explore", "gitlab.com/-/explore"),
+        ("https://gitlab.com//groups/team?q=1", "gitlab.com//groups/team?q=1"),
+        ("https://gitlab.com/group?sort=name", "gitlab.com/group?sort=name"),
+        ("https://gitlab.com/group/-/epics", "gitlab.com/group/-/epics"),
+        ("https://example.com/o/repo/.git", "example.com/o/repo"),
     ],
 )
 def test_normalize_project_url(url: str, normalized: str) -> None:
@@ -43,7 +58,7 @@ def test_normalize_project_url(url: str, normalized: str) -> None:
         (
             "https://gitlab.com/Owner/Repo",
             "https://gitlab.com/Owner/Repo?view=1",
-            False,
+            True,
         ),
         (
             "https://example.com/Owner/Repo",
@@ -53,16 +68,31 @@ def test_normalize_project_url(url: str, normalized: str) -> None:
         (
             "https://gitlab.com/Owner/Repo",
             "https://gitlab.com/Owner/Repo#section",
-            False,
+            True,
         ),
         (
             "https://example.com/Owner/Repo",
             "https://example.com/Owner/Repo#section",
             False,
         ),
-        ("https://github.com/Owner/Repo", "https://github.com:443/Owner/Repo", False),
-        ("https://gitlab.com/Owner/Repo", "https://gitlab.com:443/Owner/Repo", False),
-        ("https://example.com/Owner/Repo", "https://example.com:443/Owner/Repo", False),
+        ("https://github.com/Owner/Repo", "https://github.com:443/Owner/Repo", True),
+        ("https://gitlab.com/Owner/Repo", "https://gitlab.com:443/Owner/Repo", True),
+        ("https://example.com/Owner/Repo", "https://example.com:443/Owner/Repo", True),
+        ("http://example.com/Owner/Repo", "https://example.com:80/Owner/Repo", False),
+        ("http://example.com:80/Owner/Repo", "https://example.com/Owner/Repo", True),
+        ("https://github.com/Owner/Repo", "https://github.com:8443/Owner/Repo", False),
+        (
+            "https://example.com/Owner/Repo",
+            "https://example.com:8443/Owner/Repo",
+            False,
+        ),
+        (
+            "https://gitlab.com/Group/App",
+            "https://gitlab.com/Group/App/-/releases/v1",
+            True,
+        ),
+        ("github.com:443/Owner/Repo", "https://github.com/Owner/Repo", True),
+        ("example.com:80/Owner/Repo", "https://example.com/Owner/Repo", False),
     ],
 )
 def test_normalized_urls_identify_the_same_project(

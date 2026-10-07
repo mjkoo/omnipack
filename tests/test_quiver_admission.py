@@ -11,20 +11,12 @@ from omnipack.composition_policy import (
 )
 from omnipack.merge import compose
 from omnipack.model import Variant
-from omnipack.quiver_generation import generate_quiver
 from omnipack.render import render
 from omnipack.sources import quiver
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
     current_configuration_fixture,  # noqa: F401
-)
-from tests.test_quiver_generation import (
-    API,
-    OUTPUT,
-    ScenarioHttp,
-    set_policy,
-    setup,
 )
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -147,39 +139,3 @@ def test_quiver_credit_survives_catalog_rendering(
     prefix, _, suffix = split_catalog(rebuilt)
     assert credit in prefix + suffix
     assert credit in rebuilt
-
-
-def test_discovery_skip_does_not_replace_project_denial(tmp_path: Path) -> None:
-    values = setup(tmp_path, rows=[{"repository": "o/renamed"}])
-    package_id = "org.example.game"
-    set_policy(
-        tmp_path,
-        skips=[{"url": "https://github.com/o/repo", "reason": "Review deferred."}],
-    )
-    renamed_api = "https://api.github.com/repos/o/renamed"
-    values[renamed_api] = {"full_name": "o/renamed"}
-    values[renamed_api + "/releases/latest"] = values[API + "/releases/latest"]
-    http = ScenarioHttp(values)
-    report = generate_quiver(tmp_path, http=http)
-    assert report["status"] == "success"
-    assert not report["skipped"]
-    assert renamed_api in http.urls and API not in http.urls
-    [candidate] = quiver.fetch(tmp_path, {"catalog": f"{OUTPUT}/catalog.json"})
-    assert candidate.url == "https://github.com/o/renamed"
-    assert candidate.id == package_id
-    empty_policy = parse_composition_policy(
-        {"schemaVersion": 1, "candidates": [], "pins": []}
-    )
-    unblocked = compose([candidate], [], [], policy=empty_policy)
-    assert all(unblocked.apps[variant] for variant in Variant)
-    # A denial of the old URL does not reach the renamed project.
-    old_denial = [{"url": "https://github.com/o/repo", "reason": "Rejected."}]
-    renamed = compose([candidate], old_denial, [], policy=empty_policy)
-    assert all(renamed.apps[variant] for variant in Variant)
-    blocked = compose(
-        [candidate],
-        [{"url": candidate.url, "reason": "Rejected after source review."}],
-        [],
-        policy=empty_policy,
-    )
-    assert all(not blocked.apps[variant] for variant in Variant)

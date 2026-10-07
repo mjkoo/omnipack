@@ -10,6 +10,8 @@ from __future__ import annotations
 
 from typing import Any, Final
 
+from omnipack.model import SourceType
+
 _COMMON: dict[str, Any] = {
     "trackOnly": False,
     "versionExtractionRegEx": "",
@@ -32,8 +34,8 @@ _COMMON: dict[str, Any] = {
     "zippedApkFilterRegEx": "",
 }
 
-SETTINGS_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
-    "GitHub": {
+SETTINGS_DEFAULTS: Final[dict[SourceType, dict[str, Any]]] = {
+    SourceType.GITHUB: {
         "includePrereleases": False,
         "fallbackToOlderReleases": True,
         "filterReleaseTitlesByRegEx": "",
@@ -46,7 +48,7 @@ SETTINGS_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
         "GHReqPrefix": "",
         **_COMMON,
     },
-    "HTML": {
+    SourceType.HTML: {
         "intermediateLink": [],
         "customLinkFilterRegex": "",
         "filterByLinkText": False,
@@ -59,7 +61,7 @@ SETTINGS_DEFAULTS: Final[dict[str, dict[str, Any]]] = {
         "defaultPseudoVersioningMethod": "partialAPKHash",
         **_COMMON,
     },
-    "GitLab": {
+    SourceType.GITLAB: {
         "fallbackToOlderReleases": True,
         **_COMMON,
     },

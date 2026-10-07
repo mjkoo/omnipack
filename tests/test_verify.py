@@ -17,7 +17,7 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     assert "complete" not in result
     assert result["mode"] == "offline"
     assert result["schemaVersion"] == 5
-    assert result["verifier"] == {"version": "3.0.0", "scope": "structural"}
+    assert result["verifier"] == {"version": "4.0.0", "scope": "structural"}
     assert set(result["inputs"]) == {
         "single",
         "dual",
@@ -30,6 +30,20 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
         expected = hashlib.sha256((tmp_path / relative).read_bytes()).hexdigest()
         assert result["inputs"][name] == {"state": "present", "sha256": expected}
     assert json.loads((tmp_path / verify.VERIFY_PATH).read_text()) == result
+
+
+def test_evidence_is_the_same_with_a_token_in_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    copy_inputs(tmp_path)
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    without = verify.run_verification(tmp_path)
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.setenv(name, "token")
+    with_token = verify.run_verification(tmp_path)
+    assert without["status"] == with_token["status"] == "success"
+    assert without["inputs"] == with_token["inputs"]
 
 
 @pytest.mark.parametrize("allow_id_change", [None, False])
@@ -139,26 +153,6 @@ def test_report_write_error_is_wrapped(tmp_path: Path) -> None:
         verify.VerificationReportError, match="cannot write verification report"
     ):
         verify.run_verification(tmp_path)
-
-
-def test_http_config_is_not_read_or_fingerprinted(tmp_path, monkeypatch) -> None:
-    copy_inputs(tmp_path)
-    (tmp_path / "config/http.json").write_text(
-        json.dumps({"credentials": {"example.test": 1}})
-    )
-    read_bytes = Path.read_bytes
-    monkeypatch.setattr(
-        Path,
-        "read_bytes",
-        lambda self: (
-            pytest.fail("unexpected read")
-            if self.name == "http.json"
-            else read_bytes(self)
-        ),
-    )
-    result = verify.run_verification(tmp_path)
-    assert result["status"] == "success"
-    assert "http" not in result["inputs"]
 
 
 def test_nonobject_exclusion_completes_failed_evidence(tmp_path: Path) -> None:

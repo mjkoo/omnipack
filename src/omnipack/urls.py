@@ -4,25 +4,70 @@ from __future__ import annotations
 
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
+_DEFAULT_PORTS = {"http": 80, "https": 443}
+# First path segments of gitlab.com pages that belong to the site rather than a
+# project's namespace.
+GITLAB_ROUTES = frozenset(
+    {"-", "groups", "users", "explore", "dashboard", "search", "help", "admin"}
+)
 
-def normalize_project_url(url: str) -> str:
-    """Normalize the URL features that do not identify a different project."""
+
+def project_url(url: str) -> str:
+    """Reduce a link to the project URL that normalization identifies.
+
+    The result keeps the scheme and the path's case, lowercases the host and
+    drops a leading `www.`, drops the scheme's default port but keeps any
+    other, and drops a trailing slash and `.git`. A GitHub link is reduced to
+    its owner and repository, so a releases, tags, blob or release-asset link
+    becomes the repository root, and a gitlab.com project link to the project
+    path before GitLab's reserved `-` route segment. On any other host, and on
+    a gitlab.com site page, the query and fragment are kept, since which parts
+    of such a link identify the project cannot be known.
+    """
     parsed = _split_url(url)
+    scheme = parsed.scheme.lower()
     host = (parsed.hostname or "").lower()
     host = host.removeprefix("www.")
 
     path = parsed.path.rstrip("/")
+    segments = path.split("/")
     query, fragment = parsed.query, parsed.fragment
     if host == "github.com":
-        path = "/".join(path.split("/")[:3]).lower()
+        path = "/".join(segments[:3])
         query = fragment = ""
-    if path.lower().endswith(".git"):
-        path = path[:-4]
+    elif host == "gitlab.com" and gitlab_project(segments):
+        if "-" in segments:
+            path = "/".join(segments[: segments.index("-")])
+        query = fragment = ""
+    # `.GIT` means `.git` only where path case is folded.
+    if path.endswith(".git") or (
+        host == "github.com" and path.lower().endswith(".git")
+    ):
+        path = path[:-4].rstrip("/")
 
-    authority = host
-    if parsed.port is not None:
+    authority = f"[{host}]" if ":" in host else host
+    # A URL written without a scheme is taken as https for its default port.
+    if parsed.port is not None and parsed.port != _DEFAULT_PORTS.get(scheme or "https"):
         authority = f"{authority}:{parsed.port}"
-    return urlunsplit(("", authority, path, query, fragment)).removeprefix("//")
+    return urlunsplit((scheme, authority, path, query, fragment))
+
+
+def gitlab_project(segments: list[str]) -> bool:
+    """Whether a gitlab.com path names a project: a namespace and a project
+    before any `-` route segment, not a site route."""
+    if "-" in segments:
+        segments = segments[: segments.index("-")]
+    names = [segment for segment in segments if segment]
+    return len(names) >= 2 and names[0] not in GITLAB_ROUTES
+
+
+def normalize_project_url(url: str) -> str:
+    """Normalize the URL features that do not identify a different project."""
+    parsed = urlsplit(project_url(url))
+    path = parsed.path.lower() if parsed.hostname == "github.com" else parsed.path
+    return urlunsplit(
+        ("", parsed.netloc, path, parsed.query, parsed.fragment)
+    ).removeprefix("//")
 
 
 def parse_project_url(url: str) -> str:
@@ -43,26 +88,3 @@ def _split_url(url: str) -> SplitResult:
     if parsed.hostname is None:
         raise ValueError(f"project URL has no host: {url!r}")
     return parsed
-
-
-def gitlab_project_path(url: str) -> str:
-    """Return the case-sensitive path of a supported public GitLab project.
-
-    The bounded native adapter accepts up to twenty namespace components and
-    one project component. Invalid URLs raise ValueError for caller diagnostics.
-    """
-    parsed = urlsplit(url)
-    parts = [part for part in parsed.path.split("/") if part]
-    if (
-        parsed.scheme != "https"
-        or parsed.hostname != "gitlab.com"
-        or parsed.username is not None
-        or parsed.password is not None
-        or parsed.port is not None
-        or not 2 <= len(parts) <= 21
-        or "-" in parts
-        or parsed.query
-        or parsed.fragment
-    ):
-        raise ValueError("URL must identify one public gitlab.com project")
-    return "/".join(parts)
