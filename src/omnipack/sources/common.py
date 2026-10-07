@@ -24,14 +24,15 @@ class SourceError(RuntimeError):
         super().__init__(f"{source}: {message}")
 
 
-def declared_source_type(value: object, *, source: str, entry: str) -> str:
+def declared_source_type(value: object, *, source: str, entry: str) -> str | None:
     """Keep any source type a record declares; Obtainium supports many more
-    than the pack holds default settings for."""
+    than the pack holds default settings for. A blank declaration declares
+    nothing."""
     if not isinstance(value, str):
         raise SourceError(
             source, f"entry {entry!r} has malformed source type {value!r}"
         )
-    return value
+    return value if value.strip() else None
 
 
 def derived_source_type(url: str) -> SourceType | None:
@@ -142,11 +143,12 @@ def normalize_record(
             source, f"entry {label!r} categories must be a list of strings"
         )
     url = record["url"]
-    kind = (
+    declared = (
         declared_source_type(record["overrideSource"], source=source, entry=str(label))
         if "overrideSource" in record
-        else derived_source_type(url)
+        else None
     )
+    kind = declared or derived_source_type(url)
     modeled = {
         "id",
         "url",

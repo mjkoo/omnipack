@@ -521,6 +521,24 @@ def test_upstream_record_without_declared_source_type_derives_or_leaves_it(
     assert app.source_type == expected
 
 
+@pytest.mark.parametrize("blank", ["", "  "])
+@pytest.mark.parametrize(
+    ("url", "expected"),
+    [
+        ("https://github.com/owner/repo", SourceType.GITHUB),
+        ("https://owner.itch.io/app", None),
+    ],
+)
+def test_upstream_record_with_a_blank_source_type_declares_none(
+    blank: str, url: str, expected: SourceType | None
+) -> None:
+    record = {**_record_with("ordinary", True), "url": url, "overrideSource": blank}
+
+    [app] = _fetch_rjny([record])
+
+    assert app.source_type == expected
+
+
 @pytest.mark.parametrize(
     ("source", "fetch"),
     [
