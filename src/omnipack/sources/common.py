@@ -9,7 +9,7 @@ from urllib.parse import urlsplit
 
 from omnipack.http import HttpResponse
 from omnipack.model import App, Provenance, SourceType, Variant
-from omnipack.urls import GITLAB_ROUTES
+from omnipack.urls import gitlab_project
 
 
 class HttpGetter(Protocol):
@@ -87,16 +87,9 @@ def derived_source_type(url: str) -> SourceType | None:
         and parts[1] not in {".", ".."}
     ):
         return SourceType.GITHUB
-    # A gitlab.com project is a namespace path and a project; GitLab reserves
-    # the `-` segment for its own routes inside a project, and site routes
-    # such as `groups` for pages that belong to no project.
-    segments = [part for part in parts if part]
-    if (
-        host == "gitlab.com"
-        and len(segments) >= 2
-        and "-" not in segments
-        and segments[0] not in GITLAB_ROUTES
-    ):
+    # GitLab reserves the `-` segment for its own routes inside a project, so
+    # a link holding one points at a page rather than the project.
+    if host == "gitlab.com" and "-" not in parts and gitlab_project(parts):
         return SourceType.GITLAB
     return None
 

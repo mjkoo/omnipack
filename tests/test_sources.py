@@ -980,6 +980,7 @@ def test_build_ingestion_failure_leaves_existing_outputs_untouched(
         ("https://gitlab.com/a", None),
         ("https://gitlab.com/a/b/-/releases", None),
         ("https://gitlab.com/groups/team", None),
+        ("https://gitlab.com/group/-/epics", None),
         ("https://gitlab.com/users/someone/projects", None),
         ("https://gitlab.example.org/a/b", None),
         ("https://christt105.itch.io/poketch", None),

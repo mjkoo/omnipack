@@ -21,8 +21,8 @@ def project_url(url: str) -> str:
     its owner and repository, so a releases, tags, blob or release-asset link
     becomes the repository root, and a gitlab.com project link to the project
     path before GitLab's reserved `-` route segment. On any other host, and on
-    a gitlab.com site page, the query and fragment are kept, since which parts of such a link identify the
-    project cannot be known.
+    a gitlab.com site page, the query and fragment are kept, since which parts
+    of such a link identify the project cannot be known.
     """
     parsed = _split_url(url)
     scheme = parsed.scheme.lower()
@@ -35,7 +35,7 @@ def project_url(url: str) -> str:
     if host == "github.com":
         path = "/".join(segments[:3])
         query = fragment = ""
-    elif host == "gitlab.com" and _gitlab_project(segments):
+    elif host == "gitlab.com" and gitlab_project(segments):
         if "-" in segments:
             path = "/".join(segments[: segments.index("-")])
         query = fragment = ""
@@ -52,9 +52,11 @@ def project_url(url: str) -> str:
     return urlunsplit((scheme, authority, path, query, fragment))
 
 
-def _gitlab_project(segments: list[str]) -> bool:
-    """Whether a gitlab.com path names a project: a namespace and a project,
-    not a site route."""
+def gitlab_project(segments: list[str]) -> bool:
+    """Whether a gitlab.com path names a project: a namespace and a project
+    before any `-` route segment, not a site route."""
+    if "-" in segments:
+        segments = segments[: segments.index("-")]
     names = [segment for segment in segments if segment]
     return len(names) >= 2 and names[0] not in GITLAB_ROUTES
 
