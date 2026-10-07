@@ -20,6 +20,7 @@ from omnipack.offline import OfflineInputs, validate_offline
 from omnipack.overlay import ComposedApp
 from omnipack.render import render, render_pack
 from omnipack.report_model import Severity
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.sources import (
     IngestionReport,
     SourceError,
@@ -1194,6 +1195,7 @@ def test_entries_of_any_source_type_compose_render_and_verify() -> None:
                 "name": "Self-hosted",
                 "url": "https://gitlab.example.org/group/app",
                 "overrideSource": "GitLab",
+                "additionalSettings": {"fallbackToOlderReleases": False},
             },
         ]
     )
@@ -1205,9 +1207,18 @@ def test_entries_of_any_source_type_compose_render_and_verify() -> None:
     rendered = {app["id"]: app for app in json.loads(packs[Variant.SINGLE])["apps"]}
     assert rendered["org.codeberg.app"]["overrideSource"] == "Codeberg"
     assert "overrideSource" not in rendered["a1b2c3d4e5f6"]
-    assert rendered["org.example.gitlab"]["url"] == (
-        "https://gitlab.example.org/group/app"
-    )
+    for variant in Variant:
+        [gitlab] = [
+            app
+            for app in json.loads(packs[variant])["apps"]
+            if app["id"] == "org.example.gitlab"
+        ]
+        assert gitlab["url"] == "https://gitlab.example.org/group/app"
+        assert gitlab["overrideSource"] == "GitLab"
+        assert json.loads(gitlab["additionalSettings"]) == {
+            **SETTINGS_DEFAULTS[SourceType.GITLAB],
+            "fallbackToOlderReleases": False,
+        }
     findings = validate_offline(
         OfflineInputs(
             single=packs[Variant.SINGLE],

@@ -13,6 +13,7 @@ from omnipack.sources.extras import fetch as fetch_extras
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
     CurrentConfiguration,
+    assert_canonical_catalog,
     current_configuration_fixture,  # noqa: F401
 )
 
@@ -32,10 +33,7 @@ def test_committed_catalog_is_valid_canonical_and_composable(
     urls = [normalize_project_url(app["url"]) for app in catalog["apps"]]
     assert len(ids) == len(set(ids)), f"{path} repeats an entry id"
     assert len(urls) == len(set(urls)), f"{path} repeats a project URL"
-    raw = (ROOT / path).read_bytes()
-    assert render_catalog(catalog["apps"]) == raw, (
-        f"{path} differs from the canonical rendering of its entries"
-    )
+    assert_canonical_catalog(ROOT / path)
     assert current_configuration.result.apps[Variant.DUAL]
 
 

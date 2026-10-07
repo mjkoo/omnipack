@@ -32,6 +32,20 @@ def test_offline_evidence_fingerprints_exact_inputs(tmp_path: Path) -> None:
     assert json.loads((tmp_path / verify.VERIFY_PATH).read_text()) == result
 
 
+def test_evidence_is_the_same_with_a_token_in_the_environment(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    copy_inputs(tmp_path)
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.delenv(name, raising=False)
+    without = verify.run_verification(tmp_path)
+    for name in ("GITHUB_TOKEN", "GH_TOKEN"):
+        monkeypatch.setenv(name, "token")
+    with_token = verify.run_verification(tmp_path)
+    assert without["status"] == with_token["status"] == "success"
+    assert without["inputs"] == with_token["inputs"]
+
+
 @pytest.mark.parametrize("allow_id_change", [None, False])
 def test_verify_rejects_an_entry_that_does_not_allow_an_id_change(
     tmp_path: Path, allow_id_change: bool | None
