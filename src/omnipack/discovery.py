@@ -366,9 +366,10 @@ def _forge_url(forge: object, repository: object) -> str | SkipReason:
     segments = repository.split("/")
     url = f"https://{host}/{repository}"
     if (
-        # URL syntax in a segment would change which project the URL names.
+        # Any character but a path name's could change which project the URL
+        # names.
         any(
-            not segment or segment in {".", ".."} or re.search(r"[\s?#%]", segment)
+            segment in {".", ".."} or not re.fullmatch(r"[A-Za-z0-9_.-]+", segment)
             for segment in segments
         )
         or len(segments) < 2
