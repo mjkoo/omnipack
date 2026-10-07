@@ -134,10 +134,13 @@ source catalog, so two spellings of one project must not be treated as two
 projects. The system SHALL compare URLs in a normalized form
 obtained by discarding the scheme, lowercasing the host, dropping a leading
 `www.` from the host, dropping a port equal to the scheme's default (443 for
-`https`, 80 for `http`), dropping a trailing slash and a trailing `.git` from
+`https`, 80 for `http`, and 443 for a URL written without a scheme), dropping a trailing slash and a trailing `.git` from
 the path, reducing a GitHub project link to its owner and repository compared
-without regard to case, and reducing a gitlab.com link to the project path
-before any `/-/` segment, the route marker GitLab reserves inside a project.
+without regard to case, and reducing a gitlab.com project link to the
+project path before any `/-/` segment, the route marker GitLab reserves inside
+a project. A gitlab.com link whose first path segment is one of GitLab's site
+routes (`-`, `groups`, `users`, `explore`, `dashboard`, `search`, `help` or
+`admin`) names no project and SHALL NOT be reduced.
 A trailing `.git` SHALL be matched without regard to case only on github.com,
 where path case is folded, and exactly elsewhere. The scheme SHALL NOT participate in the comparison, so
 that `http` and `https` spellings of one project compare equal. Case SHALL be
@@ -147,12 +150,13 @@ differing only in path case remain different projects.
 
 Reducing a GitHub link to its owner and repository SHALL discard the rest of
 its path, its query and its fragment, because a GitHub project is identified by
-owner and repository alone, and reducing a gitlab.com link SHALL likewise
-discard its query and fragment. Any port other than the scheme's default SHALL
+owner and repository alone, and reducing a gitlab.com project link SHALL
+likewise discard its query and fragment. Any port other than the scheme's default SHALL
 be retained on every host, github.com included, so two links that differ only
-in such a port SHALL be different projects. On any host other than github.com
-and gitlab.com the normalized form SHALL also retain a query and a fragment, so two links to one host and path that differ in any of
-them SHALL be different projects: the system cannot know which parts of another
+in such a port SHALL be different projects. On any other host, and for a
+gitlab.com site route, the normalized form SHALL also retain a query and a
+fragment, so two links to one host and path that differ in any of them SHALL
+be different projects: the system cannot know which parts of another
 host's link identify the project. The pipeline SHALL use this form wherever it
 compares URLs: deciding whether another source already contributes a link,
 collapsing a generated source's listings of one project into one entry, forming
@@ -215,6 +219,13 @@ is acceptable: no stage rejects an entry for its URL's host or path.
   another gives `https://gitlab.com/group/app`
 - **THEN** both normalize to the same URL, because a gitlab.com link is
   reduced to the project path before its `/-/` segment
+
+#### Scenario: A gitlab.com link is a site page
+
+- **WHEN** a source gives `https://gitlab.com/groups/team/-/epics`
+- **THEN** it is not reduced to `gitlab.com/groups/team`, because `groups` is
+  a GitLab site route rather than a project's namespace, and it derives no
+  source type
 
 ### Requirement: Committed Quiver entries are baseline builds with generated provenance
 

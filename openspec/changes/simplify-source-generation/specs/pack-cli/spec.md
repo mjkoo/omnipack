@@ -233,8 +233,8 @@ the build. The system SHALL write a build report recording:
   family or a family whose selected entries are all track-only;
 - source ingestion failures.
 
-Resolution-attempt diagnostics SHALL belong to source generation, not routine
-build reports. Build reports SHALL identify the admitted generated candidates
+Upstream-list diagnostics SHALL belong to source generation reports, not
+routine build reports. Build reports SHALL identify the admitted generated candidates
 of each generated source by their committed ids and project URLs, without
 claiming that their projects were inspected. Conflicts and stale policy selectors SHALL be actionable.
 

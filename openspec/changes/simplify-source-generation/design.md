@@ -150,9 +150,10 @@ reduced to the project URL URL normalization identifies (its scheme, its
 lowercased host without `www.`, any port other than its scheme's default, and
 the project path in the listing's case, which for a GitHub link is owner and
 repository alone, so a releases, tags, blob or release-asset link becomes the
-repository root, and for a gitlab.com link stops before GitLab's reserved `/-/`
-route segment), and
-the smallest reduced URL in code point order wins, with the author taken from
+repository root, and for a gitlab.com project link stops before GitLab's
+reserved `/-/` route segment, though a GitLab site page such as a group's is
+kept whole), and an `https` reduced URL is preferred to an `http` one, then
+the smallest in code point order wins, with the author taken from
 it. Emitting a listed spelling unreduced was rejected because a codm link to a
 release asset would become an entry URL Obtainium reads as something other
 than the repository. On hosts other than GitHub and gitlab.com the reduction

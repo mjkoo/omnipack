@@ -78,6 +78,69 @@ accepted on any host, so there are no GitLab URL rules to verify.
 - **THEN** offline verification accepts it when its settings decode to an
   object
 
+## MODIFIED Requirements
+
+### Requirement: Structural verification evidence belongs to an exact input snapshot
+
+Standalone verification SHALL write `.build/verify.json` separately from the
+build report, as a diagnostic. It SHALL identify structural/offline scope, schema
+and verifier versions, observation times, status, fingerprints of the exact
+input bytes it checked, and its errors and its nonfatal findings, each kind in
+its own list, with variant, entry and field context where applicable. Fingerprints SHALL cover both output files, denylist, overlay,
+composition policy and README. Missing and unreadable inputs SHALL be explicit.
+Credentials SHALL NOT be required, read, or fingerprinted by structural
+verification. Reports SHALL NOT contain resolved versions, asset
+probes, compatibility classifications, or an Obtainium compatibility guarantee.
+
+Verification SHALL check and fingerprint one captured set of input bytes,
+collect independently discoverable errors across both variants, and succeed
+only when those bytes have no errors; nonfatal findings SHALL NOT affect the
+recorded status. The command's exit status SHALL be the
+verification outcome; the report SHALL NOT serve as authorization for
+publication. Previous reports SHALL NOT bypass these checks. The report's
+schema version SHALL advance whenever its fields change, as adding the
+nonfatal findings list does. A verification report with any schema other than
+the current one SHALL require regeneration with `pack verify`, and SHALL be
+labelled neither current nor stale.
+
+The verifier identity recorded in a report SHALL advance whenever a change
+alters what verification checks or which findings it reports, so a report of
+the current schema saved by an earlier verifier over unchanged input bytes is
+labelled stale rather than treated as current evidence.
+
+#### Scenario: Independent errors in both variants
+
+- **WHEN** both exports contain structurally invalid entries
+- **THEN** verification reports independently discoverable failures in both variants without network access
+
+#### Scenario: Interrupted verification
+
+- **WHEN** verification stops before it finishes checking its captured inputs
+- **THEN** the command does not exit successfully, and any existing report describes only the inputs that report's run checked
+
+#### Scenario: Inputs change during verification
+
+- **WHEN** an input file changes after verification captured it
+- **THEN** the report describes the captured bytes, and `pack report` labels it stale for the current files
+
+#### Scenario: Network configuration is absent
+
+- **WHEN** all structural inputs are valid but API credentials are absent
+- **THEN** structural verification succeeds without consulting them
+
+#### Scenario: Obsolete evidence
+
+- **WHEN** a report uses a schema other than the current one
+- **THEN** the user is instructed to regenerate it with `pack verify`
+
+#### Scenario: Verification checks change over unchanged inputs
+
+- **WHEN** a release changes what verification checks without changing the
+  report schema, and a report saved by the previous verifier passed over input
+  bytes that are still unchanged
+- **THEN** the running verifier's identity differs from the report's, and
+  `pack report` labels that report stale until `pack verify` regenerates it
+
 ## REMOVED Requirements
 
 ### Requirement: Offline verification checks the serialized entry shape

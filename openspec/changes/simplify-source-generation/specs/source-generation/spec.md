@@ -234,14 +234,15 @@ a denial for its URL. Each entry SHALL carry:
   normalized URL when there is one, kept verbatim the same way the id is kept,
   so re-casing or reordering upstream rows changes no catalog bytes; otherwise
   the project URL of a listing, and when several listings collapse into one
-  entry, the smallest of their project URLs in code point order, so the order
-  and case of upstream rows do not choose the URL. A listing's project URL is
+  entry, an `https` project URL before any `http` one and then the smallest
+  in code point order, so the order and case of upstream rows do not choose
+  the URL. A listing's project URL is
   its scheme, its host lowercased without a leading `www.`, any port other
   than its scheme's default,
   and the project path URL normalization identifies, in the listing's case:
   for a GitHub link its owner and repository alone, never a releases, tags,
   blob or release-asset path, for a gitlab.com link its project path before
-  any `/-/` route, and on any other host the path without a trailing slash or
+  any `/-/` route unless the link is a GitLab site page, and on any other host the path without a trailing slash or
   `.git`, with the query and fragment that normalization retains;
 - `overrideSource` GitHub for a github.com repository URL and GitLab for a
   gitlab.com project URL, and no `overrideSource` otherwise, so Obtainium
@@ -250,7 +251,8 @@ a denial for its URL. Each entry SHALL carry:
   with trailing emoji and other-symbol characters, such as pictographs and
   emoji modifiers, and surrounding whitespace trimmed, keeping punctuation,
   math and currency signs, or else, when the listing gives none or nothing remains after
-  trimming, the last path segment of the URL; when listings of one URL give
+  trimming, the last path segment of the URL, or its host when it has no
+  path; when listings of one URL give
   different names, the first trimmed name in case-insensitive order, with
   names equal ignoring case ordered by code point (`App` before `app`), so the
   order of upstream rows never chooses the name;
@@ -406,7 +408,9 @@ catalog. The read-only job SHALL likewise reject a generated candidate or a
 workspace catalog that is not a regular file. Diagnostics SHALL identify the
 base revision, the catalog's added, removed and changed entries, skipped
 listings and pack validation outcome; the PR body and the run summary SHALL
-each show the added, removed and changed entries. The base revision SHALL appear in the PR body and in the run summary of
+each show the added, removed and changed entries within the size GitHub
+accepts, listing any entries beyond that bound only by count as "and N more",
+and SHALL note a catalog whose bytes change with no entry change as such. The base revision SHALL appear in the PR body and in the run summary of
 a run whose staging succeeds; a run whose staging fails SHALL summarize that
 staging failed and its reason instead. The pack validation outcome SHALL be the
 reported results of the run's test, build and verification steps.

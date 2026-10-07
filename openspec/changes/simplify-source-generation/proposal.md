@@ -76,8 +76,7 @@ only a newly listed project gets an Obtainium placeholder id.
   `quiver-source-generation` capabilities.
 
 Estimate: two capabilities removed (12 requirements) and one added with 5
-requirements; roughly 2,000 implementation lines removed and 250 added; most
-generation test modules deleted and replaced by about 400 lines.
+requirements; most generation test modules are deleted and replaced.
 
 ## Capabilities
 
@@ -135,4 +134,4 @@ page and a Google Play page), which are denied by URL, and newly listed Quiver
   `source-catalog.yml` calls, drops its `GITHUB_TOKEN`; generation needs no API
   token.
 - Docs: `docs/source-generation.md`, `docs/quiver-ports.md`,
-  `docs/curation.md`, `docs/development.md`.
+  `docs/curation.md`, `docs/development.md`, `docs/composition.md`.
