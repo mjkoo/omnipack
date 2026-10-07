@@ -3,11 +3,11 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from enum import Enum, StrEnum
+from enum import StrEnum
 from typing import Any
 
 
-class Variant(str, Enum):
+class Variant(StrEnum):
     """Which rendered pack an entry belongs to."""
 
     SINGLE = "single"
