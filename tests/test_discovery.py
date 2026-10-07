@@ -220,6 +220,42 @@ def test_codm_reads_only_the_links_markdown_renders() -> None:
     assert [listing.url for listing in codm(readme)] == ["https://github.com/d/d"]
 
 
+def test_escaped_code_and_image_markers_hide_no_link() -> None:
+    readme = TABLE + (
+        "| \\` [A](https://github.com/a/a) \\` | \\![B](https://github.com/b/b) |\n"
+    )
+    assert [listing.url for listing in codm(readme)] == [
+        "https://github.com/a/a",
+        "https://github.com/b/b",
+    ]
+
+
+def test_a_code_span_in_link_text_keeps_its_text_as_the_name() -> None:
+    readme = TABLE + "| [`App`](https://github.com/a/a) | x |\n"
+    assert codm(readme) == [Listing("https://github.com/a/a", "App")]
+
+
+@pytest.mark.parametrize("marker", ["#1", "#######"])
+def test_a_row_beginning_with_a_hash_that_is_no_heading_stays_in_its_table(
+    marker: str,
+) -> None:
+    readme = (
+        "Project | Game\n-|-\n"
+        "[A](https://github.com/a/a) | x\n"
+        f"{marker} [B](https://github.com/b/b) | y\n"
+    )
+    assert [listing.url for listing in codm(readme)] == [
+        "https://github.com/a/a",
+        "https://github.com/b/b",
+    ]
+
+
+def test_a_list_line_is_never_a_delimiter_row() -> None:
+    readme = "Project | Game\n- | -\n[A](https://github.com/a/a) | x\n"
+    with pytest.raises(DiscoveryError, match="no Project table"):
+        codm(readme)
+
+
 def test_a_byte_order_mark_does_not_hide_the_first_table() -> None:
     readme = "\ufeff" + TABLE + "| [A](https://github.com/a/a) | x |\n"
     assert [listing.url for listing in codm(readme)] == ["https://github.com/a/a"]

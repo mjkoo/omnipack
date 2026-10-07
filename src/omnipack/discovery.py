@@ -122,18 +122,20 @@ _LINK = re.compile(
     r"(?:<((?i:https?)://[^<>\s]+)>|((?i:https?)://(?:[^()\s]|\([^()\s]*\))+))"
     r"""(?:\s+(?:"[^"]*"|'[^']*'))?\s*\)"""
 )
-_IMAGE = re.compile(r"!\[[^\]]*\]\([^)]*\)")
-# Markdown renders no link inside a code span or an HTML comment.
-_CODE_SPAN = re.compile(r"(?<!`)(`+)(?!`).*?(?<!`)\1(?!`)")
+_IMAGE = re.compile(r"(?<!\\)!\[[^\]]*\]\([^)]*\)")
+# Markdown renders no link inside a code span or an HTML comment, though a code
+# span's text still reads as text.
+_CODE_SPAN = re.compile(r"(?<![`\\])(`+)(?!`)(.*?)(?<!`)\1(?!`)")
 _COMMENT = re.compile(r"<!--.*?-->")
 _ESCAPED = re.compile(r"\\([!-/:-@\[-`{-~])")
 # A literal backslash, hidden while matching so it escapes nothing after it.
-_BACKSLASH = "\0"
+_BACKSLASH = "\ue000"
 _DELIMITER_CELL = re.compile(r"\s*:?-+:?\s*")
 # A line opening another block ends a table: a heading, a blockquote, a list
 # item or a thematic break.
 _BLOCK_START = re.compile(
-    r"^ {0,3}(?:#|>|(?:[-+*]|\d{1,9}[.)])(?:\s|$)|([-*_])(?:[ \t]*\1){2,}[ \t]*$)"
+    r"^ {0,3}(?:#{1,6}(?:[ \t]|$)|>|(?:[-+*]|\d{1,9}[.)])(?:\s|$)"
+    r"|([-*_])(?:[ \t]*\1){2,}[ \t]*$)"
 )
 # A pipe not escaped by a backslash, including pipes in inline code.
 _PIPE = re.compile(r"(?<!\\)(?:\\\\)*\|")
@@ -201,9 +203,10 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
 
 def _row_links(row: str) -> Iterator[Listing]:
     """Yield the links Markdown renders in a table row."""
-    row = _COMMENT.sub("", _CODE_SPAN.sub("", row))
+    row = row.replace("\\\\", _BACKSLASH)
+    row = _CODE_SPAN.sub(lambda span: re.sub(r"[][()\\\ue000]", "", span[2]), row)
     # A badge image inside a link is decoration, not a project.
-    row = _IMAGE.sub("", row).replace("\\\\", _BACKSLASH)
+    row = _IMAGE.sub("", _COMMENT.sub("", row))
     for text, angled, bare in _LINK.findall(row):
         name = _ESCAPED.sub(r"\1", text).replace(_BACKSLASH, "\\")
         yield Listing((angled or bare).replace(_BACKSLASH, "\\\\"), name)
@@ -211,8 +214,11 @@ def _row_links(row: str) -> Iterator[Listing]:
 
 def _is_delimiter(line: str) -> bool:
     cells = _cells(line)
+    # A line opening another block, such as the list item `- | -`, is never
+    # a delimiter row.
     return (
         "|" in line
+        and not _BLOCK_START.match(line)
         and bool(cells)
         and all(_DELIMITER_CELL.fullmatch(cell) for cell in cells)
     )
