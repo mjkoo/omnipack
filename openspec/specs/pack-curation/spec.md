@@ -130,47 +130,32 @@ check fails when single stops serving it. That coverage SHALL follow from the
 reviewed configuration itself, so that curating a new extra covers it with no
 further edit.
 
-The automation-maintained codm2000 catalog SHALL be held to two things only:
-that it is valid, and that it composes with the committed configuration, builds
-and verifies. Which projects the catalog contains and how they resolved SHALL
-NOT be grounds for blocking a source proposal, so a proposal whose catalog is
-valid and which composes, builds and verifies SHALL need no other edit to the
-repository to be accepted. Composition here means composition over upstream
-records captured in the repository, while the source workflow builds from live
-ones, so a catalog whose composition depends on upstream records newer than
-those captures is outside this guarantee.
+Each automation-maintained generated catalog, codm2000 and Quiver alike, SHALL
+be held to two things only: that it is valid, and that it composes with the
+committed configuration, builds and verifies. Which projects a catalog contains
+SHALL NOT be grounds for blocking a source proposal, so a proposal whose catalog
+is valid and which composes, builds and verifies SHALL need no other edit to
+the repository to be accepted, and no generated catalog SHALL be subject to a
+hard-coded membership assertion. Composition here means composition over
+upstream records captured in the repository, while the source workflow builds
+from live ones, so a catalog whose composition depends on upstream records
+newer than those captures is outside this guarantee.
 
-Catalog validity comprises the rules the pipeline enforces, each stated where it
-is enforced, and two rules no pipeline stage checks, which this requirement
-owns. A build rejects a malformed committed catalog, by "A failed fetch aborts
-the build" in source-ingestion, and one that repeats an entry id, by "One package
-id may resolve differently per variant" there. Generation, reading the accepted
-catalog back, rejects a document whose shape is wrong or whose entries lack a
-string id and url, a catalog that repeats an entry id, and a catalog that holds
-one normalized project URL twice, by "Generation produces a deterministic
-Obtainium source catalog" in readme-source-generation. Only the last of these is
-checked by generation alone.
-
-The two owned rules are these. Every catalog entry SHALL carry an id and
-settings appropriate to its kind: a track-only entry a synthetic numeric id with
-version detection, zip inclusion and architecture filtering all disabled, and an
-APK entry a well-formed package id and no track-only flag. The committed catalog
-file SHALL be byte-identical to the canonical rendering of the entries it holds,
-so that a hand edit or a stale write is visible rather than silently carried.
-Because generation neither compares the committed bytes against its own
-rendering nor checks an entry's id and settings against its kind, each rule
-SHALL be guarded by a check that fails when it drifts. Guarding any outcome in
-this requirement SHALL NOT require maintaining another implementation of
-Obtainium source resolution or regex semantics.
-
-The same configuration-driven acceptance and canonical-rendering checks SHALL
-cover the automation-maintained Quiver catalog. Its entries SHALL be installable
-APK records with well-formed package IDs, supported settings and no track-only
-flag; Quiver generation owns canonical-project and package uniqueness as defined
-in quiver-source-generation. Accepted Quiver catalogs SHALL NOT be subject to a
-hard-coded membership assertion. Reviewed Quiver exceptions and skip rules SHALL
-be hand-maintained configuration, not automation-maintained catalog content.
-Pruning an unwanted Quiver app uses the project deny list, as for any source.
+Catalog validity comprises the rules the build enforces, the rule generation
+enforces when it reads the committed catalog, and one rule no pipeline stage
+checks, which this requirement owns. A build rejects a malformed committed
+catalog, by "A failed fetch aborts the build" in source-ingestion, and one that
+repeats an entry id, by "One package id may resolve differently per variant"
+there. A committed catalog holding two entries whose URLs normalize to the
+same project fails the build, by the committed codm and Quiver catalog
+requirements in source-ingestion, and fails generation, by "Each listed project
+becomes a minimal Obtainium entry" in source-generation. The owned rule is that the committed catalog file SHALL be
+byte-identical to the canonical rendering of the entries it holds, so that a
+hand edit or a stale write is visible rather than silently carried; it SHALL be
+guarded by a check that fails when it drifts. Per-app settings and categories
+for generated apps are hand-maintained overlay records and category map keys,
+not catalog content. Pruning an unwanted generated app uses the project deny
+list, as for any source.
 
 #### Scenario: Upstream refresh changes a curated setting
 
@@ -184,12 +169,12 @@ Pruning an unwanted Quiver app uses the project deny list, as for any source.
 
 #### Scenario: A source proposal adds, removes or re-resolves projects
 
-- **WHEN** a candidate codm2000 catalog is valid and composes with the committed configuration over the captured upstream records, builds and verifies
-- **THEN** no check blocks the proposal because of which projects the catalog contains or how they resolved
+- **WHEN** a candidate generated catalog is valid and composes with the committed configuration over the captured upstream records, builds and verifies
+- **THEN** no check blocks the proposal because of which projects the catalog contains
 
 #### Scenario: The committed catalog drifts from its canonical form
 
-- **WHEN** the committed codm2000 catalog's bytes differ from the canonical rendering of its entries, or an entry's id or settings stop fitting its kind
+- **WHEN** a committed generated catalog's bytes differ from the canonical rendering of its entries
 - **THEN** a regression check fails and identifies the catalog
 
 #### Scenario: Quiver proposal changes membership
@@ -199,5 +184,5 @@ Pruning an unwanted Quiver app uses the project deny list, as for any source.
 
 #### Scenario: Quiver catalog is edited inconsistently
 
-- **WHEN** committed Quiver bytes differ from canonical rendering or a record lacks a valid installable APK identity
+- **WHEN** committed Quiver bytes differ from canonical rendering
 - **THEN** a regression check fails identifying the catalog

@@ -49,84 +49,25 @@ resolve package IDs.
 - **WHEN** committed codm2000 JSON is valid and other catalog sources are available
 - **THEN** ingestion succeeds without requesting README or APK data
 
-### Requirement: HTTP credentials are optional and scoped to exact hosts
-
-Every source-discovery HTTP request SHALL be subject to the host-scoped
-credential rules below, including release metadata requests made while resolving
-a package id, ranged APK reads and full asset downloads. GitHub default
-stable-release metadata SHALL be requested from
-`https://api.github.com/repos/OWNER/REPO/releases/latest`. Explicit prerelease
-or release-title policy SHALL use
-`https://api.github.com/repos/OWNER/REPO/releases` with bounded listing under
-the source-generation contract. Track-only release checks SHALL be subject to
-the same host-scoped rules and SHALL make no APK requests. Routine build
-ingestion SHALL fetch upstream catalogs with requests that carry no credentials,
-and SHALL NOT read the HTTP credential configuration. Publication operations are
-outside these rules: release, pull-request and branch-push operations SHALL
-instead follow the publication credential rules of the workflows that make
-them.
-
-The system SHALL read host-to-environment-variable registrations from the
-`credentials` object in dedicated `config/http.json`, whose committed default
-content SHALL be `{"credentials": {"api.github.com": "GITHUB_TOKEN"}}`.
-Registrations SHALL name exact hosts, compared case-insensitively against the
-request hostname, without wildcard matching, subdomain inference or the
-project-URL normalization rules. The configuration SHALL store variable names,
-not token values.
-
-The shared HTTP request helper SHALL attach `Authorization: Bearer <token>` only
-when the request host has a registered variable with a nonempty value. An unset
-or empty variable SHALL leave the request unauthenticated. Unregistered hosts
-SHALL receive no Authorization header even when tokens for other hosts are set.
-Across a cross-host redirect, the helper SHALL strip the outgoing host's
-credential; any destination credential SHALL be selected independently from that
-destination's exact registration.
-
-#### Scenario: Fresh GitHub resolution uses the API credential
-
-- **WHEN** generation resolves a GitHub project, as every generation run does
-  for every eligible project, the default HTTP configuration is loaded and
-  `GITHUB_TOKEN` is nonempty
-- **THEN** its policy-selected release metadata request to `api.github.com` carries the
-  bearer token through the shared helper, and its ranged APK reads and full
-  asset download fallback use that same helper
-- **AND** requests to unregistered `github.com`, `raw.githubusercontent.com`,
-  `codeberg.org` and release asset hosts carry no Authorization header
-
-#### Scenario: Optional token is absent
-
-- **WHEN** a registered variable is unset or empty
-- **THEN** requests to its host proceed without Authorization, including
-  fresh package-id resolution against public GitHub releases
-
-#### Scenario: Host registration does not cover related names
-
-- **WHEN** only `github.com` is registered and its token variable is nonempty
-- **THEN** requests to `api.github.com` and `www.github.com` carry no
-  Authorization header because neither exact host is registered
-
-#### Scenario: Authenticated request redirects to an unregistered host
-
-- **WHEN** a request bearing the token for `api.github.com` redirects to an
-  unregistered host
-- **THEN** the redirected request carries no Authorization header
-
-#### Scenario: Build ingestion carries no credentials
-
-- **WHEN** `pack build` fetches upstream catalogs while `GITHUB_TOKEN` is nonempty
-- **THEN** no catalog request carries an Authorization header, and the build
-  succeeds without `config/http.json`
-
 ### Requirement: URLs are compared in a normalized form
 
 The same project is spelled differently by different hands across the upstream
-catalogs, the source README, the reviewed project policy and the committed
+catalogs, the source README, the Quiver lists, the overlay and the committed
 source catalog, so two spellings of one project must not be treated as two
 projects. The system SHALL compare URLs in a normalized form
 obtained by discarding the scheme, lowercasing the host, dropping a leading
-`www.` from the host, dropping a trailing slash and a trailing `.git` from the
-path, and reducing a GitHub project link to its owner and repository compared
-without regard to case. The scheme SHALL NOT participate in the comparison, so
+`www.` from the host, dropping a port equal to the scheme's default (443 for
+`https`, 80 for `http`, and 443 for a URL written without a scheme), dropping a trailing slash and a trailing `.git` from
+the path, reducing a GitHub project link to its owner and repository compared
+without regard to case, and reducing a gitlab.com project link to the
+project path before any `/-/` segment, the route marker GitLab reserves inside
+a project. A gitlab.com link whose path holds fewer than two nonempty
+segments before any `-` segment, or whose first nonempty segment is one of GitLab's site routes (`-`,
+`groups`, `users`, `explore`, `dashboard`, `search`, `help` or `admin`), names
+no project and SHALL NOT be reduced; it is a site page, compared like another
+host's link.
+A trailing `.git` SHALL be matched without regard to case only on github.com,
+where path case is folded, and exactly elsewhere. The scheme SHALL NOT participate in the comparison, so
 that `http` and `https` spellings of one project compare equal. Case SHALL be
 folded only in the host and in a GitHub link's owner and repository; the case
 of any other path SHALL be preserved, so that two URLs on another host
@@ -134,24 +75,23 @@ differing only in path case remain different projects.
 
 Reducing a GitHub link to its owner and repository SHALL discard the rest of
 its path, its query and its fragment, because a GitHub project is identified by
-owner and repository alone. An explicit port SHALL be retained on every host,
-github.com included, so two links that differ only in an explicit port SHALL be
-different projects. On any other host the normalized form SHALL also retain a
-query and a fragment, so two links to one host and path that differ in any of
-them SHALL be different projects: the system cannot know which parts of another
+owner and repository alone, and reducing a gitlab.com project link SHALL
+likewise discard its query and fragment. Any port other than the scheme's default SHALL
+be retained on every host, github.com included, so two links that differ only
+in such a port SHALL be different projects. On any other host, and for a
+gitlab.com site route, the normalized form SHALL also retain a query and a
+fragment, so two links to one host and path that differ in any of them SHALL
+be different projects: the system cannot know which parts of another
 host's link identify the project. The pipeline SHALL use this form wherever it
 compares URLs: deciding whether another source already contributes a link,
-matching a generated project to its reviewed rule and to its entry in the
-committed source catalog, matching an overlay record's key to the selected
-entries it patches, and matching a composition policy selector to the candidates
-it governs.
+collapsing a generated source's listings of one project into one entry, forming
+default families, matching a denial or an overlay record to the candidates or
+selected entries it governs, and matching a composition policy selector to the
+candidates it governs.
 
 This normalized form is the system's comparison identity, and it SHALL decide
 only whether two spellings mean one project. It SHALL NOT decide whether a URL
-is acceptable to a source adapter: an adapter that reads a URL as written does
-so at an earlier stage, before normalization, so a URL that compares equal to
-an acceptable one MAY still be rejected there. The two notions of "the same
-host" are therefore distinct stages, and neither follows from the other.
+is acceptable: no stage rejects an entry for its URL's host or path.
 
 #### Scenario: Two spellings of one project
 
@@ -180,15 +120,44 @@ host" are therefore distinct stages, and neither follows from the other.
 - **WHEN** two URLs address the same host and path and differ only in a query
   or a fragment
 - **THEN** they are the same project on github.com, whose links reduce to owner
-  and repository, and different projects on any other host, whose query and
-  fragment are retained
+  and repository, and on gitlab.com, whose links reduce to the project path,
+  and different projects on any other host, whose query and fragment are
+  retained
 
 #### Scenario: Links differ only in an explicit port
 
 - **WHEN** two URLs address the same host and path and one of them carries an
-  explicit port
+  explicit port other than its scheme's default
 - **THEN** they are different projects on every host, github.com included,
-  because the normalized form retains an explicit port wherever it appears
+  because the normalized form retains such a port wherever it appears
+
+#### Scenario: A link names its scheme's default port
+
+- **WHEN** one source gives `https://github.com:443/owner/repo` and another
+  gives `https://github.com/owner/repo`
+- **THEN** both normalize to the same URL, because a scheme's default port is
+  dropped
+
+#### Scenario: A gitlab.com link points inside a project
+
+- **WHEN** one source gives `https://gitlab.com/group/app/-/releases#v1` and
+  another gives `https://gitlab.com/group/app`
+- **THEN** both normalize to the same URL, because a gitlab.com link is
+  reduced to the project path before its `/-/` segment
+
+#### Scenario: A gitlab.com link is a site page
+
+- **WHEN** a source gives `https://gitlab.com/groups/team/-/epics`
+- **THEN** it is not reduced to `gitlab.com/groups/team`, because `groups` is
+  a GitLab site route rather than a project's namespace, and it derives no
+  source type
+
+#### Scenario: A gitlab.com group link points inside the group
+
+- **WHEN** a source gives `https://gitlab.com/group/-/epics`
+- **THEN** it is not reduced to `gitlab.com/group`, because only one nonempty
+  segment precedes its `-` segment, so it names a group rather than a project,
+  and it derives no source type
 
 ### Requirement: A failed fetch aborts the build
 
@@ -398,65 +367,6 @@ record.
   variants and not preferred in dual, so composition rather than source
   precedence alone decides dual selection
 
-### Requirement: Every entry carries a supported source type
-
-Obtainium reads a per-app source type that decides which settings keys an app
-has, so every entry must carry one before it can be rendered. An entry ingested
-from the RJNY or BBoi34 catalog SHALL take the source type its record declares,
-and a record declaring none SHALL fail as an unsupported source type. An extras
-entry or a committed codm2000 entry with an explicit `overrideSource` SHALL use
-that declared source type before URL-based inference. Only when such an entry
-omits `overrideSource` SHALL the system derive the source type from the URL: a
-github.com repository takes GitHub and any other URL takes HTML. The pack SHALL
-support GitHub, HTML and GitLab, and SHALL fail the build with an error naming
-the entry and offending value for any other source type, including a malformed
-explicit declaration rather than silently falling back to URL inference.
-
-Native GitLab entries SHALL follow the URL, identity and discovery boundary in
-"Public GitLab entries keep native source identity". Explicit per-app settings
-SHALL override hydrated defaults. A native GitLab entry SHALL be hydrated with
-the defaults defined for GitLab, never those defined for HTML.
-
-#### Scenario: Upstream record declares a source type
-
-- **WHEN** an upstream entry's record declares the HTML source type
-- **THEN** the ingested entry carries the HTML source type
-
-#### Scenario: An entry with no upstream record derives its source type
-
-- **WHEN** an extras entry or a committed codm2000 entry that omits
-  `overrideSource` addresses a github.com repository
-- **THEN** it carries the GitHub source type, while an entry addressing any
-  other URL carries the HTML source type
-
-#### Scenario: Unsupported source type
-
-- **WHEN** an upstream or extras entry declares a source type other than GitHub, HTML or GitLab
-- **THEN** the build fails with an error naming that entry and that source type
-
-#### Scenario: Explicit GitLab declaration takes precedence over URL inference
-
-- **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
-- **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
-
-#### Scenario: Native GitLab URL is outside the supported boundary
-
-- **WHEN** an entry declares GitLab with a non-HTTPS URL, a host other than gitlab.com or no namespace/project path
-- **THEN** the build fails with the entry and invalid URL identified
-
-#### Scenario: A committed codm2000 entry declares its source type
-
-- **WHEN** a committed codm2000 entry addressing a github.com repository declares
-  the HTML source type
-- **THEN** the ingested entry carries the HTML source type rather than the type
-  its URL would derive
-
-#### Scenario: An upstream record declares no source type
-
-- **WHEN** an RJNY or BBoi34 record carries no `overrideSource`
-- **THEN** the build fails naming that entry as having an unsupported source
-  type, rather than deriving one from its URL
-
 ### Requirement: Per-app settings are normalized to a common form
 
 Upstreams encode an entry's per-app settings inconsistently: some as a nested
@@ -473,91 +383,6 @@ compares and patches them uniformly.
 
 - **WHEN** an upstream entry's per-app settings string cannot be decoded
 - **THEN** the build fails with an error naming that entry
-
-### Requirement: Public GitLab entries keep native source identity
-
-The system SHALL accept explicit extras with source type `GitLab` whose URL identifies exactly one public gitlab.com project, preserve the full case-sensitive project path including subgroups, hydrate supported GitLab defaults, and render `overrideSource: GitLab`. A URL SHALL identify one public gitlab.com project only when its scheme is `https` and its host is `gitlab.com`, each compared without regard to case, with no `www.` prefix and no port, carrying no credentials, and whose path holds between two and twenty-one nonempty components naming a project and its namespaces, each read with its case and encoding exactly as written while empty components and a trailing slash are ignored, no component of which is the separator `-` that gitlab.com reserves for its own routes, and which carries no query and no fragment. Any other URL SHALL fail the build with the entry and the URL identified, because the pipeline cannot tell which part of it names the project.
-
-This acceptance boundary is an earlier and separate stage from normalized
-comparison: the native adapter reads the project path out of the URL as the
-entry spells it, before any normalization is applied, so a URL that compares
-equal to an acceptable one MAY still be rejected here. A `www.gitlab.com`
-spelling compares equal to the canonical one, because comparison drops a leading
-`www.`, and is nonetheless not a native GitLab project URL; an explicit port is
-rejected here and, being retained in the normalized form, also makes a different
-project under comparison. Acceptance SHALL therefore be decided on the URL as
-written rather than on its comparison identity.
-
-Package ids for these explicit extras SHALL be supplied by the maintainer who adds the entry, from recorded primary APK manifest evidence as any other identity decision is; the pipeline SHALL NOT verify them, because generated package discovery covers GitHub projects only.
-
-#### Scenario: A GitLab extra reaches both exports
-
-- **WHEN** an explicit GitLab extra uses its canonical gitlab.com project URL and is selected in both variants
-- **THEN** both outputs and individual import links retain native GitLab identity and compatible settings
-
-#### Scenario: A GitLab URL carries more than a project path
-
-- **WHEN** an entry declares GitLab with a gitlab.com URL whose host is spelled with a `www.` prefix, or that carries a query, a fragment, credentials, an explicit port, a reserved `-` path component or more path components than a project and its namespaces
-- **THEN** the build fails with the entry and the invalid URL identified, rather than reading a project path out of it
-
-### Requirement: Every committed codm2000 entry is a dual-screen candidate with its generated identity
-
-The system SHALL ingest accepted codm2000 entries from committed Obtainium JSON.
-README parsing and package-ID resolution SHALL occur only in the separate
-source-generation operation. The source catalog SHALL contain generated GitHub
-project entries independently of other upstream coverage, including APKs and
-explicit track-only resources. It SHALL retain discovery settings such as
-prerelease enablement and filename filters, and SHALL NOT reinterpret a
-track-only resource ID as an Android package ID.
-
-During routine ingestion, codm2000 entries SHALL be dual-screen builds, eligible
-for dual only and preferred there. Every committed entry SHALL become a
-candidate whether or not another source lists the same project, and ingestion
-SHALL NOT read or apply the composition policy. Family formation, dual
-preference, precedence, pins and project denials in pack-composition decide
-between a codm2000 build and another source's build of the same app.
-
-Retained entries SHALL preserve codm2000 provenance, generated origin, original
-package identity and source settings, so family rules and pins that select a
-generated entry by its original selector match it; an overlay matches it by its
-normalized project URL alone, as every overlay does. How a policy selector is
-validated against the admitted candidates, and what a missing rule target or pinned
-candidate does, is defined by "Composition policy assigns app families by
-project URL" and "Pins select an eligible candidate of their family" in
-pack-composition.
-
-#### Scenario: Another source lists the same project
-
-- **WHEN** a higher-precedence source supplies a candidate with a normalized URL equal to a committed codm2000 entry's
-- **THEN** the committed entry still enters composition as a dual-screen codm2000 candidate, and pack-composition selects between the two builds
-
-#### Scenario: Retained generated selectors keep matching
-
-- **WHEN** a retained committed entry is named by a generated-origin family rule
-  or pin selector
-- **THEN** its source identity is preserved, so the rule still assigns its
-  family and the pin still selects it
-
-#### Scenario: A selected project is removed
-
-- **WHEN** an accepted source update removes a candidate required by an active rule or pin
-- **THEN** pack composition fails explicitly rather than silently ignoring the stale selector
-
-#### Scenario: Committed prerelease entries retain their settings
-
-- **WHEN** the committed catalog includes manifest-verified APK entries with explicit prerelease settings
-- **THEN** they enter dual as installable APK entries, retaining those settings and their original identities without entering single
-
-#### Scenario: A tracking resource keeps its identity
-
-- **WHEN** the committed catalog includes an explicit track-only resource
-- **THEN** dual retains its stable resource identity, track-only flag and manual-installation description
-- **AND** when the resource and the app it extends belong to different
-  families once family rules apply, whether their project URLs are equal or
-  not, neither pack's entry for that app is replaced
-- **AND** when family rules place them in one family, whatever their project
-  URLs, they compete under ordinary selection, so dual may select the resource
-  in place of the app
 
 ### Requirement: Source records carry no composition policy fields
 
@@ -624,12 +449,12 @@ unchanged for rendering, from every source.
 ### Requirement: Committed Quiver entries are baseline builds with generated provenance
 
 Routine ingestion SHALL read Quiver entries from its configured committed
-Obtainium catalog without requesting Quiver lists, release metadata or APKs.
+Obtainium catalog without requesting Quiver lists, repository hosts or APKs.
 A missing, unreadable or malformed catalog, a repeated entry ID or two entries
 at one normalized project URL SHALL fail the build while preserving previous
 outputs. Valid entries SHALL carry source
-`quiver`, generated origin `quiver-generated`, their committed package identities,
-explicit GitHub source type and reviewed discovery settings. They SHALL be
+`quiver`, generated origin `quiver-generated`, their committed ids and the
+source type each declares. They SHALL be
 baseline candidates eligible for both packs, subject to ordinary normalization,
 composition policy, denials and overlays. Every valid entry SHALL reach
 composition, including entries sharing another source's project URL. Routine
@@ -652,3 +477,135 @@ generated provenance in reports without claiming a fresh APK check.
 
 - **WHEN** a committed Quiver record includes a top-level family or variant field
 - **THEN** ingestion rejects it under the source-record policy-field prohibition
+
+### Requirement: GitLab entries keep their declared source type
+
+An entry from any source that declares `overrideSource: GitLab`, or whose URL
+is a gitlab.com project and that declares nothing, SHALL keep the GitLab
+source type, its URL as written and its explicit settings, and SHALL be
+hydrated with the defaults defined for GitLab, never those defined for HTML.
+The system SHALL NOT restrict a GitLab entry's host, path, port or query.
+
+#### Scenario: A GitLab extra reaches both exports
+
+- **WHEN** an explicit GitLab extra is selected in both variants
+- **THEN** both outputs and individual import links retain native GitLab
+  identity and compatible settings
+
+#### Scenario: A self-hosted GitLab project is declared
+
+- **WHEN** an extras entry declares GitLab with the URL of a project on a
+  self-hosted GitLab instance
+- **THEN** the build keeps the entry with the GitLab source type and its URL
+  unchanged
+
+### Requirement: An entry's source type is declared, derived or left to Obtainium
+
+Obtainium reads a per-app source type, and detects one from the URL when an
+app declares none. An entry SHALL keep the source type its record declares,
+whatever its source. When a record declares none, the system SHALL derive one
+only for URLs whose type is unambiguous: a github.com repository takes GitHub
+and a gitlab.com project takes GitLab. Any other entry without a declaration
+SHALL carry no source type, leaving detection to Obtainium. The system SHALL
+NOT fail an entry for the source type it declares or lacks; a malformed
+declaration, one that is not a string, SHALL fail the build with the entry and
+value identified. An empty or whitespace-only declaration SHALL count as no
+declaration, so the entry derives its source type or carries none.
+
+An entry declaring GitLab SHALL keep the URL as written, so a project on any
+GitLab instance, gitlab.com or self-hosted, reaches the pack as Obtainium's
+GitLab source reads it. Explicit per-app settings
+SHALL override hydrated defaults. A native GitLab entry SHALL be hydrated with
+the defaults defined for GitLab, never those defined for HTML.
+
+#### Scenario: Upstream record declares a source type
+
+- **WHEN** an upstream entry's record declares the HTML source type
+- **THEN** the ingested entry carries the HTML source type
+
+#### Scenario: An entry with no upstream record derives its source type
+
+- **WHEN** an extras entry or a committed codm2000 entry that omits
+  `overrideSource` addresses a github.com repository
+- **THEN** it carries the GitHub source type, while an entry addressing an
+  itch.io page carries no source type
+
+#### Scenario: Explicit GitLab declaration takes precedence over URL inference
+
+- **WHEN** an extras entry declares `overrideSource: GitLab` with a public gitlab.com project URL
+- **THEN** ingestion retains GitLab, and rendering uses GitLab defaults and preserves explicit settings in both variants instead of selecting HTML
+
+#### Scenario: A committed codm2000 entry declares its source type
+
+- **WHEN** a committed codm2000 entry addressing a github.com repository declares
+  the HTML source type
+- **THEN** the ingested entry carries the HTML source type rather than the type
+  its URL would derive
+
+
+#### Scenario: A record declares a source type the pack has no defaults for
+
+- **WHEN** an upstream record declares `overrideSource: Codeberg`
+- **THEN** the build keeps the entry with that source type and does not fail
+
+#### Scenario: A record declares an empty source type
+
+- **WHEN** an upstream record declares `overrideSource: ""`
+- **THEN** an entry addressing a github.com repository carries the GitHub
+  source type, an entry addressing an itch.io page carries no source type, and
+  no entry carries an empty source type
+
+#### Scenario: An upstream record declares no source type
+
+- **WHEN** an RJNY or BBoi34 record carries no `overrideSource` and its URL is
+  not a github.com repository or a gitlab.com project
+- **THEN** the entry carries no source type and the build does not fail
+
+### Requirement: Committed codm entries are dual-screen candidates
+
+The system SHALL ingest the committed codm2000 catalog as Obtainium JSON,
+without fetching the codm README; generation from the README is the separate
+source-generation operation. Each entry SHALL keep codm2000 provenance, the
+generated origin, its committed id, URL, name and settings, so composition
+rules and overlays that select it match it. During routine ingestion, codm2000
+entries SHALL be dual-screen builds, eligible for dual only and preferred
+there. Every committed entry SHALL become a candidate whether or not another
+source lists the same project, and ingestion SHALL NOT read or apply the
+composition policy: family formation, dual preference, precedence, pins and
+project denials in pack-composition decide between a codm2000 build and
+another source's build of the same app. A missing, unreadable or malformed
+catalog, a repeated entry ID or two entries at one normalized project URL
+SHALL fail the build while preserving previous outputs.
+
+#### Scenario: Broken committed codm catalog
+
+- **WHEN** the configured catalog is missing, malformed, repeats an entry ID or
+  holds two entries at one normalized project URL
+- **THEN** the build fails naming codm and leaves published outputs unchanged
+
+#### Scenario: Another source lists the same project
+
+- **WHEN** a higher-precedence source supplies a candidate with a normalized
+  URL equal to a committed codm2000 entry's
+- **THEN** the committed entry still enters composition as a dual-screen
+  codm2000 candidate, and pack-composition selects between the two builds
+
+#### Scenario: A selected project is removed
+
+- **WHEN** an accepted source update removes a candidate required by an active
+  rule or pin
+- **THEN** pack composition fails explicitly rather than silently ignoring the
+  stale selector
+
+### Requirement: Source fetches carry no credentials
+
+Every upstream request the build and source generation make SHALL carry no
+credentials, and the system SHALL keep no HTTP credential configuration.
+Publication operations are outside this rule: release, pull-request and
+branch-push operations follow the publication credential rules of the
+workflows that make them.
+
+#### Scenario: A token is present in the environment
+
+- **WHEN** `GITHUB_TOKEN` is set while a build or a source generation runs
+- **THEN** no upstream request carries an Authorization header
