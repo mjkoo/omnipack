@@ -242,7 +242,8 @@ a denial for its URL. Each entry SHALL carry:
   and the project path URL normalization identifies, in the listing's case:
   for a GitHub link its owner and repository alone, never a releases, tags,
   blob or release-asset path, for a gitlab.com link its project path before
-  any `/-/` route unless the link is a GitLab site page, and on any other host the path without a trailing slash or
+  any `/-/` route unless the link is a GitLab site page as URL normalization
+  defines it, which keeps its path, query and fragment like another host's link, and on any other host the path without a trailing slash or
   `.git`, with the query and fragment that normalization retains;
 - `overrideSource` GitHub for a github.com repository URL and GitLab for a
   gitlab.com project URL, and no `overrideSource` otherwise, so Obtainium
@@ -409,7 +410,8 @@ workspace catalog that is not a regular file. Diagnostics SHALL identify the
 base revision, the catalog's added, removed and changed entries, skipped
 listings and pack validation outcome; the PR body and the run summary SHALL
 each show the added, removed and changed entries within the size GitHub
-accepts, listing any entries beyond that bound only by count as "and N more",
+accepts, counting any listed lines beyond that bound, whether entries,
+skipped listings or notes, only as "and N more",
 and SHALL note a catalog whose bytes change with no entry change as such. The base revision SHALL appear in the PR body and in the run summary of
 a run whose staging succeeds; a run whose staging fails SHALL summarize that
 staging failed and its reason instead. The pack validation outcome SHALL be the

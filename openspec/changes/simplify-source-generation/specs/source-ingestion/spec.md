@@ -138,9 +138,11 @@ obtained by discarding the scheme, lowercasing the host, dropping a leading
 the path, reducing a GitHub project link to its owner and repository compared
 without regard to case, and reducing a gitlab.com project link to the
 project path before any `/-/` segment, the route marker GitLab reserves inside
-a project. A gitlab.com link whose first path segment is one of GitLab's site
-routes (`-`, `groups`, `users`, `explore`, `dashboard`, `search`, `help` or
-`admin`) names no project and SHALL NOT be reduced.
+a project. A gitlab.com link whose path holds fewer than two nonempty
+segments, or whose first nonempty segment is one of GitLab's site routes (`-`,
+`groups`, `users`, `explore`, `dashboard`, `search`, `help` or `admin`), names
+no project and SHALL NOT be reduced; it is a site page, compared like another
+host's link.
 A trailing `.git` SHALL be matched without regard to case only on github.com,
 where path case is folded, and exactly elsewhere. The scheme SHALL NOT participate in the comparison, so
 that `http` and `https` spellings of one project compare equal. Case SHALL be

@@ -32,7 +32,7 @@ only a newly listed project gets an Obtainium placeholder id.
   whatever its host: the committed entry's URL for a URL the committed
   catalog already holds, or else the listing's project URL with a GitHub deep
   link reduced to the repository root and a gitlab.com deep link to its
-  project (the smallest when several collapse), `overrideSource` GitHub or GitLab where the URL makes that
+  project (an `https` URL first, then the smallest, when several collapse), `overrideSource` GitHub or GitLab where the URL makes that
   unambiguous and unset otherwise (Obtainium detects it), the listing's name
   with trailing emoji and other-symbol characters trimmed or the URL's last segment, default
   settings, no categories, and the committed entry's id for a URL the committed
@@ -101,7 +101,7 @@ requirements; most generation test modules are deleted and replaced.
 - `pack-rendering`: default settings are filled only for source types with
   defaults.
 - `pack-verification`: no source-type allowlist; settings are type-checked only
-  where defaults exist.
+  where defaults exist; structural evidence no longer names HTTP configuration.
 - `pack-curation`: generated catalogs are held only to validity, composition
   and canonical bytes.
 - `nightly-publishing`: no project policy file remains to protect.

@@ -8,7 +8,7 @@ The system SHALL fill each rendered entry's settings with every key defined for
 the source type the entry carries, as established when the entry was ingested,
 using the default value for any key the entry does not set, for every source
 type the system holds defaults for. An entry with another source type, or with
-none, SHALL be rendered with exactly the settings it carries, and SHALL NOT
+no source type, SHALL be rendered with exactly the settings it carries, and SHALL NOT
 fail rendering.
 
 #### Scenario: Entry sets one setting

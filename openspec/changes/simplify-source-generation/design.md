@@ -170,8 +170,9 @@ propose removing that table's projects. The empty-result protection is measured
 on the candidate, not on the upstream list: whenever the candidate would keep
 no entry, whether the list has no rows, every row is skipped, or every listed
 project is screened out with no committed project still listed, generation
-fails, because that candidate would propose removing every entry. A per-row
-skip or screen never fails on its own. A repository
+fails, because that candidate would propose removing every entry. A candidate
+that cannot be written also fails, leaving only the report. A per-row skip or
+screen never fails on its own. A repository
 that moved or vanished upstream is simply listed differently, and the
 proposal's added, removed and changed lists show it.
 
