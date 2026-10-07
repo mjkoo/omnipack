@@ -13,7 +13,7 @@ from omnipack.merge import (
     Removal,
     StaleExclusion,
 )
-from omnipack.model import Provenance, Variant
+from omnipack.model import Provenance, Source, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
@@ -74,7 +74,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
     write_previous(tmp_path, {"apps": [old, kept]}, {"apps": [kept]})
     write_config(tmp_path)
     admitted = {
-        "source": "codm2000",
+        "source": "codm",
         "url": "https://github.com/owner/app",
         "id": "owner.app",
     }
@@ -165,7 +165,7 @@ def test_family_switch_reports_package_diff_and_new_winner(
         "Replacement",
         SourceType.HTML,
         (),
-        Provenance("extras", current_url),
+        Provenance(Source.EXTRAS, current_url),
         eligibility=frozenset(Variant),
     )
     rules = [

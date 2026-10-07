@@ -31,7 +31,7 @@ from omnipack.merge import (
 from omnipack.merge import (
     compose as compose_apps,
 )
-from omnipack.model import App, Category, Provenance, SourceType, Variant
+from omnipack.model import App, Category, Provenance, Source, SourceType, Variant
 from omnipack.render import render_pack
 from omnipack.urls import normalize_project_url
 
@@ -57,7 +57,7 @@ def app(
         "rjny": "rjny-catalog",
         "bboi": "bboi-standard-asset",
         "extras": "extras",
-        "codm2000": "codm-generated",
+        "codm": "codm-generated",
         "quiver": "quiver-generated",
     }
     return App(
@@ -66,7 +66,7 @@ def app(
         name or f"{source} {package_id}",
         SourceType.HTML,
         categories,
-        Provenance(source, url),
+        Provenance(Source(source), url),
         eligibility=eligibility,
         origin=origin or origins[source],
         family=family,
@@ -157,7 +157,7 @@ def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
     ]
     assert dual_selection.id == "dual"
     assert dual_selection.considered == (
-        ConsideredCandidate("extras", "extras", "ordinary", ordinary.url),
+        ConsideredCandidate(Source.EXTRAS, "extras", "ordinary", ordinary.url),
     )
 
 
@@ -370,7 +370,9 @@ def test_shared_package_builds_split_by_kind_without_a_pin() -> None:
         (Variant.DUAL, "bboi-dual-asset", "dual-preferred"),
     ]
     assert selections[1].considered == (
-        ConsideredCandidate("bboi", "bboi-standard-asset", "shared.pkg", standard.url),
+        ConsideredCandidate(
+            Source.BBOI, "bboi-standard-asset", "shared.pkg", standard.url
+        ),
     )
 
 
@@ -539,7 +541,7 @@ def test_a_family_rule_covers_rule_less_builds_at_its_url() -> None:
     url = "https://github.com/owner/project"
     ruled = app("bboi.pkg", "bboi", family="app:x", url=url)
     quiver = app("quiver.pkg", "quiver", url=url)
-    codm = app("codm.pkg", "codm2000", url=url, eligibility=DUAL_ONLY)
+    codm = app("codm.pkg", "codm", url=url, eligibility=DUAL_ONLY)
     result = compose(
         [ruled, quiver, codm], [], [], policy=build_policy(rules_for([ruled]))
     )
@@ -572,7 +574,7 @@ def test_rule_less_tracker_joins_the_family_ruled_onto_its_url() -> None:
     installable = app("app.pkg", family="app:x", url=url)
     tracker = app(
         "1234",
-        "codm2000",
+        "codm",
         url=url,
         eligibility=DUAL_ONLY,
         additional_settings=TRACK_ONLY,
@@ -590,7 +592,7 @@ def test_split_rules_let_a_tracker_and_an_installable_build_both_ship() -> None:
     installable = app("app.pkg", family="app:a", url=url)
     tracker = app(
         "1234",
-        "codm2000",
+        "codm",
         family="app:a-tracker",
         url=url,
         eligibility=DUAL_ONLY,
@@ -605,7 +607,7 @@ def test_owner_rules_join_an_app_and_a_tracker_at_different_urls() -> None:
     installable = app("app.pkg", family="app:x")
     tracker = app(
         "1234",
-        "codm2000",
+        "codm",
         family="app:x",
         eligibility=DUAL_ONLY,
         additional_settings=TRACK_ONLY,
@@ -988,7 +990,7 @@ def test_selection_report_names_the_winner_s_package_id_and_origin() -> None:
         "source",
     )
     assert selection.considered == (
-        ConsideredCandidate("rjny", "rjny-catalog", "other", loser.url),
+        ConsideredCandidate(Source.RJNY, "rjny-catalog", "other", loser.url),
     )
 
 
@@ -1047,9 +1049,7 @@ def test_considered_lists_only_other_available_candidates() -> None:
     winner = app("winner", "extras", family="app:x")
     loser = app("loser", "rjny", family="app:x")
     denied = app("denied", "bboi", family="app:x")
-    single_only = app(
-        "single.only", "codm2000", family="app:x", eligibility=SINGLE_ONLY
-    )
+    single_only = app("single.only", "codm", family="app:x", eligibility=SINGLE_ONLY)
     result = compose([winner, loser, denied, single_only], deny(denied.url), [])
     considered = {
         item.variant: [candidate.id for candidate in item.considered]

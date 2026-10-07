@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from omnipack.model import Source
 from omnipack.report import format_reports, write_report
 from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
@@ -375,12 +376,12 @@ def test_human_report_shows_winner_reason_and_considered_candidates(
         Variant.DUAL,
         "winner.pkg",
         "https://example.test/winner",
-        "extras",
+        Source.EXTRAS,
         "extras",
         SelectionReason.ORDINARY_FALLBACK,
         (
             ConsideredCandidate(
-                "bboi",
+                Source.BBOI,
                 "bboi-standard-asset",
                 "other.pkg",
                 "https://example.test/other",
@@ -493,7 +494,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
         ],
         "sourceAdmissions": [
             {
-                "source": "codm2000",
+                "source": "codm",
                 "url": f"https://example.test/{i}",
                 "id": f"committed.{i}",
             }
@@ -574,7 +575,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             f"winner: rjny/rjny-catalog tied.{i} at example.test/tied/{i}\n"
         ) in output
         assert (
-            f"Admission: codm2000; URL: https://example.test/{i}; committed id: committed.{i}\n"
+            f"Admission: codm; URL: https://example.test/{i}; committed id: committed.{i}\n"
             in output
         )
         assert (
@@ -837,7 +838,7 @@ SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.tes
         ),
         (
             "sourceAdmissions",
-            {"source": "codm2000", "url": "https://example.test"},
+            {"source": "codm", "url": "https://example.test"},
         ),
         ("uncategorizedFamilies", {"family": "app:x"}),
         ("uncategorizedFamilies", {"family": "app:x", "variants": []}),

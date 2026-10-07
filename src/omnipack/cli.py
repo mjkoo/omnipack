@@ -8,13 +8,13 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from omnipack.build import BuildInputs, previous_entries, publish_build
-from omnipack.discovery import GeneratedSource
 from omnipack.generation import generate
 from omnipack.http import HttpClient
 from omnipack.merge import CompositionReport, CompositionResult, compose
-from omnipack.model import App
+from omnipack.model import App, Source
 from omnipack.report import format_reports, write_report
 from omnipack.report_model import BuildStage, OfflineVerdict, Status, not_run_verdict
+from omnipack.source_registry import GENERATED
 from omnipack.sources import IngestionReport, SourceError, ingest_all, parse_json
 from omnipack.verify import VerificationReportError, run_verification
 
@@ -152,9 +152,7 @@ def _parser() -> argparse.ArgumentParser:
     generate_parser = subparsers.add_parser(
         "generate-source", help="generate a source catalog candidate"
     )
-    generate_parser.add_argument(
-        "source", type=GeneratedSource, choices=list(GeneratedSource)
-    )
+    generate_parser.add_argument("source", type=Source, choices=list(GENERATED))
     generate_parser.set_defaults(func=generate_source)
 
     return parser

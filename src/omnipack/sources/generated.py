@@ -10,23 +10,21 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 
-from omnipack.model import App, Variant
+from omnipack.model import App
+from omnipack.source_registry import GENERATED, GeneratedSource
 from omnipack.sources import IngestionReport, load_json
 from omnipack.sources.common import SourceError, normalize_record
 from omnipack.urls import normalize_project_url
 
 
 def fetch_generated(
+    source: GeneratedSource,
     root: Path,
     config: Mapping[str, object],
-    report: IngestionReport | None,
-    *,
-    source: str,
-    provenance: str,
-    origin: str,
-    eligibility: frozenset[Variant],
+    report: IngestionReport | None = None,
 ) -> list[App]:
-    """Normalize every entry of a source's committed catalog.
+    """Normalize every entry of a source's committed catalog, with the origin
+    and pack eligibility the registry gives that source.
 
     A missing, unreadable or malformed catalog fails, and so does one that
     repeats an entry id or holds two entries at one normalized URL.
@@ -37,9 +35,13 @@ def fetch_generated(
     document = load_json(root / catalog_path, source)
     if not isinstance(document, dict) or not isinstance(document.get("apps"), list):
         raise SourceError(source, "catalog must be an object with an apps list")
+    catalog = GENERATED[source]
     result = [
         normalize_record(
-            record, source=provenance, eligibility=eligibility, origin=origin
+            record,
+            source=source,
+            eligibility=catalog.eligibility,
+            origin=catalog.origin,
         )
         for record in document["apps"]
     ]
@@ -49,7 +51,7 @@ def fetch_generated(
         raise SourceError(source, str(error)) from error
     if report is not None:
         report.admitted.extend(
-            {"source": provenance, "url": app.url, "id": app.id} for app in result
+            {"source": source, "url": app.url, "id": app.id} for app in result
         )
     return result
 

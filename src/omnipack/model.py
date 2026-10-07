@@ -50,11 +50,27 @@ ASSIGNABLE_CATEGORIES = tuple(
 )
 
 
+class Source(StrEnum):
+    """Every source a build ingests.
+
+    A source's name is its provenance. Every source but extras, which reads
+    `config/extras.json`, is configured by the `config/sources.json` section of
+    that name, and a generated source's name is also its `generate-source`
+    subcommand.
+    """
+
+    RJNY = "rjny"
+    BBOI = "bboi"
+    EXTRAS = "extras"
+    CODM = "codm"
+    QUIVER = "quiver"
+
+
 @dataclass(frozen=True, slots=True)
 class Provenance:
     """Where an entry came from, for the build report."""
 
-    source: str
+    source: Source
     url: str
 
 

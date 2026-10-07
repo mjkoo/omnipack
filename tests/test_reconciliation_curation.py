@@ -142,7 +142,7 @@ def test_full_reconciliation_holds_for_current_composition(
     ]
     assert {(item.variant, item.source) for item in ctr} == {
         (Variant.SINGLE, "quiver"),
-        (Variant.DUAL, "codm2000"),
+        (Variant.DUAL, "codm"),
     }
     expected_ctr = read(CTR_EVIDENCE)["variants"]
     for variant in Variant:

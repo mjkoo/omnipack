@@ -106,7 +106,7 @@ Consumer documentation SHALL explain that either variant changing can notify eve
 
 Maintained source-selection, version, asset and identity decisions SHALL be
 expressed as reviewed configuration, meaning the configuration maintainers
-edit by hand rather than the automation-maintained codm2000 catalog, and SHALL
+edit by hand rather than the automation-maintained codm catalog, and SHALL
 be preserved across source refreshes. That configuration SHALL be the record of
 each curated app's intended values. Its selection settings describe intended
 Obtainium behavior; the pack builder SHALL NOT independently execute them as a
@@ -130,7 +130,7 @@ check fails when single stops serving it. That coverage SHALL follow from the
 reviewed configuration itself, so that curating a new extra covers it with no
 further edit.
 
-Each automation-maintained generated catalog, codm2000 and Quiver alike, SHALL
+Each automation-maintained generated catalog, codm and Quiver alike, SHALL
 be held to two things only: that it is valid, and that it composes with the
 committed configuration, builds and verifies. Which projects a catalog contains
 SHALL NOT be grounds for blocking a source proposal, so a proposal whose catalog

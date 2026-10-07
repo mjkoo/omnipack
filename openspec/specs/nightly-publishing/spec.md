@@ -225,7 +225,7 @@ failures SHALL be independent of nightly eligibility.
 
 Verification SHALL use `pack verify` and SHALL make no network requests.
 Building SHALL retain upstream JSON network ingestion and read the committed
-codm2000 catalog locally, without README fetches or APK package-ID discovery.
+codm catalog locally, without README fetches or APK package-ID discovery.
 
 #### Scenario: Candidate verifies with non-blocking diagnostics
 

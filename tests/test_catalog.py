@@ -19,6 +19,7 @@ from omnipack.composition_policy import (
     CompositionPolicy,
     build_policy,
 )
+from omnipack.model import Source
 from omnipack.urls import normalize_project_url
 
 FIXTURES = Path(__file__).parent / "fixtures"
@@ -59,7 +60,7 @@ def policy(*projections: tuple[str, str, str]) -> CompositionPolicy:
         [
             CandidateRule(
                 CandidateSelector(
-                    "rjny", "rjny-catalog", package_id, normalize_project_url(url)
+                    Source.RJNY, "rjny-catalog", package_id, normalize_project_url(url)
                 ),
                 "test",
                 family,

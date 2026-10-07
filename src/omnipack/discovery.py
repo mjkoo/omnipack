@@ -16,15 +16,10 @@ from enum import StrEnum
 from typing import TypedDict
 from urllib.parse import urlsplit
 
+from omnipack.model import Source
+from omnipack.source_registry import GeneratedSource
 from omnipack.sources.common import HttpGetter, SourceType, derived_source_type
 from omnipack.urls import normalize_project_url
-
-
-class GeneratedSource(StrEnum):
-    """The sources whose committed catalogs are generated from an upstream list."""
-
-    CODM = "codm"
-    QUIVER = "quiver"
 
 
 class SkipReason(StrEnum):
@@ -484,6 +479,6 @@ _DISCOVERERS: dict[
     GeneratedSource,
     Callable[[Mapping[str, object], HttpGetter, frozenset[str]], Discovery],
 ] = {
-    GeneratedSource.CODM: _discover_codm,
-    GeneratedSource.QUIVER: _discover_quiver,
+    Source.CODM: _discover_codm,
+    Source.QUIVER: _discover_quiver,
 }

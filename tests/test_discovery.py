@@ -7,7 +7,6 @@ import pytest
 from omnipack.discovery import (
     Discovery,
     DiscoveryError,
-    GeneratedSource,
     LinkSkip,
     Listing,
     Skip,
@@ -15,6 +14,7 @@ from omnipack.discovery import (
     discover,
 )
 from omnipack.http import HttpError
+from omnipack.model import Source
 from omnipack.urls import normalize_project_url
 from tests.http_support import FakeHttp
 
@@ -26,9 +26,7 @@ ASSETS_URL = "https://catalog.test/quiver/platform-index.json"
 
 def codm(readme: str, committed: frozenset[str] = frozenset()) -> list[Listing]:
     http = FakeHttp({README_URL: readme})
-    discovery = discover(
-        GeneratedSource.CODM, {"readme_url": README_URL}, http, committed
-    )
+    discovery = discover(Source.CODM, {"readme_url": README_URL}, http, committed)
     assert http.urls == [README_URL]
     assert discovery.skipped == ()
     return list(discovery.listings)
@@ -65,7 +63,7 @@ def test_codm_link_no_project_url_can_be_formed_from_is_skipped() -> None:
         "| [Valid](https://github.com/o/app) | z |\n"
     )
     discovery = discover(
-        GeneratedSource.CODM,
+        Source.CODM,
         {"readme_url": README_URL},
         FakeHttp({README_URL: readme}),
         frozenset(),
@@ -358,7 +356,7 @@ def quiver(
     committed: frozenset[str] = frozenset(),
     index_url: str = INDEX_URL,
 ) -> Discovery:
-    return discover(GeneratedSource.QUIVER, {"index_url": index_url}, http, committed)
+    return discover(Source.QUIVER, {"index_url": index_url}, http, committed)
 
 
 def row(repository: object, project: str = "Port", **fields: Any) -> dict[str, Any]:

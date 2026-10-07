@@ -9,7 +9,8 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
-from omnipack.model import App
+from omnipack.model import App, Source
+from omnipack.source_registry import GENERATED, PRECEDENCE
 
 from .common import HttpGetter, SourceError
 
@@ -31,12 +32,14 @@ def ingest_all(
     extras_config: object,
     report: IngestionReport,
 ) -> list[App]:
-    """Fetch every source in precedence order and retain structured outcomes.
+    """Fetch every source and return its candidates in precedence order,
+    lowest first, recording generated admissions in `report`.
 
     Candidates come back as their sources describe them; composition applies
     the policy. Every committed generated entry joins the candidate set.
     """
-    from . import bboi, codm, extras, quiver, rjny
+    from . import bboi, extras, rjny
+    from .generated import fetch_generated
 
     def section(name: str) -> Mapping[str, object]:
         value = source_config.get(name)
@@ -46,12 +49,14 @@ def ingest_all(
 
     if not isinstance(extras_config, list):
         raise SourceError("extras", "configuration must be a list")
-    rjny_apps = rjny.fetch(http, section("rjny"))
-    bboi_apps = bboi.fetch(http, section("bboi"))
-    extra_apps = extras.fetch(extras_config)
-    generated = codm.fetch(root, section("codm"), report)
-    quiver_apps = quiver.fetch(root, section("quiver"), report)
-    return [*rjny_apps, *bboi_apps, *generated, *quiver_apps, *extra_apps]
+    candidates: dict[Source, list[App]] = {
+        Source.RJNY: rjny.fetch(http, section(Source.RJNY)),
+        Source.BBOI: bboi.fetch(http, section(Source.BBOI)),
+        Source.EXTRAS: extras.fetch(extras_config),
+    }
+    for source in GENERATED:
+        candidates[source] = fetch_generated(source, root, section(source), report)
+    return [app for source in PRECEDENCE for app in candidates[source]]
 
 
 def load_json(path: str | PathLike[str], source: str) -> object:

@@ -6,6 +6,7 @@ from collections.abc import Callable
 from copy import deepcopy
 from dataclasses import replace
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -14,9 +15,10 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import CompositionResult, compose
-from omnipack.model import App, Category, Provenance, Variant
+from omnipack.model import App, Category, Provenance, Source, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
+from omnipack.source_registry import GeneratedSource
 from omnipack.urls import normalize_project_url
 from tests import current_config_support
 from tests.current_config_support import (
@@ -388,10 +390,13 @@ def test_configuration_names_only_files_that_exist() -> None:
 def _with_quiver_catalog(
     monkeypatch: pytest.MonkeyPatch, change: Callable[[list[App]], list[App]]
 ) -> CurrentConfiguration:
-    fetch = current_config_support.quiver.fetch
-    monkeypatch.setattr(
-        current_config_support.quiver, "fetch", lambda *args: change(fetch(*args))
-    )
+    fetch = current_config_support.generated.fetch_generated
+
+    def changed(source: GeneratedSource, *args: Any) -> list[App]:
+        apps = fetch(source, *args)
+        return change(apps) if source is Source.QUIVER else apps
+
+    monkeypatch.setattr(current_config_support.generated, "fetch_generated", changed)
     return current_config_support.build_current_configuration()
 
 
@@ -405,7 +410,7 @@ def test_catalog_only_addition_of_an_uncategorized_family_is_reported(
         "New Port",
         None,
         (),
-        Provenance("quiver", url),
+        Provenance(Source.QUIVER, url),
         frozenset(Variant),
         origin="quiver-generated",
     )

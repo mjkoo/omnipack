@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from omnipack.model import App, Variant
+from omnipack.model import App, Source, Variant
 from omnipack.sources.common import SourceError, normalize_record
 
 
@@ -28,7 +28,7 @@ def fetch(entries: Sequence[object]) -> list[App]:
         result.append(
             normalize_record(
                 record,
-                source="extras",
+                source=Source.EXTRAS,
                 eligibility=(
                     frozenset({Variant.DUAL}) if dual_screen else frozenset(Variant)
                 ),

@@ -11,6 +11,8 @@ from pathlib import Path
 import pytest
 import yaml
 
+from omnipack.source_registry import GENERATED
+
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
 
 
@@ -273,7 +275,7 @@ def test_sources_run_independent_complete_check_publish_chains():
     }
     assert caller["permissions"] == {}
     assert "concurrency" not in caller
-    assert set(caller["jobs"]) == {"codm", "quiver"}
+    assert set(caller["jobs"]) == set(GENERATED)
     for source, job in caller["jobs"].items():
         assert job["uses"] == "./.github/workflows/source-maintenance.yml"
         assert job["with"] == {"source": source}
