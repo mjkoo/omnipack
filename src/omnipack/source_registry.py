@@ -1,7 +1,9 @@
 """Every pack source: its name, origins, precedence and generated-catalog eligibility.
 
-A source's name is its provenance, its `config/sources.json` key and, for a
-generated source, its `generate-source` subcommand.
+A source's name is its provenance. Every source but extras, which reads
+`config/extras.json`, is configured by the `config/sources.json` section of
+that name, and a generated source's name is also its `generate-source`
+subcommand.
 """
 
 from __future__ import annotations

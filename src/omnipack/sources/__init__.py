@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from omnipack.model import App
+from omnipack.source_registry import GENERATED, PRECEDENCE, Source
 
 from .common import HttpGetter, SourceError
 
@@ -37,8 +38,6 @@ def ingest_all(
     Candidates come back as their sources describe them; composition applies
     the policy. Every committed generated entry joins the candidate set.
     """
-    from omnipack.source_registry import GENERATED, PRECEDENCE, Source
-
     from . import bboi, extras, rjny
     from .generated import fetch_generated
 
