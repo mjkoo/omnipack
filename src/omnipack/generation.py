@@ -213,7 +213,11 @@ def minimal_entry(
     if committed is not None:
         url, identifier = committed["url"], committed["id"]
     else:
-        url = min(project_url(listing.url) for listing in listings)
+        # An https spelling wins over an http one, then the smallest.
+        url = min(
+            (project_url(listing.url) for listing in listings),
+            key=lambda url: (not url.startswith("https:"), url),
+        )
         identifier = placeholder_id(normalized)
     names = sorted(
         {trimmed for listing in listings if (trimmed := trim_name(listing.name))},

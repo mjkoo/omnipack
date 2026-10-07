@@ -25,6 +25,12 @@ from omnipack.urls import normalize_project_url
         ("https://gitlab.com/Group/Sub/App.git/-/tags", "gitlab.com/Group/Sub/App"),
         ("https://[::1]:8443/App", "[::1]:8443/App"),
         ("https://[::1]/App", "[::1]/App"),
+        (
+            "https://gitlab.com/groups/team/-/epics?x=1",
+            "gitlab.com/groups/team/-/epics?x=1",
+        ),
+        ("https://gitlab.com/-/explore", "gitlab.com/-/explore"),
+        ("https://example.com/o/repo/.git", "example.com/o/repo"),
     ],
 )
 def test_normalize_project_url(url: str, normalized: str) -> None:
@@ -82,6 +88,8 @@ def test_normalize_project_url(url: str, normalized: str) -> None:
             "https://gitlab.com/Group/App/-/releases/v1",
             True,
         ),
+        ("github.com:443/Owner/Repo", "https://github.com/Owner/Repo", True),
+        ("example.com:80/Owner/Repo", "https://example.com/Owner/Repo", False),
     ],
 )
 def test_normalized_urls_identify_the_same_project(

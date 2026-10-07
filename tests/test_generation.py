@@ -110,6 +110,14 @@ def test_two_spellings_collapse_to_the_smallest_url_whatever_the_order() -> None
     assert candidate(listings) == candidate(list(reversed(listings)))
 
 
+def test_an_https_spelling_wins_over_an_http_one() -> None:
+    order = ["http://example.test/app", "https://example.test/app"]
+    listings = [Listing(url, "App") for url in order]
+    [entry] = json.loads(candidate(listings))["apps"]
+    assert entry["url"] == "https://example.test/app"
+    assert candidate(listings) == candidate(list(reversed(listings)))
+
+
 def test_listing_order_does_not_choose_the_name() -> None:
     listings = [Listing("https://github.com/o/r", name) for name in ["App", "app"]]
     assert entry_for(listings)["name"] == "App"

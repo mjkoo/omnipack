@@ -5,6 +5,11 @@ from __future__ import annotations
 from urllib.parse import SplitResult, urlsplit, urlunsplit
 
 _DEFAULT_PORTS = {"http": 80, "https": 443}
+# First path segments of gitlab.com pages that belong to the site rather than a
+# project's namespace.
+GITLAB_ROUTES = frozenset(
+    {"-", "groups", "users", "explore", "dashboard", "search", "help", "admin"}
+)
 
 
 def project_url(url: str) -> str:
@@ -14,9 +19,9 @@ def project_url(url: str) -> str:
     drops a leading `www.`, drops the scheme's default port but keeps any
     other, and drops a trailing slash and `.git`. A GitHub link is reduced to
     its owner and repository, so a releases, tags, blob or release-asset link
-    becomes the repository root, and a gitlab.com link to the project path
-    before GitLab's reserved `-` route segment. On any other host the query
-    and fragment are kept, since which parts of such a link identify the
+    becomes the repository root, and a gitlab.com project link to the project
+    path before GitLab's reserved `-` route segment. On any other host, and on
+    a gitlab.com site page, the query and fragment are kept, since which parts of such a link identify the
     project cannot be known.
     """
     parsed = _split_url(url)
@@ -25,12 +30,14 @@ def project_url(url: str) -> str:
     host = host.removeprefix("www.")
 
     path = parsed.path.rstrip("/")
+    segments = path.split("/")
     query, fragment = parsed.query, parsed.fragment
     if host == "github.com":
-        path = "/".join(path.split("/")[:3])
+        path = "/".join(segments[:3])
         query = fragment = ""
-    elif host == "gitlab.com":
-        segments = path.split("/")
+    elif (
+        host == "gitlab.com" and len(segments) > 1 and segments[1] not in GITLAB_ROUTES
+    ):
         if "-" in segments:
             path = "/".join(segments[: segments.index("-")])
         query = fragment = ""
@@ -38,10 +45,11 @@ def project_url(url: str) -> str:
     if path.endswith(".git") or (
         host == "github.com" and path.lower().endswith(".git")
     ):
-        path = path[:-4]
+        path = path[:-4].rstrip("/")
 
     authority = f"[{host}]" if ":" in host else host
-    if parsed.port is not None and parsed.port != _DEFAULT_PORTS.get(scheme):
+    # A URL written without a scheme is taken as https for its default port.
+    if parsed.port is not None and parsed.port != _DEFAULT_PORTS.get(scheme or "https"):
         authority = f"{authority}:{parsed.port}"
     return urlunsplit((scheme, authority, path, query, fragment))
 
