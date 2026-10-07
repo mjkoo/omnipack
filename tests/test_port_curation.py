@@ -16,7 +16,7 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import compose
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.render import render
 from omnipack.sources.extras import fetch
 from omnipack.urls import normalize_project_url
@@ -95,7 +95,7 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             "upstream duplicate",
             app.source_type,
             app.categories,
-            Provenance("bboi", app.url),
+            Provenance(Source.BBOI, app.url),
             frozenset({Variant.DUAL}),
             {"apkFilterRegEx": "wrong.apk", "versionDetection": True},
             origin="bboi-dual-asset",
@@ -264,14 +264,14 @@ def test_single_pin_exempts_an_extra_at_the_pinned_family_s_url() -> None:
         "Ruled",
         SourceType.HTML,
         (),
-        Provenance("rjny", "catalog"),
+        Provenance(Source.RJNY, "catalog"),
         eligibility=frozenset(Variant),
         origin="rjny-catalog",
     )
     extra = replace(
         ruled,
         id="extra",
-        provenance=Provenance("extras", "extras"),
+        provenance=Provenance(Source.EXTRAS, "extras"),
         origin="extras",
     )
     match = {

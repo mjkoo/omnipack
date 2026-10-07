@@ -10,7 +10,7 @@ from __future__ import annotations
 import fnmatch
 from collections.abc import Mapping
 
-from omnipack.model import App, Variant
+from omnipack.model import App, Source, Variant
 from omnipack.sources.common import HttpGetter, SourceError, normalize_record
 
 
@@ -48,7 +48,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
         result = [
             normalize_record(
                 record,
-                source="bboi",
+                source=Source.BBOI,
                 eligibility=frozenset(Variant),
                 origin="bboi-standard-asset",
             )
@@ -57,7 +57,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
         result.extend(
             normalize_record(
                 record,
-                source="bboi",
+                source=Source.BBOI,
                 eligibility=frozenset({Variant.DUAL}),
                 origin="bboi-dual-asset",
             )

@@ -31,7 +31,7 @@ from omnipack.merge import (
 from omnipack.merge import (
     compose as compose_apps,
 )
-from omnipack.model import App, Category, Provenance, SourceType, Variant
+from omnipack.model import App, Category, Provenance, Source, SourceType, Variant
 from omnipack.render import render_pack
 from omnipack.urls import normalize_project_url
 
@@ -66,7 +66,7 @@ def app(
         name or f"{source} {package_id}",
         SourceType.HTML,
         categories,
-        Provenance(source, url),
+        Provenance(Source(source), url),
         eligibility=eligibility,
         origin=origin or origins[source],
         family=family,
@@ -157,7 +157,7 @@ def test_dual_prefers_suitable_candidate_before_higher_source() -> None:
     ]
     assert dual_selection.id == "dual"
     assert dual_selection.considered == (
-        ConsideredCandidate("extras", "extras", "ordinary", ordinary.url),
+        ConsideredCandidate(Source.EXTRAS, "extras", "ordinary", ordinary.url),
     )
 
 
@@ -370,7 +370,9 @@ def test_shared_package_builds_split_by_kind_without_a_pin() -> None:
         (Variant.DUAL, "bboi-dual-asset", "dual-preferred"),
     ]
     assert selections[1].considered == (
-        ConsideredCandidate("bboi", "bboi-standard-asset", "shared.pkg", standard.url),
+        ConsideredCandidate(
+            Source.BBOI, "bboi-standard-asset", "shared.pkg", standard.url
+        ),
     )
 
 
@@ -988,7 +990,7 @@ def test_selection_report_names_the_winner_s_package_id_and_origin() -> None:
         "source",
     )
     assert selection.considered == (
-        ConsideredCandidate("rjny", "rjny-catalog", "other", loser.url),
+        ConsideredCandidate(Source.RJNY, "rjny-catalog", "other", loser.url),
     )
 
 

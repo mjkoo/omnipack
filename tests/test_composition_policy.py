@@ -13,7 +13,7 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import CompositionError, _import_data, compose
-from omnipack.model import App, Category, Provenance, SourceType, Variant
+from omnipack.model import App, Category, Provenance, Source, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.render import render
 
@@ -25,7 +25,7 @@ def candidate(**changes: object) -> App:
         "Example",
         SourceType.GITHUB,
         (),
-        Provenance("rjny", "catalog"),
+        Provenance(Source.RJNY, "catalog"),
         eligibility=frozenset(Variant),
         origin="rjny-catalog",
     )
@@ -203,7 +203,7 @@ def other_source(**changes: object) -> App:
     """A candidate from another source, by default at the same project URL."""
     values: dict[str, object] = {
         "id": "org.example.new",
-        "provenance": Provenance("bboi", "asset"),
+        "provenance": Provenance(Source.BBOI, "asset"),
         "origin": "bboi-standard-asset",
     }
     return candidate(**{**values, **changes})
@@ -235,12 +235,12 @@ def test_family_rule_covers_every_build_at_its_url() -> None:
     )
     quiver = candidate(
         id="org.example.quiver",
-        provenance=Provenance("quiver", "catalog"),
+        provenance=Provenance(Source.QUIVER, "catalog"),
         origin="quiver-generated",
     )
     codm = candidate(
         id="org.example.codm",
-        provenance=Provenance("codm", "catalog"),
+        provenance=Provenance(Source.CODM, "catalog"),
         origin="codm-generated",
     )
     assert families(parsed, [other_source(), quiver, codm]) == [
@@ -262,7 +262,7 @@ def test_rules_naming_different_families_split_one_repository() -> None:
     )
     third = candidate(
         id="org.example.third",
-        provenance=Provenance("extras", "catalog"),
+        provenance=Provenance(Source.EXTRAS, "catalog"),
         origin="extras",
     )
     assert families(parsed, [candidate(), other_source(), third]) == [

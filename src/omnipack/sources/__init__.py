@@ -9,8 +9,8 @@ from os import PathLike
 from pathlib import Path
 from typing import Any
 
-from omnipack.model import App
-from omnipack.source_registry import GENERATED, PRECEDENCE, Source
+from omnipack.model import App, Source
+from omnipack.source_registry import GENERATED, PRECEDENCE
 
 from .common import HttpGetter, SourceError
 
@@ -55,9 +55,7 @@ def ingest_all(
         Source.EXTRAS: extras.fetch(extras_config),
     }
     for source in GENERATED:
-        candidates[Source(source)] = fetch_generated(
-            source, root, section(source), report
-        )
+        candidates[source] = fetch_generated(source, root, section(source), report)
     return [app for source in PRECEDENCE for app in candidates[source]]
 
 

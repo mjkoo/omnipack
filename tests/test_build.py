@@ -13,7 +13,7 @@ from omnipack.merge import (
     Removal,
     StaleExclusion,
 )
-from omnipack.model import Provenance, Variant
+from omnipack.model import Provenance, Source, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
@@ -165,7 +165,7 @@ def test_family_switch_reports_package_diff_and_new_winner(
         "Replacement",
         SourceType.HTML,
         (),
-        Provenance("extras", current_url),
+        Provenance(Source.EXTRAS, current_url),
         eligibility=frozenset(Variant),
     )
     rules = [

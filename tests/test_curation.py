@@ -15,7 +15,7 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import CompositionResult, compose
-from omnipack.model import App, Category, Provenance, Variant
+from omnipack.model import App, Category, Provenance, Source, Variant
 from omnipack.overlay import ComposedApp, apply_overlay, parse_overlay
 from omnipack.render import render
 from omnipack.source_registry import GeneratedSource
@@ -394,7 +394,7 @@ def _with_quiver_catalog(
 
     def changed(source: GeneratedSource, *args: Any) -> list[App]:
         apps = fetch(source, *args)
-        return change(apps) if source is GeneratedSource.QUIVER else apps
+        return change(apps) if source is Source.QUIVER else apps
 
     monkeypatch.setattr(current_config_support.generated, "fetch_generated", changed)
     return current_config_support.build_current_configuration()
@@ -410,7 +410,7 @@ def test_catalog_only_addition_of_an_uncategorized_family_is_reported(
         "New Port",
         None,
         (),
-        Provenance("quiver", url),
+        Provenance(Source.QUIVER, url),
         frozenset(Variant),
         origin="quiver-generated",
     )

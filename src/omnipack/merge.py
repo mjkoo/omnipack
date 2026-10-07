@@ -19,7 +19,7 @@ from omnipack.composition_policy import (
     rendered_key,
     repeated_ids,
 )
-from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
+from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Source, Variant
 from omnipack.overlay import (
     ComposedApp,
     OverlayError,
@@ -32,7 +32,7 @@ from omnipack.report_model import SelectionReason
 from omnipack.source_registry import PRECEDENCE
 from omnipack.urls import normalize_project_url, parse_project_url
 
-_PRECEDENCE: dict[str, int] = {source: rank for rank, source in enumerate(PRECEDENCE)}
+_PRECEDENCE = {source: rank for rank, source in enumerate(PRECEDENCE)}
 
 
 class CompositionError(ValueError):
@@ -58,7 +58,7 @@ class StaleExclusion:
 class ConsideredCandidate:
     """A candidate that was available for a selection and did not win it."""
 
-    source: str
+    source: Source
     origin: str
     id: str
     url: str
@@ -76,7 +76,7 @@ class FamilySelection:
     variant: Variant
     id: str
     url: str
-    source: str
+    source: Source
     origin: str
     reason: SelectionReason
     considered: tuple[ConsideredCandidate, ...]
@@ -176,7 +176,6 @@ def compose(
         candidates = list(apply_composition_policy(policy, candidates))
     except CompositionPolicyError as error:
         raise CompositionError(str(error)) from error
-    _check_sources(candidates)
     denied = _exclude(candidates, exclusions, report)
     formed = tuple(
         item for item in candidates if item.eligibility and id(item) not in denied
@@ -222,13 +221,6 @@ def parse_exclusions(entries: list[Any]) -> tuple[Exclusion, ...]:
             ) from error
         result.append(Exclusion(normalized, reason))
     return tuple(result)
-
-
-def _check_sources(candidates: list[App]) -> None:
-    for candidate in candidates:
-        source = candidate.provenance.source
-        if source not in _PRECEDENCE:
-            raise CompositionError(f"unknown candidate source {source!r}")
 
 
 def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:

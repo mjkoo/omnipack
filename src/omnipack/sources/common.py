@@ -8,7 +8,7 @@ from typing import Any, Protocol
 from urllib.parse import urlsplit
 
 from omnipack.http import HttpResponse
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.urls import gitlab_project
 
 
@@ -115,7 +115,7 @@ def settings(value: object, *, source: str, entry: str) -> dict[str, Any]:
 def normalize_record(
     record: object,
     *,
-    source: str,
+    source: Source,
     eligibility: frozenset[Variant],
     origin: str = "",
     default_label: str = "unnamed entry",

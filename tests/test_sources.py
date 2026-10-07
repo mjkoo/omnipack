@@ -15,13 +15,12 @@ from omnipack import cli
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpClient, HttpResponse
 from omnipack.merge import _import_data, compose
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.offline import OfflineInputs, validate_offline
 from omnipack.overlay import ComposedApp
 from omnipack.render import render, render_pack
 from omnipack.report_model import Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
-from omnipack.source_registry import GeneratedSource
 from omnipack.sources import (
     IngestionReport,
     SourceError,
@@ -309,7 +308,7 @@ def _fetch_bboi(
 
 def _fetch_codm(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
-    return fetch_generated(GeneratedSource.CODM, tmp_path, {"catalog": "catalog.json"})
+    return fetch_generated(Source.CODM, tmp_path, {"catalog": "catalog.json"})
 
 
 @pytest.mark.parametrize("field", ["family", "variant"])
@@ -437,7 +436,7 @@ def test_package_id_field_is_ingested_and_rendered_unchanged() -> None:
 
 def _fetch_quiver(tmp_path: Path, records: list[dict[str, object]]) -> list[App]:
     (tmp_path / "quiver.json").write_text(json.dumps({"apps": records}))
-    return fetch_generated(GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"})
+    return fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"})
 
 
 EVERY_SOURCE_FETCH = [
@@ -557,9 +556,7 @@ def test_upstream_record_with_a_blank_source_type_declares_none(
         ),
         pytest.param(
             "codm",
-            lambda tmp_path: fetch_generated(
-                GeneratedSource.CODM, tmp_path, {"catalog": ""}
-            ),
+            lambda tmp_path: fetch_generated(Source.CODM, tmp_path, {"catalog": ""}),
             id="codm",
         ),
     ],
@@ -680,9 +677,7 @@ def test_codm_loads_every_committed_entry_and_reports_admission(
     path = tmp_path / "catalog.json"
     path.write_text(json.dumps(catalog))
     report = IngestionReport()
-    apps = fetch_generated(
-        GeneratedSource.CODM, tmp_path, {"catalog": "catalog.json"}, report
-    )
+    apps = fetch_generated(Source.CODM, tmp_path, {"catalog": "catalog.json"}, report)
     urls = {app.url for app in apps}
     assert "https://github.com/samyost1/zelda3-android" in urls
     assert "https://github.com/igawa6/dusklight" in urls
@@ -724,7 +719,7 @@ def test_codm_reports_every_committed_identity(tmp_path: Path) -> None:
     ]
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
     report = IngestionReport()
-    fetch_generated(GeneratedSource.CODM, tmp_path, {"catalog": "catalog.json"}, report)
+    fetch_generated(Source.CODM, tmp_path, {"catalog": "catalog.json"}, report)
     assert [(item["url"], item["id"]) for item in report.admitted] == [
         ("https://github.com/owner/app", "app.apk"),
         ("https://github.com/owner/mod", "123"),
@@ -798,7 +793,7 @@ def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
     ]
     (tmp_path / "catalog.json").write_text(json.dumps({"apps": records}))
     with pytest.raises(SourceError, match="duplicate id.*same.*repo0.*repo1"):
-        fetch_generated(GeneratedSource.CODM, tmp_path, {"catalog": "catalog.json"})
+        fetch_generated(Source.CODM, tmp_path, {"catalog": "catalog.json"})
 
 
 PROJECT = "https://github.com/owner/project"
@@ -811,7 +806,7 @@ def rjny_candidate(eligibility: frozenset[Variant]) -> App:
         "Standard",
         SourceType.GITHUB,
         (),
-        Provenance("rjny", "catalog"),
+        Provenance(Source.RJNY, "catalog"),
         eligibility=eligibility,
         origin="rjny-catalog",
     )
@@ -1037,12 +1032,12 @@ def test_upstream_declared_source_type_is_preserved(declared: SourceType) -> Non
 def test_codm_malformed_catalog_names_source(tmp_path: Path, body: str) -> None:
     (tmp_path / "catalog.json").write_text(body)
     with pytest.raises(SourceError, match="codm"):
-        fetch_generated(GeneratedSource.CODM, tmp_path, {"catalog": "catalog.json"})
+        fetch_generated(Source.CODM, tmp_path, {"catalog": "catalog.json"})
 
 
 def test_codm_missing_catalog_names_source(tmp_path: Path) -> None:
     with pytest.raises(SourceError, match="codm"):
-        fetch_generated(GeneratedSource.CODM, tmp_path, {"catalog": "missing.json"})
+        fetch_generated(Source.CODM, tmp_path, {"catalog": "missing.json"})
 
 
 def test_explicit_null_extra_source_is_not_inferred():
@@ -1076,7 +1071,7 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
         "Fork",
         SourceType.GITHUB,
         (),
-        Provenance("bboi", "asset"),
+        Provenance(Source.BBOI, "asset"),
         frozenset({Variant.DUAL}),
         origin="bboi-dual-asset",
     )

@@ -8,9 +8,9 @@ from collections.abc import Sequence
 from dataclasses import dataclass, replace
 from typing import Any
 
-from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Variant
+from omnipack.model import ASSIGNABLE_CATEGORIES, App, Category, Source, Variant
 from omnipack.overlay import OverlayPatch
-from omnipack.source_registry import ORIGINS, Source
+from omnipack.source_registry import ORIGINS
 from omnipack.strict_json import DuplicateKeyError, reject_duplicate_keys
 from omnipack.urls import normalize_project_url, parse_project_url
 
@@ -27,14 +27,14 @@ class CompositionPolicyError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class CandidateSelector:
-    source: str
+    source: Source
     origin: str
     id: str
     url: str
 
     @property
     def key(self) -> tuple[str, str, str, str]:
-        return self.source, self.origin, self.id, self.url
+        return self.source.value, self.origin, self.id, self.url
 
 
 @dataclass(frozen=True, slots=True)
@@ -362,17 +362,17 @@ def _parse_pin(value: object, index: int) -> Pin:
 def _selector(value: object, label: str) -> CandidateSelector:
     record = _object(value, label)
     _fields(record, {"source", "origin", "id", "url"}, label)
-    source = _text(record.get("source"), f"{label}.source")
+    raw_source = _text(record.get("source"), f"{label}.source")
     origin = _text(record.get("origin"), f"{label}.origin")
     try:
-        origins = ORIGINS[Source(source)]
+        source = Source(raw_source)
     except ValueError:
         raise CompositionPolicyError(
-            f"{label}.source has unknown source {source!r}"
+            f"{label}.source has unknown source {raw_source!r}"
         ) from None
-    if origin not in origins:
+    if origin not in ORIGINS[source]:
         raise CompositionPolicyError(
-            f"{label}.origin {origin!r} is invalid for source {source!r}"
+            f"{label}.origin {origin!r} is invalid for source {raw_source!r}"
         )
     return CandidateSelector(
         source,

@@ -1,6 +1,6 @@
 import pytest
 
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, Source, SourceType, Variant
 
 
 def app(eligibility: frozenset[Variant]) -> App:
@@ -10,7 +10,7 @@ def app(eligibility: frozenset[Variant]) -> App:
         name="Example",
         source_type=SourceType.GITHUB,
         categories=("Emulator",),
-        provenance=Provenance(source="fixture", url="https://example.com/c.json"),
+        provenance=Provenance(source=Source.RJNY, url="https://example.com/c.json"),
         eligibility=eligibility,
     )
 
@@ -31,4 +31,4 @@ def test_dual_preference_is_derived_from_dual_only_eligibility(
 
 
 def test_origin_defaults_from_provenance() -> None:
-    assert app(frozenset(Variant)).origin == "fixture"
+    assert app(frozenset(Variant)).origin == "rjny"

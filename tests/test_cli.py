@@ -10,7 +10,7 @@ from omnipack import cli
 from omnipack.build import BuildInputs
 from omnipack.cli import main
 from omnipack.http import HttpClient, HttpResponse, HttpStatusError
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport
 from tests.test_build import write_config
@@ -361,7 +361,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         "Current",
         SourceType.HTML,
         (),
-        Provenance("extras", "fixture"),
+        Provenance(Source.EXTRAS, "fixture"),
         eligibility=frozenset(Variant),
     )
     before = json.dumps(
@@ -455,7 +455,7 @@ def test_failed_rollback_reports_changes_against_the_output_before_the_build(
         "Current",
         SourceType.HTML,
         (),
-        Provenance("extras", "fixture"),
+        Provenance(Source.EXTRAS, "fixture"),
         eligibility=frozenset(Variant),
     )
     before = json.dumps(
@@ -536,7 +536,7 @@ def test_composition_failure_preserves_collected_diagnostics(
             source,
             SourceType.HTML,
             (),
-            Provenance(source, "https://example.test/catalog"),
+            Provenance(Source(source), "https://example.test/catalog"),
             eligibility=frozenset(Variant),
         )
         for package_id, source, url in (
@@ -663,7 +663,7 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
             package_id,
             SourceType.HTML,
             (),
-            Provenance("rjny", "https://example.test/catalog"),
+            Provenance(Source.RJNY, "https://example.test/catalog"),
             eligibility=eligibility,
             origin="rjny-catalog",
         )
@@ -781,7 +781,7 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
             package_id,
             SourceType.HTML,
             ("Dual Screen",),
-            Provenance("rjny", "https://example.test/catalog"),
+            Provenance(Source.RJNY, "https://example.test/catalog"),
             eligibility=frozenset(variants),
         )
 
@@ -891,7 +891,7 @@ def test_a_pin_on_a_project_whose_id_an_overlay_patches_builds_and_verifies(
             package_id,
             SourceType.HTML,
             (),
-            Provenance(source, "https://example.test/catalog"),
+            Provenance(Source(source), "https://example.test/catalog"),
             eligibility=frozenset(Variant),
             origin=origin,
         )
@@ -952,7 +952,7 @@ def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
             package_id,
             SourceType.HTML,
             (),
-            Provenance("rjny", "https://example.test/catalog"),
+            Provenance(Source.RJNY, "https://example.test/catalog"),
             eligibility=frozenset(Variant),
             origin="rjny-catalog",
         )
@@ -1015,7 +1015,7 @@ def test_winning_tie_publishes_one_build_and_reports_the_tie(
             "Candidate",
             SourceType.HTML,
             (),
-            Provenance("bboi", "fixture"),
+            Provenance(Source.BBOI, "fixture"),
             eligibility=frozenset(Variant),
             origin="bboi-standard-asset",
         )

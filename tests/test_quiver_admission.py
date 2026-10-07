@@ -10,9 +10,8 @@ from omnipack.composition_policy import (
     parse_composition_policy,
 )
 from omnipack.merge import compose
-from omnipack.model import Variant
+from omnipack.model import Source, Variant
 from omnipack.render import render
-from omnipack.source_registry import GeneratedSource
 from omnipack.sources.generated import fetch_generated
 from omnipack.urls import normalize_project_url
 from tests.current_config_support import (
@@ -30,7 +29,7 @@ def test_emerald_family_pairs_new_baseline_with_existing_dual(
 ) -> None:
     current = current_configuration
     quiver_apps = fetch_generated(
-        GeneratedSource.QUIVER,
+        Source.QUIVER,
         ROOT,
         json.loads((ROOT / "config/sources.json").read_text())["quiver"],
     )

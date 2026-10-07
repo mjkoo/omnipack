@@ -1,35 +1,15 @@
-"""Every pack source: its name, origins, precedence and generated-catalog eligibility.
-
-A source's name is its provenance. Every source but extras, which reads
-`config/extras.json`, is configured by the `config/sources.json` section of
-that name, and a generated source's name is also its `generate-source`
-subcommand.
-"""
+"""Every pack source's origins, precedence and generated-catalog eligibility."""
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from enum import StrEnum
+from typing import Literal
 
-from omnipack.model import Variant
+from omnipack.model import Source, Variant
 
-
-class Source(StrEnum):
-    """Every source a build ingests."""
-
-    RJNY = "rjny"
-    BBOI = "bboi"
-    EXTRAS = "extras"
-    CODM = "codm"
-    QUIVER = "quiver"
-
-
-class GeneratedSource(StrEnum):
-    """The sources whose committed catalogs are generated from an upstream list."""
-
-    CODM = Source.CODM.value
-    QUIVER = Source.QUIVER.value
+type GeneratedSource = Literal[Source.CODM, Source.QUIVER]
+"""The sources whose committed catalogs are generated from an upstream list."""
 
 
 @dataclass(frozen=True, slots=True)
@@ -42,18 +22,15 @@ class GeneratedCatalog:
 
 GENERATED: Mapping[GeneratedSource, GeneratedCatalog] = {
     # codm lists dual-screen builds only.
-    GeneratedSource.CODM: GeneratedCatalog("codm-generated", frozenset({Variant.DUAL})),
-    GeneratedSource.QUIVER: GeneratedCatalog("quiver-generated", frozenset(Variant)),
+    Source.CODM: GeneratedCatalog("codm-generated", frozenset({Variant.DUAL})),
+    Source.QUIVER: GeneratedCatalog("quiver-generated", frozenset(Variant)),
 }
 
 ORIGINS: Mapping[Source, frozenset[str]] = {
     Source.RJNY: frozenset({"rjny-catalog"}),
     Source.BBOI: frozenset({"bboi-standard-asset", "bboi-dual-asset"}),
     Source.EXTRAS: frozenset({"extras"}),
-    **{
-        Source(source): frozenset({catalog.origin})
-        for source, catalog in GENERATED.items()
-    },
+    **{source: frozenset({catalog.origin}) for source, catalog in GENERATED.items()},
 }
 
 # Lowest first: within a selection tier, the later source wins.

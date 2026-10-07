@@ -10,7 +10,7 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from omnipack.model import App, Variant
+from omnipack.model import App, Source, Variant
 from omnipack.sources.common import HttpGetter, SourceError, normalize_record
 
 
@@ -47,7 +47,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
             result.append(
                 normalize_record(
                     record,
-                    source="rjny",
+                    source=Source.RJNY,
                     eligibility=eligibility,
                     origin="rjny-catalog",
                 )

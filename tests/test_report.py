@@ -7,6 +7,7 @@ from typing import Any
 
 import pytest
 
+from omnipack.model import Source
 from omnipack.report import format_reports, write_report
 from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
@@ -375,12 +376,12 @@ def test_human_report_shows_winner_reason_and_considered_candidates(
         Variant.DUAL,
         "winner.pkg",
         "https://example.test/winner",
-        "extras",
+        Source.EXTRAS,
         "extras",
         SelectionReason.ORDINARY_FALLBACK,
         (
             ConsideredCandidate(
-                "bboi",
+                Source.BBOI,
                 "bboi-standard-asset",
                 "other.pkg",
                 "https://example.test/other",

@@ -13,7 +13,7 @@ from omnipack.composition_policy import load_composition_policy
 from omnipack.merge import CompositionResult, compose
 from omnipack.model import App
 from omnipack.source_catalog import render_catalog
-from omnipack.source_registry import GeneratedSource
+from omnipack.source_registry import GENERATED
 from omnipack.sources import bboi, generated, rjny
 from omnipack.sources.extras import fetch as fetch_extras
 from tests.http_support import FakeHttp
@@ -73,7 +73,7 @@ def build_current_configuration() -> CurrentConfiguration:
     ]
     generated_apps = [
         app
-        for source in GeneratedSource
+        for source in GENERATED
         for app in generated.fetch_generated(source, ROOT, sources[source])
     ]
     candidates = [*higher, *generated_apps]

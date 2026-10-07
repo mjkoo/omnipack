@@ -11,7 +11,7 @@ from omnipack.catalog import generate_catalog, replace_catalog
 from omnipack.composition_policy import parse_composition_policy
 from omnipack.http import HttpResponse
 from omnipack.merge import compose
-from omnipack.model import App, Provenance, SourceType, Variant
+from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.render import render, render_pack
 from omnipack.source_catalog import render_catalog
 from omnipack.source_registry import GeneratedSource
@@ -49,7 +49,7 @@ def other(package: str, repo: str, source: str, origin: str) -> App:
         repo,
         SourceType.GITHUB,
         (),
-        Provenance(source, "fixture"),
+        Provenance(Source(source), "fixture"),
         eligibility=frozenset({Variant.DUAL})
         if source == "codm"
         else frozenset(Variant),
@@ -69,9 +69,7 @@ def test_committed_quiver_ingests_every_entry_without_network(tmp_path: Path) ->
         [entry("org.example.one", "owner/one"), entry("org.example.two", "owner/two")],
     )
     report = IngestionReport()
-    apps = fetch_generated(
-        GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"}, report
-    )
+    apps = fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"}, report)
     assert [app.id for app in apps] == ["org.example.one", "org.example.two"]
     assert all(app.eligibility == frozenset(Variant) for app in apps)
     assert all(
@@ -88,12 +86,12 @@ def test_committed_quiver_ingests_every_entry_without_network(tmp_path: Path) ->
 def test_quiver_malformed_catalog_fails_named(tmp_path: Path, content: str) -> None:
     (tmp_path / "quiver.json").write_text(content)
     with pytest.raises(SourceError, match="quiver"):
-        fetch_generated(GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"})
+        fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"})
 
 
 def test_quiver_missing_catalog_fails_named(tmp_path: Path) -> None:
     with pytest.raises(SourceError, match="quiver"):
-        fetch_generated(GeneratedSource.QUIVER, tmp_path, {"catalog": "missing.json"})
+        fetch_generated(Source.QUIVER, tmp_path, {"catalog": "missing.json"})
 
 
 def test_quiver_duplicate_package_id_fails_named(tmp_path: Path) -> None:
@@ -105,14 +103,14 @@ def test_quiver_duplicate_package_id_fails_named(tmp_path: Path) -> None:
         ],
     )
     with pytest.raises(SourceError, match="quiver.*org.example.shared"):
-        fetch_generated(GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"})
+        fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"})
 
 
 @pytest.mark.parametrize("field", ["family", "variant"])
 def test_quiver_rejects_composition_fields(tmp_path: Path, field: str) -> None:
     write_catalog(tmp_path, [entry("org.example.one", "owner/one", **{field: "x"})])
     with pytest.raises(SourceError, match=field):
-        fetch_generated(GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"})
+        fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"})
 
 
 @pytest.mark.parametrize(
@@ -133,9 +131,7 @@ def test_quiver_keeps_any_valid_committed_record(
     tmp_path: Path, record: dict[str, object]
 ) -> None:
     write_catalog(tmp_path, [record])
-    [app] = fetch_generated(
-        GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"}
-    )
+    [app] = fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"})
     assert (app.id, app.url, app.source_type) == (
         record["id"],
         record["url"],
@@ -261,9 +257,7 @@ def test_different_package_fork_family_pairs_across_variants() -> None:
 
 def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> None:
     write_catalog(tmp_path, [entry("org.example.future", "newpublisher/future")])
-    [candidate] = fetch_generated(
-        GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"}
-    )
+    [candidate] = fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"})
     result = compose([candidate], [], [], policy=policy())
     assert all(
         [app.data["id"] for app in result.apps[variant]] == ["org.example.future"]
@@ -274,7 +268,7 @@ def test_quiver_future_membership_is_configuration_driven(tmp_path: Path) -> Non
     assert all(not denied.apps[variant] for variant in Variant)
     (tmp_path / "quiver.json").write_text('{"apps":[]}')
     empty = compose(
-        fetch_generated(GeneratedSource.QUIVER, tmp_path, {"catalog": "quiver.json"}),
+        fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"}),
         denial,
         [],
         policy=policy(),
@@ -314,7 +308,7 @@ def test_current_configuration_fixture_composes_quiver(
 
     def with_injected(source: GeneratedSource, *args: Any) -> list[App]:
         apps = original_fetch(source, *args)
-        return [*apps, injected] if source is GeneratedSource.QUIVER else apps
+        return [*apps, injected] if source is Source.QUIVER else apps
 
     monkeypatch.setattr(
         current_config_support.generated, "fetch_generated", with_injected

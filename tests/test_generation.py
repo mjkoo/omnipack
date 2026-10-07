@@ -18,7 +18,7 @@ from omnipack.generation import (
     trim_name,
 )
 from omnipack.http import HttpClient, HttpError, HttpResponse
-from omnipack.model import SourceType
+from omnipack.model import Source, SourceType
 from omnipack.report_model import Status
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 from omnipack.source_catalog import render_catalog
@@ -164,8 +164,8 @@ def test_quiver_name_with_a_trailing_symbol_is_trimmed(tmp_path: Path) -> None:
     http = quiver_http(
         [row("owner/repo", project="Melee PC ™")], [asset("owner/repo", "m.apk")]
     )
-    generate(tmp_path, GeneratedSource.QUIVER, http=http)
-    [entry] = catalog_apps(tmp_path, GeneratedSource.QUIVER)
+    generate(tmp_path, Source.QUIVER, http=http)
+    [entry] = catalog_apps(tmp_path, Source.QUIVER)
     assert entry["name"] == "Melee PC"
 
 
@@ -234,9 +234,7 @@ def test_an_empty_committed_catalog_gives_every_entry_a_placeholder_id(
     write_config(tmp_path)
     write_catalog(tmp_path, "codm", [])
     http = FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"})
-    assert generate(tmp_path, GeneratedSource.CODM, http=http)["status"] == (
-        Status.SUCCESS
-    )
+    assert generate(tmp_path, Source.CODM, http=http)["status"] == (Status.SUCCESS)
     [entry] = catalog_apps(tmp_path, "codm")
     assert entry["id"] == hashlib.sha256(b"github.com/o/a").hexdigest()[:12]
 
@@ -246,7 +244,7 @@ def test_an_error_without_a_message_is_recorded_by_its_type(
 ) -> None:
     write_config(tmp_path)
     http = FakeHttp({README_URL: KeyError()})
-    report = generate(tmp_path, GeneratedSource.CODM, http=http)
+    report = generate(tmp_path, Source.CODM, http=http)
     assert (report["status"], report["error"]) == (Status.FAILED, "KeyError")
 
 
@@ -266,7 +264,7 @@ def test_two_committed_entries_at_one_project_fail_naming_both_ids(
     http = FakeHttp(
         {README_URL: TABLE + "| [A](https://github.com/owner/repo) | x |\n"}
     )
-    report = generate(tmp_path, GeneratedSource.CODM, http=http)
+    report = generate(tmp_path, Source.CODM, http=http)
     assert report["status"] == Status.FAILED
     assert "github.com/owner/repo" in report["error"]
     assert "a1b2c3d4e5f6" in report["error"]
@@ -680,10 +678,10 @@ def test_the_command_rejects_an_unknown_source() -> None:
     ("source", "upstream"),
     [
         (
-            GeneratedSource.CODM,
+            Source.CODM,
             FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"}),
         ),
-        (GeneratedSource.QUIVER, quiver_http([row("o/a")], [asset("o/a", "a.apk")])),
+        (Source.QUIVER, quiver_http([row("o/a")], [asset("o/a", "a.apk")])),
     ],
 )
 def test_generation_sends_no_credentials_when_a_token_is_set(
