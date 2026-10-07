@@ -649,6 +649,27 @@ def test_an_output_directory_that_cannot_be_prepared_fails_in_one_line(
     assert blocked.read_text() == "not a directory"
 
 
+def test_a_report_that_cannot_be_written_leaves_no_candidate(
+    workdir: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    write_text = Path.write_text
+
+    def failing(self: Path, *args: Any, **kwargs: Any) -> int:
+        if self.name == "report.json":
+            raise OSError("disk full")
+        return write_text(self, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "write_text", failing)
+    http = FakeHttp({README_URL: TABLE + "| [A](https://github.com/o/a) | x |\n"})
+    assert run_cli(monkeypatch, "codm", http) == 1
+    assert not candidate_path(workdir, "codm").exists()
+    error = capsys.readouterr().err
+    assert error.startswith("source generation failed: cannot write ")
+    assert "disk full" in error
+
+
 def test_the_command_rejects_an_unknown_source() -> None:
     with pytest.raises(SystemExit):
         cli.main(["generate-source", "rjny"])

@@ -143,9 +143,16 @@ def generate(
         report["status"] = Status.SUCCESS
     except Exception as error:  # noqa: BLE001 - the report records every failure
         report["error"] = str(error) or type(error).__name__
-    (output / "report.json").write_text(
-        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
-    )
+    try:
+        (output / "report.json").write_text(
+            json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+        )
+    except OSError as error:
+        # A candidate without its report would be published unexplained.
+        (output / "catalog.json").unlink(missing_ok=True)
+        report.pop("changes", None)
+        report["status"] = Status.FAILED
+        report["error"] = f"cannot write {output / 'report.json'}: {error}"
     return report
 
 
