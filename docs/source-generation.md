@@ -49,8 +49,11 @@ index is malformed. In each row, an absent `repositorySource` means GitHub, and
 forge names match without regard to case: `github` forms
 `https://github.com/<repository>`, where the repository is exactly an owner and
 a name, and `gitlab` forms `https://gitlab.com/<repository>`, with one or more
-namespaces and a project. A row naming another forge, or with a missing or
-invalid repository, is reported and skipped.
+namespaces and a project. Every path segment must be nonempty, neither `.` nor
+`..`, and hold only ASCII letters, digits, `_`, `.` and `-`, and the URL formed
+must be a repository of its forge, so its entry carries that forge's source
+type. A row naming another forge, or whose repository is missing, not a string
+or breaks these rules, is reported and skipped.
 
 ## Screening
 
@@ -94,8 +97,9 @@ of listing order, as a canonical catalog:
   case-insensitive order wins.
 - The author is the first path segment for a URL with an `overrideSource`, and
   empty otherwise.
-- Entries carry no categories and no settings; the build fills defaults for
-  GitHub, GitLab and HTML entries, and others keep exactly their own settings.
+- Entries carry no categories, and their settings are their source type's
+  defaults: GitHub or GitLab defaults, or none for an entry without a source
+  type.
 
 Per-app names and settings for generated entries are
 [overlay](composition.md#denials-and-patches) records in `config/overlay.json`,

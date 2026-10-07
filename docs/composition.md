@@ -53,7 +53,8 @@ source, entry and field identified. Composition policy in
 policy does not repair an invalid source record.
 
 Ingestion keeps any `overrideSource` string an entry declares; a non-string
-fails with the source and entry identified. An entry that declares none is
+fails with the source and entry identified, and an empty or whitespace-only
+string counts as no declaration. An entry that declares none is
 GitHub for a github.com repository and GitLab for a gitlab.com project, and
 otherwise has no source type, leaving detection to Obtainium. A URL declared
 GitLab is kept as written, self-hosted instances included. Rendering fills
