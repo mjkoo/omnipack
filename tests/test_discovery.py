@@ -235,8 +235,14 @@ def test_escaped_code_and_image_markers_hide_no_link() -> None:
 
 
 def test_a_code_span_in_link_text_keeps_its_text_as_the_name() -> None:
-    readme = TABLE + "| [`App`](https://github.com/a/a) | x |\n"
-    assert codm(readme) == [Listing("https://github.com/a/a", "App")]
+    readme = TABLE + (
+        "| [`App`](https://github.com/a/a) | x |\n"
+        "| [`Vec<T>` and `f(x)[0]`](https://github.com/b/b) | y |\n"
+    )
+    assert codm(readme) == [
+        Listing("https://github.com/a/a", "App"),
+        Listing("https://github.com/b/b", "Vec<T> and f(x)[0]"),
+    ]
 
 
 @pytest.mark.parametrize("marker", ["#1", "#######"])

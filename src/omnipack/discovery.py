@@ -130,6 +130,11 @@ _COMMENT = re.compile(r"<!--.*?-->")
 _ESCAPED = re.compile(r"\\([!-/:-@\[-`{-~])")
 # A literal backslash, hidden while matching so it escapes nothing after it.
 _BACKSLASH = "\ue000"
+# Characters a code span holds as plain text, hidden while matching so they
+# open no link, image or comment, and shown again in a name.
+_CODE_TEXT = "[]()<\\"
+_HIDE_CODE = str.maketrans({c: chr(0xE001 + i) for i, c in enumerate(_CODE_TEXT)})
+_SHOW_CODE = str.maketrans({chr(0xE001 + i): c for i, c in enumerate(_CODE_TEXT)})
 _DELIMITER_CELL = re.compile(r"\s*:?-+:?\s*")
 # A line opening another block ends a table: a heading, a blockquote, a list
 # item or a thematic break.
@@ -204,12 +209,13 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
 def _row_links(row: str) -> Iterator[Listing]:
     """Yield the links Markdown renders in a table row."""
     row = row.replace("\\\\", _BACKSLASH)
-    row = _CODE_SPAN.sub(lambda span: re.sub(r"[][()<>\\\ue000]", "", span[2]), row)
+    row = _CODE_SPAN.sub(lambda span: span[2].translate(_HIDE_CODE), row)
     # A badge image inside a link is decoration, not a project.
     row = _IMAGE.sub("", _COMMENT.sub("", row))
     for text, angled, bare in _LINK.findall(row):
         name = _ESCAPED.sub(r"\1", text).replace(_BACKSLASH, "\\")
-        yield Listing((angled or bare).replace(_BACKSLASH, "\\\\"), name)
+        url = (angled or bare).replace(_BACKSLASH, "\\\\")
+        yield Listing(url.translate(_SHOW_CODE), name.translate(_SHOW_CODE))
 
 
 def _is_delimiter(line: str) -> bool:
