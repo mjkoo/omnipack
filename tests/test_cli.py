@@ -1210,15 +1210,16 @@ def test_a_candidate_dropping_a_pinned_entry_fails_build_and_keeps_outputs(
 
 @pytest.mark.parametrize("source", ["codm", "quiver"])
 @pytest.mark.parametrize(
-    "catalog",
+    ("catalog", "error"),
     [
-        pytest.param(None, id="missing"),
-        pytest.param("not json", id="malformed"),
+        pytest.param(None, "", id="missing"),
+        pytest.param("not json", "", id="malformed"),
         pytest.param(
             _catalog(
                 _generated_entry("org.fixture.a", "https://github.com/fixture/one"),
                 _generated_entry("org.fixture.a", "https://github.com/fixture/other"),
             ),
+            "",
             id="repeated-id",
         ),
         pytest.param(
@@ -1226,12 +1227,17 @@ def test_a_candidate_dropping_a_pinned_entry_fails_build_and_keeps_outputs(
                 _generated_entry("org.fixture.a", "https://github.com/fixture/one"),
                 _generated_entry("org.fixture.b", "https://github.com/Fixture/One/"),
             ),
+            "several entries for github.com/fixture/one",
             id="repeated-url",
         ),
     ],
 )
 def test_broken_generated_catalog_fails_build_and_keeps_published_outputs(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, source: str, catalog: str | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    source: str,
+    catalog: str | None,
+    error: str,
 ) -> None:
     responses = write_fixture_pipeline(tmp_path)
     monkeypatch.setattr(HttpClient, "_urllib_transport", fixture_transport(responses))
@@ -1253,6 +1259,7 @@ def test_broken_generated_catalog_fails_build_and_keeps_published_outputs(
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert (report["status"], report["stage"]) == ("failed", "ingestion")
     assert report["error"].startswith(f"{source}: ")
+    assert error in report["error"]
     assert report["changes"] is None
     assert [path.read_bytes() for path in published] == before
 

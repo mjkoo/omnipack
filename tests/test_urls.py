@@ -30,6 +30,8 @@ from omnipack.urls import normalize_project_url
             "gitlab.com/groups/team/-/epics?x=1",
         ),
         ("https://gitlab.com/-/explore", "gitlab.com/-/explore"),
+        ("https://gitlab.com//groups/team?q=1", "gitlab.com//groups/team?q=1"),
+        ("https://gitlab.com/group?sort=name", "gitlab.com/group?sort=name"),
         ("https://example.com/o/repo/.git", "example.com/o/repo"),
     ],
 )

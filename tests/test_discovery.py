@@ -215,9 +215,13 @@ def test_codm_reads_only_the_links_markdown_renders() -> None:
     readme = TABLE + (
         "| `[A](https://github.com/a/a)` <!-- [B](https://github.com/b/b) --> "
         "\\[C](https://github.com/c/c) [D](https://github.com/d/d) | x |\n"
+        "| `<!--` [F](https://github.com/f/f) `-->` | z |\n"
         "<!--\n| [E](https://github.com/e/e) | y |\n-->\n"
     )
-    assert [listing.url for listing in codm(readme)] == ["https://github.com/d/d"]
+    assert [listing.url for listing in codm(readme)] == [
+        "https://github.com/d/d",
+        "https://github.com/f/f",
+    ]
 
 
 def test_escaped_code_and_image_markers_hide_no_link() -> None:

@@ -35,9 +35,7 @@ def project_url(url: str) -> str:
     if host == "github.com":
         path = "/".join(segments[:3])
         query = fragment = ""
-    elif (
-        host == "gitlab.com" and len(segments) > 1 and segments[1] not in GITLAB_ROUTES
-    ):
+    elif host == "gitlab.com" and _gitlab_project(segments):
         if "-" in segments:
             path = "/".join(segments[: segments.index("-")])
         query = fragment = ""
@@ -52,6 +50,13 @@ def project_url(url: str) -> str:
     if parsed.port is not None and parsed.port != _DEFAULT_PORTS.get(scheme or "https"):
         authority = f"{authority}:{parsed.port}"
     return urlunsplit((scheme, authority, path, query, fragment))
+
+
+def _gitlab_project(segments: list[str]) -> bool:
+    """Whether a gitlab.com path names a project: a namespace and a project,
+    not a site route."""
+    names = [segment for segment in segments if segment]
+    return len(names) >= 2 and names[0] not in GITLAB_ROUTES
 
 
 def normalize_project_url(url: str) -> str:

@@ -204,7 +204,7 @@ def _project_table_links(readme: bytes) -> Iterator[Listing]:
 def _row_links(row: str) -> Iterator[Listing]:
     """Yield the links Markdown renders in a table row."""
     row = row.replace("\\\\", _BACKSLASH)
-    row = _CODE_SPAN.sub(lambda span: re.sub(r"[][()\\\ue000]", "", span[2]), row)
+    row = _CODE_SPAN.sub(lambda span: re.sub(r"[][()<>\\\ue000]", "", span[2]), row)
     # A badge image inside a link is decoration, not a project.
     row = _IMAGE.sub("", _COMMENT.sub("", row))
     for text, angled, bare in _LINK.findall(row):

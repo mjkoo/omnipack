@@ -78,8 +78,9 @@ of listing order, as a canonical catalog:
   know it keep working.
 - Otherwise the URL is the reduced project URL (a GitHub deep link becomes the
   repository root and a gitlab.com link into a project's `/-/` routes becomes
-  the project, while a gitlab.com site page such as a group's and a link on any
-  other host keep their path; when several listings collapse to one URL, an
+  the project, while a gitlab.com site page (one starting with a reserved route
+  such as `groups` or `-`, or naming no project) and a link on any other host
+  keep their path; when several listings collapse to one URL, an
   `https` URL wins over an `http` one, then the smallest in code point order),
   and the id is an Obtainium placeholder: the first
   twelve hex characters of the SHA-256 of the normalized URL. Obtainium
@@ -147,7 +148,8 @@ report viewer and does not cover source generation.
 A run fails only when the source configuration is missing or malformed, when
 an input is unreadable or malformed, when the committed catalog is unreadable or
 malformed (including two entries at one normalized URL, which the error names
-with their ids, and a repeated id), or when the candidate would keep no entry.
+with their ids, and a repeated id), when the candidate would keep no entry, or
+when the candidate cannot be written.
 A missing committed catalog holds nothing, so every entry gets a placeholder
 id.
 A failed run writes only its report: no candidate survives from it or from an
