@@ -160,7 +160,7 @@ README.
 
 Run `uv run pack verify` (or `just verify`) to validate the committed packs,
 README catalog and local configuration without network access.
-Verification does not consult HTTP configuration or credentials. Unsupported
+Verification does not consult credentials. Unsupported
 arguments fail before verification and leave prior evidence intact. Use Obtainium
 to investigate source selection and version behavior.
 Verification leaves distribution files, README, configuration, and the build

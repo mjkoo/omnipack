@@ -29,8 +29,8 @@ already on disk still describes only the inputs an earlier completed run
 checked. Reports contain offline mode, verifier identity, observation times,
 status, contextual errors, nonfatal findings and SHA-256 fingerprints of both
 distribution files, the denylist, the overlay, composition policy and README.
-Missing and unreadable inputs are explicit. HTTP configuration and environment
-credentials are not consulted or fingerprinted.
+Missing and unreadable inputs are explicit. Environment credentials are not
+consulted or fingerprinted.
 
 Independent errors are collected across both variants. Verification exits zero
 only for a complete run without errors; report persistence failure also causes a

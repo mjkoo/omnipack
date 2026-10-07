@@ -77,13 +77,16 @@ of listing order, as a canonical catalog:
   URL are kept verbatim, so composition rules, pins and installed apps that
   know it keep working.
 - Otherwise the URL is the reduced project URL (a GitHub deep link becomes the
-  repository root, while a link on any other host keeps its path; when several
-  listings collapse to one URL, the smallest in code point order wins), and the id is an Obtainium placeholder: the first
+  repository root and a gitlab.com link into a project's `/-/` routes becomes
+  the project, while a gitlab.com site page such as a group's and a link on any
+  other host keep their path; when several listings collapse to one URL, an
+  `https` URL wins over an `http` one, then the smallest in code point order),
+  and the id is an Obtainium placeholder: the first
   twelve hex characters of the SHA-256 of the normalized URL. Obtainium
   replaces it with the APK's package id on first install.
 - `overrideSource` is GitHub for a github.com repository and GitLab for a
-  gitlab.com project; any other URL, a gitlab.com link into a project's `/-/`
-  routes included, leaves it unset, and Obtainium detects the source.
+  gitlab.com project; any other URL leaves it unset, and Obtainium detects the
+  source.
 - The name is the listing's name with trailing emoji and other symbols trimmed
   (punctuation, `+` and currency signs are kept), or the last URL path segment,
   or the host for a URL without a path, when no listing names it. When listings give several names, the first in
