@@ -169,6 +169,14 @@
     }
   },
   {
+    "id": "com.starfox.enhanced",
+    "url": "https://github.com/kandowontu2/starfox-enhanced",
+    "name": "Star Fox Enhanced",
+    "author": "kandowontu2",
+    "categories": [],
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "omnipack updates",
