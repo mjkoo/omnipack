@@ -184,6 +184,16 @@ after the main outcome. A verification or build report with any schema other
 than the current one requires regeneration with `uv run pack verify` or
 `uv run pack build` respectively.
 
+Run `uv run pack check-live` to check that each project in the committed packs
+still answers. It requests each distinct pack URL once, with the request headers
+the entry declares, and prints the URLs that answered 404 or 410 (unreachable)
+and those with any other failed outcome (inconclusive, with the reason). It
+exits nonzero when a URL is unreachable, the packs cannot be read, or the report
+cannot be written, and writes `.build/live-check/report.json` and `summary.md`
+on every run. It changes no committed file; see
+[source generation](source-generation.md#live-project-check) for acting on its
+findings.
+
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
 

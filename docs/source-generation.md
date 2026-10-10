@@ -359,3 +359,39 @@ Nightly pack publication remains independent of this workflow. It reads only
 the committed source catalogs on `main` and publishes
 `dist/single-screen.json`, `dist/dual-screen.json` and the generated
 interior of `README.md`; it never stages a catalog change.
+
+## Live project check
+
+The same **Reviewed source catalog** workflow also runs a read-only job,
+`live-check`, which runs `uv run --no-sync pack check-live` against `main`'s
+committed packs. Generation itself still inspects no project; this job requests
+each distinct pack URL once, with the request headers the entry declares (for
+example `User-Agent: Obtainium/1.0`), and inspects no release, asset or archive
+state. It holds only `contents: read`, checks out with
+`persist-credentials: false`, runs in its own non-canceling
+`omnipack-live-check` concurrency group without waiting on any source job, and
+is limited to 30 minutes, above the command's own 20-minute budget.
+
+A URL that answers 404 or 410 is unreachable and fails the run, so GitHub's
+failed-run notification reaches the owner. Packs that cannot be read also fail
+it. Any other outcome, such as a 403, a 429, a server error, a timeout or the
+URLs left unchecked when the budget runs out, is inconclusive: it is listed with
+its reason but does not fail the run. The run summary lists the unreachable and
+inconclusive URLs, or the error of a failed check, and the
+`live-check-report-<run id>` artifact keeps `.build/live-check/report.json` for
+14 days.
+
+The job changes no branch, PR or committed file. To drop a project that is gone,
+the owner confirms the URL by hand and then, in one commit, adds the deny record
+to `config/deny.json`, removes any overlay record or composition pin for that
+URL, and commits the packs and README rebuilt with `uv run pack build`. Because
+each run checks `main`'s packs afresh, the next run stops failing on that URL,
+as it does when the project answers again. An unreachable HTML-source URL may
+instead mean the project moved its downloads, which a corrected source or extras
+URL fixes.
+
+A host that redirects an anonymous request for a missing project to a sign-in
+page is detected only as far as that page's final status allows. When the page
+answers an error status the project is inconclusive (gitlab.com answers 403),
+so an inconclusive URL on such a host may be gone and is worth a look. When it
+answers 2xx the missing project is not detected at all.
