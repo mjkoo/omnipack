@@ -11,7 +11,7 @@ import json
 import time
 import urllib.error
 import urllib.request
-from collections.abc import Callable
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from email.message import Message
 from http.client import HTTPException, IncompleteRead
@@ -34,10 +34,18 @@ class HttpStatusError(HttpError):
 
 
 class TransientHttpError(HttpError):
-    """A request that still failed transiently after the client's retries."""
+    """A request that still failed transiently after the client's retries.
 
-    def __init__(self, url: str, attempts: int) -> None:
+    `status` is the last attempt's HTTP status when it got an error
+    response, otherwise None; `detail` is the last failure's own message.
+    """
+
+    def __init__(
+        self, url: str, attempts: int, *, status: int | None = None, detail: str = ""
+    ) -> None:
         self.url = url
+        self.status = status
+        self.detail = detail
         super().__init__(
             f"request to {redact_url(url)} failed after {attempts} attempts"
         )
@@ -85,9 +93,13 @@ class HttpClient:
         self.backoff = backoff
         self.sleep = sleep
 
-    def get(self, url: str) -> HttpResponse:
-        """Fetch one URL, retrying transient failures up to the configured bound."""
-        request = _build_request(url, user_agent=self.user_agent)
+    def get(self, url: str, headers: Mapping[str, str] | None = None) -> HttpResponse:
+        """Fetch one URL, retrying transient failures up to the configured bound.
+
+        `headers` are sent with the request and may replace the client's
+        default user agent.
+        """
+        request = _build_request(url, user_agent=self.user_agent, headers=headers)
         attempts = self.retries + 1
         for number in range(attempts):
             try:
@@ -98,7 +110,14 @@ class HttpClient:
                     if not _is_transient(error):
                         raise HttpStatusError(url, error.code, number + 1) from error
                 if number + 1 == attempts:
-                    raise TransientHttpError(url, number + 1) from error
+                    raise TransientHttpError(
+                        url,
+                        number + 1,
+                        status=error.code
+                        if isinstance(error, urllib.error.HTTPError)
+                        else None,
+                        detail=str(error) or type(error).__name__,
+                    ) from error
                 self.sleep(self.backoff * (2**number))
         raise AssertionError("request loop did not return or raise")
 
@@ -109,12 +128,18 @@ class HttpClient:
             return _complete_response(stream, stream.read())
 
 
-def _build_request(url: str, *, user_agent: str) -> urllib.request.Request:
+def _build_request(
+    url: str, *, user_agent: str, headers: Mapping[str, str] | None = None
+) -> urllib.request.Request:
     """Build a request that carries no credentials."""
     parsed = urlsplit(url)
     if parsed.username is not None or parsed.password is not None:
         raise ValueError("embedded URL credentials are not allowed")
-    return urllib.request.Request(url, headers={"User-Agent": user_agent})
+    # urllib normalizes header name case, so a given User-Agent of any
+    # spelling replaces the default.
+    return urllib.request.Request(
+        url, headers={"User-Agent": user_agent, **(headers or {})}
+    )
 
 
 def _complete_response(stream: Any, body: bytes) -> HttpResponse:

@@ -11,6 +11,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from omnipack.live_check import REPORT, SUMMARY
 from omnipack.source_registry import GENERATED
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
@@ -275,8 +276,9 @@ def test_sources_run_independent_complete_check_publish_chains():
     }
     assert caller["permissions"] == {}
     assert "concurrency" not in caller
-    assert set(caller["jobs"]) == set(GENERATED)
-    for source, job in caller["jobs"].items():
+    assert set(caller["jobs"]) == {*GENERATED, "live-check"}
+    for source in GENERATED:
+        job = caller["jobs"][source]
         assert job["uses"] == "./.github/workflows/source-maintenance.yml"
         assert job["with"] == {"source": source}
         assert job["concurrency"] == {
@@ -289,6 +291,59 @@ def test_sources_run_independent_complete_check_publish_chains():
             job["if"]
             == "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
         )
+
+
+def test_live_check_job_reads_only_and_reports_its_findings():
+    job = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())["jobs"][
+        "live-check"
+    ]
+    assert (
+        job["if"]
+        == "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
+    )
+    assert job["permissions"] == {"contents": "read"}
+    assert job["concurrency"] == {
+        "group": "omnipack-live-check",
+        "cancel-in-progress": False,
+    }
+    assert job["timeout-minutes"] == 30
+    assert "needs" not in job
+    assert "uses" not in job
+    assert "continue-on-error" not in job
+
+    (checkout,) = action_steps(job, "actions/checkout")
+    assert checkout["with"]["persist-credentials"] is False
+    (setup_uv,) = action_steps(job, "astral-sh/setup-uv")
+    assert setup_uv["with"]["enable-cache"] is False
+    command_step(job, "uv", "sync", "--locked")
+    check = command_step(job, "uv", "run", "--no-sync", "pack", "check-live")
+    assert "if" not in check
+    assert "continue-on-error" not in check
+
+    summary = next(s for s in job["steps"] if "GITHUB_STEP_SUMMARY" in s.get("run", ""))
+    assert summary["if"] == "always()"
+    assert str(SUMMARY) in summary["run"]
+
+    (upload,) = action_steps(job, "actions/upload-artifact")
+    assert upload["if"] == "always()"
+    assert upload["with"]["path"] == str(REPORT)
+    assert upload["with"]["if-no-files-found"] == "ignore"
+    assert upload["with"]["retention-days"] == 14
+    steps = job["steps"]
+    assert steps.index(check) < steps.index(summary)
+    assert steps.index(check) < steps.index(upload)
+
+    # Nothing in the job can change a branch, a PR or a committed file.
+    assert all("env" not in step for step in job["steps"])
+    runs = " ".join(step.get("run", "") for step in job["steps"])
+    for word in ("git", "gh ", "GITHUB_TOKEN", "github.token"):
+        assert word not in runs
+    assert {step.get("uses", "").split("@")[0] for step in job["steps"]} == {
+        "actions/checkout",
+        "astral-sh/setup-uv",
+        "actions/upload-artifact",
+        "",
+    }
 
 
 def test_source_artifacts_and_actual_validation_outcomes_are_scoped():

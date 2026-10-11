@@ -37,3 +37,50 @@ jobs:
     uses: ./.github/workflows/source-maintenance.yml # zizmor: ignore[self-repository]
     with:
       source: quiver
+
+  live-check:
+    name: Check that pack projects answer
+    if: github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
+    permissions:
+      contents: read
+    concurrency:
+      group: omnipack-live-check
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    # Above the command's own 20-minute budget, so its report is written
+    # before the job is stopped.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@c18668ad3cf93ea998bef934396af7bb5c839dc7 # v10.2.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14"
+          # A cache written here could be restored into a later run.
+          enable-cache: false
+
+      - name: Sync locked environment
+        run: uv sync --locked
+
+      - name: Check pack projects
+        run: uv run --no-sync pack check-live
+
+      - name: Report the check
+        if: always()
+        run: |
+          if [ -f .build/live-check/summary.md ]; then
+            cat .build/live-check/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the check report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: live-check-report-${{ github.run_id }}
+          path: .build/live-check/report.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true

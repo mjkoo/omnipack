@@ -15,6 +15,7 @@ from omnipack.http import (
     HttpError,
     HttpResponse,
     HttpStatusError,
+    TransientHttpError,
     redact_url,
 )
 
@@ -135,6 +136,24 @@ def test_exhausted_retries_raise_http_error() -> None:
         client.get("https://example.com/data")
 
 
+def test_exhausted_retries_name_the_last_attempts_status_and_detail() -> None:
+    url = "https://example.com/data"
+    rate_limited = urllib.error.HTTPError(url, 429, "limited", Message(), None)
+    limited = RecordingTransport([TimeoutError("timed out"), rate_limited])
+    timed_out = RecordingTransport([rate_limited, TimeoutError("timed out")])
+
+    with pytest.raises(TransientHttpError) as last_limited:
+        HttpClient(retries=1, sleep=lambda _: None, transport=limited).get(url)
+    with pytest.raises(TransientHttpError) as last_timed_out:
+        HttpClient(retries=1, sleep=lambda _: None, transport=timed_out).get(url)
+
+    assert last_limited.value.status == 429
+    assert last_limited.value.detail == "HTTP Error 429: limited"
+    assert last_timed_out.value.status is None
+    assert last_timed_out.value.detail == "timed out"
+    assert "failed after 2 attempts" in str(last_timed_out.value)
+
+
 def test_rate_limit_retries_but_nontransient_http_error_does_not() -> None:
     rate_limited = urllib.error.HTTPError(
         "https://example.com", 429, "limited", Message(), None
@@ -211,3 +230,18 @@ def test_every_nontransient_http_status_is_typed(status: int) -> None:
 
     assert caught.value.status == status
     assert len(transport.requests) == 1
+
+
+def test_given_headers_are_sent_and_may_replace_the_default_user_agent() -> None:
+    transport = RecordingTransport([response(), response(), response()])
+    client = HttpClient(transport=transport)
+
+    client.get("https://example.com/data")
+    client.get("https://example.com/data", headers={"user-agent": "Obtainium/1.0"})
+    client.get("https://example.com/data", headers={"Referer": "https://example.com"})
+
+    default, replaced, added = transport.requests
+    assert default.get_header("User-agent") == "omnipack/0.1"
+    assert replaced.get_header("User-agent") == "Obtainium/1.0"
+    assert added.get_header("User-agent") == "omnipack/0.1"
+    assert added.get_header("Referer") == "https://example.com"

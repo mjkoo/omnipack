@@ -1,4 +1,4 @@
-"""`pack` command-line entry point: build, verify, report."""
+"""`pack` command-line entry point: build, verify, report, generate, check."""
 
 from __future__ import annotations
 
@@ -10,6 +10,7 @@ from pathlib import Path
 from omnipack.build import BuildInputs, previous_entries, publish_build
 from omnipack.generation import generate
 from omnipack.http import HttpClient
+from omnipack.live_check import check_live, write_live_report
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App, Source
 from omnipack.report import format_reports, write_report
@@ -132,6 +133,26 @@ def generate_source(args: argparse.Namespace) -> int:
     return 0
 
 
+def check_live_command(_args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    result = check_live(root)
+    # Findings print first so a report that cannot be written loses none.
+    failed = result["status"] == Status.FAILED
+    if failed:
+        print(f"check-live failed: {result.get('error')}", file=sys.stderr)
+    else:
+        for item in result["unreachable"]:
+            print(f"unreachable: {item['url']} (HTTP {item['status']})")
+        for item in result["inconclusive"]:
+            print(f"inconclusive: {item['url']}: {item['reason']}")
+    try:
+        write_live_report(root, result)
+    except (OSError, ValueError) as error:
+        print(f"check-live failed: cannot write report: {error}", file=sys.stderr)
+        return 1
+    return 1 if failed or result["unreachable"] else 0
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pack")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -154,6 +175,11 @@ def _parser() -> argparse.ArgumentParser:
     )
     generate_parser.add_argument("source", type=Source, choices=list(GENERATED))
     generate_parser.set_defaults(func=generate_source)
+
+    check_live_parser = subparsers.add_parser(
+        "check-live", help="report pack projects that no longer answer"
+    )
+    check_live_parser.set_defaults(func=check_live_command)
 
     return parser
 
