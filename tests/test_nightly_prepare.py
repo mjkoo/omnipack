@@ -10,15 +10,18 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import UTC, datetime
 from pathlib import Path
+from typing import get_args
 
 import pytest
 
 from scripts import nightly as nightly_module
+from scripts.alerts import PREPARE_STAGE_SLUGS, Owner, emit, valid_key
 from scripts.nightly import (
     ALLOWED_PATHS,
     BUILD_COMMAND,
     STRUCTURAL_VERIFY_COMMAND,
     PrepareCommandResult,
+    PrepareStage,
     PrepareSubprocess,
     run_prepare,
 )
@@ -644,3 +647,36 @@ def test_prepare_cli_writes_the_failing_stage_and_stages_on_failure(
     assert (tmp_path / "output.txt").read_text() == (
         "stage=build\nstages=checkout,build\n"
     )
+
+
+def test_alert_stage_table_covers_exactly_the_prepare_stages() -> None:
+    stages = set(get_args(PrepareStage)) - {"complete"}
+
+    assert set(PREPARE_STAGE_SLUGS) == stages
+    for slug in PREPARE_STAGE_SLUGS.values():
+        assert valid_key(Owner.NIGHTLY_PREPARE, f"nightly/prepare/{slug}")
+    assert len(set(PREPARE_STAGE_SLUGS.values())) == len(PREPARE_STAGE_SLUGS)
+
+
+def test_emitted_scope_follows_the_stages_prepare_reports(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    process = ScriptedProcess(root)
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+    file = emit(
+        Owner.NIGHTLY_PREPARE,
+        {
+            "JOB_STATUS": "success",
+            "PREPARE_STAGE": outcome.stage,
+            "PREPARE_STAGES": ",".join(outcome.started),
+        },
+        tmp_path / "no-report.json",
+    )
+
+    assert file.scope == tuple(
+        f"nightly/prepare/{PREPARE_STAGE_SLUGS[stage]}" for stage in outcome.started
+    )
+    assert len(file.scope) == len(outcome.started)

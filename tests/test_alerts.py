@@ -17,6 +17,7 @@ from scripts import alerts as alerts_module
 from scripts.alerts import (
     BODY_LIMIT,
     KEY_LIMIT,
+    PREPARE_STAGE_SLUGS,
     TITLE_LIMIT,
     Finding,
     FindingsFile,
@@ -27,6 +28,7 @@ from scripts.alerts import (
     build_body,
     early_failure_finding,
     early_failure_key,
+    emit,
     encode_subject,
     marker_line,
     parse_findings,
@@ -975,3 +977,806 @@ def test_cli_reconciles_producers_with_results_from_the_environment(
         summary_path.read_text()
         == "alerts: 1 opened, 0 updated, 0 reopened, 0 closed, 0 mute cleared\n"
     )
+
+
+# --- emitters --------------------------------------------------------------
+
+STAGES = "checkout,build,allowlist,README boundary,verify,drift after verify"
+HARMLESS_RUN_CONTEXT = {"GITHUB_RUN_ID": "7", "GITHUB_SHA": "a" * 40}
+
+
+def _emit(
+    owner: Owner,
+    status: str = "success",
+    *,
+    report: object | None = None,
+    tmp_path: Path | None = None,
+    **env: str,
+) -> FindingsFile:
+    """The emitted file, checked to survive validation unchanged."""
+    report_path = None
+    if report is not None:
+        assert tmp_path is not None
+        report_path = tmp_path / "report.json"
+        report_path.write_text(json.dumps(report))
+    elif tmp_path is not None:
+        report_path = tmp_path / "absent-report.json"
+    file = emit(owner, {"JOB_STATUS": status, **env}, report_path)
+    assert parse_findings(owner, file.to_json()) == file
+    return file
+
+
+def _keys(file: FindingsFile) -> list[str]:
+    return [finding.key for finding in file.findings]
+
+
+def _early(owner: Owner) -> list[str]:
+    return [early_failure_key(owner)]
+
+
+def _build_report(status: str = "success", **lists: list) -> dict:
+    return {
+        "status": status,
+        "uncategorizedFamilies": [],
+        "staleExclusions": [],
+        "staleCategoryAssignments": [],
+        **lists,
+    }
+
+
+def test_emit_requires_the_job_status(tmp_path: Path) -> None:
+    with pytest.raises(SystemExit, match="JOB_STATUS is required"):
+        emit(Owner.NIGHTLY_PUBLISH, {})
+
+
+def test_successful_prepare_with_an_empty_report_raises_nothing(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        report=_build_report(),
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert file.findings == ()
+    assert file.scope == (
+        "nightly/prepare/checkout",
+        "nightly/prepare/build",
+        "nightly/prepare/allowlist",
+        "nightly/prepare/readme-boundary",
+        "nightly/prepare/verify",
+        "nightly/prepare/drift-after-verify",
+        "build/",
+    )
+    assert "nightly/prepare/commit" not in file.scope
+    assert "nightly/prepare/bundle" not in file.scope
+
+
+def test_prepare_failing_at_build_leaves_later_stages_out_of_scope(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        tmp_path=tmp_path,
+        PREPARE_STAGE="build",
+        PREPARE_STAGES="checkout,build",
+    )
+
+    assert _keys(file) == ["nightly/prepare/build"]
+    assert file.scope == ("nightly/prepare/checkout", "nightly/prepare/build")
+    assert file.findings[0].title == "Nightly preparation failed at the build stage"
+
+
+def test_stage_with_spaces_maps_through_its_slug(tmp_path: Path) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        tmp_path=tmp_path,
+        PREPARE_STAGE="README boundary",
+        PREPARE_STAGES="checkout,build,allowlist,README boundary",
+    )
+
+    assert _keys(file) == ["nightly/prepare/readme-boundary"]
+    assert "nightly/prepare/readme-boundary" in file.scope
+
+
+def test_failure_removing_stale_reports_leaves_checkout_out_of_scope(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        tmp_path=tmp_path,
+        PREPARE_STAGE="build",
+        PREPARE_STAGES="build",
+    )
+
+    assert file.scope == ("nightly/prepare/build",)
+    assert _keys(file) == ["nightly/prepare/build"]
+
+
+def test_build_warnings_are_one_finding_per_item_and_scope_the_build_keys(
+    tmp_path: Path,
+) -> None:
+    report = _build_report(
+        uncategorizedFamilies=[
+            {"family": "Alpha", "variants": ["single-screen"]},
+            {"family": "Beta", "variants": ["single-screen", "dual-screen"]},
+        ],
+        staleExclusions=[{"url": "https://example.com/old", "reason": "gone"}],
+        staleCategoryAssignments=["Some Key"],
+    )
+
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [
+        "build/uncategorized/Alpha",
+        "build/uncategorized/Beta",
+        "build/stale-denial/https://example.com/old",
+        "build/stale-category/Some%20Key",
+    ]
+    assert "build/" in file.scope
+    assert file.findings[1].details == (
+        "Family: Beta",
+        "Variants: single-screen, dual-screen",
+    )
+
+
+def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
+    tmp_path: Path,
+) -> None:
+    failed = _build_report(
+        "failed", uncategorizedFamilies=[{"family": "Alpha", "variants": []}]
+    )
+    empty = _build_report("failed")
+
+    raising = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        report=failed,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="build",
+        PREPARE_STAGES="checkout,build",
+    )
+    quiet = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        report=empty,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="build",
+        PREPARE_STAGES="checkout,build",
+    )
+
+    assert "build/uncategorized/Alpha" in _keys(raising)
+    assert not any(entry.startswith("build/") for entry in raising.scope)
+    assert not any(entry.startswith("build/") for entry in quiet.scope)
+
+
+def test_missing_or_malformed_build_report_contributes_nothing(
+    tmp_path: Path,
+) -> None:
+    env = {"PREPARE_STAGE": "complete", "PREPARE_STAGES": STAGES}
+    missing = _emit(Owner.NIGHTLY_PREPARE, tmp_path=tmp_path, **env)
+    (tmp_path / "report.json").write_text("[not an object")
+    malformed = emit(
+        Owner.NIGHTLY_PREPARE,
+        {"JOB_STATUS": "success", **env},
+        tmp_path / "report.json",
+    )
+
+    assert "build/" not in missing.scope
+    assert "build/" not in malformed.scope
+    assert missing.findings == malformed.findings == ()
+
+
+def test_setup_failure_before_prepare_raises_the_early_failure_only(
+    tmp_path: Path,
+) -> None:
+    file = _emit(Owner.NIGHTLY_PREPARE, "failure", tmp_path=tmp_path)
+
+    assert _keys(file) == _early(Owner.NIGHTLY_PREPARE)
+    assert file.scope == ()
+
+
+def test_upload_failure_after_a_successful_prepare_raises_the_early_failure(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        report=_build_report(),
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == _early(Owner.NIGHTLY_PREPARE)
+    assert "nightly/prepare/verify" in file.scope
+
+
+def test_a_failed_stage_accounts_for_the_failed_job(tmp_path: Path) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        tmp_path=tmp_path,
+        PREPARE_STAGE="verify",
+        PREPARE_STAGES="checkout,build,allowlist,README boundary,verify",
+    )
+
+    assert early_failure_key(Owner.NIGHTLY_PREPARE) not in _keys(file)
+
+
+def test_unrecognized_stage_names_contribute_nothing(tmp_path: Path) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        "failure",
+        tmp_path=tmp_path,
+        PREPARE_STAGE="reticulate splines",
+        PREPARE_STAGES="checkout,../escape,reticulate splines",
+    )
+
+    assert file.scope == ("nightly/prepare/checkout",)
+    assert _keys(file) == _early(Owner.NIGHTLY_PREPARE)
+
+
+@pytest.mark.parametrize("owner", list(Owner))
+def test_cancelled_job_yields_exactly_the_early_failure(
+    owner: Owner, tmp_path: Path
+) -> None:
+    report = {
+        "status": "success",
+        "unreachable": [{"url": "https://x/y", "status": 404}],
+    }
+    file = _emit(
+        owner,
+        "cancelled",
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="build",
+        PREPARE_STAGES="checkout,build",
+        PUSH_OUTCOME="failed",
+        RELEASE_OUTCOME="ok",
+        PUBLISH_OUTCOME="failed",
+        GENERATION_RESULT="success",
+        STAGING_RESULT="failure",
+        TESTS_RESULT="failure",
+        CHECK_RESULT="failure",
+        CHANGED="false",
+    )
+
+    assert file == FindingsFile(owner, (), (), (early_failure_finding(owner),))
+
+
+def test_nightly_push_and_release_are_scoped_when_ok_or_failed() -> None:
+    file = _emit(
+        Owner.NIGHTLY_PUBLISH, "failure", PUSH_OUTCOME="ok", RELEASE_OUTCOME="failed"
+    )
+
+    assert file.scope == ("nightly/publish/push", "nightly/publish/release")
+    assert _keys(file) == ["nightly/publish/release"]
+
+
+def test_main_advanced_raises_nothing_and_leaves_its_key_out_of_scope() -> None:
+    file = _emit(Owner.NIGHTLY_PUBLISH, "failure", PUSH_OUTCOME="main-advanced")
+
+    assert file.findings == ()
+    assert file.scope == ()
+
+
+def test_release_main_advanced_after_an_ok_push_scopes_only_the_push() -> None:
+    file = _emit(
+        Owner.NIGHTLY_PUBLISH,
+        "failure",
+        PUSH_OUTCOME="ok",
+        RELEASE_OUTCOME="main-advanced",
+    )
+
+    assert file.scope == ("nightly/publish/push",)
+    assert file.findings == ()
+
+
+def test_release_ok_from_a_new_revision_scopes_the_release_key() -> None:
+    file = _emit(Owner.NIGHTLY_PUBLISH, PUSH_OUTCOME="ok", RELEASE_OUTCOME="ok")
+
+    assert "nightly/publish/release" in file.scope
+    assert file.findings == ()
+
+
+@pytest.mark.parametrize(
+    "owner", [Owner.NIGHTLY_PUBLISH, Owner.CODM_PUBLISH, Owner.QUIVER_PUBLISH]
+)
+def test_failed_base_guard_in_a_write_job_raises_the_early_failure(
+    owner: Owner,
+) -> None:
+    file = _emit(owner, "failure")
+
+    assert _keys(file) == _early(owner)
+    assert file.scope == ()
+
+
+def test_skipped_publish_steps_after_a_successful_job_raise_nothing() -> None:
+    file = _emit(Owner.CODM_PUBLISH)
+
+    assert file == FindingsFile(Owner.CODM_PUBLISH)
+
+
+@pytest.mark.parametrize(
+    ("owner", "source"),
+    [(Owner.CODM_PUBLISH, "codm"), (Owner.QUIVER_PUBLISH, "quiver")],
+)
+def test_failed_source_publication_raises_the_proposal_finding(
+    owner: Owner, source: str
+) -> None:
+    file = _emit(owner, "failure", PUBLISH_OUTCOME="failed")
+
+    assert _keys(file) == [f"{source}/publish/proposal"]
+    assert file.scope == (f"{source}/publish/proposal",)
+    assert source in file.findings[0].title
+
+
+def test_source_publication_refused_as_main_advanced_raises_nothing() -> None:
+    file = _emit(Owner.CODM_PUBLISH, "failure", PUBLISH_OUTCOME="main-advanced")
+
+    assert file.findings == ()
+    assert file.scope == ()
+
+
+def test_candidate_failing_verification_raises_the_verify_finding() -> None:
+    file = _emit(
+        Owner.CODM_CHECK,
+        "failure",
+        GENERATION_RESULT="success",
+        STAGING_RESULT="success",
+        TESTS_RESULT="success",
+        BUILD_RESULT="success",
+        VERIFY_RESULT="failure",
+        GUARD_RESULT="skipped",
+        CHANGED="true",
+    )
+
+    assert _keys(file) == ["codm/check/verify"]
+    assert file.scope == (
+        "codm/check/generation",
+        "codm/check/stage",
+        "codm/check/tests",
+        "codm/check/build",
+        "codm/check/verify",
+    )
+    assert "codm/check/guard" not in file.scope
+
+
+def test_generation_failing_leaves_later_steps_out_of_scope() -> None:
+    file = _emit(
+        Owner.QUIVER_CHECK,
+        "failure",
+        GENERATION_RESULT="failure",
+        STAGING_RESULT="skipped",
+        TESTS_RESULT="skipped",
+        BUILD_RESULT="skipped",
+        VERIFY_RESULT="skipped",
+        GUARD_RESULT="skipped",
+    )
+
+    assert _keys(file) == ["quiver/check/generation"]
+    assert file.scope == ("quiver/check/generation",)
+
+
+def test_unchanged_candidate_after_successful_staging_re_checks_the_skipped_steps() -> (
+    None
+):
+    file = _emit(
+        Owner.CODM_CHECK,
+        GENERATION_RESULT="success",
+        STAGING_RESULT="success",
+        TESTS_RESULT="skipped",
+        BUILD_RESULT="skipped",
+        VERIFY_RESULT="skipped",
+        GUARD_RESULT="skipped",
+        CHANGED="false",
+    )
+
+    assert file.findings == ()
+    assert file.scope == tuple(
+        f"codm/check/{slug}"
+        for slug in ("generation", "stage", "tests", "build", "verify", "guard")
+    )
+
+
+def test_steps_skipped_after_a_failed_staging_are_not_re_checked() -> None:
+    file = _emit(
+        Owner.CODM_CHECK,
+        "failure",
+        GENERATION_RESULT="success",
+        STAGING_RESULT="failure",
+        TESTS_RESULT="skipped",
+        BUILD_RESULT="skipped",
+        VERIFY_RESULT="skipped",
+        GUARD_RESULT="skipped",
+        CHANGED="",
+    )
+
+    assert file.scope == ("codm/check/generation", "codm/check/stage")
+
+
+def test_check_setup_failure_and_upload_failure_raise_the_early_failure() -> None:
+    setup = _emit(Owner.CODM_CHECK, "failure")
+    upload = _emit(
+        Owner.CODM_CHECK,
+        "failure",
+        GENERATION_RESULT="success",
+        STAGING_RESULT="success",
+        CHANGED="false",
+        TESTS_RESULT="skipped",
+        BUILD_RESULT="skipped",
+        VERIFY_RESULT="skipped",
+        GUARD_RESULT="skipped",
+    )
+
+    assert _keys(setup) == _early(Owner.CODM_CHECK)
+    assert setup.scope == ()
+    assert _keys(upload) == _early(Owner.CODM_CHECK)
+    assert "codm/check/guard" in upload.scope
+
+
+def test_unrecognized_step_results_count_for_nothing() -> None:
+    file = _emit(Owner.CODM_CHECK, GENERATION_RESULT="weird", TESTS_RESULT="")
+
+    assert file == FindingsFile(Owner.CODM_CHECK)
+
+
+LIVE_ENV = {"CHECK_RESULT": "failure"}
+
+
+def _live_report(**overrides: object) -> dict:
+    return {"status": "success", "unreachable": [], "inconclusive": [], **overrides}
+
+
+def test_live_check_outcomes_raise_findings_for_404_and_403_only(
+    tmp_path: Path,
+) -> None:
+    report = _live_report(
+        unreachable=[{"url": "https://a.example/gone", "status": 404}],
+        inconclusive=[
+            {"url": "https://b.example/blocked", "reason": "HTTP 403", "status": 403},
+            {"url": "https://c.example/limited", "reason": "HTTP 429"},
+            {"url": "https://d.example/slow", "reason": "timed out"},
+        ],
+    )
+
+    file = _emit(
+        Owner.LIVE_CHECK, "failure", report=report, tmp_path=tmp_path, **LIVE_ENV
+    )
+
+    assert _keys(file) == [
+        "live-check/gone/https://a.example/gone",
+        "live-check/status/https://b.example/blocked",
+    ]
+    assert file.scope == ("live-check/read", "live-check/gone/", "live-check/status/")
+    assert file.unchecked == (
+        "live-check/gone/https://c.example/limited",
+        "live-check/status/https://c.example/limited",
+        "live-check/gone/https://d.example/slow",
+        "live-check/status/https://d.example/slow",
+    )
+
+
+def test_budget_spent_urls_are_unchecked(tmp_path: Path) -> None:
+    report = _live_report(
+        inconclusive=[
+            {"url": "https://a.example/x", "reason": "not checked: time budget spent"}
+        ]
+    )
+
+    file = _emit(
+        Owner.LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success"
+    )
+
+    assert file.findings == ()
+    assert "live-check/gone/https://a.example/x" in file.unchecked
+    assert "live-check/status/https://a.example/x" in file.unchecked
+
+
+def test_a_url_absent_from_the_report_falls_in_scope(tmp_path: Path) -> None:
+    file = _emit(
+        Owner.LIVE_CHECK,
+        report=_live_report(),
+        tmp_path=tmp_path,
+        CHECK_RESULT="success",
+    )
+
+    assert alerts_module._in_scope(
+        "live-check/gone/https://removed.example/x", file.scope
+    )
+    assert file.unchecked == ()
+
+
+def test_unreadable_packs_raise_the_read_finding_and_scope_only_it(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.LIVE_CHECK,
+        "failure",
+        report={"status": "failed", "error": "pack single-screen.json is unreadable"},
+        tmp_path=tmp_path,
+        **LIVE_ENV,
+    )
+
+    assert _keys(file) == ["live-check/read"]
+    assert file.scope == ("live-check/read",)
+
+
+def test_a_successful_read_scopes_the_read_key_so_a_stale_issue_closes(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.LIVE_CHECK,
+        report=_live_report(),
+        tmp_path=tmp_path,
+        CHECK_RESULT="success",
+    )
+
+    assert "live-check/read" in file.scope
+
+
+def test_live_check_report_is_ignored_when_the_check_step_did_not_run(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.LIVE_CHECK,
+        "failure",
+        report=_live_report(unreachable=[{"url": "https://stale/x", "status": 404}]),
+        tmp_path=tmp_path,
+        CHECK_RESULT="skipped",
+    )
+
+    assert _keys(file) == _early(Owner.LIVE_CHECK)
+    assert file.scope == ()
+
+
+def test_live_check_without_a_report_after_a_failed_step_raises_the_early_failure(
+    tmp_path: Path,
+) -> None:
+    file = _emit(Owner.LIVE_CHECK, "failure", tmp_path=tmp_path, **LIVE_ENV)
+
+    assert _keys(file) == _early(Owner.LIVE_CHECK)
+    assert "live-check/read" not in file.scope
+
+
+def test_live_check_with_a_gone_url_does_not_add_the_early_failure(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.LIVE_CHECK,
+        "failure",
+        report=_live_report(unreachable=[{"url": "https://a/b", "status": 410}]),
+        tmp_path=tmp_path,
+        **LIVE_ENV,
+    )
+
+    assert early_failure_key(Owner.LIVE_CHECK) not in _keys(file)
+
+
+# --- emitter keys, titles and determinism ----------------------------------
+
+
+def test_query_bearing_url_and_family_key_validly_and_round_trip_to_one_issue(
+    tmp_path: Path,
+) -> None:
+    url = "https://dolphin-emu.org/download/?ref=btn&x=%20"
+    live = _emit(
+        Owner.LIVE_CHECK,
+        report=_live_report(unreachable=[{"url": url, "status": 404}]),
+        tmp_path=tmp_path,
+        CHECK_RESULT="failure",
+    )
+    prepare = _emit(
+        Owner.NIGHTLY_PREPARE,
+        report=_build_report(
+            uncategorizedFamilies=[{"family": "Ünï / Cödé?", "variants": []}]
+        ),
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert live.findings[0].key == (
+        "live-check/gone/https://dolphin-emu.org/download/%3Fref%3Dbtn%26x%3D%2520"
+    )
+    path = tmp_path / "live.json"
+    path.write_text(live.to_json())
+    first = _gh()
+    _run(first, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS), url=RUN_1)
+    (body,) = _bodies(first, "create")
+    second = _gh(
+        [
+            {
+                "number": 4,
+                "title": live.findings[0].title,
+                "body": body,
+                "state": "open",
+                "state_reason": None,
+            }
+        ]
+    )
+    _run(second, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS), url=RUN_2)
+    assert _verbs(second) == []
+    assert prepare.findings[0].key.startswith("build/uncategorized/")
+
+
+def test_overlong_url_and_family_still_yield_a_valid_file_keeping_other_findings(
+    tmp_path: Path,
+) -> None:
+    long_url = "https://example.com/" + "a/b?" * 2000
+    long_family = "F" * 5000
+    live = _emit(
+        Owner.LIVE_CHECK,
+        report=_live_report(
+            unreachable=[
+                {"url": long_url, "status": 404},
+                {"url": "https://ok.example/gone", "status": 410},
+            ]
+        ),
+        tmp_path=tmp_path,
+        CHECK_RESULT="failure",
+    )
+    prepare = _emit(
+        Owner.NIGHTLY_PREPARE,
+        report=_build_report(
+            uncategorizedFamilies=[
+                {"family": long_family, "variants": []},
+                {"family": "Short", "variants": []},
+            ]
+        ),
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert len(live.findings) == 2
+    assert "live-check/gone/https://ok.example/gone" in _keys(live)
+    assert all(len(f.key) <= KEY_LIMIT for f in live.findings + prepare.findings)
+    assert all(len(f.title) <= TITLE_LIMIT for f in live.findings + prepare.findings)
+    assert "build/uncategorized/Short" in _keys(prepare)
+    assert len(prepare.findings) == 2
+
+
+def test_multiline_and_padded_subjects_give_one_line_trimmed_titles(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        Owner.NIGHTLY_PREPARE,
+        report=_build_report(
+            uncategorizedFamilies=[
+                {"family": "  two\nlines\r\n ", "variants": []},
+                {"family": "", "variants": []},
+                {"family": "x" * 400, "variants": []},
+            ]
+        ),
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert file.findings[0].title == "Family has no category: two lines"
+    assert file.findings[1].title == "Family has no category:"
+    assert file.findings[2].title.endswith("…")
+    assert all(f.title == f.title.strip() for f in file.findings)
+
+
+def test_findings_carry_no_per_run_values(tmp_path: Path) -> None:
+    def both(**context: str) -> list[FindingsFile]:
+        live = _live_report(
+            unreachable=[{"url": "https://a.example/gone", "status": 404}]
+        )
+        build = _build_report(
+            uncategorizedFamilies=[{"family": "Alpha", "variants": ["single-screen"]}]
+        )
+        return [
+            _emit(
+                Owner.LIVE_CHECK,
+                "failure",
+                report=live,
+                tmp_path=tmp_path,
+                CHECK_RESULT="failure",
+                **context,
+            ),
+            _emit(
+                Owner.NIGHTLY_PREPARE,
+                "failure",
+                report=build,
+                tmp_path=tmp_path,
+                PREPARE_STAGE="verify",
+                PREPARE_STAGES="checkout,build,allowlist,README boundary,verify",
+                **context,
+            ),
+            emit(
+                Owner.CODM_CHECK,
+                {"JOB_STATUS": "failure", "GENERATION_RESULT": "failure", **context},
+            ),
+            emit(
+                Owner.NIGHTLY_PUBLISH,
+                {"JOB_STATUS": "failure", "PUSH_OUTCOME": "failed", **context},
+            ),
+            emit(Owner.QUIVER_PUBLISH, {"JOB_STATUS": "failure", **context}),
+        ]
+
+    first = both(**HARMLESS_RUN_CONTEXT)
+    second = both(
+        GITHUB_RUN_ID="8",
+        GITHUB_SHA="b" * 40,
+        BASE_SHA="c" * 40,
+        CANDIDATE_SHA="d" * 40,
+        GITHUB_RUN_ATTEMPT="3",
+    )
+
+    assert first == second
+    for file in first:
+        assert "a" * 40 not in file.to_json()
+
+
+def test_cli_emit_writes_a_file_reconcile_accepts(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    output = tmp_path / "nested" / "findings.json"
+    monkeypatch.setenv("JOB_STATUS", "failure")
+    monkeypatch.setenv("PUSH_OUTCOME", "failed")
+
+    exit_code = alerts_module.main(["emit", "nightly-publish", "--output", str(output)])
+
+    assert exit_code == 0
+    parsed = parse_findings(Owner.NIGHTLY_PUBLISH, output.read_text())
+    assert parsed is not None
+    assert [f.key for f in parsed.findings] == ["nightly/publish/push"]
+    assert not output.with_name("findings.json.partial").exists()
+
+
+def test_cli_emit_reports_a_file_it_cannot_write(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    blocker = tmp_path / "blocker"
+    blocker.write_text("a file")
+    monkeypatch.setenv("JOB_STATUS", "success")
+
+    exit_code = alerts_module.main(
+        ["emit", "nightly-publish", "--output", str(blocker / "findings.json")]
+    )
+
+    assert exit_code == 1
+    assert capsys.readouterr().err == "emit failed: could not write the findings file\n"
+
+
+def test_cli_emit_reads_a_report_from_the_given_path(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    report = tmp_path / "live.json"
+    report.write_text(
+        json.dumps(_live_report(unreachable=[{"url": "https://a/b", "status": 404}]))
+    )
+    output = tmp_path / "findings.json"
+    monkeypatch.setenv("JOB_STATUS", "failure")
+    monkeypatch.setenv("CHECK_RESULT", "failure")
+
+    alerts_module.main(
+        ["emit", "live-check", "--report", str(report), "--output", str(output)]
+    )
+
+    parsed = parse_findings(Owner.LIVE_CHECK, output.read_text())
+    assert parsed is not None
+    assert [f.key for f in parsed.findings] == ["live-check/gone/https://a/b"]
+
+
+def test_prepare_stage_slugs_make_valid_keys() -> None:
+    for slug in PREPARE_STAGE_SLUGS.values():
+        key = "nightly/prepare/" + slug
+        assert alerts_module.valid_key(Owner.NIGHTLY_PREPARE, key)
