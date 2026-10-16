@@ -6,15 +6,19 @@ dispatched manually with no inputs. Both paths run only for `mjkoo/omnipack`
 on `main`; a dispatch from another ref, or a run in a fork, does not publish.
 One `omnipack-nightly-publisher` concurrency group serializes runs without
 canceling one already in progress. The workflow runs two jobs in sequence,
-each limited to 60 minutes, so a run can take about 120 minutes end to end.
+each limited to 60 minutes, so a run can take about 120 minutes end to end,
+then an `alert` job that raises and clears
+[maintenance alert](alerts.md) issues from their findings.
 Scheduling is best effort: GitHub does not guarantee an exact start time or
 execution of every queued trigger.
 
 ## Two-job flow and credential split
 
-The workflow has two jobs, `prepare` and `publish`, so that nothing which
-builds, generates or handles upstream data ever shares a job, a workspace or
-the write credential with the steps that push to `main` or write the release.
+The workflow splits the work into two jobs, `prepare` and `publish`, so that
+nothing which builds, generates or handles upstream data ever shares a job, a
+workspace or the write credential with the steps that push to `main` or write
+the release. The `alert` job that follows them holds only issue access and is
+described in [maintenance alerts](alerts.md).
 
 **`prepare`** holds `permissions: contents: read` and no step in it sets
 `GH_TOKEN` or otherwise receives a token beyond that read-only job token. It
@@ -94,8 +98,8 @@ and run on the runner's preinstalled `python3`, which is 3.12 on
 module starts with `from __future__ import annotations` so that no
 annotation is evaluated at import time, and `pyproject.toml` pins their ruff
 target to `py312`. `just check-py312` runs the tests of the write jobs'
-scripts (`tests/test_nightly_write.py`, `tests/test_source_proposal.py` and
-`tests/test_workflow_support.py`) under a real CPython 3.12, without the
+scripts (`tests/test_alerts.py`, `tests/test_nightly_write.py`,
+`tests/test_source_proposal.py` and `tests/test_workflow_support.py`) under a real CPython 3.12, without the
 project environment, since ruff alone cannot catch a 3.13-or-later
 standard-library API or an annotation-evaluation difference. Locally it
 uses `python312` from the `nixpkgs` this repository's flake pins; CI's
@@ -110,7 +114,8 @@ that installs a hook.
 ## Permissions and direct-push prerequisites
 
 The workflow grants no permissions at workflow level; `prepare` holds
-`contents: read` and `publish` holds `contents: write`. `publish` pushes with
+`contents: read`, `publish` holds `contents: write`, and `alert` holds only
+`issues: write`. `publish` pushes with
 the ordinary job token (`${{ github.token }}`), handed to `git` through
 `gh auth setup-git`, so there is no personal access token and no automatic
 change to repository settings.
@@ -256,7 +261,7 @@ the pushed commit stays on `main`.
 ## Step summary lines
 
 Each summary line has one owner, so a run's Actions summary shows at most one
-line each from `prepare`, `push` and `release`:
+line each from `prepare`, `push`, `release` and the alert job's reconcile:
 
 - `prepare`: `no-op at <sha>`, `prepared <sha>`, or the failing stage name.
 - `push`: `published <sha>`, `push failed for <sha>`, or
@@ -265,6 +270,8 @@ line each from `prepare`, `push` and `release`:
 - `release`: `unchanged at revision N`, `repaired at revision N`,
   `revision N+1`, or `release failed: <reason>` (with bootstrap guidance when
   the release itself is the problem).
+- reconcile: `alerts: N opened, N updated, N reopened, N closed, N mute cleared`,
+  or `reconcile failed: <reason>`.
 
 ## Diagnostics
 

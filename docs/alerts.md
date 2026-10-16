@@ -30,7 +30,9 @@ What does not raise a finding:
   unchecked when the budget runs out. Malformed request settings land here
   too. Such a URL neither raises nor closes anything, so an existing issue for
   it stays as it is.
-- A skipped job, such as nightly `publish` after `prepare` failed.
+- A skipped job, such as nightly `publish` after `prepare` failed. A `publish`
+  job whose upstream did not succeed never started, so it counts as skipped
+  even when Actions reports it as failed or cancelled.
 
 ## Keys
 
@@ -117,6 +119,14 @@ reopens the issue.
   from stale findings. The next scheduled run corrects it, except that a
   cleared mute must be re-muted by hand. Scheduled runs cannot cause this,
   because each alert job is serialized in a non-canceling concurrency group.
+- **A manual re-run attempt whose producer dies before uploading.** Findings
+  artifact names carry only the run ID, so the alert job of a re-run attempt
+  whose producer failed before uploading its findings can reconcile the
+  previous attempt's file instead. Accepted beside the manual re-run risk
+  above; the next scheduled run corrects it.
+- **The repository becomes private.** The alert job's checkout holds no
+  `contents` permission and relies on the repository being public, so making
+  it private fails every alert job visibly, with no issue opened.
 - **A manual cancellation** of a producer raises its early-failure issue too.
 - **Duplicate issues for one key** are not merged; the lowest-numbered one is
   used.

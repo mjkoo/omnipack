@@ -174,9 +174,11 @@ The codm and Quiver caller jobs invoke the same reusable workflow, each under it
 own non-canceling concurrency group covering the complete check-and-publish chain.
 They do not wait on, count PRs from, close proposals from, or stage catalogs from
 the other source. Each source runs a read-only `check` job followed by its own
-write-capable `publish` job, each limited to 60 minutes.
+write-capable `publish` job, each limited to 60 minutes, then an `alert` job
+that raises and clears [maintenance alert](alerts.md) issues.
 
-The caller grants the reusable workflow only the ceiling needed for publication;
+The caller grants the reusable workflow only the ceiling needed for publication
+and alerting (`contents: write`, `pull-requests: write` and `issues: write`);
 its check job reduces permissions to `contents: read`. No workflow grants
 permissions at workflow level. Every check step, including checkout, setup,
 generation, tests and build, has only that read-only job token available, and
@@ -341,7 +343,9 @@ inputs and receives no token. No step receives a write token. Only `publish`
 holds `contents: write` and `pull-requests: write`, and only its one step
 receives `GH_TOKEN`; its checkout uses the job token only to fetch the
 triggering revision, and `persist-credentials: false` keeps it out of
-`.git/config`. `scripts/source_proposal.py` serves both jobs and, like
+`.git/config`. The `alert` job holds only `issues: write`, which the callers
+grant for it alone; see [maintenance alerts](alerts.md#security).
+`scripts/source_proposal.py` serves both jobs and, like
 `scripts/nightly_write.py`, imports only the standard library and the shared
 helpers in `scripts/workflow_support.py`, and runs on the runner's preinstalled
 `python3` in the write job. Source text, project URLs, asset names and other
