@@ -1,0 +1,244 @@
+"""Alert emitters fed by the real producers: step outputs, workflow bindings and
+the reports the build and live check write.
+
+Each test runs the producing script or writer, resolves the producing job's
+emit-step environment from `nightly.yml` or `source-catalog.yml` the way
+Actions would, then emits and reconciles, so a renamed output, binding or
+report key fails here.
+"""
+
+from __future__ import annotations
+
+import re
+import shlex
+from collections.abc import Mapping
+from pathlib import Path
+
+import pytest
+import yaml
+
+from omnipack.live_check import REPORT, check_live, write_live_report
+from omnipack.merge import CompositionReport, StaleExclusion, UncategorizedFamily
+from omnipack.model import Variant
+from omnipack.report import write_report
+from omnipack.sources import IngestionReport
+from scripts import alerts as alerts_module
+from scripts import nightly as nightly_module
+from scripts import nightly_write as write_module
+from scripts.alerts import (
+    LIVE_CHECK,
+    NIGHTLY_PREPARE,
+    NIGHTLY_PUBLISH,
+    Owner,
+    Producer,
+    parse_findings,
+    reconcile,
+)
+from scripts.workflow_support import StepOutcome
+from tests.publication_support import (
+    bare_remote,
+    bundle,
+    isolated_git_identity,
+    shallow_checkout,
+)
+from tests.publication_support import git as _git
+from tests.test_alerts import REPOSITORY, RUN_2, _gh, _issue, _verbs
+from tests.test_live_check import Transport, client, entry, write_packs
+from tests.test_nightly_prepare import ScriptedProcess, _prepare_environment, _repo
+from tests.test_nightly_write import _bot_commit, _push_gh, _seed
+
+pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
+
+WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
+_EXPRESSION = re.compile(
+    r"\$\{\{ (?:steps\.(?P<step>[\w-]+)\.(?:outputs\.(?P<output>\w+)|(?P<outcome>outcome))"
+    r"|(?P<job>job\.status)) \}\}"
+)
+
+
+def _emit_step(workflow: str, job: str) -> dict:
+    steps = yaml.safe_load((WORKFLOWS / workflow).read_text())["jobs"][job]["steps"]
+    (step,) = [s for s in steps if "scripts.alerts emit" in s.get("run", "")]
+    return step
+
+
+def _resolve(
+    value: str,
+    *,
+    outputs: Mapping[str, Mapping[str, str]],
+    outcomes: Mapping[str, str] | None = None,
+    job_status: StepOutcome,
+) -> str:
+    """One binding as Actions evaluates it; an unset output reads as empty."""
+    match = _EXPRESSION.fullmatch(value)
+    assert match, value
+    if match["job"]:
+        return job_status
+    if match["outcome"]:
+        return (outcomes or {}).get(match["step"], "")
+    return outputs.get(match["step"], {}).get(match["output"], "")
+
+
+def _run_emit(
+    monkeypatch: pytest.MonkeyPatch,
+    step: dict,
+    output: Path,
+    *,
+    outputs: Mapping[str, Mapping[str, str]],
+    job_status: StepOutcome,
+    outcomes: Mapping[str, str] | None = None,
+    report: Path | None = None,
+) -> None:
+    """Run the step's emit command with its environment resolved."""
+    for name, value in step["env"].items():
+        resolved = _resolve(
+            value, outputs=outputs, outcomes=outcomes, job_status=job_status
+        )
+        monkeypatch.setenv(name, resolved)
+    words = shlex.split(step["run"])
+    assert words[:4] == ["python3", "-m", "scripts.alerts", "emit"]
+    extra = ["--report", str(report)] if report is not None else []
+    assert alerts_module.main([*words[3:], "--output", str(output), *extra]) == 0
+
+
+def _outputs(path: Path) -> dict[str, str]:
+    return dict(line.split("=", 1) for line in path.read_text().splitlines())
+
+
+def _reconcile(owner: Owner, path: Path, result: StepOutcome, issues: list[dict]):
+    gh = _gh(issues)
+    reconcile(gh, [Producer(owner, path, result)], repository=REPOSITORY, url=RUN_2)
+    return gh
+
+
+def test_no_op_prepare_closes_a_stage_it_ran_and_leaves_one_it_did_not(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    _prepare_environment(monkeypatch, root, tmp_path)
+    process = ScriptedProcess(root)
+    monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
+    assert nightly_module.main(["prepare"]) == 0
+    findings = tmp_path / "findings.json"
+
+    _run_emit(
+        monkeypatch,
+        _emit_step("nightly.yml", "prepare"),
+        findings,
+        outputs={"prepare": _outputs(tmp_path / "output.txt")},
+        job_status="success",
+    )
+    gh = _reconcile(
+        NIGHTLY_PREPARE,
+        findings,
+        "success",
+        [_issue(1, "nightly/prepare/build"), _issue(2, "nightly/prepare/commit")],
+    )
+
+    assert _verbs(gh) == [("close", "1")]
+
+
+def test_push_refused_as_main_advanced_raises_nothing_and_leaves_its_issue(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed = _seed(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = bare_remote(seed, tmp_path)
+    sha = _bot_commit(seed, {"dist/single-screen.json": "changed\n"})
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    _git(seed, "push", "-q", str(bare), "HEAD:main")
+    write_side = shallow_checkout(tmp_path, bare, base)
+    output = tmp_path / "push-output.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output))
+    monkeypatch.setenv("CANDIDATE_SHA", sha)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    monkeypatch.chdir(write_side)
+    assert write_module.main(["push", "--bundle", str(bundle_path)]) == 1
+    findings = tmp_path / "findings.json"
+
+    # The release step does not run after a failed push.
+    _run_emit(
+        monkeypatch,
+        _emit_step("nightly.yml", "publish"),
+        findings,
+        outputs={"push": _outputs(output)},
+        job_status="failure",
+    )
+    parsed = parse_findings(NIGHTLY_PUBLISH, findings.read_text())
+    gh = _reconcile(
+        NIGHTLY_PUBLISH, findings, "failure", [_issue(1, "nightly/publish/push")]
+    )
+
+    assert parsed is not None
+    assert parsed.findings == ()
+    assert parsed.scope == ()
+    assert _verbs(gh) == []
+
+
+def test_build_report_from_the_real_writer_raises_its_warnings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    write_report(
+        tmp_path,
+        {},
+        None,
+        IngestionReport(),
+        composition_report=CompositionReport(
+            stale_exclusions=[StaleExclusion("example.test/stale", "gone")],
+            uncategorized_families=[
+                UncategorizedFamily("example.test/family", (Variant.SINGLE,))
+            ],
+            stale_category_assignments=["Some Key"],
+        ),
+    )
+    findings = tmp_path / "findings.json"
+
+    _run_emit(
+        monkeypatch,
+        _emit_step("nightly.yml", "prepare"),
+        findings,
+        report=tmp_path / ".build/report.json",
+        outputs={"prepare": {"stage": "complete", "stages": "checkout,build"}},
+        job_status="success",
+    )
+    parsed = parse_findings(NIGHTLY_PREPARE, findings.read_text())
+
+    assert parsed is not None
+    assert [finding.key for finding in parsed.findings] == [
+        "build/uncategorized/example.test/family",
+        "build/stale-denial/example.test/stale",
+        "build/stale-category/Some%20Key",
+    ]
+    assert parsed.findings[0].details == (
+        "Family: example.test/family",
+        "Variants: single",
+    )
+    assert "build/" in parsed.scope
+
+
+def test_live_check_report_from_the_real_writer_raises_gone_and_status_findings(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    gone, blocked = "https://github.com/a/gone", "https://github.com/a/blocked"
+    write_packs(tmp_path, [entry(gone), entry(blocked)])
+    report = check_live(tmp_path, http=client(Transport({gone: [404], blocked: [403]})))
+    write_live_report(tmp_path, report)
+    findings = tmp_path / "findings.json"
+
+    _run_emit(
+        monkeypatch,
+        _emit_step("source-catalog.yml", "live-check"),
+        findings,
+        report=tmp_path / REPORT,
+        outputs={},
+        outcomes={"check": "failure"},
+        job_status="failure",
+    )
+    parsed = parse_findings(LIVE_CHECK, findings.read_text())
+
+    assert parsed is not None
+    assert [(f.key, f.title) for f in parsed.findings] == [
+        (f"live-check/gone/{gone}", f"Project URL is gone (HTTP 404): {gone}"),
+        (f"live-check/status/{blocked}", f"Project URL answers HTTP 403: {blocked}"),
+    ]
