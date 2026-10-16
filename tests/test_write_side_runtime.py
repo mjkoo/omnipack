@@ -11,6 +11,7 @@ from pathlib import Path
 def test_write_side_modules_import_only_stdlib_and_scripts() -> None:
     root = Path(__file__).resolve().parents[1]
     pending = [
+        "scripts.alerts",
         "scripts.nightly_write",
         "scripts.source_proposal",
         "scripts.workflow_support",
