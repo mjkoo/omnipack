@@ -25,6 +25,7 @@ from scripts.workflow_support import (
     GhRunner,
     HandoffRejected,
     SubprocessGhRunner,
+    WriteOutcome,
     append_summary,
     bot_commit,
     diff_raw_entries,
@@ -40,6 +41,7 @@ from scripts.workflow_support import (
     run_url,
     verify_handoff,
     write_github_output,
+    write_outcome_output,
 )
 
 CANONICAL_REPOSITORY = "mjkoo/omnipack"
@@ -305,9 +307,10 @@ def _commit_candidate(
 
 
 class PublishFailure(RuntimeError):
-    def __init__(self, summary: str) -> None:
+    def __init__(self, summary: str, *, main_advanced: bool = False) -> None:
         super().__init__(summary)
         self.summary = summary
+        self.main_advanced = main_advanced
 
 
 PublishStatus = Literal["closed", "unchanged", "published", "failed"]
@@ -317,6 +320,13 @@ PublishStatus = Literal["closed", "unchanged", "published", "failed"]
 class PublishOutcome:
     status: PublishStatus
     summary: str
+    main_advanced: bool = False
+
+    @property
+    def outcome(self) -> WriteOutcome:
+        if self.status != "failed":
+            return "ok"
+        return "main-advanced" if self.main_advanced else "failed"
 
 
 def run_publish(
@@ -356,7 +366,7 @@ def run_publish(
         if remote_main is None:
             raise PublishFailure(f"{generic}: could not read remote main")
         if remote_main != base_sha:
-            raise PublishFailure(f"{generic}: main advanced")
+            raise PublishFailure(f"{generic}: main advanced", main_advanced=True)
 
         selected_number = _selected_pr_number(selected_gh, descriptor)
 
@@ -464,7 +474,7 @@ def run_publish(
             raise PublishFailure(f"{generic}: PR create failed")
         return PublishOutcome("published", "publish created PR")
     except PublishFailure as failure:
-        return PublishOutcome("failed", failure.summary)
+        return PublishOutcome("failed", failure.summary, failure.main_advanced)
 
 
 def _selected_pr_number(gh: GhRunner, descriptor: SourceDescriptor) -> int | None:
@@ -604,6 +614,7 @@ def _run_publish_command(
         body_path,
         source=source,
     )
+    write_outcome_output(environ, outcome.outcome)
     return _report_outcome(environ, outcome.summary, failed=outcome.status == "failed")
 
 

@@ -100,6 +100,7 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}: main advanced"
+    assert result.outcome == "main-advanced"
     assert _git(bare, "rev-parse", "main") == advanced
 
 
@@ -120,9 +121,12 @@ def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
 
     assert result.status == "failed"
     assert "main advanced" in result.summary
+    assert result.outcome == "main-advanced"
     assert _git(bare, "rev-parse", "main") == sha
 
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
     monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
@@ -130,6 +134,7 @@ def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
 
     assert write_module.main(["push", "--bundle", str(bundle_path)]) == 1
+    assert output_path.read_text() == "outcome=main-advanced\n"
     assert "main advanced" in summary_path.read_text()
     assert _git(bare, "rev-parse", "main") == sha
 
@@ -252,16 +257,19 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
         write_side, "pre-push", "post-checkout", "reference-transaction"
     )
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
 
     monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
 
     assert exit_code == 0
+    assert output_path.read_text() == "outcome=ok\n"
     assert summary_path.read_text() == f"published {sha}\n"
     assert _git(bare, "rev-parse", "main") == sha
     assert _git(write_side, "rev-parse", "HEAD") == sha
@@ -284,15 +292,18 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
     )
     pre_receive.chmod(0o755)
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
     monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert summary_path.read_text() == f"push failed for {sha}\n"
     assert "protected branch: fixture says no" in capsys.readouterr().err
     assert _git(bare, "rev-parse", "main") == base
@@ -315,15 +326,18 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
     post_receive.write_text(f"#!/bin/sh\ntouch '{write_side}/.git/index.lock'\n")
     post_receive.chmod(0o755)
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
     monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert summary_path.read_text() == f"published {sha}\n"
     assert _git(bare, "rev-parse", "main") == sha
     assert "index.lock" in capsys.readouterr().err
@@ -496,6 +510,7 @@ def test_differing_record_uploads_and_edits_with_canonical_body(
     result = run_release(root, gh=gh)
 
     assert result.status == "advanced"
+    assert result.outcome == "ok"
     assert result.summary == "revision 4"
     upload_calls = [call for call in gh.calls if call[:2] == ("release", "upload")]
     edit_calls = [call for call in gh.calls if call[:2] == ("release", "edit")]
@@ -745,6 +760,7 @@ def test_remote_main_other_than_head_fails_without_bootstrap_guidance(
 
     assert result.status == "failed"
     assert result.summary == "release failed: main advanced"
+    assert result.outcome == "main-advanced"
     assert "gh release create" not in result.summary
     assert gh.calls == [("auth", "setup-git")]
 
@@ -817,16 +833,19 @@ def test_release_cli_exit_code_and_summary(
     root, sha = _release_repo(tmp_path)
     view = _valid_release(sha)
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
 
     monkeypatch.setattr(
         write_module, "SubprocessGhRunner", lambda: _release_gh(view=view)
     )
     monkeypatch.chdir(root)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["release"])
 
     assert exit_code == 0
+    assert output_path.read_text() == "outcome=ok\n"
     assert summary_path.read_text() == "unchanged at revision 3\n"
 
 
@@ -867,6 +886,7 @@ def test_release_cli_fails_when_the_release_edit_fails(
         assets=[],
     )
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
     monkeypatch.setattr(
         write_module,
         "SubprocessGhRunner",
@@ -874,8 +894,29 @@ def test_release_cli_fails_when_the_release_edit_fails(
     )
     monkeypatch.chdir(root)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["release"])
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert summary_path.read_text() == "release failed: release edit failed\n"
+
+
+def test_unchanged_and_repaired_releases_are_ok(tmp_path: Path) -> None:
+    root, sha = _release_repo(tmp_path)
+
+    unchanged = run_release(root, gh=_release_gh(view=_valid_release(sha)))
+    repaired = run_release(root, gh=_release_gh(view=_valid_release(sha, assets=[])))
+
+    assert (unchanged.status, unchanged.outcome) == ("unchanged", "ok")
+    assert (repaired.status, repaired.outcome) == ("repaired", "ok")
+
+
+def test_release_failures_other_than_main_advanced_are_failed(tmp_path: Path) -> None:
+    root, _sha = _release_repo(tmp_path)
+
+    result = run_release(root, gh=_release_gh(view=None, view_ok=False))
+
+    assert result.status == "failed"
+    assert result.outcome == "failed"

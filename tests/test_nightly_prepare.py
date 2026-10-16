@@ -142,6 +142,12 @@ def test_readme_catalog_interior_change_is_committed(tmp_path: Path) -> None:
     )
 
 
+_ALL_STAGES = (
+    "checkout,build,allowlist,README boundary,commit,verify,drift after verify,bundle"
+)
+_NO_OP_STAGES = "checkout,build,allowlist,README boundary,verify,drift after verify"
+
+
 def _prepare_environment(
     monkeypatch: pytest.MonkeyPatch, root: Path, tmp_path: Path
 ) -> Path:
@@ -179,7 +185,7 @@ def test_prepare_cli_writes_changed_sha_and_base_for_a_candidate(
     assert exit_code == 0
     assert sha != base
     assert (tmp_path / "output.txt").read_text() == (
-        f"changed=true\nsha={sha}\nbase={base}\n"
+        f"changed=true\nsha={sha}\nbase={base}\nstage=complete\nstages={_ALL_STAGES}\n"
     )
     assert (tmp_path / "summary.md").read_text() == f"prepared {sha}\n"
     bundle_path = runner_temp / "nightly-handoff" / "candidate.bundle"
@@ -215,6 +221,7 @@ def test_prepare_cli_writes_changed_false_for_a_no_op(
     assert exit_code == 0
     assert (tmp_path / "output.txt").read_text() == (
         f"changed=false\nsha={base}\nbase={base}\n"
+        f"stage=complete\nstages={_NO_OP_STAGES}\n"
     )
     assert (tmp_path / "summary.md").read_text() == f"no-op at {base}\n"
     assert not (runner_temp / "nightly-handoff").exists()
@@ -500,3 +507,140 @@ def test_real_prepare_commit_hands_off_to_push(tmp_path: Path) -> None:
     assert result.summary == f"published {candidate_sha}"
     assert _git(bare, "rev-parse", "main") == candidate_sha
     assert _git(write_side, "rev-parse", "HEAD") == candidate_sha
+
+
+def _stages(outcome) -> str:
+    return ",".join(outcome.started)
+
+
+def test_published_candidate_lists_every_stage(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    process = ScriptedProcess(root)
+    process.on_build.append(
+        lambda: (root / ALLOWED_PATHS[0]).write_text("changed pack\n")
+    )
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "prepared"
+    assert _stages(outcome) == _ALL_STAGES
+
+
+def test_no_op_success_lists_neither_commit_nor_bundle(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+
+    outcome = run_prepare(
+        root,
+        base,
+        "run",
+        tmp_path / "candidate.bundle",
+        process=ScriptedProcess(root),
+        now=_now,
+    )
+
+    assert outcome.status == "no-op"
+    assert _stages(outcome) == _NO_OP_STAGES
+
+
+def _fail_at(stage: str, root: Path, tmp_path: Path) -> tuple[ScriptedProcess, Path]:
+    """Arrange a run that fails at `stage`; return its process and bundle path."""
+    process = ScriptedProcess(root)
+    bundle = tmp_path / "candidate.bundle"
+    change = lambda: (root / ALLOWED_PATHS[0]).write_text("changed pack\n")
+    if stage == "checkout":
+        (root / "tracked.txt").write_text("dirty\n")
+    elif stage == "build":
+        _fail_build(process)
+    elif stage == "allowlist":
+        process.on_build.append(lambda: (root / "tracked.txt").write_text("mutated\n"))
+    elif stage == "README boundary":
+        process.on_build.append(
+            lambda: (root / "README.md").write_bytes(
+                b"changed guide\n<!-- omnipack:catalog:start -->\nbase catalog\n"
+                b"<!-- omnipack:catalog:end -->\ncredits\n"
+            )
+        )
+    elif stage == "commit":
+
+        def lock_the_index() -> None:
+            change()
+            (root / ".git/index.lock").write_bytes(b"")
+
+        process.on_build.append(lock_the_index)
+    elif stage == "verify":
+        process.on_build.append(change)
+        _fail_verify(process)
+    elif stage == "drift after verify":
+        process.on_verify.append(lambda: (root / ALLOWED_PATHS[0]).write_text("x\n"))
+    else:
+        process.on_build.append(change)
+        (tmp_path / "blocker").write_text("a file, not a directory\n")
+        bundle = tmp_path / "blocker" / "candidate.bundle"
+    return process, bundle
+
+
+@pytest.mark.parametrize(
+    ("stage", "expected"),
+    [
+        ("checkout", "checkout"),
+        ("build", "checkout,build"),
+        ("allowlist", "checkout,build,allowlist"),
+        ("README boundary", "checkout,build,allowlist,README boundary"),
+        ("commit", "checkout,build,allowlist,README boundary,commit"),
+        ("verify", "checkout,build,allowlist,README boundary,commit,verify"),
+        (
+            "drift after verify",
+            "checkout,build,allowlist,README boundary,verify,drift after verify",
+        ),
+        ("bundle", _ALL_STAGES),
+    ],
+)
+def test_failure_lists_the_stages_started_through_the_failing_one(
+    tmp_path: Path, stage: str, expected: str
+) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    process, bundle = _fail_at(stage, root, tmp_path)
+
+    outcome = run_prepare(root, base, "run", bundle, process=process, now=_now)
+
+    assert outcome.status == "failed"
+    assert outcome.stage == stage
+    assert _stages(outcome) == expected
+
+
+def test_failure_removing_stale_reports_lists_only_build(tmp_path: Path) -> None:
+    root = _repo(tmp_path)
+    base = _git(root, "rev-parse", "HEAD")
+    (root / ".build/report.json").mkdir(parents=True)
+    (root / ".build/report.json/keep").write_text("x")
+    process = ScriptedProcess(root)
+
+    outcome = run_prepare(
+        root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
+    )
+
+    assert outcome.status == "failed"
+    assert outcome.stage == "build"
+    assert _stages(outcome) == "build"
+    assert process.calls == []
+
+
+def test_prepare_cli_writes_the_failing_stage_and_stages_on_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    root = _repo(tmp_path)
+    _prepare_environment(monkeypatch, root, tmp_path)
+    process = ScriptedProcess(root)
+    _fail_build(process)
+    monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
+
+    assert nightly_module.main(["prepare"]) == 1
+
+    assert (tmp_path / "output.txt").read_text() == (
+        "stage=build\nstages=checkout,build\n"
+    )

@@ -60,6 +60,9 @@ class PrepareSubprocess:
         return CommandResult(completed.returncode, "", "")
 
 
+# Joins stage names in the `stages` step output; no stage name contains it.
+STAGE_SEPARATOR = ","
+
 PrepareStatus = Literal["no-op", "prepared", "failed"]
 PrepareStage = Literal[
     "checkout",
@@ -79,12 +82,15 @@ class PrepareOutcome:
     """The outcome of one guarded `prepare` run.
 
     `stage` names the failing stage on failure, or `"complete"` otherwise.
+    `started` lists every stage the run began, in order: a no-op lists neither
+    `commit` nor `bundle`, and a failure ends with the failing stage.
     """
 
     status: PrepareStatus
     stage: PrepareStage
     base_sha: str | None
     sha: str | None
+    started: tuple[PrepareStage, ...] = ()
 
     @property
     def changed(self) -> bool:
@@ -116,6 +122,15 @@ def run_prepare(
     """
     selected_process = process or PrepareSubprocess()
     selected_now = now or (lambda: datetime.now(UTC))
+    started: list[PrepareStage] = []
+
+    def begin(stage: PrepareStage) -> None:
+        if stage not in started:
+            started.append(stage)
+
+    def fail(stage: PrepareStage, base_sha: str | None) -> PrepareOutcome:
+        begin(stage)
+        return PrepareOutcome("failed", stage, base_sha, None, tuple(started))
 
     # Reports left by an earlier run in a reused workspace must never reach
     # this run's diagnostics upload, whichever stage fails.
@@ -123,43 +138,47 @@ def run_prepare(
         try:
             (root / relative).unlink(missing_ok=True)
         except OSError:
-            return PrepareOutcome("failed", "build", None, None)
+            return fail("build", None)
 
+    begin("checkout")
     try:
         head = git_text(root, "rev-parse", "HEAD")
     except OSError:
-        return PrepareOutcome("failed", "checkout", None, None)
+        return fail("checkout", None)
     try:
         dirty = _dirty_paths(root)
     except OSError:
-        return PrepareOutcome("failed", "checkout", head, None)
+        return fail("checkout", head)
     if head != github_sha or dirty:
-        return PrepareOutcome("failed", "checkout", head, None)
+        return fail("checkout", head)
     base_sha = head
 
+    begin("build")
     build_result = selected_process.run(BUILD_COMMAND, root)
     if build_result.returncode != 0:
-        return PrepareOutcome("failed", "build", base_sha, None)
+        return fail("build", base_sha)
 
+    begin("allowlist")
     try:
         out_of_scope = _dirty_paths(root) - set(ALLOWED_PATHS)
     except OSError:
-        return PrepareOutcome("failed", "allowlist", base_sha, None)
+        return fail("allowlist", base_sha)
     if out_of_scope:
-        return PrepareOutcome("failed", "allowlist", base_sha, None)
+        return fail("allowlist", base_sha)
     for relative in ALLOWED_PATHS:
         if regular_file_problem(root / relative, executable_ok=False) is not None:
-            return PrepareOutcome("failed", "allowlist", base_sha, None)
+            return fail("allowlist", base_sha)
 
+    begin("README boundary")
     try:
         base_readme = git_output(root, "show", f"{base_sha}:README.md")
         current_readme = (root / "README.md").read_bytes()
         base_prefix, _, base_suffix = split_catalog(base_readme)
         current_prefix, _, current_suffix = split_catalog(current_readme)
     except CatalogError, OSError:
-        return PrepareOutcome("failed", "README boundary", base_sha, None)
+        return fail("README boundary", base_sha)
     if current_prefix != base_prefix or current_suffix != base_suffix:
-        return PrepareOutcome("failed", "README boundary", base_sha, None)
+        return fail("README boundary", base_sha)
 
     try:
         changed_paths = tuple(
@@ -169,39 +188,43 @@ def run_prepare(
             != (root / relative).read_bytes()
         )
     except OSError:
-        return PrepareOutcome("failed", "allowlist", base_sha, None)
+        return fail("allowlist", base_sha)
 
     sha = base_sha
     if changed_paths:
+        begin("commit")
         try:
             sha = _commit_candidate(
                 root, changed_paths, selected_now(), run_url, base_sha
             )
         except OSError:
-            return PrepareOutcome("failed", "commit", base_sha, None)
+            return fail("commit", base_sha)
 
+    begin("verify")
     verify_result = selected_process.run(STRUCTURAL_VERIFY_COMMAND, root)
     if verify_result.returncode != 0:
-        return PrepareOutcome("failed", "verify", base_sha, None)
+        return fail("verify", base_sha)
 
+    begin("drift after verify")
     try:
         drifted = _dirty_paths(root)
     except OSError:
-        return PrepareOutcome("failed", "drift after verify", base_sha, None)
+        return fail("drift after verify", base_sha)
     if drifted:
-        return PrepareOutcome("failed", "drift after verify", base_sha, None)
+        return fail("drift after verify", base_sha)
 
     if not changed_paths:
-        return PrepareOutcome("no-op", "complete", base_sha, base_sha)
+        return PrepareOutcome("no-op", "complete", base_sha, base_sha, tuple(started))
 
+    begin("bundle")
     try:
         if git_text(root, "rev-parse", "HEAD") != sha:
-            return PrepareOutcome("failed", "bundle", base_sha, None)
+            return fail("bundle", base_sha)
         bundle_path.parent.mkdir(parents=True, exist_ok=True)
         git_output(root, "bundle", "create", str(bundle_path), f"{base_sha}..HEAD")
     except OSError:
-        return PrepareOutcome("failed", "bundle", base_sha, None)
-    return PrepareOutcome("prepared", "complete", base_sha, sha)
+        return fail("bundle", base_sha)
+    return PrepareOutcome("prepared", "complete", base_sha, sha, tuple(started))
 
 
 def _commit_candidate(
@@ -243,15 +266,18 @@ def _run_prepare_command(
         run_url(environ),
         _handoff_bundle_path(environ),
     )
+    # `stage` and `stages` are written on failure as well, since alerting
+    # reads them; the hand-off outputs exist only for a candidate that passed.
+    values: dict[str, str] = {}
     if outcome.status != "failed":
-        write_github_output(
-            environ,
-            {
-                "changed": "true" if outcome.changed else "false",
-                "sha": outcome.sha or "",
-                "base": outcome.base_sha or "",
-            },
-        )
+        values |= {
+            "changed": "true" if outcome.changed else "false",
+            "sha": outcome.sha or "",
+            "base": outcome.base_sha or "",
+        }
+    values["stage"] = outcome.stage
+    values["stages"] = STAGE_SEPARATOR.join(outcome.started)
+    write_github_output(environ, values)
     append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 

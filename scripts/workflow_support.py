@@ -218,6 +218,11 @@ def verify_handoff(
 
 FileProblem = Literal["missing", "symlink", "irregular", "executable"]
 
+# How a write step ended, as the `outcome` step output reports it. A write
+# refused because `main` advanced past the run's base is its own outcome, since
+# a later run retries it and it is no problem to report.
+WriteOutcome = Literal["ok", "main-advanced", "failed"]
+
 
 def regular_file_problem(
     path: Path, *, executable_ok: bool = True
@@ -321,6 +326,10 @@ def write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -
         return
     with Path(output).open("a", encoding="utf-8") as stream:
         stream.writelines(f"{key}={value}\n" for key, value in values.items())
+
+
+def write_outcome_output(environ: Mapping[str, str], outcome: WriteOutcome) -> None:
+    write_github_output(environ, {"outcome": outcome})
 
 
 def log(message: str) -> None:

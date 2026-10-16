@@ -645,6 +645,7 @@ def test_unchanged_closes_an_open_pr_and_makes_no_push_or_pr_write(
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
 
     assert result.status == "closed"
+    assert result.outcome == "ok"
     assert result.summary == "publish closed PR #7"
     close_calls = [call for call in gh.calls if call[:2] == ("pr", "close")]
     assert close_calls == [("pr", "close", "7", "--repo", "mjkoo/omnipack")]
@@ -702,6 +703,7 @@ def test_unchanged_with_no_open_pr_makes_no_write(tmp_path: Path) -> None:
     result = run_publish(write_side, "false", base, base, None, None, gh=gh)
 
     assert result.status == "unchanged"
+    assert result.outcome == "ok"
     assert not any(call[:2] == ("pr", "close") for call in gh.calls)
 
 
@@ -734,6 +736,7 @@ def test_changed_with_an_open_pr_edits_its_body(tmp_path: Path) -> None:
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "published"
+    assert result.outcome == "ok"
     assert result.summary == "publish updated PR #3"
     edit_calls = [call for call in gh.calls if call[:2] == ("pr", "edit")]
     assert len(edit_calls) == 1
@@ -774,6 +777,7 @@ def test_two_selected_same_repository_prs_fail_before_any_write(
     result = run_publish(write_side, "true", sha, base, bundle_path, body_path, gh=gh)
 
     assert result.status == "failed"
+    assert result.outcome == "failed"
     assert result.summary == "publish failed: more than one source-update PR"
     assert not any(
         call[:2] in (("pr", "close"), ("pr", "edit"), ("pr", "create"))
@@ -922,6 +926,7 @@ def test_remote_main_other_than_base_fails_on_both_paths(
     )
     assert unchanged_result.status == "failed"
     assert unchanged_result.summary == "publish failed: main advanced"
+    assert unchanged_result.outcome == "main-advanced"
     assert not any(call[:2] == ("pr", "close") for call in gh.calls)
 
     gh2 = _proposal_gh(pr_list=[_pr(9, source=source)])
@@ -930,6 +935,7 @@ def test_remote_main_other_than_base_fails_on_both_paths(
     )
     assert changed_result.status == "failed"
     assert changed_result.summary == "publish failed: main advanced"
+    assert changed_result.outcome == "main-advanced"
     assert not any(
         call[:2] in (("pr", "close"), ("pr", "edit"), ("pr", "create"))
         for call in gh2.calls
@@ -1456,6 +1462,8 @@ def test_failed_check_leaves_no_body_so_publish_fails_before_any_write(
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     gh = _proposal_gh(pr_list=[_pr(4)])
     monkeypatch.setattr(proposal_module, "SubprocessGhRunner", lambda: gh)
+    output_path = tmp_path / "publish-output.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
     exit_code = proposal_module.main(
         [
             "publish",
@@ -1467,6 +1475,7 @@ def test_failed_check_leaves_no_body_so_publish_fails_before_any_write(
     )
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert (
         (tmp_path / "summary.md")
         .read_text()
@@ -1501,3 +1510,35 @@ def test_source_stage_rejects_executable_base_catalog(
     result = run_stage(root, base, "run", tmp_path / "b.bundle", source=source)
     assert result.status == "failed"
     assert _git(root, "rev-parse", "HEAD") == base
+
+
+def test_publish_cli_writes_ok_and_main_advanced_outcomes(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    seed = _repo(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = _bare_from(seed, tmp_path)
+    write_side = shallow_checkout(tmp_path, bare, base)
+    output_path = tmp_path / "output.txt"
+    monkeypatch.setattr(proposal_module, "SubprocessGhRunner", lambda: _proposal_gh())
+    monkeypatch.chdir(write_side)
+    monkeypatch.setenv("CHANGED", "false")
+    monkeypatch.setenv("CANDIDATE_SHA", base)
+    monkeypatch.setenv("BASE_SHA", base)
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
+
+    assert proposal_module.main(["publish"]) == 0
+    assert output_path.read_text() == "outcome=ok\n"
+
+    other = tmp_path / "other"
+    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
+    _git(other, "config", "user.name", "Test")
+    _git(other, "config", "user.email", "test@example.invalid")
+    (other / "tracked.txt").write_text("advance\n")
+    _git(other, "add", "tracked.txt")
+    _git(other, "commit", "-qm", "advance")
+    _git(other, "push", "-q", "origin", "HEAD:main")
+    output_path.write_text("")
+
+    assert proposal_module.main(["publish"]) == 1
+    assert output_path.read_text() == "outcome=main-advanced\n"
