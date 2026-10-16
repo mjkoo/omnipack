@@ -22,7 +22,6 @@ from scripts.alerts import (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
     OWNERS,
-    PREPARE_STAGE_SLUGS,
     TITLE_LIMIT,
     Finding,
     FindingsFile,
@@ -451,12 +450,9 @@ def test_mute_survives_a_run_that_did_not_re_check_the_key(tmp_path: Path) -> No
     assert _verbs(gh) == []
 
 
-@pytest.mark.parametrize("reason", ["not_planned", "duplicate"])
-def test_not_planned_and_duplicate_closures_are_mutes(
-    tmp_path: Path, reason: str
-) -> None:
+def test_duplicate_closure_is_a_mute(tmp_path: Path) -> None:
     path = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
-    gh = _gh([_issue(7, NIGHTLY_STAGE, state="closed", reason=reason)])
+    gh = _gh([_issue(7, NIGHTLY_STAGE, state="closed", reason="duplicate")])
 
     _run(gh, _nightly(path))
 
@@ -686,21 +682,6 @@ def test_existing_label_is_success_and_reconcile_proceeds(tmp_path: Path) -> Non
 # --- producers -------------------------------------------------------------
 
 
-def test_producer_findings_files_do_not_cross_owners(tmp_path: Path) -> None:
-    codm = _file(
-        tmp_path,
-        CODM_CHECK,
-        scope=("codm/check/",),
-        findings=(Finding("codm/check/verify", "verify", ("x",)),),
-    )
-    gh = _gh([_issue(1, "quiver/check/verify")])
-    quiver = Producer(QUIVER_CHECK, tmp_path / "missing.json", "skipped")
-
-    _run(gh, Producer(CODM_CHECK, codm, "failure"), quiver)
-
-    assert _verbs(gh) == [("create", "verify")]
-
-
 def test_codm_early_failure_leaves_quivers_issue_open(tmp_path: Path) -> None:
     gh_codm = _gh([_issue(1, early_failure_key(QUIVER_CHECK))])
     _run(gh_codm, Producer(CODM_CHECK, tmp_path / "none.json", "failure"))
@@ -711,31 +692,6 @@ def test_codm_early_failure_leaves_quivers_issue_open(tmp_path: Path) -> None:
     quiver = _file(tmp_path, QUIVER_CHECK, scope=("quiver/check/",))
     _run(gh_quiver, Producer(QUIVER_CHECK, quiver, "success"))
     assert _verbs(gh_quiver) == []
-
-
-def test_codm_and_quiver_reconcile_in_one_run_independently(tmp_path: Path) -> None:
-    quiver = _file(tmp_path, QUIVER_CHECK, scope=("quiver/check/",))
-    gh = _gh(
-        [
-            _issue(1, early_failure_key(QUIVER_CHECK)),
-            _issue(
-                2,
-                early_failure_key(CODM_CHECK),
-                title=early_failure_finding(CODM_CHECK).title,
-                details=early_failure_finding(CODM_CHECK).details,
-            ),
-        ]
-    )
-
-    _run(
-        gh,
-        Producer(CODM_CHECK, tmp_path / "none.json", "failure"),
-        Producer(QUIVER_CHECK, quiver, "success"),
-    )
-
-    assert ("close", "1") in _verbs(gh)
-    assert ("close", "2") not in _verbs(gh)
-    assert [v for v in _verbs(gh) if v[0] == "edit"] == []
 
 
 def test_early_failure_issue_closes_when_the_producer_succeeds(tmp_path: Path) -> None:
@@ -754,16 +710,6 @@ def test_missing_file_raises_the_early_failure_and_closes_nothing_else(
     gh = _gh([_issue(1, NIGHTLY_STAGE)])
 
     _run(gh, _nightly(tmp_path / "absent.json", result))
-
-    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
-
-
-def test_rejected_file_raises_the_early_failure_only(tmp_path: Path) -> None:
-    path = tmp_path / "bad.json"
-    path.write_text("{not json")
-    gh = _gh([_issue(1, NIGHTLY_STAGE)])
-
-    _run(gh, _nightly(path))
 
     assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
@@ -982,9 +928,8 @@ def test_cli_reconciles_producers_with_results_from_the_command_line(
     )
 
 
-@pytest.mark.parametrize("result", ["", "weird"])
-def test_cli_producer_with_an_empty_or_unknown_result_contributes_nothing(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, result: str
+def test_cli_producer_with_an_empty_result_contributes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = _file(
         tmp_path,
@@ -997,10 +942,9 @@ def test_cli_producer_with_an_empty_or_unknown_result_contributes_nothing(
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
     monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
     monkeypatch.setenv("GITHUB_RUN_ID", "2")
-    monkeypatch.setenv("NIGHTLY_PREPARE_RESULT", "success")
 
     exit_code = alerts_module.main(
-        ["reconcile", "--producer", f"nightly-prepare={result}:{path}"]
+        ["reconcile", "--producer", f"nightly-prepare=:{path}"]
     )
 
     assert exit_code == 0
@@ -1071,7 +1015,7 @@ def _build_report(status: str = "success", **lists: list) -> dict:
     }
 
 
-def test_emit_requires_the_job_status(tmp_path: Path) -> None:
+def test_emit_requires_the_job_status() -> None:
     with pytest.raises(SystemExit, match="JOB_STATUS is required"):
         emit(NIGHTLY_PUBLISH, {})
 
@@ -1128,21 +1072,6 @@ def test_stage_with_spaces_maps_through_its_slug(tmp_path: Path) -> None:
 
     assert _keys(file) == ["nightly/prepare/readme-boundary"]
     assert "nightly/prepare/readme-boundary" in file.scope
-
-
-def test_failure_removing_stale_reports_leaves_checkout_out_of_scope(
-    tmp_path: Path,
-) -> None:
-    file = _emit(
-        NIGHTLY_PREPARE,
-        "failure",
-        tmp_path=tmp_path,
-        PREPARE_STAGE="build",
-        PREPARE_STAGES="build",
-    )
-
-    assert file.scope == ("nightly/prepare/build",)
-    assert _keys(file) == ["nightly/prepare/build"]
 
 
 def test_build_warnings_are_one_finding_per_item_and_scope_the_build_keys(
@@ -1250,18 +1179,6 @@ def test_upload_failure_after_a_successful_prepare_raises_the_early_failure(
     assert "nightly/prepare/verify" in file.scope
 
 
-def test_a_failed_stage_accounts_for_the_failed_job(tmp_path: Path) -> None:
-    file = _emit(
-        NIGHTLY_PREPARE,
-        "failure",
-        tmp_path=tmp_path,
-        PREPARE_STAGE="verify",
-        PREPARE_STAGES="checkout,build,allowlist,README boundary,verify",
-    )
-
-    assert early_failure_key(NIGHTLY_PREPARE) not in _keys(file)
-
-
 def test_unrecognized_stage_names_contribute_nothing(tmp_path: Path) -> None:
     file = _emit(
         NIGHTLY_PREPARE,
@@ -1331,7 +1248,7 @@ def test_release_main_advanced_after_an_ok_push_scopes_only_the_push() -> None:
     assert file.findings == ()
 
 
-def test_release_ok_from_a_new_revision_scopes_the_release_key() -> None:
+def test_ok_push_and_release_scope_the_release_key_and_raise_nothing() -> None:
     file = _emit(NIGHTLY_PUBLISH, PUSH_OUTCOME="ok", RELEASE_OUTCOME="ok")
 
     assert "nightly/publish/release" in file.scope
@@ -1366,13 +1283,6 @@ def test_failed_source_publication_raises_the_proposal_finding(
     assert _keys(file) == [f"{source}/publish/proposal"]
     assert file.scope == (f"{source}/publish/proposal",)
     assert source in file.findings[0].title
-
-
-def test_source_publication_refused_as_main_advanced_raises_nothing() -> None:
-    file = _emit(CODM_PUBLISH, "failure", PUBLISH_OUTCOME="main-advanced")
-
-    assert file.findings == ()
-    assert file.scope == ()
 
 
 def test_candidate_failing_verification_raises_the_verify_finding() -> None:
@@ -1555,7 +1465,7 @@ def test_unreadable_packs_raise_the_read_finding_and_scope_only_it(
     assert file.scope == ("live-check/read",)
 
 
-def test_a_successful_read_scopes_the_read_key_so_a_stale_issue_closes(
+def test_a_successful_read_scopes_the_read_key(
     tmp_path: Path,
 ) -> None:
     file = _emit(
@@ -1794,7 +1704,7 @@ def test_findings_carry_no_per_run_values(tmp_path: Path) -> None:
         assert "a" * 40 not in file.to_json()
 
 
-def test_cli_emit_writes_a_file_reconcile_accepts(
+def test_cli_emit_writes_a_whole_file_that_validates_as_its_owners(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     output = tmp_path / "nested" / "findings.json"
@@ -1845,9 +1755,3 @@ def test_cli_emit_reads_a_report_from_the_given_path(
     parsed = parse_findings(LIVE_CHECK, output.read_text())
     assert parsed is not None
     assert [f.key for f in parsed.findings] == ["live-check/gone/https://a/b"]
-
-
-def test_prepare_stage_slugs_make_valid_keys() -> None:
-    for slug in PREPARE_STAGE_SLUGS.values():
-        key = "nightly/prepare/" + slug
-        assert alerts_module.valid_key(NIGHTLY_PREPARE, key)

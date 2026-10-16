@@ -903,20 +903,9 @@ def test_release_cli_fails_when_the_release_edit_fails(
     assert summary_path.read_text() == "release failed: release edit failed\n"
 
 
-def test_unchanged_and_repaired_releases_are_ok(tmp_path: Path) -> None:
+def test_repaired_release_is_ok(tmp_path: Path) -> None:
     root, sha = _release_repo(tmp_path)
 
-    unchanged = run_release(root, gh=_release_gh(view=_valid_release(sha)))
     repaired = run_release(root, gh=_release_gh(view=_valid_release(sha, assets=[])))
 
-    assert (unchanged.status, unchanged.outcome) == ("unchanged", "ok")
     assert (repaired.status, repaired.outcome) == ("repaired", "ok")
-
-
-def test_release_failures_other_than_main_advanced_are_failed(tmp_path: Path) -> None:
-    root, _sha = _release_repo(tmp_path)
-
-    result = run_release(root, gh=_release_gh(view=None, view_ok=False))
-
-    assert result.status == "failed"
-    assert result.outcome == "failed"

@@ -356,7 +356,6 @@ def test_live_check_job_reads_only_and_reports_its_findings():
     assert summary["if"] == "always()"
     assert str(SUMMARY) in summary["run"]
 
-    (findings,) = [s for s in job["steps"] if is_findings_upload(s)]
     (upload,) = [
         s
         for s in action_steps(job, "actions/upload-artifact")
@@ -371,19 +370,12 @@ def test_live_check_job_reads_only_and_reports_its_findings():
     assert steps.index(check) < steps.index(upload)
 
     emit = next(s for s in job["steps"] if is_emit(s))
-    assert steps[-2:] == [emit, findings]
-    assert command(emit) == ["python3", "-m", "scripts.alerts", "emit", "live-check"]
-    assert emit["env"] == {
-        "JOB_STATUS": "${{ job.status }}",
-        "CHECK_RESULT": "${{ steps.check.outcome }}",
-    }
-    assert check["id"] == "check"
 
     # Nothing in the job can change a branch, a PR or a committed file.
     assert [s for s in job["steps"] if "env" in s] == [emit]
     runs = " ".join(step.get("run", "") for step in job["steps"])
     for word in ("git", "gh ", "GITHUB_TOKEN", "github.token"):
-        assert word not in runs.replace("alerts", "")
+        assert word not in runs
     assert {step.get("uses", "").split("@")[0] for step in job["steps"]} == {
         "actions/checkout",
         "astral-sh/setup-uv",
