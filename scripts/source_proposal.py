@@ -16,15 +16,21 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal
 
 from scripts.workflow_support import (
     FULL_SHA,
+    SOURCE_NAMES,
+    STEP_OUTCOMES,
+    VALIDATION_STEPS,
     DiffEntry,
     FileProblem,
     GhRunner,
     HandoffRejected,
+    SourceName,
+    StepOutcome,
     SubprocessGhRunner,
+    ValidationStep,
     WriteOutcome,
     append_summary,
     bot_commit,
@@ -39,16 +45,15 @@ from scripts.workflow_support import (
     render_escaped_pre,
     require_env,
     run_url,
+    step_result_variable,
     verify_handoff,
     write_github_output,
+    write_outcome,
     write_outcome_output,
 )
 
 CANONICAL_REPOSITORY = "mjkoo/omnipack"
 CANONICAL_OWNER = "mjkoo"
-
-
-SourceName = Literal["codm", "quiver"]
 
 
 @dataclass(frozen=True)
@@ -70,7 +75,7 @@ SOURCES: Mapping[SourceName, SourceDescriptor] = {
         f".build/source-generation/{name}/report.json",
         f"chore(catalog): update reviewed {name} source",
     )
-    for name in get_args(SourceName)
+    for name in SOURCE_NAMES
 }
 GENERATION_SUCCESS_STATUS = "success"
 HANDOFF_DIRECTORY = "source-handoff"
@@ -85,12 +90,8 @@ SUMMARY_LIMIT = 250_000
 # added, removed or changed, so a reviewer is not left with three empty lists.
 BYTES_ONLY_CHANGE = "Catalog bytes changed without entry changes"
 
-# The values GitHub reports for a step's `outcome`.
-StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
-STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
 # The summary reports this for a step whose outcome is absent or unrecognized.
 StepResult = StepOutcome | Literal["unavailable"]
-VALIDATION_STEPS = ("generation", "staging", "tests", "build", "verify", "guard")
 
 
 # --- stage (read-only check job) -----------------------------------------
@@ -324,9 +325,9 @@ class PublishOutcome:
 
     @property
     def outcome(self) -> WriteOutcome:
-        if self.status != "failed":
-            return "ok"
-        return "main-advanced" if self.main_advanced else "failed"
+        return write_outcome(
+            succeeded=self.status != "failed", main_advanced=self.main_advanced
+        )
 
 
 def run_publish(
@@ -646,7 +647,7 @@ def _step_result(value: str) -> StepResult:
     return value if value in STEP_OUTCOMES else "unavailable"
 
 
-def _render_validation(results: Mapping[str, StepResult]) -> str:
+def _render_validation(results: Mapping[ValidationStep, StepResult]) -> str:
     lines = [f"{step}: {result}" for step, result in results.items()]
     return "Validation outcomes:\n" + "\n".join(lines) + "\n"
 
@@ -656,7 +657,7 @@ def render_pr_body(
     *,
     base_sha: str,
     run_url: str,
-    results: Mapping[str, StepResult],
+    results: Mapping[ValidationStep, StepResult],
 ) -> str:
     """The escaped PR body: the run, base, changes, skipped listings and results.
 
@@ -683,7 +684,7 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
     """
     descriptor = SOURCES[source]
     results = {
-        step: _step_result(environ.get(step.upper() + "_RESULT", ""))
+        step: _step_result(environ.get(step_result_variable(step), ""))
         for step in VALIDATION_STEPS
     }
     validation = _render_validation(results)

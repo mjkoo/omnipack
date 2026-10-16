@@ -17,19 +17,29 @@ import re
 import sys
 import tempfile
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass, field
-from enum import StrEnum
+from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
+from typing import Literal
 
 from scripts.workflow_support import (
+    SOURCE_NAMES,
+    STAGE_SEPARATOR,
+    VALIDATION_STEPS,
+    WRITE_OUTCOMES,
     GhRunner,
+    SourceName,
+    StepOutcome,
     SubprocessGhRunner,
+    ValidationStep,
+    WriteOutcome,
     append_summary,
+    parse_step_outcome,
     regular_file_problem,
     render_escaped_pre,
     require_env,
     run_url,
+    step_result_variable,
 )
 
 LABEL = "omnipack-alert"
@@ -52,6 +62,7 @@ _RUN_LINE = "\nRun: "
 _ALREADY_EXISTS = "already exists"
 _MUTE_REASONS = frozenset({"not_planned", "duplicate"})
 EARLY_FAILURE_SLUG = "run"
+_SEE_RUN = "See the workflow run linked below for the failing step."
 
 
 EMIT_HELP = """Write the findings file for one producing job.
@@ -69,55 +80,69 @@ and `stages` outputs (stages comma-separated), and the build report at --report
 (default .build/report.json).
 nightly-publish: PUSH_OUTCOME and RELEASE_OUTCOME, the push and release steps'
 `outcome` outputs (ok, main-advanced or failed; empty when a step did not run).
-codm-check, quiver-check: GENERATION_RESULT, STAGING_RESULT, TESTS_RESULT,
-BUILD_RESULT, VERIFY_RESULT and GUARD_RESULT, each step's `outcome`, and
-CHANGED, the stage step's `changed` output.
-codm-publish, quiver-publish: PUBLISH_OUTCOME, the publish step's `outcome`
-output.
+SOURCE-check, for each reviewed SOURCE: GENERATION_RESULT, STAGING_RESULT,
+TESTS_RESULT, BUILD_RESULT, VERIFY_RESULT and GUARD_RESULT, each step's
+`outcome`, and CHANGED, the stage step's `changed` output.
+SOURCE-publish: PUBLISH_OUTCOME, the publish step's `outcome` output.
 live-check: CHECK_RESULT, the `pack check-live` step's `outcome`, and its
 report at --report (default .build/live-check/report.json).
 """
 
 
-class JobResult(StrEnum):
-    """How a job or step ended, as GitHub reports `result` and `outcome`."""
-
-    SUCCESS = "success"
-    FAILURE = "failure"
-    CANCELLED = "cancelled"
-    SKIPPED = "skipped"
-
-    @classmethod
-    def parse(cls, value: str | None) -> JobResult | None:
-        """The result `value` names, or None for an absent or unknown value."""
-        try:
-            return cls(value)
-        except ValueError:
-            return None
-
-
-class Owner(StrEnum):
-    """The producing jobs a findings file can come from."""
-
-    NIGHTLY_PREPARE = "nightly-prepare"
-    NIGHTLY_PUBLISH = "nightly-publish"
-    CODM_CHECK = "codm-check"
-    CODM_PUBLISH = "codm-publish"
-    QUIVER_CHECK = "quiver-check"
-    QUIVER_PUBLISH = "quiver-publish"
-    LIVE_CHECK = "live-check"
-
-
-# The key prefixes each owner may use. The first is the early-failure prefix.
-OWNER_PREFIXES: Mapping[Owner, tuple[str, ...]] = {
-    Owner.NIGHTLY_PREPARE: ("nightly/prepare/", "build/"),
-    Owner.NIGHTLY_PUBLISH: ("nightly/publish/",),
-    Owner.CODM_CHECK: ("codm/check/",),
-    Owner.CODM_PUBLISH: ("codm/publish/",),
-    Owner.QUIVER_CHECK: ("quiver/check/",),
-    Owner.QUIVER_PUBLISH: ("quiver/publish/",),
-    Owner.LIVE_CHECK: ("live-check/",),
+# The producing jobs: the nightly prepare and publish jobs, each source's check
+# and publish jobs, and the live check.
+OwnerJob = Literal[
+    "nightly-prepare", "nightly-publish", "check", "publish", "live-check"
+]
+SourceJob = Literal["check", "publish"]
+_UNSOURCED_PREFIXES: Mapping[OwnerJob, tuple[str, ...]] = {
+    "nightly-prepare": ("nightly/prepare/", "build/"),
+    "nightly-publish": ("nightly/publish/",),
+    "live-check": ("live-check/",),
 }
+
+
+@dataclass(frozen=True)
+class Owner:
+    """A producing job a findings file can come from; `OWNERS` lists them all."""
+
+    job: OwnerJob
+    source: SourceName | None = None
+
+    @property
+    def value(self) -> str:
+        """The owner's name, as a findings file and the command line give it."""
+        return self.job if self.source is None else f"{self.source}-{self.job}"
+
+    @property
+    def prefixes(self) -> tuple[str, ...]:
+        """The key prefixes the owner may use. The first is the early-failure prefix."""
+        if self.source is None:
+            return _UNSOURCED_PREFIXES[self.job]
+        return (f"{self.source}/{self.job}/",)
+
+    def __str__(self) -> str:
+        return self.value
+
+
+NIGHTLY_PREPARE = Owner("nightly-prepare")
+NIGHTLY_PUBLISH = Owner("nightly-publish")
+LIVE_CHECK = Owner("live-check")
+_SOURCE_JOBS: tuple[SourceJob, ...] = ("check", "publish")
+OWNERS: tuple[Owner, ...] = (
+    NIGHTLY_PREPARE,
+    NIGHTLY_PUBLISH,
+    *(Owner(job, source) for source in SOURCE_NAMES for job in _SOURCE_JOBS),
+    LIVE_CHECK,
+)
+
+
+def parse_owner(name: str) -> Owner:
+    """The owner named `name`; raises ValueError for an unknown name."""
+    for owner in OWNERS:
+        if owner.value == name:
+            return owner
+    raise ValueError(f"unknown producer owner: {name}")
 
 
 @dataclass(frozen=True)
@@ -163,7 +188,7 @@ class Producer:
 
     owner: Owner
     path: Path
-    result: JobResult | None
+    result: StepOutcome | None
 
 
 class ReconcileFailure(RuntimeError):
@@ -171,7 +196,7 @@ class ReconcileFailure(RuntimeError):
 
 
 def early_failure_key(owner: Owner) -> str:
-    return OWNER_PREFIXES[owner][0] + EARLY_FAILURE_SLUG
+    return owner.prefixes[0] + EARLY_FAILURE_SLUG
 
 
 def early_failure_finding(owner: Owner) -> Finding:
@@ -187,7 +212,7 @@ def early_failure_finding(owner: Owner) -> Finding:
                 f"The {owner.value} job failed or was cancelled, or its findings"
                 " did not reach the alert job intact."
             ),
-            "See the workflow run linked below for the failing step.",
+            _SEE_RUN,
         ),
     )
 
@@ -232,7 +257,7 @@ def valid_key(owner: Owner, key: object) -> bool:
     return (
         isinstance(key, str)
         and _KEY.fullmatch(key) is not None
-        and key.startswith(OWNER_PREFIXES[owner])
+        and key.startswith(owner.prefixes)
     )
 
 
@@ -327,7 +352,6 @@ class ReconcileSummary:
     reopened: int = 0
     closed: int = 0
     cleared: int = 0
-    raised: list[str] = field(default_factory=list)
 
     @property
     def text(self) -> str:
@@ -342,9 +366,9 @@ def _read_producer(producer: Producer) -> tuple[list[Finding], list[str], list[s
     """The producer's findings, scope and unchecked keys by its result."""
     owner = producer.owner
     early = early_failure_key(owner)
-    if producer.result is JobResult.CANCELLED:
+    if producer.result == "cancelled":
         return [early_failure_finding(owner)], [early], []
-    if producer.result not in (JobResult.SUCCESS, JobResult.FAILURE):
+    if producer.result not in ("success", "failure"):
         return [], [], []
     parsed = None
     if regular_file_problem(producer.path) is None:
@@ -499,7 +523,7 @@ def reconcile(
         scope += producer_scope
         unchecked.update(producer_unchecked)
 
-    summary = ReconcileSummary(raised=sorted(raised))
+    summary = ReconcileSummary()
     ensure_label(gh, repository)
     existing = _list_issues(gh, repository)
     issues = _Issues(gh, repository)
@@ -541,10 +565,6 @@ def reconcile(
 DEFAULT_OUTPUT = Path(".build/alerts/findings.json")
 BUILD_REPORT = Path(".build/report.json")
 LIVE_CHECK_REPORT = Path(".build/live-check/report.json")
-STAGE_SEPARATOR = ","
-_OK = "ok"
-_FAILED = "failed"
-_MAIN_ADVANCED = "main-advanced"
 # The prepare stage names `scripts.nightly` reports, mapped to the slug each
 # one has in a key. A test outside the 3.12 run keeps these keys equal to that
 # script's stage names other than `complete`.
@@ -562,28 +582,22 @@ _BUILD_PREFIX = "build/"
 _UNCATEGORIZED = _BUILD_PREFIX + "uncategorized/"
 _STALE_DENIAL = _BUILD_PREFIX + "stale-denial/"
 _STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
-_LIVE_PREFIX = OWNER_PREFIXES[Owner.LIVE_CHECK][0]
+_LIVE_PREFIX = LIVE_CHECK.prefixes[0]
 _LIVE_READ = _LIVE_PREFIX + "read"
 _GONE = _LIVE_PREFIX + "gone/"
 _STATUS = _LIVE_PREFIX + "status/"
-# Each check step's key slug, the variable holding its `outcome`, and a name.
-_CHECK_STEPS = (
-    ("generation", "GENERATION_RESULT", "generation"),
-    ("stage", "STAGING_RESULT", "staging"),
-    ("tests", "TESTS_RESULT", "test suite"),
-    ("build", "BUILD_RESULT", "pack build"),
-    ("verify", "VERIFY_RESULT", "pack verification"),
-    ("guard", "GUARD_RESULT", "catalog guard"),
-)
-# The steps skipped, rather than run, when the candidate equals main's catalog.
-_SKIPPED_WHEN_UNCHANGED = ("tests", "build", "verify", "guard")
-_SOURCES = {
-    Owner.CODM_CHECK: "codm",
-    Owner.CODM_PUBLISH: "codm",
-    Owner.QUIVER_CHECK: "quiver",
-    Owner.QUIVER_PUBLISH: "quiver",
+# Each source check step's key slug and the name its finding gives it, in the
+# order the steps run.
+CHECK_STEPS: Mapping[ValidationStep, tuple[str, str]] = {
+    "generation": ("generation", "generation"),
+    "staging": ("stage", "staging"),
+    "tests": ("tests", "test suite"),
+    "build": ("build", "pack build"),
+    "verify": ("verify", "pack verification"),
+    "guard": ("guard", "catalog guard"),
 }
-_SEE_RUN = "See the workflow run linked below for the failing step."
+# The steps skipped, rather than run, when the candidate equals main's catalog.
+_SKIPPED_WHEN_UNCHANGED: tuple[ValidationStep, ...] = VALIDATION_STEPS[2:]
 
 
 def _one_line(text: str) -> str:
@@ -606,11 +620,11 @@ def _finish(
 ) -> FindingsFile:
     """The owner's file, adding its early-failure finding for a failed job that
     nothing else accounts for, and keeping only that finding for a cancelled one."""
-    status = JobResult.parse(require_env(environ, "JOB_STATUS"))
-    if status is JobResult.CANCELLED:
+    status = parse_step_outcome(require_env(environ, "JOB_STATUS"))
+    if status == "cancelled":
         return FindingsFile(owner, findings=(early_failure_finding(owner),))
     raised = {finding.key: finding for finding in findings}
-    if status is JobResult.FAILURE and not accounted:
+    if status == "failure" and not accounted:
         early = early_failure_finding(owner)
         raised.setdefault(early.key, early)
     return FindingsFile(
@@ -644,16 +658,16 @@ def _strings(value: object) -> list[str]:
     return [item for item in value if isinstance(item, str)]
 
 
-def _result(environ: Mapping[str, str], name: str) -> JobResult | None:
-    return JobResult.parse(environ.get(name))
+def _result(environ: Mapping[str, str], name: str) -> StepOutcome | None:
+    return parse_step_outcome(environ.get(name))
 
 
 def emit_nightly_prepare(
     environ: Mapping[str, str], report_path: Path = BUILD_REPORT
 ) -> FindingsFile:
     """Stage findings from the prepare step's outputs, build warnings from its report."""
-    owner = Owner.NIGHTLY_PREPARE
-    prefix = OWNER_PREFIXES[owner][0]
+    owner = NIGHTLY_PREPARE
+    prefix = owner.prefixes[0]
     findings: list[Finding] = []
     scope = [
         prefix + PREPARE_STAGE_SLUGS[name]
@@ -723,6 +737,13 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
     return findings
 
 
+def _write_outcome(value: str | None) -> WriteOutcome | None:
+    for outcome in WRITE_OUTCOMES:
+        if value == outcome:
+            return outcome
+    return None
+
+
 def _publish_steps(
     owner: Owner,
     environ: Mapping[str, str],
@@ -734,25 +755,25 @@ def _publish_steps(
     `main-advanced` outcome raises nothing and re-checks nothing but still
     accounts for a failed job, and an empty one means the step did not run.
     """
-    prefix = OWNER_PREFIXES[owner][0]
+    prefix = owner.prefixes[0]
     findings: list[Finding] = []
     scope: list[str] = []
     accounted = False
     for slug, variable, name in steps:
-        outcome = environ.get(variable, "")
-        if outcome in (_OK, _FAILED):
+        outcome = _write_outcome(environ.get(variable))
+        if outcome in ("ok", "failed"):
             scope.append(prefix + slug)
-        if outcome == _FAILED:
+        if outcome == "failed":
             findings.append(
                 _finding(prefix + slug, f"{name} failed", [f"{name} failed.", _SEE_RUN])
             )
-        accounted = accounted or outcome in (_FAILED, _MAIN_ADVANCED)
+        accounted = accounted or outcome in ("failed", "main-advanced")
     return _finish(owner, environ, findings, scope, accounted=accounted)
 
 
 def emit_nightly_publish(environ: Mapping[str, str]) -> FindingsFile:
     return _publish_steps(
-        Owner.NIGHTLY_PUBLISH,
+        NIGHTLY_PUBLISH,
         environ,
         (
             ("push", "PUSH_OUTCOME", "Nightly push to main"),
@@ -761,34 +782,35 @@ def emit_nightly_publish(environ: Mapping[str, str]) -> FindingsFile:
     )
 
 
-def emit_source_publish(environ: Mapping[str, str], owner: Owner) -> FindingsFile:
-    source = _SOURCES[owner]
+def emit_source_publish(environ: Mapping[str, str], source: SourceName) -> FindingsFile:
     return _publish_steps(
-        owner,
+        Owner("publish", source),
         environ,
         (("proposal", "PUBLISH_OUTCOME", f"Publishing the {source} source proposal"),),
     )
 
 
-def emit_source_check(environ: Mapping[str, str], owner: Owner) -> FindingsFile:
+def emit_source_check(environ: Mapping[str, str], source: SourceName) -> FindingsFile:
     """Step findings from the check job's step outcomes and `CHANGED` flag."""
-    prefix = OWNER_PREFIXES[owner][0]
-    source = _SOURCES[owner]
-    results = {slug: _result(environ, variable) for slug, variable, _ in _CHECK_STEPS}
+    owner = Owner("check", source)
+    prefix = owner.prefixes[0]
+    results = {
+        step: _result(environ, step_result_variable(step)) for step in CHECK_STEPS
+    }
     unchanged = (
-        results["generation"] is JobResult.SUCCESS
-        and results["stage"] is JobResult.SUCCESS
+        results["generation"] == "success"
+        and results["staging"] == "success"
         and environ.get("CHANGED") == "false"
     )
     findings: list[Finding] = []
     scope: list[str] = []
-    for slug, _, name in _CHECK_STEPS:
-        result = results[slug]
-        if result in (JobResult.SUCCESS, JobResult.FAILURE) or (
-            unchanged and slug in _SKIPPED_WHEN_UNCHANGED
+    for step, (slug, name) in CHECK_STEPS.items():
+        result = results[step]
+        if result in ("success", "failure") or (
+            unchanged and step in _SKIPPED_WHEN_UNCHANGED
         ):
             scope.append(prefix + slug)
-        if result is JobResult.FAILURE:
+        if result == "failure":
             findings.append(
                 _finding(
                     prefix + slug,
@@ -807,7 +829,7 @@ def emit_live_check(
     environ: Mapping[str, str], report_path: Path = LIVE_CHECK_REPORT
 ) -> FindingsFile:
     """Findings from the live check's report, read only when the check step ran."""
-    ran = _result(environ, "CHECK_RESULT") in (JobResult.SUCCESS, JobResult.FAILURE)
+    ran = _result(environ, "CHECK_RESULT") in ("success", "failure")
     report = _read_object(report_path) if ran else None
     if report is not None and report.get("status") not in ("success", "failed"):
         report = None
@@ -857,7 +879,7 @@ def emit_live_check(
                 else:
                     unchecked += [subject_key(_GONE, url), subject_key(_STATUS, url)]
     return _finish(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         environ,
         findings,
         scope,
@@ -875,15 +897,15 @@ def emit(
     owner: Owner, environ: Mapping[str, str], report_path: Path | None = None
 ) -> FindingsFile:
     """The findings file for `owner` from the environment `EMIT_HELP` documents."""
-    if owner is Owner.NIGHTLY_PREPARE:
+    if owner.source is not None:
+        if owner.job == "check":
+            return emit_source_check(environ, owner.source)
+        return emit_source_publish(environ, owner.source)
+    if owner == NIGHTLY_PREPARE:
         return emit_nightly_prepare(environ, report_path or BUILD_REPORT)
-    if owner is Owner.NIGHTLY_PUBLISH:
+    if owner == NIGHTLY_PUBLISH:
         return emit_nightly_publish(environ)
-    if owner is Owner.LIVE_CHECK:
-        return emit_live_check(environ, report_path or LIVE_CHECK_REPORT)
-    if owner in (Owner.CODM_CHECK, Owner.QUIVER_CHECK):
-        return emit_source_check(environ, owner)
-    return emit_source_publish(environ, owner)
+    return emit_live_check(environ, report_path or LIVE_CHECK_REPORT)
 
 
 def write_findings(file: FindingsFile, output: Path) -> None:
@@ -910,13 +932,20 @@ def _emit_command(arguments: argparse.Namespace, environ: Mapping[str, str]) -> 
 def _parse_producer(value: str) -> Producer:
     name, separator, rest = value.partition("=")
     try:
-        owner = Owner(name)
-    except ValueError:
-        raise SystemExit(f"unknown producer owner: {name}") from None
+        owner = parse_owner(name)
+    except ValueError as error:
+        raise SystemExit(str(error)) from None
     result, colon, path = rest.partition(":")
     if not separator or not colon or not path:
         raise SystemExit(f"--producer needs OWNER=RESULT:PATH, got {value}")
-    return Producer(owner, Path(path), JobResult.parse(result))
+    return Producer(owner, Path(path), parse_step_outcome(result))
+
+
+def _owner_argument(value: str) -> Owner:
+    try:
+        return parse_owner(value)
+    except ValueError as error:
+        raise argparse.ArgumentTypeError(str(error)) from None
 
 
 def _reconcile_command(
@@ -955,7 +984,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=EMIT_HELP,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    emit_parser.add_argument("owner", type=Owner, choices=list(Owner))
+    emit_parser.add_argument("owner", type=_owner_argument, choices=OWNERS)
     emit_parser.add_argument("--report", type=Path, default=None)
     emit_parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args(argv)

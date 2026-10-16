@@ -15,6 +15,7 @@ from typing import Literal, Protocol
 from omnipack.catalog import CatalogError, split_catalog
 from scripts.nightly_write import ALLOWED_PATHS
 from scripts.workflow_support import (
+    STAGE_SEPARATOR,
     CommandResult,
     append_summary,
     bot_commit,
@@ -59,9 +60,6 @@ class PrepareSubprocess:
         completed = subprocess.run(command, cwd=cwd, check=False)
         return CommandResult(completed.returncode, "", "")
 
-
-# Joins stage names in the `stages` step output; no stage name contains it.
-STAGE_SEPARATOR = ","
 
 PrepareStatus = Literal["no-op", "prepared", "failed"]
 PrepareStage = Literal[

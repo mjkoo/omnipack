@@ -33,6 +33,7 @@ from scripts.workflow_support import (
     ls_remote_sha,
     regular_file_problem,
     verify_handoff,
+    write_outcome,
     write_outcome_output,
 )
 
@@ -82,9 +83,9 @@ class PushOutcome:
 
     @property
     def outcome(self) -> WriteOutcome:
-        if self.status == "published":
-            return "ok"
-        return "main-advanced" if self.main_advanced else "failed"
+        return write_outcome(
+            succeeded=self.status == "published", main_advanced=self.main_advanced
+        )
 
 
 ReleaseStatus = Literal["unchanged", "repaired", "advanced", "failed"]
@@ -98,9 +99,9 @@ class ReleaseOutcome:
 
     @property
     def outcome(self) -> WriteOutcome:
-        if self.status != "failed":
-            return "ok"
-        return "main-advanced" if self.main_advanced else "failed"
+        return write_outcome(
+            succeeded=self.status != "failed", main_advanced=self.main_advanced
+        )
 
 
 def run_push(

@@ -14,7 +14,8 @@ from omnipack.report_model import (
     Status,
 )
 from omnipack.source_registry import GENERATED
-from scripts.source_proposal import GENERATION_SUCCESS_STATUS, SourceName
+from scripts.source_proposal import GENERATION_SUCCESS_STATUS
+from scripts.workflow_support import SourceName
 
 
 def test_generation_success_matches_the_standalone_script_boundary() -> None:

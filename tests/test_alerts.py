@@ -16,12 +16,16 @@ import pytest
 from scripts import alerts as alerts_module
 from scripts.alerts import (
     BODY_LIMIT,
+    CHECK_STEPS,
     KEY_LIMIT,
+    LIVE_CHECK,
+    NIGHTLY_PREPARE,
+    NIGHTLY_PUBLISH,
+    OWNERS,
     PREPARE_STAGE_SLUGS,
     TITLE_LIMIT,
     Finding,
     FindingsFile,
-    JobResult,
     Owner,
     Producer,
     ReconcileFailure,
@@ -32,16 +36,22 @@ from scripts.alerts import (
     encode_subject,
     marker_line,
     parse_findings,
+    parse_owner,
     reconcile,
     subject_key,
     truncate_title,
 )
+from scripts.workflow_support import SOURCE_NAMES, VALIDATION_STEPS, StepOutcome
 from tests.publication_support import OK, CommandResult, FakeGh, failure
 
 REPOSITORY = "mjkoo/omnipack"
 RUN_1 = "https://github.com/mjkoo/omnipack/actions/runs/1"
 RUN_2 = "https://github.com/mjkoo/omnipack/actions/runs/2"
 LIST = ("api", "--paginate")
+CODM_CHECK = Owner("check", "codm")
+CODM_PUBLISH = Owner("publish", "codm")
+QUIVER_CHECK = Owner("check", "quiver")
+QUIVER_PUBLISH = Owner("publish", "quiver")
 CODM_STEP = "codm/check/verify"
 NIGHTLY_STAGE = "nightly/prepare/build"
 
@@ -115,8 +125,8 @@ def _run(
     return reconcile(gh, producers, repository=REPOSITORY, url=url)
 
 
-def _nightly(path: Path, result: JobResult | None = JobResult.SUCCESS) -> Producer:
-    return Producer(Owner.NIGHTLY_PREPARE, path, result)
+def _nightly(path: Path, result: StepOutcome | None = "success") -> Producer:
+    return Producer(NIGHTLY_PREPARE, path, result)
 
 
 def _verbs(gh: FakeGh) -> list[tuple[str, ...]]:
@@ -160,8 +170,8 @@ def test_overlong_subject_keys_fit_the_cap_and_stay_distinct_and_stable() -> Non
     assert key == subject_key("live-check/gone/", first)
     assert key != subject_key("live-check/gone/", second)
     assert parse_findings(
-        Owner.LIVE_CHECK,
-        FindingsFile(Owner.LIVE_CHECK, findings=(Finding(key, "t"),)).to_json(),
+        LIVE_CHECK,
+        FindingsFile(LIVE_CHECK, findings=(Finding(key, "t"),)).to_json(),
     )
 
 
@@ -179,17 +189,37 @@ def test_titles_past_the_limit_end_in_an_ellipsis() -> None:
     assert cut.endswith("…")
 
 
+def test_each_source_has_its_own_check_and_publish_owners() -> None:
+    sourced = [owner for owner in OWNERS if owner.source is not None]
+
+    assert sorted((o.source, o.job) for o in sourced) == sorted(
+        (source, job) for source in SOURCE_NAMES for job in ("check", "publish")
+    )
+    assert len({owner.value for owner in OWNERS}) == len(OWNERS)
+    prefixes = [prefix for owner in OWNERS for prefix in owner.prefixes]
+    assert not any(a != b and b.startswith(a) for a in prefixes for b in prefixes)
+    assert parse_owner("quiver-publish").prefixes == ("quiver/publish/",)
+    with pytest.raises(ValueError, match="unknown producer owner"):
+        parse_owner("quiver")
+
+
+def test_check_step_table_covers_exactly_the_validation_steps_in_order() -> None:
+    assert tuple(CHECK_STEPS) == VALIDATION_STEPS
+    slugs = [slug for slug, _ in CHECK_STEPS.values()]
+    assert len(set(slugs)) == len(slugs)
+
+
 def test_early_failure_finding_is_fixed_per_owner() -> None:
-    for owner in Owner:
+    for owner in OWNERS:
         finding = early_failure_finding(owner)
         assert finding == early_failure_finding(owner)
         assert finding.key == early_failure_key(owner)
         assert finding.key.endswith("/run")
         assert owner.value in finding.title
         assert not any("http" in line for line in finding.details)
-    assert early_failure_key(Owner.NIGHTLY_PREPARE) == "nightly/prepare/run"
-    assert early_failure_key(Owner.LIVE_CHECK) == "live-check/run"
-    assert early_failure_key(Owner.QUIVER_PUBLISH) == "quiver/publish/run"
+    assert early_failure_key(NIGHTLY_PREPARE) == "nightly/prepare/run"
+    assert early_failure_key(LIVE_CHECK) == "live-check/run"
+    assert early_failure_key(QUIVER_PUBLISH) == "quiver/publish/run"
 
 
 def _parse(expected: Owner, **overrides: object) -> FindingsFile | None:
@@ -230,21 +260,21 @@ def _entry(key: str, **overrides: object) -> dict[str, object]:
     ],
 )
 def test_invalid_findings_files_are_rejected(overrides: dict[str, object]) -> None:
-    assert _parse(Owner.CODM_CHECK, **overrides) is None
+    assert _parse(CODM_CHECK, **overrides) is None
 
 
 def test_valid_findings_keep_raw_details_and_allow_long_ones() -> None:
     long_details = ["<b>" + "x" * 200_000]
     parsed = _parse(
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         findings=[_entry(CODM_STEP, title="x" * 255, details=long_details)],
         scope=["codm/check/"],
     )
 
     assert parsed is not None
     assert parsed.findings[0].details == tuple(long_details)
-    assert parse_findings(Owner.CODM_CHECK, "{not json") is None
-    assert parse_findings(Owner.CODM_CHECK, "[]") is None
+    assert parse_findings(CODM_CHECK, "{not json") is None
+    assert parse_findings(CODM_CHECK, "[]") is None
 
 
 # --- bodies ----------------------------------------------------------------
@@ -278,7 +308,7 @@ def test_body_truncates_to_the_limit_counting_the_rest() -> None:
 def test_new_finding_opens_an_issue_with_label_title_and_body(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "Build failed", ("error <1>",)),),
     )
@@ -297,7 +327,7 @@ def test_new_finding_opens_an_issue_with_label_title_and_body(tmp_path: Path) ->
 
 
 def test_finding_clears_closing_its_issue_as_completed(tmp_path: Path) -> None:
-    path = _file(tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
+    path = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     gh = _gh([_issue(7, NIGHTLY_STAGE)])
 
     _run(gh, _nightly(path))
@@ -313,7 +343,7 @@ def test_persisting_finding_with_new_details_edits_the_same_issue(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "t", ("new message",)),),
     )
@@ -330,7 +360,7 @@ def test_persisting_finding_with_new_details_edits_the_same_issue(
 def test_persisting_finding_with_changed_title_edits_the_issue(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "new title", ("boom",)),),
     )
     gh = _gh([_issue(7, NIGHTLY_STAGE, title="old title")])
@@ -345,7 +375,7 @@ def test_unchanged_finding_makes_no_edit_across_runs_with_different_urls(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
@@ -366,7 +396,7 @@ def test_unchanged_finding_makes_no_edit_across_runs_with_different_urls(
 def test_muted_issue_stays_closed_while_the_finding_persists(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
@@ -380,7 +410,7 @@ def test_muted_issue_stays_closed_while_the_finding_persists(tmp_path: Path) -> 
 def test_muted_issue_that_clears_is_marked_completed_and_then_recurs_reopened(
     tmp_path: Path,
 ) -> None:
-    clear = _file(tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
+    clear = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     muted = _issue(7, NIGHTLY_STAGE, state="closed", reason="not_planned")
     gh = _gh([muted])
 
@@ -393,7 +423,7 @@ def test_muted_issue_that_clears_is_marked_completed_and_then_recurs_reopened(
 
     raise_again = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
         name="again.json",
     )
@@ -409,16 +439,14 @@ def test_mute_survives_a_run_that_did_not_re_check_the_key(tmp_path: Path) -> No
     key = "live-check/status/https://example.com/x"
     path = _file(
         tmp_path,
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         scope=("live-check/status/", "live-check/gone/"),
         unchecked=(key,),
     )
-    other = _file(
-        tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,), name="n.json"
-    )
+    other = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,), name="n.json")
     gh = _gh([_issue(7, key, state="closed", reason="not_planned")])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS), _nightly(other))
+    _run(gh, Producer(LIVE_CHECK, path, "success"), _nightly(other))
 
     assert _verbs(gh) == []
 
@@ -427,7 +455,7 @@ def test_mute_survives_a_run_that_did_not_re_check_the_key(tmp_path: Path) -> No
 def test_not_planned_and_duplicate_closures_are_mutes(
     tmp_path: Path, reason: str
 ) -> None:
-    path = _file(tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
+    path = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     gh = _gh([_issue(7, NIGHTLY_STAGE, state="closed", reason=reason)])
 
     _run(gh, _nightly(path))
@@ -441,7 +469,7 @@ def test_completed_or_unreasoned_closures_reopen_when_raised(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
     gh = _gh([_issue(7, NIGHTLY_STAGE, state="closed", reason=reason)])
@@ -455,7 +483,7 @@ def test_completed_or_unreasoned_closures_reopen_when_raised(
 def test_completed_closure_is_left_alone_when_the_finding_clears(
     tmp_path: Path, reason: str | None
 ) -> None:
-    path = _file(tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
+    path = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     gh = _gh([_issue(7, NIGHTLY_STAGE, state="closed", reason=reason)])
 
     _run(gh, _nightly(path))
@@ -467,7 +495,7 @@ def test_muted_403_does_not_hide_a_later_404(tmp_path: Path) -> None:
     url = "https://example.com/x"
     path = _file(
         tmp_path,
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         scope=("live-check/gone/", "live-check/status/"),
         findings=(Finding(f"live-check/gone/{url}", "gone", ("404",)),),
     )
@@ -475,13 +503,13 @@ def test_muted_403_does_not_hide_a_later_404(tmp_path: Path) -> None:
         [_issue(7, f"live-check/status/{url}", state="closed", reason="not_planned")]
     )
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
+    _run(gh, Producer(LIVE_CHECK, path, "success"))
 
     assert _verbs(gh)[0] == ("create", "gone")
 
 
 def test_key_outside_scope_or_unchecked_is_left_unchanged(tmp_path: Path) -> None:
-    path = _file(tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
+    path = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     gh = _gh(
         [
             _issue(1, "nightly/prepare/commit"),
@@ -501,13 +529,13 @@ def test_unchecked_key_under_a_scope_prefix_is_not_closed(tmp_path: Path) -> Non
     gone = "live-check/gone/https://example.com/gone"
     path = _file(
         tmp_path,
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         scope=("live-check/gone/", "live-check/status/"),
         unchecked=(kept,),
     )
     gh = _gh([_issue(1, kept), _issue(2, gone)])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
+    _run(gh, Producer(LIVE_CHECK, path, "success"))
 
     assert _verbs(gh) == [("close", "2")]
 
@@ -515,7 +543,7 @@ def test_unchecked_key_under_a_scope_prefix_is_not_closed(tmp_path: Path) -> Non
 def test_creates_and_reopens_precede_closes(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         scope=("codm/check/",),
         findings=(
             Finding("codm/check/tests", "tests", ("x",)),
@@ -529,7 +557,7 @@ def test_creates_and_reopens_precede_closes(tmp_path: Path) -> None:
         ]
     )
 
-    _run(gh, Producer(Owner.CODM_CHECK, path, JobResult.FAILURE))
+    _run(gh, Producer(CODM_CHECK, path, "failure"))
 
     verbs = [verb for verb, _ in _verbs(gh)]
     assert verbs == ["create", "reopen", "edit", "close"]
@@ -541,7 +569,7 @@ def test_creates_and_reopens_precede_closes(tmp_path: Path) -> None:
 def test_duplicate_keys_use_the_lowest_number(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("new",)),),
     )
     gh = _gh([[_issue(9, NIGHTLY_STAGE)], [_issue(4, NIGHTLY_STAGE, title="t")]])
@@ -555,7 +583,7 @@ def test_issues_without_a_valid_first_line_marker_are_ignored(tmp_path: Path) ->
     marker = marker_line(NIGHTLY_STAGE)
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
@@ -577,7 +605,7 @@ def test_issues_without_a_valid_first_line_marker_are_ignored(tmp_path: Path) ->
 def test_pull_requests_in_the_listing_are_ignored(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
     gh = _gh([_issue(1, NIGHTLY_STAGE) | {"pull_request": {}}])
@@ -593,7 +621,7 @@ def test_details_carrying_another_keys_marker_leave_that_issue_alone(
     other = "codm/check/verify"
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "t", (marker_line(other), "<b>x</b>")),),
     )
@@ -619,7 +647,7 @@ def test_marker_inside_an_existing_issues_details_is_not_its_key() -> None:
 def test_listing_reads_every_page(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=(NIGHTLY_STAGE,),
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
@@ -642,7 +670,7 @@ def test_listing_reads_every_page(tmp_path: Path) -> None:
 def test_existing_label_is_success_and_reconcile_proceeds(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
     gh = _gh(
@@ -661,50 +689,48 @@ def test_existing_label_is_success_and_reconcile_proceeds(tmp_path: Path) -> Non
 def test_producer_findings_files_do_not_cross_owners(tmp_path: Path) -> None:
     codm = _file(
         tmp_path,
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         scope=("codm/check/",),
         findings=(Finding("codm/check/verify", "verify", ("x",)),),
     )
     gh = _gh([_issue(1, "quiver/check/verify")])
-    quiver = Producer(Owner.QUIVER_CHECK, tmp_path / "missing.json", JobResult.SKIPPED)
+    quiver = Producer(QUIVER_CHECK, tmp_path / "missing.json", "skipped")
 
-    _run(gh, Producer(Owner.CODM_CHECK, codm, JobResult.FAILURE), quiver)
+    _run(gh, Producer(CODM_CHECK, codm, "failure"), quiver)
 
     assert _verbs(gh) == [("create", "verify")]
 
 
 def test_codm_early_failure_leaves_quivers_issue_open(tmp_path: Path) -> None:
-    gh_codm = _gh([_issue(1, early_failure_key(Owner.QUIVER_CHECK))])
-    _run(gh_codm, Producer(Owner.CODM_CHECK, tmp_path / "none.json", JobResult.FAILURE))
+    gh_codm = _gh([_issue(1, early_failure_key(QUIVER_CHECK))])
+    _run(gh_codm, Producer(CODM_CHECK, tmp_path / "none.json", "failure"))
 
-    assert _verbs(gh_codm) == [
-        ("create", early_failure_finding(Owner.CODM_CHECK).title)
-    ]
+    assert _verbs(gh_codm) == [("create", early_failure_finding(CODM_CHECK).title)]
 
-    gh_quiver = _gh([_issue(1, early_failure_key(Owner.CODM_CHECK))])
-    quiver = _file(tmp_path, Owner.QUIVER_CHECK, scope=("quiver/check/",))
-    _run(gh_quiver, Producer(Owner.QUIVER_CHECK, quiver, JobResult.SUCCESS))
+    gh_quiver = _gh([_issue(1, early_failure_key(CODM_CHECK))])
+    quiver = _file(tmp_path, QUIVER_CHECK, scope=("quiver/check/",))
+    _run(gh_quiver, Producer(QUIVER_CHECK, quiver, "success"))
     assert _verbs(gh_quiver) == []
 
 
 def test_codm_and_quiver_reconcile_in_one_run_independently(tmp_path: Path) -> None:
-    quiver = _file(tmp_path, Owner.QUIVER_CHECK, scope=("quiver/check/",))
+    quiver = _file(tmp_path, QUIVER_CHECK, scope=("quiver/check/",))
     gh = _gh(
         [
-            _issue(1, early_failure_key(Owner.QUIVER_CHECK)),
+            _issue(1, early_failure_key(QUIVER_CHECK)),
             _issue(
                 2,
-                early_failure_key(Owner.CODM_CHECK),
-                title=early_failure_finding(Owner.CODM_CHECK).title,
-                details=early_failure_finding(Owner.CODM_CHECK).details,
+                early_failure_key(CODM_CHECK),
+                title=early_failure_finding(CODM_CHECK).title,
+                details=early_failure_finding(CODM_CHECK).details,
             ),
         ]
     )
 
     _run(
         gh,
-        Producer(Owner.CODM_CHECK, tmp_path / "none.json", JobResult.FAILURE),
-        Producer(Owner.QUIVER_CHECK, quiver, JobResult.SUCCESS),
+        Producer(CODM_CHECK, tmp_path / "none.json", "failure"),
+        Producer(QUIVER_CHECK, quiver, "success"),
     )
 
     assert ("close", "1") in _verbs(gh)
@@ -713,25 +739,23 @@ def test_codm_and_quiver_reconcile_in_one_run_independently(tmp_path: Path) -> N
 
 
 def test_early_failure_issue_closes_when_the_producer_succeeds(tmp_path: Path) -> None:
-    path = _file(tmp_path, Owner.LIVE_CHECK)
-    gh = _gh([_issue(1, early_failure_key(Owner.LIVE_CHECK))])
+    path = _file(tmp_path, LIVE_CHECK)
+    gh = _gh([_issue(1, early_failure_key(LIVE_CHECK))])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
+    _run(gh, Producer(LIVE_CHECK, path, "success"))
 
     assert _verbs(gh) == [("close", "1")]
 
 
-@pytest.mark.parametrize("result", [JobResult.SUCCESS, JobResult.FAILURE])
+@pytest.mark.parametrize("result", ["success", "failure"])
 def test_missing_file_raises_the_early_failure_and_closes_nothing_else(
-    tmp_path: Path, result: JobResult
+    tmp_path: Path, result: StepOutcome
 ) -> None:
     gh = _gh([_issue(1, NIGHTLY_STAGE)])
 
     _run(gh, _nightly(tmp_path / "absent.json", result))
 
-    assert _verbs(gh) == [
-        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
-    ]
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
 def test_rejected_file_raises_the_early_failure_only(tmp_path: Path) -> None:
@@ -741,15 +765,13 @@ def test_rejected_file_raises_the_early_failure_only(tmp_path: Path) -> None:
 
     _run(gh, _nightly(path))
 
-    assert _verbs(gh) == [
-        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
-    ]
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
 def test_foreign_key_is_rejected_with_the_early_failure_finding(tmp_path: Path) -> None:
     path = _file(
         tmp_path,
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         scope=("live-check/",),
         findings=(Finding("live-check/gone/x", "gone", ()),),
     )
@@ -758,9 +780,9 @@ def test_foreign_key_is_rejected_with_the_early_failure_finding(tmp_path: Path) 
     path.write_text(json.dumps(data))
     gh = _gh([_issue(1, "live-check/gone/y")])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
+    _run(gh, Producer(LIVE_CHECK, path, "success"))
 
-    assert _verbs(gh) == [("create", early_failure_finding(Owner.LIVE_CHECK).title)]
+    assert _verbs(gh) == [("create", early_failure_finding(LIVE_CHECK).title)]
 
 
 def test_pathologically_nested_file_is_rejected_with_the_early_failure(
@@ -768,35 +790,23 @@ def test_pathologically_nested_file_is_rejected_with_the_early_failure(
 ) -> None:
     path = tmp_path / "nested.json"
     path.write_text("[" * 100_000 + "]" * 100_000)
-    assert parse_findings(Owner.NIGHTLY_PREPARE, path.read_text()) is None
+    assert parse_findings(NIGHTLY_PREPARE, path.read_text()) is None
     gh = _gh([_issue(1, NIGHTLY_STAGE)])
 
     _run(gh, _nightly(path))
 
-    assert _verbs(gh) == [
-        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
-    ]
-
-
-def test_job_result_parses_known_values_and_nothing_else() -> None:
-    assert JobResult.parse("cancelled") is JobResult.CANCELLED
-    assert JobResult.parse("success") is JobResult.SUCCESS
-    assert JobResult.parse("") is None
-    assert JobResult.parse("weird") is None
-    assert JobResult.parse(None) is None
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
 def test_symlinked_findings_file_is_rejected(tmp_path: Path) -> None:
-    real = _file(tmp_path, Owner.NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
+    real = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     link = tmp_path / "link.json"
     link.symlink_to(real)
     gh = _gh([_issue(1, NIGHTLY_STAGE)])
 
     _run(gh, _nightly(link))
 
-    assert _verbs(gh) == [
-        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
-    ]
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
 def test_cancelled_producer_with_a_valid_file_raises_only_the_early_failure(
@@ -804,18 +814,16 @@ def test_cancelled_producer_with_a_valid_file_raises_only_the_early_failure(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=("nightly/prepare/", NIGHTLY_STAGE),
         unchecked=(),
         findings=(Finding(NIGHTLY_STAGE, "build", ("boom",)),),
     )
     gh = _gh([_issue(1, "nightly/prepare/commit"), _issue(2, "build/x")])
 
-    _run(gh, _nightly(path, JobResult.CANCELLED))
+    _run(gh, _nightly(path, "cancelled"))
 
-    assert _verbs(gh) == [
-        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
-    ]
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
 def test_failed_producer_reporting_only_the_early_failure_closes_nothing(
@@ -823,31 +831,29 @@ def test_failed_producer_reporting_only_the_early_failure_closes_nothing(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
-        findings=(early_failure_finding(Owner.NIGHTLY_PREPARE),),
+        NIGHTLY_PREPARE,
+        findings=(early_failure_finding(NIGHTLY_PREPARE),),
     )
     gh = _gh([_issue(1, NIGHTLY_STAGE), _issue(2, "build/uncategorized/x")])
 
-    _run(gh, _nightly(path, JobResult.FAILURE))
+    _run(gh, _nightly(path, "failure"))
 
-    assert _verbs(gh) == [
-        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
-    ]
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
-@pytest.mark.parametrize("result", [JobResult.SKIPPED, None])
+@pytest.mark.parametrize("result", ["skipped", None])
 def test_producer_with_another_result_contributes_nothing(
-    tmp_path: Path, result: JobResult | None
+    tmp_path: Path, result: StepOutcome | None
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PUBLISH,
+        NIGHTLY_PUBLISH,
         scope=("nightly/publish/",),
         findings=(Finding("nightly/publish/push", "push", ()),),
     )
     gh = _gh([_issue(1, "nightly/publish/release"), _issue(2, "nightly/publish/run")])
 
-    _run(gh, Producer(Owner.NIGHTLY_PUBLISH, path, result))
+    _run(gh, Producer(NIGHTLY_PUBLISH, path, result))
 
     assert _verbs(gh) == []
 
@@ -858,13 +864,13 @@ def test_oversized_details_keep_the_finding_with_an_overflow_count(
     details = tuple("y" * 1000 for _ in range(200))
     path = _file(
         tmp_path,
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         scope=("codm/check/",),
         findings=(Finding(CODM_STEP, "verify", details),),
     )
     gh = _gh()
 
-    _run(gh, Producer(Owner.CODM_CHECK, path, JobResult.FAILURE))
+    _run(gh, Producer(CODM_CHECK, path, "failure"))
 
     assert _verbs(gh) == [("create", "verify")]
     (body,) = _bodies(gh, "create")
@@ -908,7 +914,7 @@ def test_failed_gh_operation_fails_with_a_fixed_reason(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         scope=("nightly/prepare/commit",),
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
@@ -936,7 +942,7 @@ def test_failed_gh_operation_fails_with_a_fixed_reason(
 
 
 def test_unreadable_listing_fails_without_gh_output(tmp_path: Path) -> None:
-    path = _file(tmp_path, Owner.NIGHTLY_PREPARE)
+    path = _file(tmp_path, NIGHTLY_PREPARE)
     gh = _gh(listing=CommandResult(0, "{not json", ""))
 
     with pytest.raises(ReconcileFailure, match="could not read the issue listing"):
@@ -948,7 +954,7 @@ def test_cli_reconciles_producers_with_results_from_the_command_line(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
     gh = _gh()
@@ -982,7 +988,7 @@ def test_cli_producer_with_an_empty_or_unknown_result_contributes_nothing(
 ) -> None:
     path = _file(
         tmp_path,
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
     )
     gh = _gh()
@@ -1062,14 +1068,14 @@ def _build_report(status: str = "success", **lists: list) -> dict:
 
 def test_emit_requires_the_job_status(tmp_path: Path) -> None:
     with pytest.raises(SystemExit, match="JOB_STATUS is required"):
-        emit(Owner.NIGHTLY_PUBLISH, {})
+        emit(NIGHTLY_PUBLISH, {})
 
 
 def test_successful_prepare_with_an_empty_report_raises_nothing(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         report=_build_report(),
         tmp_path=tmp_path,
         PREPARE_STAGE="complete",
@@ -1094,7 +1100,7 @@ def test_prepare_failing_at_build_leaves_later_stages_out_of_scope(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         tmp_path=tmp_path,
         PREPARE_STAGE="build",
@@ -1108,7 +1114,7 @@ def test_prepare_failing_at_build_leaves_later_stages_out_of_scope(
 
 def test_stage_with_spaces_maps_through_its_slug(tmp_path: Path) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         tmp_path=tmp_path,
         PREPARE_STAGE="README boundary",
@@ -1123,7 +1129,7 @@ def test_failure_removing_stale_reports_leaves_checkout_out_of_scope(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         tmp_path=tmp_path,
         PREPARE_STAGE="build",
@@ -1147,7 +1153,7 @@ def test_build_warnings_are_one_finding_per_item_and_scope_the_build_keys(
     )
 
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         report=report,
         tmp_path=tmp_path,
         PREPARE_STAGE="complete",
@@ -1176,7 +1182,7 @@ def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
     empty = _build_report("failed")
 
     raising = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         report=failed,
         tmp_path=tmp_path,
@@ -1184,7 +1190,7 @@ def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
         PREPARE_STAGES="checkout,build",
     )
     quiet = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         report=empty,
         tmp_path=tmp_path,
@@ -1201,10 +1207,10 @@ def test_missing_or_malformed_build_report_contributes_nothing(
     tmp_path: Path,
 ) -> None:
     env = {"PREPARE_STAGE": "complete", "PREPARE_STAGES": STAGES}
-    missing = _emit(Owner.NIGHTLY_PREPARE, tmp_path=tmp_path, **env)
+    missing = _emit(NIGHTLY_PREPARE, tmp_path=tmp_path, **env)
     (tmp_path / "report.json").write_text("[not an object")
     malformed = emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         {"JOB_STATUS": "success", **env},
         tmp_path / "report.json",
     )
@@ -1217,9 +1223,9 @@ def test_missing_or_malformed_build_report_contributes_nothing(
 def test_setup_failure_before_prepare_raises_the_early_failure_only(
     tmp_path: Path,
 ) -> None:
-    file = _emit(Owner.NIGHTLY_PREPARE, "failure", tmp_path=tmp_path)
+    file = _emit(NIGHTLY_PREPARE, "failure", tmp_path=tmp_path)
 
-    assert _keys(file) == _early(Owner.NIGHTLY_PREPARE)
+    assert _keys(file) == _early(NIGHTLY_PREPARE)
     assert file.scope == ()
 
 
@@ -1227,7 +1233,7 @@ def test_upload_failure_after_a_successful_prepare_raises_the_early_failure(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         report=_build_report(),
         tmp_path=tmp_path,
@@ -1235,25 +1241,25 @@ def test_upload_failure_after_a_successful_prepare_raises_the_early_failure(
         PREPARE_STAGES=STAGES,
     )
 
-    assert _keys(file) == _early(Owner.NIGHTLY_PREPARE)
+    assert _keys(file) == _early(NIGHTLY_PREPARE)
     assert "nightly/prepare/verify" in file.scope
 
 
 def test_a_failed_stage_accounts_for_the_failed_job(tmp_path: Path) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         tmp_path=tmp_path,
         PREPARE_STAGE="verify",
         PREPARE_STAGES="checkout,build,allowlist,README boundary,verify",
     )
 
-    assert early_failure_key(Owner.NIGHTLY_PREPARE) not in _keys(file)
+    assert early_failure_key(NIGHTLY_PREPARE) not in _keys(file)
 
 
 def test_unrecognized_stage_names_contribute_nothing(tmp_path: Path) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         "failure",
         tmp_path=tmp_path,
         PREPARE_STAGE="reticulate splines",
@@ -1261,10 +1267,10 @@ def test_unrecognized_stage_names_contribute_nothing(tmp_path: Path) -> None:
     )
 
     assert file.scope == ("nightly/prepare/checkout",)
-    assert _keys(file) == _early(Owner.NIGHTLY_PREPARE)
+    assert _keys(file) == _early(NIGHTLY_PREPARE)
 
 
-@pytest.mark.parametrize("owner", list(Owner))
+@pytest.mark.parametrize("owner", OWNERS, ids=str)
 def test_cancelled_job_yields_exactly_the_early_failure(
     owner: Owner, tmp_path: Path
 ) -> None:
@@ -1294,7 +1300,7 @@ def test_cancelled_job_yields_exactly_the_early_failure(
 
 def test_nightly_push_and_release_are_scoped_when_ok_or_failed() -> None:
     file = _emit(
-        Owner.NIGHTLY_PUBLISH, "failure", PUSH_OUTCOME="ok", RELEASE_OUTCOME="failed"
+        NIGHTLY_PUBLISH, "failure", PUSH_OUTCOME="ok", RELEASE_OUTCOME="failed"
     )
 
     assert file.scope == ("nightly/publish/push", "nightly/publish/release")
@@ -1302,7 +1308,7 @@ def test_nightly_push_and_release_are_scoped_when_ok_or_failed() -> None:
 
 
 def test_main_advanced_raises_nothing_and_leaves_its_key_out_of_scope() -> None:
-    file = _emit(Owner.NIGHTLY_PUBLISH, "failure", PUSH_OUTCOME="main-advanced")
+    file = _emit(NIGHTLY_PUBLISH, "failure", PUSH_OUTCOME="main-advanced")
 
     assert file.findings == ()
     assert file.scope == ()
@@ -1310,7 +1316,7 @@ def test_main_advanced_raises_nothing_and_leaves_its_key_out_of_scope() -> None:
 
 def test_release_main_advanced_after_an_ok_push_scopes_only_the_push() -> None:
     file = _emit(
-        Owner.NIGHTLY_PUBLISH,
+        NIGHTLY_PUBLISH,
         "failure",
         PUSH_OUTCOME="ok",
         RELEASE_OUTCOME="main-advanced",
@@ -1321,15 +1327,13 @@ def test_release_main_advanced_after_an_ok_push_scopes_only_the_push() -> None:
 
 
 def test_release_ok_from_a_new_revision_scopes_the_release_key() -> None:
-    file = _emit(Owner.NIGHTLY_PUBLISH, PUSH_OUTCOME="ok", RELEASE_OUTCOME="ok")
+    file = _emit(NIGHTLY_PUBLISH, PUSH_OUTCOME="ok", RELEASE_OUTCOME="ok")
 
     assert "nightly/publish/release" in file.scope
     assert file.findings == ()
 
 
-@pytest.mark.parametrize(
-    "owner", [Owner.NIGHTLY_PUBLISH, Owner.CODM_PUBLISH, Owner.QUIVER_PUBLISH]
-)
+@pytest.mark.parametrize("owner", [NIGHTLY_PUBLISH, CODM_PUBLISH, QUIVER_PUBLISH])
 def test_failed_base_guard_in_a_write_job_raises_the_early_failure(
     owner: Owner,
 ) -> None:
@@ -1340,14 +1344,14 @@ def test_failed_base_guard_in_a_write_job_raises_the_early_failure(
 
 
 def test_skipped_publish_steps_after_a_successful_job_raise_nothing() -> None:
-    file = _emit(Owner.CODM_PUBLISH)
+    file = _emit(CODM_PUBLISH)
 
-    assert file == FindingsFile(Owner.CODM_PUBLISH)
+    assert file == FindingsFile(CODM_PUBLISH)
 
 
 @pytest.mark.parametrize(
     ("owner", "source"),
-    [(Owner.CODM_PUBLISH, "codm"), (Owner.QUIVER_PUBLISH, "quiver")],
+    [(CODM_PUBLISH, "codm"), (QUIVER_PUBLISH, "quiver")],
 )
 def test_failed_source_publication_raises_the_proposal_finding(
     owner: Owner, source: str
@@ -1360,7 +1364,7 @@ def test_failed_source_publication_raises_the_proposal_finding(
 
 
 def test_source_publication_refused_as_main_advanced_raises_nothing() -> None:
-    file = _emit(Owner.CODM_PUBLISH, "failure", PUBLISH_OUTCOME="main-advanced")
+    file = _emit(CODM_PUBLISH, "failure", PUBLISH_OUTCOME="main-advanced")
 
     assert file.findings == ()
     assert file.scope == ()
@@ -1368,7 +1372,7 @@ def test_source_publication_refused_as_main_advanced_raises_nothing() -> None:
 
 def test_candidate_failing_verification_raises_the_verify_finding() -> None:
     file = _emit(
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         "failure",
         GENERATION_RESULT="success",
         STAGING_RESULT="success",
@@ -1392,7 +1396,7 @@ def test_candidate_failing_verification_raises_the_verify_finding() -> None:
 
 def test_generation_failing_leaves_later_steps_out_of_scope() -> None:
     file = _emit(
-        Owner.QUIVER_CHECK,
+        QUIVER_CHECK,
         "failure",
         GENERATION_RESULT="failure",
         STAGING_RESULT="skipped",
@@ -1410,7 +1414,7 @@ def test_unchanged_candidate_after_successful_staging_re_checks_the_skipped_step
     None
 ):
     file = _emit(
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         GENERATION_RESULT="success",
         STAGING_RESULT="success",
         TESTS_RESULT="skipped",
@@ -1429,7 +1433,7 @@ def test_unchanged_candidate_after_successful_staging_re_checks_the_skipped_step
 
 def test_steps_skipped_after_a_failed_staging_are_not_re_checked() -> None:
     file = _emit(
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         "failure",
         GENERATION_RESULT="success",
         STAGING_RESULT="failure",
@@ -1444,9 +1448,9 @@ def test_steps_skipped_after_a_failed_staging_are_not_re_checked() -> None:
 
 
 def test_check_setup_failure_and_upload_failure_raise_the_early_failure() -> None:
-    setup = _emit(Owner.CODM_CHECK, "failure")
+    setup = _emit(CODM_CHECK, "failure")
     upload = _emit(
-        Owner.CODM_CHECK,
+        CODM_CHECK,
         "failure",
         GENERATION_RESULT="success",
         STAGING_RESULT="success",
@@ -1457,16 +1461,16 @@ def test_check_setup_failure_and_upload_failure_raise_the_early_failure() -> Non
         GUARD_RESULT="skipped",
     )
 
-    assert _keys(setup) == _early(Owner.CODM_CHECK)
+    assert _keys(setup) == _early(CODM_CHECK)
     assert setup.scope == ()
-    assert _keys(upload) == _early(Owner.CODM_CHECK)
+    assert _keys(upload) == _early(CODM_CHECK)
     assert "codm/check/guard" in upload.scope
 
 
 def test_unrecognized_step_results_count_for_nothing() -> None:
-    file = _emit(Owner.CODM_CHECK, GENERATION_RESULT="weird", TESTS_RESULT="")
+    file = _emit(CODM_CHECK, GENERATION_RESULT="weird", TESTS_RESULT="")
 
-    assert file == FindingsFile(Owner.CODM_CHECK)
+    assert file == FindingsFile(CODM_CHECK)
 
 
 LIVE_ENV = {"CHECK_RESULT": "failure"}
@@ -1488,9 +1492,7 @@ def test_live_check_outcomes_raise_findings_for_404_and_403_only(
         ],
     )
 
-    file = _emit(
-        Owner.LIVE_CHECK, "failure", report=report, tmp_path=tmp_path, **LIVE_ENV
-    )
+    file = _emit(LIVE_CHECK, "failure", report=report, tmp_path=tmp_path, **LIVE_ENV)
 
     assert _keys(file) == [
         "live-check/gone/https://a.example/gone",
@@ -1512,9 +1514,7 @@ def test_budget_spent_urls_are_unchecked(tmp_path: Path) -> None:
         ]
     )
 
-    file = _emit(
-        Owner.LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success"
-    )
+    file = _emit(LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success")
 
     assert file.findings == ()
     assert "live-check/gone/https://a.example/x" in file.unchecked
@@ -1523,7 +1523,7 @@ def test_budget_spent_urls_are_unchecked(tmp_path: Path) -> None:
 
 def test_a_url_absent_from_the_report_falls_in_scope(tmp_path: Path) -> None:
     file = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         report=_live_report(),
         tmp_path=tmp_path,
         CHECK_RESULT="success",
@@ -1539,7 +1539,7 @@ def test_unreadable_packs_raise_the_read_finding_and_scope_only_it(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         "failure",
         report={"status": "failed", "error": "pack single-screen.json is unreadable"},
         tmp_path=tmp_path,
@@ -1554,7 +1554,7 @@ def test_a_successful_read_scopes_the_read_key_so_a_stale_issue_closes(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         report=_live_report(),
         tmp_path=tmp_path,
         CHECK_RESULT="success",
@@ -1567,23 +1567,23 @@ def test_live_check_report_is_ignored_when_the_check_step_did_not_run(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         "failure",
         report=_live_report(unreachable=[{"url": "https://stale/x", "status": 404}]),
         tmp_path=tmp_path,
         CHECK_RESULT="skipped",
     )
 
-    assert _keys(file) == _early(Owner.LIVE_CHECK)
+    assert _keys(file) == _early(LIVE_CHECK)
     assert file.scope == ()
 
 
 def test_live_check_without_a_report_after_a_failed_step_raises_the_early_failure(
     tmp_path: Path,
 ) -> None:
-    file = _emit(Owner.LIVE_CHECK, "failure", tmp_path=tmp_path, **LIVE_ENV)
+    file = _emit(LIVE_CHECK, "failure", tmp_path=tmp_path, **LIVE_ENV)
 
-    assert _keys(file) == _early(Owner.LIVE_CHECK)
+    assert _keys(file) == _early(LIVE_CHECK)
     assert "live-check/read" not in file.scope
 
 
@@ -1597,7 +1597,7 @@ def test_a_status_finding_does_not_account_for_an_unrelated_job_failure(
     )
 
     file = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         "failure",
         report=report,
         tmp_path=tmp_path,
@@ -1606,7 +1606,7 @@ def test_a_status_finding_does_not_account_for_an_unrelated_job_failure(
 
     assert _keys(file) == [
         "live-check/status/https://b.example/blocked",
-        *_early(Owner.LIVE_CHECK),
+        *_early(LIVE_CHECK),
     ]
 
 
@@ -1619,7 +1619,7 @@ def test_an_unreachable_status_that_is_not_an_int_is_left_out_of_the_text(
         item["status"] = status
 
     file = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         "failure",
         report=_live_report(unreachable=[item]),
         tmp_path=tmp_path,
@@ -1639,13 +1639,13 @@ def test_query_bearing_url_and_family_key_validly_and_round_trip_to_one_issue(
 ) -> None:
     url = "https://dolphin-emu.org/download/?ref=btn&x=%20"
     live = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         report=_live_report(unreachable=[{"url": url, "status": 404}]),
         tmp_path=tmp_path,
         CHECK_RESULT="failure",
     )
     prepare = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         report=_build_report(
             uncategorizedFamilies=[{"family": "Ünï / Cödé?", "variants": []}]
         ),
@@ -1660,7 +1660,7 @@ def test_query_bearing_url_and_family_key_validly_and_round_trip_to_one_issue(
     path = tmp_path / "live.json"
     path.write_text(live.to_json())
     first = _gh()
-    _run(first, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS), url=RUN_1)
+    _run(first, Producer(LIVE_CHECK, path, "success"), url=RUN_1)
     (body,) = _bodies(first, "create")
     second = _gh(
         [
@@ -1673,7 +1673,7 @@ def test_query_bearing_url_and_family_key_validly_and_round_trip_to_one_issue(
             }
         ]
     )
-    _run(second, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS), url=RUN_2)
+    _run(second, Producer(LIVE_CHECK, path, "success"), url=RUN_2)
     assert _verbs(second) == []
     assert prepare.findings[0].key.startswith("build/uncategorized/")
 
@@ -1684,7 +1684,7 @@ def test_overlong_url_and_family_still_yield_a_valid_file_keeping_other_findings
     long_url = "https://example.com/" + "a/b?" * 2000
     long_family = "F" * 5000
     live = _emit(
-        Owner.LIVE_CHECK,
+        LIVE_CHECK,
         report=_live_report(
             unreachable=[
                 {"url": long_url, "status": 404},
@@ -1695,7 +1695,7 @@ def test_overlong_url_and_family_still_yield_a_valid_file_keeping_other_findings
         CHECK_RESULT="failure",
     )
     prepare = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         report=_build_report(
             uncategorizedFamilies=[
                 {"family": long_family, "variants": []},
@@ -1719,7 +1719,7 @@ def test_multiline_and_padded_subjects_give_one_line_trimmed_titles(
     tmp_path: Path,
 ) -> None:
     file = _emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         report=_build_report(
             uncategorizedFamilies=[
                 {"family": "  two\nlines\r\n ", "variants": []},
@@ -1748,7 +1748,7 @@ def test_findings_carry_no_per_run_values(tmp_path: Path) -> None:
         )
         return [
             _emit(
-                Owner.LIVE_CHECK,
+                LIVE_CHECK,
                 "failure",
                 report=live,
                 tmp_path=tmp_path,
@@ -1756,7 +1756,7 @@ def test_findings_carry_no_per_run_values(tmp_path: Path) -> None:
                 **context,
             ),
             _emit(
-                Owner.NIGHTLY_PREPARE,
+                NIGHTLY_PREPARE,
                 "failure",
                 report=build,
                 tmp_path=tmp_path,
@@ -1765,14 +1765,14 @@ def test_findings_carry_no_per_run_values(tmp_path: Path) -> None:
                 **context,
             ),
             emit(
-                Owner.CODM_CHECK,
+                CODM_CHECK,
                 {"JOB_STATUS": "failure", "GENERATION_RESULT": "failure", **context},
             ),
             emit(
-                Owner.NIGHTLY_PUBLISH,
+                NIGHTLY_PUBLISH,
                 {"JOB_STATUS": "failure", "PUSH_OUTCOME": "failed", **context},
             ),
-            emit(Owner.QUIVER_PUBLISH, {"JOB_STATUS": "failure", **context}),
+            emit(QUIVER_PUBLISH, {"JOB_STATUS": "failure", **context}),
         ]
 
     first = both(**HARMLESS_RUN_CONTEXT)
@@ -1799,7 +1799,7 @@ def test_cli_emit_writes_a_file_reconcile_accepts(
     exit_code = alerts_module.main(["emit", "nightly-publish", "--output", str(output)])
 
     assert exit_code == 0
-    parsed = parse_findings(Owner.NIGHTLY_PUBLISH, output.read_text())
+    parsed = parse_findings(NIGHTLY_PUBLISH, output.read_text())
     assert parsed is not None
     assert [f.key for f in parsed.findings] == ["nightly/publish/push"]
     assert not output.with_name("findings.json.partial").exists()
@@ -1837,7 +1837,7 @@ def test_cli_emit_reads_a_report_from_the_given_path(
         ["emit", "live-check", "--report", str(report), "--output", str(output)]
     )
 
-    parsed = parse_findings(Owner.LIVE_CHECK, output.read_text())
+    parsed = parse_findings(LIVE_CHECK, output.read_text())
     assert parsed is not None
     assert [f.key for f in parsed.findings] == ["live-check/gone/https://a/b"]
 
@@ -1845,4 +1845,4 @@ def test_cli_emit_reads_a_report_from_the_given_path(
 def test_prepare_stage_slugs_make_valid_keys() -> None:
     for slug in PREPARE_STAGE_SLUGS.values():
         key = "nightly/prepare/" + slug
-        assert alerts_module.valid_key(Owner.NIGHTLY_PREPARE, key)
+        assert alerts_module.valid_key(NIGHTLY_PREPARE, key)

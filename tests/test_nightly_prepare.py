@@ -15,7 +15,7 @@ from typing import get_args
 import pytest
 
 from scripts import nightly as nightly_module
-from scripts.alerts import PREPARE_STAGE_SLUGS, Owner, emit, valid_key
+from scripts.alerts import NIGHTLY_PREPARE, PREPARE_STAGE_SLUGS, emit, valid_key
 from scripts.nightly import (
     ALLOWED_PATHS,
     BUILD_COMMAND,
@@ -654,7 +654,7 @@ def test_alert_stage_table_covers_exactly_the_prepare_stages() -> None:
 
     assert set(PREPARE_STAGE_SLUGS) == stages
     for slug in PREPARE_STAGE_SLUGS.values():
-        assert valid_key(Owner.NIGHTLY_PREPARE, f"nightly/prepare/{slug}")
+        assert valid_key(NIGHTLY_PREPARE, f"nightly/prepare/{slug}")
     assert len(set(PREPARE_STAGE_SLUGS.values())) == len(PREPARE_STAGE_SLUGS)
 
 
@@ -667,7 +667,7 @@ def test_emitted_scope_follows_the_stages_prepare_reports(tmp_path: Path) -> Non
         root, base, "run", tmp_path / "candidate.bundle", process=process, now=_now
     )
     file = emit(
-        Owner.NIGHTLY_PREPARE,
+        NIGHTLY_PREPARE,
         {
             "JOB_STATUS": "success",
             "PREPARE_STAGE": outcome.stage,

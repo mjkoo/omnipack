@@ -20,9 +20,11 @@ from scripts.workflow_support import (
     git,
     git_output,
     ls_remote_sha,
+    parse_step_outcome,
     render_escaped_pre,
     run_url,
     verify_handoff,
+    write_outcome,
 )
 from tests.publication_support import (
     bare_remote,
@@ -208,3 +210,26 @@ def test_render_escaped_pre_counts_lines_that_exceed_the_limit() -> None:
     kept = text.count("line ")
     assert 0 < kept < 20
     assert f"and {20 - kept} more\n</pre>\n" in text
+
+
+def test_step_outcome_parses_known_values_and_nothing_else() -> None:
+    assert parse_step_outcome("cancelled") == "cancelled"
+    assert parse_step_outcome("success") == "success"
+    assert parse_step_outcome("") is None
+    assert parse_step_outcome("weird") is None
+    assert parse_step_outcome(None) is None
+
+
+@pytest.mark.parametrize(
+    ("succeeded", "main_advanced", "expected"),
+    [
+        (True, False, "ok"),
+        (True, True, "ok"),
+        (False, True, "main-advanced"),
+        (False, False, "failed"),
+    ],
+)
+def test_write_outcome_names_main_advanced_only_for_a_refused_write(
+    succeeded: bool, main_advanced: bool, expected: str
+) -> None:
+    assert write_outcome(succeeded=succeeded, main_advanced=main_advanced) == expected

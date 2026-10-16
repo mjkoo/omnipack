@@ -16,7 +16,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, NamedTuple, Protocol
+from typing import Literal, NamedTuple, Protocol, get_args
 
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 BOT_NAME = "github-actions[bot]"
@@ -222,6 +222,43 @@ FileProblem = Literal["missing", "symlink", "irregular", "executable"]
 # refused because `main` advanced past the run's base is its own outcome, since
 # a later run retries it and it is no problem to report.
 WriteOutcome = Literal["ok", "main-advanced", "failed"]
+WRITE_OUTCOMES: frozenset[WriteOutcome] = frozenset(get_args(WriteOutcome))
+
+# The values GitHub reports for a step's `outcome` and for a job's `result`.
+StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
+STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
+
+# The reviewed sources, each generated, checked and published by its own jobs.
+SourceName = Literal["codm", "quiver"]
+SOURCE_NAMES: tuple[SourceName, ...] = get_args(SourceName)
+
+# A source check's steps, in order. Each step's `outcome` reaches the scripts
+# in the variable `step_result_variable` names.
+ValidationStep = Literal["generation", "staging", "tests", "build", "verify", "guard"]
+VALIDATION_STEPS: tuple[ValidationStep, ...] = get_args(ValidationStep)
+
+# Joins the nightly prepare stage names in its `stages` step output; no stage
+# name contains it.
+STAGE_SEPARATOR = ","
+
+
+def write_outcome(*, succeeded: bool, main_advanced: bool) -> WriteOutcome:
+    """A write step's outcome: ok, else main-advanced when that refused it."""
+    if succeeded:
+        return "ok"
+    return "main-advanced" if main_advanced else "failed"
+
+
+def parse_step_outcome(value: str | None) -> StepOutcome | None:
+    """The step outcome or job result `value` names, or None for any other value."""
+    for outcome in get_args(StepOutcome):
+        if value == outcome:
+            return outcome
+    return None
+
+
+def step_result_variable(step: ValidationStep) -> str:
+    return step.upper() + "_RESULT"
 
 
 def regular_file_problem(

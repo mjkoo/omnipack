@@ -14,7 +14,7 @@ import yaml
 
 from omnipack.live_check import REPORT, SUMMARY
 from omnipack.source_registry import GENERATED
-from scripts.alerts import Owner
+from scripts.alerts import parse_owner
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
 
@@ -507,7 +507,7 @@ def test_alert_job_holds_only_issue_access_and_reconciles_producer_findings(
             result = f"needs.{upstream}.result == 'success' && {result} || 'skipped'"
         expected_env[variable] = "${{ " + result + " }}"
         for source in GENERATED if "$SOURCE" in owner else [""]:
-            assert Owner(owner.replace("$SOURCE", source)) in Owner
+            parse_owner(owner.replace("$SOURCE", source))
     assert reconcile["env"] == expected_env
     assert len({variable for _, variable, _ in parsed}) == len(parsed)
     # Each download lands in the directory its own producer reads.
