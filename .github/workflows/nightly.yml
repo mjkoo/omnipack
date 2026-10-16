@@ -67,6 +67,26 @@ jobs:
           retention-days: 14
           overwrite: true
 
+      - name: Write the alert findings
+        if: always()
+        continue-on-error: true
+        env:
+          JOB_STATUS: ${{ job.status }}
+          PREPARE_STAGE: ${{ steps.prepare.outputs.stage }}
+          PREPARE_STAGES: ${{ steps.prepare.outputs.stages }}
+        run: python3 -m scripts.alerts emit nightly-prepare
+
+      - name: Upload the alert findings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: alert-findings-nightly-prepare-${{ github.run_id }}
+          path: .build/alerts/findings.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
   publish:
     name: Push and release the candidate
     needs: prepare
@@ -94,7 +114,8 @@ jobs:
           name: nightly-handoff-${{ github.run_id }}
           path: ${{ runner.temp }}/nightly-handoff
 
-      - name: Push the verified candidate to main
+      - id: push
+        name: Push the verified candidate to main
         if: needs.prepare.outputs.changed == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
@@ -104,7 +125,67 @@ jobs:
           python3 -m scripts.nightly_write push \
             --bundle "$RUNNER_TEMP/nightly-handoff/candidate.bundle"
 
-      - name: Synchronize the rolling release
+      - id: release
+        name: Synchronize the rolling release
         env:
           GH_TOKEN: ${{ github.token }}
         run: python3 -m scripts.nightly_write release
+
+      - name: Write the alert findings
+        if: always()
+        continue-on-error: true
+        env:
+          JOB_STATUS: ${{ job.status }}
+          PUSH_OUTCOME: ${{ steps.push.outputs.outcome }}
+          RELEASE_OUTCOME: ${{ steps.release.outputs.outcome }}
+        run: python3 -m scripts.alerts emit nightly-publish
+
+      - name: Upload the alert findings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.0
+        with:
+          name: alert-findings-nightly-publish-${{ github.run_id }}
+          path: .build/alerts/findings.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+  alert:
+    name: Raise and clear maintenance issues
+    needs: [prepare, publish]
+    if: always() && github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write # Required to open, update and close the alert issues.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Download the nightly-prepare findings
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: alert-findings-nightly-prepare-${{ github.run_id }}
+          path: ${{ runner.temp }}/alert-findings/nightly-prepare
+
+      - name: Download the nightly-publish findings
+        continue-on-error: true
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: alert-findings-nightly-publish-${{ github.run_id }}
+          path: ${{ runner.temp }}/alert-findings/nightly-publish
+
+      - name: Reconcile the alert issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          NIGHTLY_PREPARE_RESULT: ${{ needs.prepare.result }}
+          NIGHTLY_PUBLISH_RESULT: ${{ needs.publish.result }}
+        run: |
+          python3 -m scripts.alerts reconcile \
+            --producer "nightly-prepare=$RUNNER_TEMP/alert-findings/nightly-prepare/findings.json" \
+            --producer "nightly-publish=$RUNNER_TEMP/alert-findings/nightly-publish/findings.json"
