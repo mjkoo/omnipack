@@ -50,9 +50,25 @@ _MARKER_SUFFIX = " -->"
 _MARKER = re.compile(re.escape(_MARKER_PREFIX) + r"(\S+)" + re.escape(_MARKER_SUFFIX))
 _RUN_LINE = "\nRun: "
 _ALREADY_EXISTS = "already exists"
-_COMPLETED_STATUSES = frozenset({"success", "failure"})
 _MUTE_REASONS = frozenset({"not_planned", "duplicate"})
 EARLY_FAILURE_SLUG = "run"
+
+
+class JobResult(StrEnum):
+    """How a job or step ended, as GitHub reports `result` and `outcome`."""
+
+    SUCCESS = "success"
+    FAILURE = "failure"
+    CANCELLED = "cancelled"
+    SKIPPED = "skipped"
+
+    @classmethod
+    def parse(cls, value: str | None) -> JobResult | None:
+        """The result `value` names, or None for an absent or unknown value."""
+        try:
+            return cls(value)
+        except ValueError:
+            return None
 
 
 class Owner(StrEnum):
@@ -122,7 +138,7 @@ class Producer:
 
     owner: Owner
     path: Path
-    result: str
+    result: JobResult | None
 
 
 class ReconcileFailure(RuntimeError):
@@ -201,6 +217,7 @@ def _valid_title(title: object) -> bool:
         and 0 < len(title) <= TITLE_LIMIT
         and "\n" not in title
         and "\r" not in title
+        and title == title.strip()
     )
 
 
@@ -208,7 +225,7 @@ def parse_findings(owner: Owner, text: str) -> FindingsFile | None:
     """The validated findings file, or None when it is malformed or not `owner`'s."""
     try:
         data = json.loads(text)
-    except ValueError:
+    except (ValueError, RecursionError):
         return None
     if not isinstance(data, dict) or data.get("owner") != owner.value:
         return None
@@ -300,9 +317,9 @@ def _read_producer(producer: Producer) -> tuple[list[Finding], list[str], list[s
     """The producer's findings, scope and unchecked keys by its result."""
     owner = producer.owner
     early = early_failure_key(owner)
-    if producer.result == "cancelled":
+    if producer.result is JobResult.CANCELLED:
         return [early_failure_finding(owner)], [early], []
-    if producer.result not in _COMPLETED_STATUSES:
+    if producer.result not in (JobResult.SUCCESS, JobResult.FAILURE):
         return [], [], []
     parsed = None
     if regular_file_problem(producer.path) is None:
@@ -503,7 +520,7 @@ def _parse_producer(value: str, environ: Mapping[str, str]) -> Producer:
     if not separator or not path:
         raise SystemExit(f"--producer needs OWNER=PATH, got {value}")
     result = require_env(environ, owner.value.upper().replace("-", "_") + "_RESULT")
-    return Producer(owner, Path(path), result)
+    return Producer(owner, Path(path), JobResult.parse(result))
 
 
 def _reconcile_command(

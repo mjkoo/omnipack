@@ -20,6 +20,7 @@ from scripts.alerts import (
     TITLE_LIMIT,
     Finding,
     FindingsFile,
+    JobResult,
     Owner,
     Producer,
     ReconcileFailure,
@@ -112,7 +113,7 @@ def _run(
     return reconcile(gh, producers, repository=REPOSITORY, url=url)
 
 
-def _nightly(path: Path, result: str = "success") -> Producer:
+def _nightly(path: Path, result: JobResult | None = JobResult.SUCCESS) -> Producer:
     return Producer(Owner.NIGHTLY_PREPARE, path, result)
 
 
@@ -214,6 +215,8 @@ def _entry(key: str, **overrides: object) -> dict[str, object]:
         {"findings": [_entry("nightly/prepare/build")]},
         {"findings": [_entry("codm/check/a", title="two\nlines")]},
         {"findings": [_entry("codm/check/a", title="")]},
+        {"findings": [_entry("codm/check/a", title=" padded")]},
+        {"findings": [_entry("codm/check/a", title="padded\t")]},
         {"findings": [_entry("codm/check/a", title="x" * 256)]},
         {"findings": [_entry("codm/check/a", details="not a list")]},
         {"findings": [_entry("codm/check/a", details=["ok", 3])]},
@@ -413,7 +416,7 @@ def test_mute_survives_a_run_that_did_not_re_check_the_key(tmp_path: Path) -> No
     )
     gh = _gh([_issue(7, key, state="closed", reason="not_planned")])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, "success"), _nightly(other))
+    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS), _nightly(other))
 
     assert _verbs(gh) == []
 
@@ -470,7 +473,7 @@ def test_muted_403_does_not_hide_a_later_404(tmp_path: Path) -> None:
         [_issue(7, f"live-check/status/{url}", state="closed", reason="not_planned")]
     )
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, "success"))
+    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
 
     assert _verbs(gh)[0] == ("create", "gone")
 
@@ -502,7 +505,7 @@ def test_unchecked_key_under_a_scope_prefix_is_not_closed(tmp_path: Path) -> Non
     )
     gh = _gh([_issue(1, kept), _issue(2, gone)])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, "success"))
+    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
 
     assert _verbs(gh) == [("close", "2")]
 
@@ -524,7 +527,7 @@ def test_creates_and_reopens_precede_closes(tmp_path: Path) -> None:
         ]
     )
 
-    _run(gh, Producer(Owner.CODM_CHECK, path, "failure"))
+    _run(gh, Producer(Owner.CODM_CHECK, path, JobResult.FAILURE))
 
     verbs = [verb for verb, _ in _verbs(gh)]
     assert verbs == ["create", "reopen", "edit", "close"]
@@ -661,16 +664,16 @@ def test_producer_findings_files_do_not_cross_owners(tmp_path: Path) -> None:
         findings=(Finding("codm/check/verify", "verify", ("x",)),),
     )
     gh = _gh([_issue(1, "quiver/check/verify")])
-    quiver = Producer(Owner.QUIVER_CHECK, tmp_path / "missing.json", "skipped")
+    quiver = Producer(Owner.QUIVER_CHECK, tmp_path / "missing.json", JobResult.SKIPPED)
 
-    _run(gh, Producer(Owner.CODM_CHECK, codm, "failure"), quiver)
+    _run(gh, Producer(Owner.CODM_CHECK, codm, JobResult.FAILURE), quiver)
 
     assert _verbs(gh) == [("create", "verify")]
 
 
 def test_codm_early_failure_leaves_quivers_issue_open(tmp_path: Path) -> None:
     gh_codm = _gh([_issue(1, early_failure_key(Owner.QUIVER_CHECK))])
-    _run(gh_codm, Producer(Owner.CODM_CHECK, tmp_path / "none.json", "failure"))
+    _run(gh_codm, Producer(Owner.CODM_CHECK, tmp_path / "none.json", JobResult.FAILURE))
 
     assert _verbs(gh_codm) == [
         ("create", early_failure_finding(Owner.CODM_CHECK).title)
@@ -678,7 +681,7 @@ def test_codm_early_failure_leaves_quivers_issue_open(tmp_path: Path) -> None:
 
     gh_quiver = _gh([_issue(1, early_failure_key(Owner.CODM_CHECK))])
     quiver = _file(tmp_path, Owner.QUIVER_CHECK, scope=("quiver/check/",))
-    _run(gh_quiver, Producer(Owner.QUIVER_CHECK, quiver, "success"))
+    _run(gh_quiver, Producer(Owner.QUIVER_CHECK, quiver, JobResult.SUCCESS))
     assert _verbs(gh_quiver) == []
 
 
@@ -698,8 +701,8 @@ def test_codm_and_quiver_reconcile_in_one_run_independently(tmp_path: Path) -> N
 
     _run(
         gh,
-        Producer(Owner.CODM_CHECK, tmp_path / "none.json", "failure"),
-        Producer(Owner.QUIVER_CHECK, quiver, "success"),
+        Producer(Owner.CODM_CHECK, tmp_path / "none.json", JobResult.FAILURE),
+        Producer(Owner.QUIVER_CHECK, quiver, JobResult.SUCCESS),
     )
 
     assert ("close", "1") in _verbs(gh)
@@ -711,14 +714,14 @@ def test_early_failure_issue_closes_when_the_producer_succeeds(tmp_path: Path) -
     path = _file(tmp_path, Owner.LIVE_CHECK)
     gh = _gh([_issue(1, early_failure_key(Owner.LIVE_CHECK))])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, "success"))
+    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
 
     assert _verbs(gh) == [("close", "1")]
 
 
-@pytest.mark.parametrize("result", ["success", "failure"])
+@pytest.mark.parametrize("result", [JobResult.SUCCESS, JobResult.FAILURE])
 def test_missing_file_raises_the_early_failure_and_closes_nothing_else(
-    tmp_path: Path, result: str
+    tmp_path: Path, result: JobResult
 ) -> None:
     gh = _gh([_issue(1, NIGHTLY_STAGE)])
 
@@ -753,9 +756,32 @@ def test_foreign_key_is_rejected_with_the_early_failure_finding(tmp_path: Path) 
     path.write_text(json.dumps(data))
     gh = _gh([_issue(1, "live-check/gone/y")])
 
-    _run(gh, Producer(Owner.LIVE_CHECK, path, "success"))
+    _run(gh, Producer(Owner.LIVE_CHECK, path, JobResult.SUCCESS))
 
     assert _verbs(gh) == [("create", early_failure_finding(Owner.LIVE_CHECK).title)]
+
+
+def test_pathologically_nested_file_is_rejected_with_the_early_failure(
+    tmp_path: Path,
+) -> None:
+    path = tmp_path / "nested.json"
+    path.write_text("[" * 100_000 + "]" * 100_000)
+    assert parse_findings(Owner.NIGHTLY_PREPARE, path.read_text()) is None
+    gh = _gh([_issue(1, NIGHTLY_STAGE)])
+
+    _run(gh, _nightly(path))
+
+    assert _verbs(gh) == [
+        ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
+    ]
+
+
+def test_job_result_parses_known_values_and_nothing_else() -> None:
+    assert JobResult.parse("cancelled") is JobResult.CANCELLED
+    assert JobResult.parse("success") is JobResult.SUCCESS
+    assert JobResult.parse("") is None
+    assert JobResult.parse("weird") is None
+    assert JobResult.parse(None) is None
 
 
 def test_symlinked_findings_file_is_rejected(tmp_path: Path) -> None:
@@ -783,7 +809,7 @@ def test_cancelled_producer_with_a_valid_file_raises_only_the_early_failure(
     )
     gh = _gh([_issue(1, "nightly/prepare/commit"), _issue(2, "build/x")])
 
-    _run(gh, _nightly(path, "cancelled"))
+    _run(gh, _nightly(path, JobResult.CANCELLED))
 
     assert _verbs(gh) == [
         ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
@@ -800,16 +826,16 @@ def test_failed_producer_reporting_only_the_early_failure_closes_nothing(
     )
     gh = _gh([_issue(1, NIGHTLY_STAGE), _issue(2, "build/uncategorized/x")])
 
-    _run(gh, _nightly(path, "failure"))
+    _run(gh, _nightly(path, JobResult.FAILURE))
 
     assert _verbs(gh) == [
         ("create", early_failure_finding(Owner.NIGHTLY_PREPARE).title)
     ]
 
 
-@pytest.mark.parametrize("result", ["skipped", ""])
+@pytest.mark.parametrize("result", [JobResult.SKIPPED, None])
 def test_producer_with_another_result_contributes_nothing(
-    tmp_path: Path, result: str
+    tmp_path: Path, result: JobResult | None
 ) -> None:
     path = _file(
         tmp_path,
@@ -836,7 +862,7 @@ def test_oversized_details_keep_the_finding_with_an_overflow_count(
     )
     gh = _gh()
 
-    _run(gh, Producer(Owner.CODM_CHECK, path, "failure"))
+    _run(gh, Producer(Owner.CODM_CHECK, path, JobResult.FAILURE))
 
     assert _verbs(gh) == [("create", "verify")]
     (body,) = _bodies(gh, "create")
