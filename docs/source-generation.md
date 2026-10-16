@@ -243,7 +243,9 @@ characters. The publisher compares the whole candidate tree to that source branc
 remote tree, avoiding a push when they match even if commits differ. Otherwise it
 replaces that source branch with the checked commit. It then edits its existing PR
 or opens one to main, titled `chore(catalog): update reviewed <source> source`.
-No automatic merge, direct-main write, issue or release operation occurs.
+The publish job performs no automatic merge, direct-main write, issue or
+release operation; issues come only from the separate alert job described in
+[maintenance alerts](alerts.md).
 
 The body links the checking workflow run, records the base SHA, and lists the
 added, removed and changed catalog URLs, the skipped listings and the actual
@@ -372,11 +374,12 @@ state. It holds only `contents: read`, checks out with
 `omnipack-live-check` concurrency group without waiting on any source job, and
 is limited to 30 minutes, above the command's own 20-minute budget.
 
-A URL that answers 404 or 410 is unreachable and fails the run, so GitHub's
-failed-run notification reaches the owner. Packs that cannot be read also fail
-it. Any other outcome, such as a 403, a 429, a server error, a timeout or the
+A URL that answers 404 or 410 is unreachable and fails the run and
+raises an issue (see [maintenance alerts](alerts.md)). Packs that cannot be
+read also fail it. Any other outcome, such as a 403, a 429, a server error, a timeout or the
 URLs left unchecked when the budget runs out, is inconclusive: it is listed with
-its reason but does not fail the run. The run summary lists the unreachable and
+its reason but does not fail the run (an error status, such as a 403, still
+raises an issue). The run summary lists the unreachable and
 inconclusive URLs, or the error of a failed check, and the
 `live-check-report-<run id>` artifact keeps `.build/live-check/report.json` for
 14 days.
