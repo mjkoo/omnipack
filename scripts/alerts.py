@@ -88,6 +88,15 @@ live-check: CHECK_RESULT, the `pack check-live` step's `outcome`, and its
 report at --report (default .build/live-check/report.json).
 """
 
+RECONCILE_HELP = """Open, update, reopen and close the labelled alert issues.
+
+Each --producer names one expected producing job, its job `result` and the
+path its findings file was downloaded to. A cancelled producer, or a failed or
+successful one whose file is missing or invalid, raises its early-failure
+finding; a producer with any other result contributes nothing. Requires
+GH_TOKEN, GITHUB_REPOSITORY, GITHUB_SERVER_URL and GITHUB_RUN_ID.
+"""
+
 
 # The producing jobs: the nightly prepare and publish jobs, each source's check
 # and publish jobs, and the live check.
@@ -495,6 +504,9 @@ class _Issues:
 
 
 def ensure_label(gh: GhRunner, repository: str) -> None:
+    # An existing label counts as success rather than being recreated with
+    # `--force`, which would overwrite the owner's edits to its color or
+    # description.
     result = gh.run(
         [
             "label", "create", LABEL, "--repo", repository,
@@ -934,10 +946,10 @@ def _parse_producer(value: str) -> Producer:
     try:
         owner = parse_owner(name)
     except ValueError as error:
-        raise SystemExit(str(error)) from None
+        raise argparse.ArgumentTypeError(str(error)) from None
     result, colon, path = rest.partition(":")
     if not separator or not colon or not path:
-        raise SystemExit(f"--producer needs OWNER=RESULT:PATH, got {value}")
+        raise argparse.ArgumentTypeError(f"needs OWNER=RESULT:PATH, got {value}")
     return Producer(owner, Path(path), parse_step_outcome(result))
 
 
@@ -951,7 +963,7 @@ def _owner_argument(value: str) -> Owner:
 def _reconcile_command(
     arguments: argparse.Namespace, environ: Mapping[str, str]
 ) -> int:
-    producers = [_parse_producer(value) for value in arguments.producer]
+    producers: list[Producer] = arguments.producer
     repository = require_env(environ, "GITHUB_REPOSITORY")
     url = run_url(environ)
     try:
@@ -969,11 +981,17 @@ def _reconcile_command(
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python3 -m scripts.alerts")
     subparsers = parser.add_subparsers(dest="command", required=True)
-    reconcile_parser = subparsers.add_parser("reconcile")
+    reconcile_parser = subparsers.add_parser(
+        "reconcile",
+        help="make the alert issues match the producers' findings files",
+        description=RECONCILE_HELP,
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
     reconcile_parser.add_argument(
         "--producer",
         action="append",
         required=True,
+        type=_parse_producer,
         metavar="OWNER=RESULT:PATH",
         help="an expected producer, its job result and its findings file; an "
         "empty or unknown RESULT makes the producer contribute nothing",

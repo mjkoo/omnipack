@@ -528,14 +528,7 @@ def reconcile_producers(reconcile):
     for value in values:
         match = re.fullmatch(r"(?P<o>[^=]+)=\$(?P<v>\w+):(?P<p>.+)", value)
         assert match, value
-        owner, variable, path = match["o"], match["v"], match["p"]
-        parsed.append(
-            (
-                owner.replace("${SOURCE}", "$SOURCE"),
-                variable,
-                path.replace("${SOURCE}", "$SOURCE"),
-            )
-        )
+        parsed.append((match["o"], match["v"], match["p"]))
     return parsed
 
 

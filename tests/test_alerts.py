@@ -1016,9 +1016,14 @@ def test_cli_producer_with_an_empty_or_unknown_result_contributes_nothing(
         "bogus=success:f.json",
     ],
 )
-def test_cli_rejects_a_malformed_producer(value: str) -> None:
-    with pytest.raises(SystemExit):
+def test_cli_rejects_a_malformed_producer_with_a_usage_error(
+    value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as raised:
         alerts_module.main(["reconcile", "--producer", value])
+
+    assert raised.value.code == 2
+    assert "usage:" in capsys.readouterr().err
 
 
 # --- emitters --------------------------------------------------------------
