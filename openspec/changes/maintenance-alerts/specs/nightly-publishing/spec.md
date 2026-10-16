@@ -37,11 +37,14 @@ reports after an early failure SHALL NOT imply verification success.
 Verification reports SHALL be identified as structural/offline without
 live-health claims. Failures and build warnings SHALL be raised as findings as
 maintenance-alerts requires; only the workflow's alert job SHALL hold issue
-write access. Summary or upload failure SHALL remain a visible failed
-step and SHALL NOT undo a completed push. A failure in the job that prepares the
-candidate, a summary or upload failure there included, SHALL keep that
+write access. A summary failure, or a failure uploading the build and
+verification reports or the hand-off, SHALL remain a visible failed step and
+SHALL NOT undo a completed push. A failure in the job that prepares the
+candidate, such a summary or upload failure there included, SHALL keep that
 attempt's write job from running, so the attempt publishes nothing, and a rerun
-or a later run SHALL make its own attempt.
+or a later run SHALL make its own attempt. A failure writing or uploading the
+findings file SHALL change neither the job's verdict nor whether the write job
+runs, as maintenance-alerts requires.
 
 Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
 downloads, and source text SHALL be treated as data rather than executable

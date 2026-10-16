@@ -30,8 +30,8 @@ finding for each of these problems, and for no other outcome:
   one finding per job, so a job stopped by its time limit raises this finding
   whether its result reads cancelled or failed.
 
-A push or publication refused because `main` advanced past the run's base
-revision SHALL raise no finding. Skipped listings, and live-check outcomes
+A nightly push or release synchronization, or a source publication, refused
+because `main` advanced past the run's base revision SHALL raise no finding. Skipped listings, and live-check outcomes
 that end in a retried status, a timeout, a connection failure or the time
 budget running out, SHALL raise no finding. Each finding SHALL have a key that
 stays the same while the same problem persists, independent of the problem's
@@ -50,8 +50,9 @@ uploading them fails.
 
 #### Scenario: Main advanced during publication
 
-- **WHEN** a nightly push is refused because main advanced past the run's base
-- **THEN** no finding is raised for the push
+- **WHEN** a nightly push or release synchronization is refused because main
+  advanced past the run's base
+- **THEN** no finding is raised for the refused push or release
 
 #### Scenario: Live check outcomes
 
@@ -265,8 +266,9 @@ other issue for that producer; details SHALL NOT be rejected for their length.
 Producers SHALL report a finding's details as raw text, and
 the alert job SHALL itself HTML-escape them inside a preformatted block, so an
 issue carries no markup a producer wrote; upstream-derived text in an issue
-SHALL be HTML-escaped inside a preformatted block and fit GitHub's issue body limit, counting lines
-beyond it as "and N more". A failed alert job SHALL fail visibly; it is the
+body SHALL be HTML-escaped inside a preformatted block and fit GitHub's issue body limit, counting lines
+beyond it as "and N more"; an issue title is plain text and carries the
+subject unencoded. A failed alert job SHALL fail visibly; it is the
 one failure no issue reports, and documentation SHALL say so.
 
 #### Scenario: Findings carry markup
