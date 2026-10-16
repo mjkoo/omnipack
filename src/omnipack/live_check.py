@@ -50,6 +50,7 @@ class Unreachable(TypedDict):
 class Inconclusive(TypedDict):
     url: str
     reason: str
+    status: NotRequired[int]
 
 
 class LiveCheckReport(TypedDict):
@@ -105,7 +106,11 @@ def check_live(
                 )
             else:
                 report["inconclusive"].append(
-                    {"url": target.url, "reason": f"HTTP {error.status}"}
+                    {
+                        "url": target.url,
+                        "reason": f"HTTP {error.status}",
+                        "status": error.status,
+                    }
                 )
         except (HttpError, ValueError) as error:
             report["inconclusive"].append(

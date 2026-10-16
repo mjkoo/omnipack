@@ -229,13 +229,40 @@ def test_other_outcomes_are_inconclusive_with_their_cause(tmp_path: Path) -> Non
     assert report["status"] == Status.SUCCESS
     assert report["unreachable"] == []
     assert report["inconclusive"] == [
-        {"url": "https://gitlab.com/a/private", "reason": "HTTP 403"},
+        {"url": "https://gitlab.com/a/private", "reason": "HTTP 403", "status": 403},
         {"url": "https://github.com/a/limited", "reason": "HTTP 429"},
         {"url": "https://slow.example/app", "reason": "timed out"},
     ]
     # The 429 and the timeout were each retried before giving up.
     assert transport.urls().count("https://github.com/a/limited") == 3
     assert transport.urls().count("https://slow.example/app") == 3
+
+
+def test_only_a_non_retried_error_status_is_recorded_on_an_inconclusive_entry(
+    tmp_path: Path,
+) -> None:
+    write_packs(
+        tmp_path,
+        [
+            entry("https://a.example/forbidden"),
+            entry("https://b.example/limited"),
+            entry("https://c.example/slow"),
+        ],
+    )
+    transport = Transport(
+        {
+            "https://a.example/forbidden": [403],
+            "https://b.example/limited": [429],
+            "https://c.example/slow": [TimeoutError("timed out")],
+        }
+    )
+
+    report = check_live(tmp_path, http=client(transport))
+
+    forbidden, limited, slow = report["inconclusive"]
+    assert forbidden["status"] == 403
+    assert "status" not in limited
+    assert "status" not in slow
 
 
 def test_the_reason_names_the_last_attempts_status(tmp_path: Path) -> None:
@@ -330,6 +357,7 @@ def test_malformed_settings_leave_only_that_url_inconclusive(
     (finding,) = report["inconclusive"]
     assert finding["url"] == "https://bad.example/app"
     assert problem in finding["reason"]
+    assert "status" not in finding
     assert transport.urls() == ["https://github.com/a/ok"]
 
 
