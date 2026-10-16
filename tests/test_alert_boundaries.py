@@ -242,3 +242,35 @@ def test_live_check_report_from_the_real_writer_raises_gone_and_status_findings(
         (f"live-check/gone/{gone}", f"Project URL is gone (HTTP 404): {gone}"),
         (f"live-check/status/{blocked}", f"Project URL answers HTTP 403: {blocked}"),
     ]
+
+
+def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> None:
+    docs = (Path(__file__).resolve().parents[1] / "docs/alerts.md").read_text()
+    named = set(re.findall(r"`([^`]+)`", docs))
+
+    assert alerts_module.LABEL in named
+    for owner in alerts_module.OWNERS:
+        assert owner.value in named or owner.source is not None
+        prefixes = (
+            owner.prefixes
+            if owner.source is None
+            else tuple(
+                p.replace(f"{owner.source}/", "<source>/", 1) for p in owner.prefixes
+            )
+        )
+        assert set(prefixes) <= named
+    assert all(slug in docs for slug in alerts_module.PREPARE_STAGE_SLUGS.values())
+    assert all(f"`{slug}`" in docs for slug, _ in alerts_module.CHECK_STEPS.values())
+
+    for workflow in WORKFLOWS.glob("*.yml"):
+        for name, job in yaml.safe_load(workflow.read_text())["jobs"].items():
+            steps = job.get("steps", [])
+            if any("scripts.alerts reconcile" in step.get("run", "") for step in steps):
+                assert name in named
+            for step in steps:
+                artifact = step.get("with", {}).get("name", "")
+                if step.get("uses", "").startswith("actions/upload-artifact") and (
+                    artifact.startswith("alert-findings-")
+                ):
+                    assert artifact.endswith("-${{ github.run_id }}")
+    assert "alert-findings-<owner>-<run id>" in named
