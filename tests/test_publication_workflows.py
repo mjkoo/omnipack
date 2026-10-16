@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import subprocess
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ import yaml
 
 from omnipack.live_check import REPORT, SUMMARY
 from omnipack.source_registry import GENERATED
+from scripts.alerts import Owner
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
 
@@ -56,7 +58,7 @@ def workflow(request):
     return yaml.safe_load((WORKFLOWS / request.param).read_text())
 
 
-def check_name(workflow):
+def check_job_name(workflow):
     return workflow["jobs"]["publish"]["needs"]
 
 
@@ -102,7 +104,7 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
         assert checkout["with"]["ref"] == "${{ github.sha }}"
         assert checkout["with"]["persist-credentials"] is False
         assert checkout["with"]["fetch-depth"] == depth
-    assert set(workflow["jobs"]) == {check_name(workflow), "publish", "alert"}
+    assert set(workflow["jobs"]) == {check_job_name(workflow), "publish", "alert"}
     for job_name, job in producing_jobs(workflow).items():
         assert job["if"] == GUARD
         if job_name != "publish":
@@ -436,7 +438,7 @@ def alert_cases():
         (
             "source-maintenance.yml",
             "alert",
-            {"${inputs.source}-check": "check", "${inputs.source}-publish": "publish"},
+            {"$SOURCE-check": "check", "$SOURCE-publish": "publish"},
         ),
         ("source-catalog.yml", "alert-live-check", {"live-check": "live-check"}),
     ]
@@ -487,21 +489,52 @@ def test_alert_job_holds_only_issue_access_and_reconciles_producer_findings(
 
     reconcile = next(s for s in job["steps"] if "reconcile" in command(s))
     assert [s for s in job["steps"] if "GH_TOKEN" in s.get("env", {})] == [reconcile]
-    assert reconcile["env"]["GH_TOKEN"] == "${{ github.token }}"
     assert "continue-on-error" not in reconcile
-    pairs = [
-        word.removeprefix("--producer=") for word in command(reconcile) if "=" in word
-    ]
-    assert len(pairs) == len(producers)
-    # Each download lands in the directory its own producer pair reads.
-    for download, pair in zip(downloads, pairs, strict=True):
+    expected_env = {"GH_TOKEN": "${{ github.token }}"}
+    parsed = reconcile_producers(reconcile)
+    assert len(parsed) == len(producers)
+    # Each producer's owner is the one its job's emit step passes, and its
+    # result is that job's own, so a misspelled or swapped owner fails here.
+    assert {owner for owner, _, _ in parsed} == set(producers)
+    for owner, variable, path in parsed:
+        job_name = producers[owner]
+        assert emitted_owner(workflow["jobs"][job_name]) == owner
+        expected_env[variable] = "${{ needs." + job_name + ".result }}"
+        for source in GENERATED if "$SOURCE" in owner else [""]:
+            assert Owner(owner.replace("$SOURCE", source)) in Owner
+    assert reconcile["env"] == expected_env
+    assert len({variable for _, variable, _ in parsed}) == len(parsed)
+    # Each download lands in the directory its own producer reads.
+    for download, (owner, _, path) in zip(downloads, parsed, strict=True):
         directory = download["with"]["path"].replace(
             "${{ runner.temp }}", "$RUNNER_TEMP"
         )
-        directory = directory.replace("${{ inputs.source }}", "${SOURCE}")
-        owner, _, path = pair.partition("=")
+        directory = directory.replace("${{ inputs.source }}", "$SOURCE")
         assert path == directory + "/findings.json"
         assert owner == directory.rsplit("/", 1)[1]
+
+
+def reconcile_producers(reconcile):
+    """Each `--producer OWNER=$VARIABLE:PATH` as (owner, variable, path)."""
+    words = command(reconcile)
+    values = [w for previous, w in pairwise(words) if previous == "--producer"]
+    parsed = []
+    for value in values:
+        match = re.fullmatch(r"(?P<o>[^=]+)=\$(?P<v>\w+):(?P<p>.+)", value)
+        assert match, value
+        owner, variable, path = match["o"], match["v"], match["p"]
+        parsed.append(
+            (
+                owner.replace("${SOURCE}", "$SOURCE"),
+                variable,
+                path.replace("${SOURCE}", "$SOURCE"),
+            )
+        )
+    return parsed
+
+
+def emitted_owner(job):
+    return command(producing_env(job["steps"]))[4]
 
 
 def producing_env(job_steps):
@@ -541,6 +574,10 @@ EMIT_BINDINGS = {
         '"$SOURCE-publish"',
         {"PUBLISH_OUTCOME": "${{ steps.publish.outputs.outcome }}"},
     ),
+    ("source-catalog.yml", "live-check"): (
+        "live-check",
+        {"CHECK_RESULT": "${{ steps.check.outcome }}"},
+    ),
 }
 
 
@@ -577,6 +614,7 @@ def test_producing_jobs_emit_findings_last_and_tolerate_emit_failure(file, job_n
                 "check": {"contents": "read"},
                 "publish": {"contents": "write", "pull-requests": "write"},
             },
+            "source-catalog.yml": {"live-check": {"contents": "read"}},
         }[file][job_name]
     )
 
@@ -627,29 +665,3 @@ def test_findings_uploads_are_unique_and_each_alert_downloads_its_producers():
         for n in uploads.values()
     ] + [live, *names.values()]
     assert len(set(run_names)) == len(run_names)
-
-
-def test_source_alert_job_reconciles_the_called_sources_producers():
-    job = load("source-maintenance.yml")["jobs"]["alert"]
-    reconcile = next(s for s in job["steps"] if "reconcile" in command(s))
-    env = reconcile["env"]
-    for source in GENERATED:
-        name = source.upper()
-        assert env[f"{name}_CHECK_RESULT"] == "${{ needs.check.result }}"
-        assert env[f"{name}_PUBLISH_RESULT"] == "${{ needs.publish.result }}"
-
-
-def test_nightly_alert_reconcile_receives_each_producers_result():
-    job = load("nightly.yml")["jobs"]["alert"]
-    reconcile = next(s for s in job["steps"] if "reconcile" in command(s))
-    assert reconcile["env"] == {
-        "GH_TOKEN": "${{ github.token }}",
-        "NIGHTLY_PREPARE_RESULT": "${{ needs.prepare.result }}",
-        "NIGHTLY_PUBLISH_RESULT": "${{ needs.publish.result }}",
-    }
-    live = load("source-catalog.yml")["jobs"]["alert-live-check"]
-    reconcile = next(s for s in live["steps"] if "reconcile" in command(s))
-    assert reconcile["env"] == {
-        "GH_TOKEN": "${{ github.token }}",
-        "LIVE_CHECK_RESULT": "${{ needs.live-check.result }}",
-    }

@@ -183,9 +183,9 @@ jobs:
       - name: Reconcile the alert issues
         env:
           GH_TOKEN: ${{ github.token }}
-          NIGHTLY_PREPARE_RESULT: ${{ needs.prepare.result }}
-          NIGHTLY_PUBLISH_RESULT: ${{ needs.publish.result }}
+          PREPARE_RESULT: ${{ needs.prepare.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
         run: |
           python3 -m scripts.alerts reconcile \
-            --producer "nightly-prepare=$RUNNER_TEMP/alert-findings/nightly-prepare/findings.json" \
-            --producer "nightly-publish=$RUNNER_TEMP/alert-findings/nightly-publish/findings.json"
+            --producer "nightly-prepare=$PREPARE_RESULT:$RUNNER_TEMP/alert-findings/nightly-prepare/findings.json" \
+            --producer "nightly-publish=$PUBLISH_RESULT:$RUNNER_TEMP/alert-findings/nightly-publish/findings.json"

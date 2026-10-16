@@ -924,10 +924,9 @@ def test_failed_gh_operation_fails_with_a_fixed_reason(
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
     monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
     monkeypatch.setenv("GITHUB_RUN_ID", "2")
-    monkeypatch.setenv("NIGHTLY_PREPARE_RESULT", "success")
 
     exit_code = alerts_module.main(
-        ["reconcile", "--producer", f"nightly-prepare={path}"]
+        ["reconcile", "--producer", f"nightly-prepare=success:{path}"]
     )
 
     assert exit_code == 1
@@ -944,7 +943,7 @@ def test_unreadable_listing_fails_without_gh_output(tmp_path: Path) -> None:
         _run(gh, _nightly(path))
 
 
-def test_cli_reconciles_producers_with_results_from_the_environment(
+def test_cli_reconciles_producers_with_results_from_the_command_line(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     path = _file(
@@ -959,14 +958,12 @@ def test_cli_reconciles_producers_with_results_from_the_environment(
     monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
     monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
     monkeypatch.setenv("GITHUB_RUN_ID", "2")
-    monkeypatch.setenv("NIGHTLY_PREPARE_RESULT", "success")
-    monkeypatch.setenv("NIGHTLY_PUBLISH_RESULT", "skipped")
 
     exit_code = alerts_module.main(
         [
             "reconcile",
-            "--producer", f"nightly-prepare={path}",
-            "--producer", f"nightly-publish={tmp_path / 'absent.json'}",
+            "--producer", f"nightly-prepare=success:{path}",
+            "--producer", f"nightly-publish=skipped:{tmp_path / 'absent.json'}",
         ]
     )  # fmt: skip
 
@@ -977,6 +974,45 @@ def test_cli_reconciles_producers_with_results_from_the_environment(
         summary_path.read_text()
         == "alerts: 1 opened, 0 updated, 0 reopened, 0 closed, 0 mute cleared\n"
     )
+
+
+@pytest.mark.parametrize("result", ["", "weird"])
+def test_cli_producer_with_an_empty_or_unknown_result_contributes_nothing(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, result: str
+) -> None:
+    path = _file(
+        tmp_path,
+        Owner.NIGHTLY_PREPARE,
+        findings=(Finding(NIGHTLY_STAGE, "t", ("boom",)),),
+    )
+    gh = _gh()
+    monkeypatch.setattr(alerts_module, "SubprocessGhRunner", lambda: gh)
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.com")
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
+    monkeypatch.setenv("GITHUB_RUN_ID", "2")
+    monkeypatch.setenv("NIGHTLY_PREPARE_RESULT", "success")
+
+    exit_code = alerts_module.main(
+        ["reconcile", "--producer", f"nightly-prepare={result}:{path}"]
+    )
+
+    assert exit_code == 0
+    assert _verbs(gh) == []
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "nightly-prepare",
+        "nightly-prepare=success",
+        "nightly-prepare=success:",
+        "bogus=success:f.json",
+    ],
+)
+def test_cli_rejects_a_malformed_producer(value: str) -> None:
+    with pytest.raises(SystemExit):
+        alerts_module.main(["reconcile", "--producer", value])
 
 
 # --- emitters --------------------------------------------------------------

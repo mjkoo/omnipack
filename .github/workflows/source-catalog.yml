@@ -135,7 +135,7 @@ jobs:
       - name: Reconcile the alert issues
         env:
           GH_TOKEN: ${{ github.token }}
-          LIVE_CHECK_RESULT: ${{ needs.live-check.result }}
+          CHECK_RESULT: ${{ needs.live-check.result }}
         run: |
           python3 -m scripts.alerts reconcile \
-            --producer "live-check=$RUNNER_TEMP/alert-findings/live-check/findings.json"
+            --producer "live-check=$CHECK_RESULT:$RUNNER_TEMP/alert-findings/live-check/findings.json"

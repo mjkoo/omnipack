@@ -225,13 +225,9 @@ jobs:
       - name: Reconcile the alert issues
         env:
           GH_TOKEN: ${{ github.token }}
-          # Reconcile reads each producer's result from a variable named for its
-          # owner, so the called source's pair is the one it uses.
-          CODM_CHECK_RESULT: ${{ needs.check.result }}
-          CODM_PUBLISH_RESULT: ${{ needs.publish.result }}
-          QUIVER_CHECK_RESULT: ${{ needs.check.result }}
-          QUIVER_PUBLISH_RESULT: ${{ needs.publish.result }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          PUBLISH_RESULT: ${{ needs.publish.result }}
         run: |
           python3 -m scripts.alerts reconcile \
-            --producer "${SOURCE}-check=$RUNNER_TEMP/alert-findings/${SOURCE}-check/findings.json" \
-            --producer "${SOURCE}-publish=$RUNNER_TEMP/alert-findings/${SOURCE}-publish/findings.json"
+            --producer "${SOURCE}-check=$CHECK_RESULT:$RUNNER_TEMP/alert-findings/${SOURCE}-check/findings.json" \
+            --producer "${SOURCE}-publish=$PUBLISH_RESULT:$RUNNER_TEMP/alert-findings/${SOURCE}-publish/findings.json"

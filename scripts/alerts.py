@@ -895,22 +895,22 @@ def _emit_command(arguments: argparse.Namespace, environ: Mapping[str, str]) -> 
     return 0
 
 
-def _parse_producer(value: str, environ: Mapping[str, str]) -> Producer:
-    name, separator, path = value.partition("=")
+def _parse_producer(value: str) -> Producer:
+    name, separator, rest = value.partition("=")
     try:
         owner = Owner(name)
     except ValueError:
         raise SystemExit(f"unknown producer owner: {name}") from None
-    if not separator or not path:
-        raise SystemExit(f"--producer needs OWNER=PATH, got {value}")
-    result = require_env(environ, owner.value.upper().replace("-", "_") + "_RESULT")
+    result, colon, path = rest.partition(":")
+    if not separator or not colon or not path:
+        raise SystemExit(f"--producer needs OWNER=RESULT:PATH, got {value}")
     return Producer(owner, Path(path), JobResult.parse(result))
 
 
 def _reconcile_command(
     arguments: argparse.Namespace, environ: Mapping[str, str]
 ) -> int:
-    producers = [_parse_producer(value, environ) for value in arguments.producer]
+    producers = [_parse_producer(value) for value in arguments.producer]
     repository = require_env(environ, "GITHUB_REPOSITORY")
     url = run_url(environ)
     try:
@@ -933,9 +933,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--producer",
         action="append",
         required=True,
-        metavar="OWNER=PATH",
-        help="an expected producer and its findings file; its job result is read "
-        "from OWNER_RESULT in the environment (hyphens become underscores)",
+        metavar="OWNER=RESULT:PATH",
+        help="an expected producer, its job result and its findings file; an "
+        "empty or unknown RESULT makes the producer contribute nothing",
     )
     emit_parser = subparsers.add_parser(
         "emit",
