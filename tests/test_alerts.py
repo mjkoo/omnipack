@@ -1587,18 +1587,48 @@ def test_live_check_without_a_report_after_a_failed_step_raises_the_early_failur
     assert "live-check/read" not in file.scope
 
 
-def test_live_check_with_a_gone_url_does_not_add_the_early_failure(
+def test_a_status_finding_does_not_account_for_an_unrelated_job_failure(
     tmp_path: Path,
 ) -> None:
+    report = _live_report(
+        inconclusive=[
+            {"url": "https://b.example/blocked", "reason": "HTTP 403", "status": 403}
+        ]
+    )
+
     file = _emit(
         Owner.LIVE_CHECK,
         "failure",
-        report=_live_report(unreachable=[{"url": "https://a/b", "status": 410}]),
+        report=report,
+        tmp_path=tmp_path,
+        CHECK_RESULT="success",
+    )
+
+    assert _keys(file) == [
+        "live-check/status/https://b.example/blocked",
+        *_early(Owner.LIVE_CHECK),
+    ]
+
+
+@pytest.mark.parametrize("status", [True, None, "404"], ids=["bool", "absent", "text"])
+def test_an_unreachable_status_that_is_not_an_int_is_left_out_of_the_text(
+    tmp_path: Path, status: object
+) -> None:
+    item: dict[str, object] = {"url": "https://a.example/gone"}
+    if status is not None:
+        item["status"] = status
+
+    file = _emit(
+        Owner.LIVE_CHECK,
+        "failure",
+        report=_live_report(unreachable=[item]),
         tmp_path=tmp_path,
         **LIVE_ENV,
     )
 
-    assert early_failure_key(Owner.LIVE_CHECK) not in _keys(file)
+    (finding,) = file.findings
+    assert finding.title == "Project URL is gone: https://a.example/gone"
+    assert finding.details == ("URL: https://a.example/gone",)
 
 
 # --- emitter keys, titles and determinism ----------------------------------

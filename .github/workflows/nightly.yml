@@ -184,7 +184,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           PREPARE_RESULT: ${{ needs.prepare.result }}
-          PUBLISH_RESULT: ${{ needs.publish.result }}
+          # publish starts only after prepare succeeds, so any other prepare result means
+          # publish never started and contributes nothing.
+          PUBLISH_RESULT: ${{ needs.prepare.result == 'success' && needs.publish.result || 'skipped' }}
         run: |
           python3 -m scripts.alerts reconcile \
             --producer "nightly-prepare=$PREPARE_RESULT:$RUNNER_TEMP/alert-findings/nightly-prepare/findings.json" \

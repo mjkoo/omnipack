@@ -226,7 +226,9 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           CHECK_RESULT: ${{ needs.check.result }}
-          PUBLISH_RESULT: ${{ needs.publish.result }}
+          # publish starts only after check succeeds, so any other check result means
+          # publish never started and contributes nothing.
+          PUBLISH_RESULT: ${{ needs.check.result == 'success' && needs.publish.result || 'skipped' }}
         run: |
           python3 -m scripts.alerts reconcile \
             --producer "${SOURCE}-check=$CHECK_RESULT:$RUNNER_TEMP/alert-findings/${SOURCE}-check/findings.json" \

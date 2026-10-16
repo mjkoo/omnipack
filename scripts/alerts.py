@@ -799,6 +799,10 @@ def emit_source_check(environ: Mapping[str, str], owner: Owner) -> FindingsFile:
     return _finish(owner, environ, findings, scope, accounted=bool(findings))
 
 
+def _http_status(value: object) -> bool:
+    return isinstance(value, int) and not isinstance(value, bool)
+
+
 def emit_live_check(
     environ: Mapping[str, str], report_path: Path = LIVE_CHECK_REPORT
 ) -> FindingsFile:
@@ -827,19 +831,22 @@ def emit_live_check(
             scope += [_GONE, _STATUS]
             for item in _objects(report.get("unreachable")):
                 url, status = item.get("url"), item.get("status")
-                if isinstance(url, str):
-                    findings.append(
-                        _finding(
-                            subject_key(_GONE, url),
-                            f"Project URL is gone (HTTP {status}): {url}",
-                            [f"URL: {url}", f"Status: HTTP {status}"],
-                        )
+                if not isinstance(url, str):
+                    continue
+                # A status that is not an HTTP code is left out of the text.
+                known = _http_status(status)
+                findings.append(
+                    _finding(
+                        subject_key(_GONE, url),
+                        f"Project URL is gone{f' (HTTP {status})' if known else ''}: {url}",
+                        [f"URL: {url}", *([f"Status: HTTP {status}"] if known else [])],
                     )
+                )
             for item in _objects(report.get("inconclusive")):
                 url, status = item.get("url"), item.get("status")
                 if not isinstance(url, str):
                     continue
-                if isinstance(status, int) and not isinstance(status, bool):
+                if _http_status(status):
                     findings.append(
                         _finding(
                             subject_key(_STATUS, url),
@@ -855,7 +862,12 @@ def emit_live_check(
         findings,
         scope,
         unchecked,
-        accounted=bool(findings),
+        # The check step fails the job for unreadable packs or a gone URL, never
+        # for an inconclusive status, so only those findings account for it.
+        accounted=any(
+            finding.key == _LIVE_READ or finding.key.startswith(_GONE)
+            for finding in findings
+        ),
     )
 
 

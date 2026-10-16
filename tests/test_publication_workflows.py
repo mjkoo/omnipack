@@ -499,7 +499,13 @@ def test_alert_job_holds_only_issue_access_and_reconciles_producer_findings(
     for owner, variable, path in parsed:
         job_name = producers[owner]
         assert emitted_owner(workflow["jobs"][job_name]) == owner
-        expected_env[variable] = "${{ needs." + job_name + ".result }}"
+        result = "needs." + job_name + ".result"
+        # A dependent job that never started reads as skipped, whatever its
+        # upstream's own result, so it raises no early failure of its own.
+        upstream = workflow["jobs"][job_name].get("needs")
+        if upstream is not None:
+            result = f"needs.{upstream}.result == 'success' && {result} || 'skipped'"
+        expected_env[variable] = "${{ " + result + " }}"
         for source in GENERATED if "$SOURCE" in owner else [""]:
             assert Owner(owner.replace("$SOURCE", source)) in Owner
     assert reconcile["env"] == expected_env
