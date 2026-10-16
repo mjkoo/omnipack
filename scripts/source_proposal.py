@@ -10,7 +10,6 @@ import anything from `omnipack` or from a module that does.
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import os
 import sys
@@ -36,6 +35,7 @@ from scripts.workflow_support import (
     log,
     ls_remote_sha,
     regular_file_problem,
+    render_escaped_pre,
     require_env,
     run_url,
     verify_handoff,
@@ -276,12 +276,12 @@ def _render_report(
     head: list[str] = []
     if run_url is not None:
         head += [f"Workflow run: {run_url}", ""]
-    head += [f"Base SHA: {base_sha}", "", "<pre>"]
+    head += [f"Base SHA: {base_sha}", ""]
     notes: list[str] = []
     error = report.get("error")
     if isinstance(error, str):
         notes.append(f"Error: {error}")
-    sections: list[tuple[str, Sequence[str]]] = []
+    sections: list[tuple[str | None, Sequence[str]]] = []
     changes = _report_changes(report)
     if changes is not None:
         added, removed, changed = changes
@@ -289,44 +289,7 @@ def _render_report(
             notes.append(BYTES_ONLY_CHANGE)
         sections += [("Added:", added), ("Removed:", removed), ("Changed:", changed)]
     sections.append(("Skipped:", _report_skipped(report)))
-    escaped_notes = [html.escape(note) for note in notes]
-    escaped_sections = [
-        (header, [html.escape(line) for line in lines]) for header, lines in sections
-    ]
-
-    def render(kept_notes: list[str], kept: list[list[str]], omitted: int) -> str:
-        lines = list(head)
-        for note in kept_notes:
-            lines += [note, ""]
-        for index, (header, _) in enumerate(escaped_sections):
-            if index:
-                lines.append("")
-            lines += [header, *kept[index]]
-        if omitted:
-            lines.append(f"and {omitted} more")
-        return "\n".join([*lines, "</pre>"]) + "\n"
-
-    full = render(escaped_notes, [lines for _, lines in escaped_sections], 0)
-    if len(full) <= limit:
-        return full
-    # Keep what fits, in order, leaving room for the longest omission line.
-    # The full diagnostics remain in the generation report.
-    total = len(escaped_notes) + sum(len(lines) for _, lines in escaped_sections)
-    budget = limit - len(render([], [[] for _ in escaped_sections], total))
-    kept_notes: list[str] = []
-    for note in escaped_notes:
-        if len(note) + 2 <= budget:
-            kept_notes.append(note)
-            budget -= len(note) + 2
-    kept: list[list[str]] = []
-    for _, lines in escaped_sections:
-        kept.append([])
-        for line in lines:
-            if len(line) + 1 <= budget:
-                kept[-1].append(line)
-                budget -= len(line) + 1
-    omitted = total - len(kept_notes) - sum(len(lines) for lines in kept)
-    return render(kept_notes, kept, omitted)
+    return render_escaped_pre(head, notes, sections, limit=limit)
 
 
 def _commit_candidate(

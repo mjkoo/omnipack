@@ -8,6 +8,7 @@ does.
 
 from __future__ import annotations
 
+import html
 import re
 import stat
 import subprocess
@@ -233,6 +234,62 @@ def regular_file_problem(
     if not executable_ok and info.st_mode & 0o111:
         return "executable"
     return None
+
+
+def render_escaped_pre(
+    head: Sequence[str],
+    notes: Sequence[str],
+    sections: Sequence[tuple[str | None, Sequence[str]]],
+    *,
+    limit: int,
+) -> str:
+    """Render raw text lines HTML-escaped inside a `<pre>` block within `limit`.
+
+    `head` lines come first and are written as given, so the caller escapes
+    anything upstream-derived in them. `notes` and each section's lines are
+    escaped here. A section header of None writes no header line. When the
+    text would exceed `limit`, lines that do not fit are left out and counted
+    in a final "and N more" line, while every section header stays.
+    """
+    escaped_notes = [html.escape(note) for note in notes]
+    escaped_sections = [
+        (header, [html.escape(line) for line in lines]) for header, lines in sections
+    ]
+
+    def render(kept_notes: list[str], kept: list[list[str]], omitted: int) -> str:
+        lines = [*head, "<pre>"]
+        for note in kept_notes:
+            lines += [note, ""]
+        for index, (header, _) in enumerate(escaped_sections):
+            if index:
+                lines.append("")
+            if header is not None:
+                lines.append(header)
+            lines += kept[index]
+        if omitted:
+            lines.append(f"and {omitted} more")
+        return "\n".join([*lines, "</pre>"]) + "\n"
+
+    full = render(escaped_notes, [lines for _, lines in escaped_sections], 0)
+    if len(full) <= limit:
+        return full
+    # Keep what fits, in order, leaving room for the longest omission line.
+    total = len(escaped_notes) + sum(len(lines) for _, lines in escaped_sections)
+    budget = limit - len(render([], [[] for _ in escaped_sections], total))
+    kept_notes: list[str] = []
+    for note in escaped_notes:
+        if len(note) + 2 <= budget:
+            kept_notes.append(note)
+            budget -= len(note) + 2
+    kept: list[list[str]] = []
+    for _, lines in escaped_sections:
+        kept.append([])
+        for line in lines:
+            if len(line) + 1 <= budget:
+                kept[-1].append(line)
+                budget -= len(line) + 1
+    omitted = total - len(kept_notes) - sum(len(lines) for lines in kept)
+    return render(kept_notes, kept, omitted)
 
 
 def require_env(environ: Mapping[str, str], name: str) -> str:

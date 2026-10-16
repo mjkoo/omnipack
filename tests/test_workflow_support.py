@@ -20,6 +20,7 @@ from scripts.workflow_support import (
     git,
     git_output,
     ls_remote_sha,
+    render_escaped_pre,
     run_url,
     verify_handoff,
 )
@@ -181,3 +182,29 @@ def test_run_url_requires_every_variable(missing: str) -> None:
 
     with pytest.raises(SystemExit, match=f"^{missing} is required$"):
         run_url(environ)
+
+
+def test_render_escaped_pre_escapes_lines_and_notes_but_not_the_head() -> None:
+    text = render_escaped_pre(
+        ["<!-- head -->"],
+        ["<b>note</b>"],
+        [("Items:", ["<script>", "a & b"]), (None, ["plain"])],
+        limit=10_000,
+    )
+
+    assert text == (
+        "<!-- head -->\n<pre>\n&lt;b&gt;note&lt;/b&gt;\n\nItems:\n"
+        "&lt;script&gt;\na &amp; b\n\nplain\n</pre>\n"
+    )
+
+
+def test_render_escaped_pre_counts_lines_that_exceed_the_limit() -> None:
+    lines = [f"line {index:02d}" for index in range(20)]
+
+    text = render_escaped_pre(["head"], [], [("Items:", lines)], limit=80)
+
+    assert len(text) <= 80
+    assert text.startswith("head\n<pre>\nItems:\nline 00\n")
+    kept = text.count("line ")
+    assert 0 < kept < 20
+    assert f"and {20 - kept} more\n</pre>\n" in text
