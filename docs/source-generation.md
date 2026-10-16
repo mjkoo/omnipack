@@ -374,12 +374,13 @@ state. It holds only `contents: read`, checks out with
 `omnipack-live-check` concurrency group without waiting on any source job, and
 is limited to 30 minutes, above the command's own 20-minute budget.
 
-A URL that answers 404 or 410 is unreachable and fails the run and
-raises an issue (see [maintenance alerts](alerts.md)). Packs that cannot be
-read also fail it. Any other outcome, such as a 403, a 429, a server error, a timeout or the
-URLs left unchecked when the budget runs out, is inconclusive: it is listed with
-its reason but does not fail the run (an error status, such as a 403, still
-raises an issue). The run summary lists the unreachable and
+A URL that answers 404 or 410 is unreachable: it fails the run and raises an
+issue (see [maintenance alerts](alerts.md)). Packs that cannot be read also
+fail it. Any other outcome, such as a 403, a 429, a server error, a timeout or
+the URLs left unchecked when the budget runs out, is inconclusive: it is listed
+with its reason but does not fail the run. An error status the HTTP client does
+not retry, such as a 403, still raises an issue; a 429, a server error, a
+timeout or an unchecked URL does not. The run summary lists the unreachable and
 inconclusive URLs, or the error of a failed check, and the
 `live-check-report-<run id>` artifact keeps `.build/live-check/report.json` for
 14 days.

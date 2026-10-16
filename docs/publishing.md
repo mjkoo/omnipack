@@ -277,7 +277,8 @@ artifact of the same name, so **Re-run all jobs**, which keeps the run ID,
 does not fail on a name an earlier attempt already used. Actions' own step
 status, logs and these artifacts are the record of a run; failures and
 build warnings also open issues, described in [maintenance alerts](alerts.md).
-A failing `git` or `gh` command writes its error output to the job log, never to the step summary.
+A failing `git` or `gh` command writes its error output to the job log, never
+to the step summary.
 
 ## Rollback
 
