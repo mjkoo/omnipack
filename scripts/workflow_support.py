@@ -228,6 +228,11 @@ WRITE_OUTCOMES: frozenset[WriteOutcome] = frozenset(get_args(WriteOutcome))
 StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
 STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
 
+# How a build or live-check report says its run ended. It mirrors the project's
+# report status, which this module cannot import.
+ReportStatus = Literal["success", "failed"]
+REPORT_STATUSES: frozenset[ReportStatus] = frozenset(get_args(ReportStatus))
+
 # The reviewed sources, each generated, checked and published by its own jobs.
 SourceName = Literal["codm", "quiver"]
 SOURCE_NAMES: tuple[SourceName, ...] = get_args(SourceName)
@@ -249,12 +254,17 @@ def write_outcome(*, succeeded: bool, main_advanced: bool) -> WriteOutcome:
     return "main-advanced" if main_advanced else "failed"
 
 
+def parse_literal[T: str](value: object, options: frozenset[T]) -> T | None:
+    """The option `value` names, or None for any other value."""
+    for option in options:
+        if value == option:
+            return option
+    return None
+
+
 def parse_step_outcome(value: str | None) -> StepOutcome | None:
     """The step outcome or job result `value` names, or None for any other value."""
-    for outcome in get_args(StepOutcome):
-        if value == outcome:
-            return outcome
-    return None
+    return parse_literal(value, STEP_OUTCOMES)
 
 
 def step_result_variable(step: ValidationStep) -> str:

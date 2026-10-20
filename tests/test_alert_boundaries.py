@@ -13,6 +13,7 @@ import re
 import shlex
 from collections.abc import Mapping
 from pathlib import Path
+from typing import get_args
 
 import pytest
 import yaml
@@ -21,6 +22,7 @@ from omnipack.live_check import REPORT, check_live, write_live_report
 from omnipack.merge import CompositionReport, StaleExclusion, UncategorizedFamily
 from omnipack.model import Variant
 from omnipack.report import write_report
+from omnipack.report_model import Status
 from omnipack.sources import IngestionReport
 from scripts import alerts as alerts_module
 from scripts import nightly as nightly_module
@@ -34,7 +36,7 @@ from scripts.alerts import (
     parse_findings,
     reconcile,
 )
-from scripts.workflow_support import StepOutcome
+from scripts.workflow_support import ReportStatus, StepOutcome
 from tests.publication_support import (
     bare_remote,
     bundle,
@@ -242,6 +244,10 @@ def test_live_check_report_from_the_real_writer_raises_gone_and_status_findings(
         (f"live-check/gone/{gone}", f"Project URL is gone (HTTP 404): {gone}"),
         (f"live-check/status/{blocked}", f"Project URL answers HTTP 403: {blocked}"),
     ]
+
+
+def test_alert_report_status_mirrors_the_report_status() -> None:
+    assert set(get_args(ReportStatus)) == {status.value for status in Status}
 
 
 def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> None:

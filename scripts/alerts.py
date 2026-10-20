@@ -21,20 +21,21 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
-from typing import Literal
+from typing import Literal, NamedTuple, get_args
 
 from scripts.workflow_support import (
+    REPORT_STATUSES,
     SOURCE_NAMES,
     STAGE_SEPARATOR,
-    VALIDATION_STEPS,
     WRITE_OUTCOMES,
     GhRunner,
+    ReportStatus,
     SourceName,
     StepOutcome,
     SubprocessGhRunner,
     ValidationStep,
-    WriteOutcome,
     append_summary,
+    parse_literal,
     parse_step_outcome,
     regular_file_problem,
     render_escaped_pre,
@@ -55,7 +56,9 @@ DIGEST_LENGTH = 16
 _SAFE_SUBJECT = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/:._~+-"
 )
-_KEY = re.compile(rf"[A-Za-z0-9/:._~%+-]{{1,{KEY_LIMIT}}}")
+# A key is safe subject characters plus the `%` of an escape.
+_KEY_CHARACTERS = "".join(sorted(_SAFE_SUBJECT | {"%"}))
+_KEY = re.compile(rf"[{re.escape(_KEY_CHARACTERS)}]{{1,{KEY_LIMIT}}}")
 _MARKER_PREFIX = "<!-- omnipack-alert-key: "
 _MARKER_SUFFIX = " -->"
 _MARKER = re.compile(re.escape(_MARKER_PREFIX) + r"(\S+)" + re.escape(_MARKER_SUFFIX))
@@ -103,13 +106,13 @@ GH_TOKEN, GITHUB_REPOSITORY, GITHUB_SERVER_URL and GITHUB_RUN_ID.
 """
 
 
-# The producing jobs: the nightly prepare and publish jobs, each source's check
-# and publish jobs, and the live check.
-OwnerJob = Literal[
-    "nightly-prepare", "nightly-publish", "check", "publish", "live-check"
-]
+# The producing jobs: the nightly prepare and publish jobs and the live check,
+# which belong to no source, and each source's check and publish jobs.
+UnsourcedJob = Literal["nightly-prepare", "nightly-publish", "live-check"]
 SourceJob = Literal["check", "publish"]
-_UNSOURCED_PREFIXES: Mapping[OwnerJob, tuple[str, ...]] = {
+_UNSOURCED_JOBS: frozenset[UnsourcedJob] = frozenset(get_args(UnsourcedJob))
+_SOURCE_JOBS: tuple[SourceJob, ...] = get_args(SourceJob)
+_UNSOURCED_PREFIXES: Mapping[UnsourcedJob, tuple[str, ...]] = {
     "nightly-prepare": ("nightly/prepare/", "build/"),
     "nightly-publish": ("nightly/publish/",),
     "live-check": ("live-check/",),
@@ -120,8 +123,12 @@ _UNSOURCED_PREFIXES: Mapping[OwnerJob, tuple[str, ...]] = {
 class Owner:
     """A producing job a findings file can come from; `OWNERS` lists them all."""
 
-    job: OwnerJob
+    job: UnsourcedJob | SourceJob
     source: SourceName | None = None
+
+    def __post_init__(self) -> None:
+        if (self.source is None) != (self.job in _UNSOURCED_JOBS):
+            raise ValueError(f"{self.job} job with source {self.source}")
 
     @property
     def value(self) -> str:
@@ -131,8 +138,9 @@ class Owner:
     @property
     def prefixes(self) -> tuple[str, ...]:
         """The key prefixes the owner may use. The first is the early-failure prefix."""
-        if self.source is None:
-            return _UNSOURCED_PREFIXES[self.job]
+        unsourced = parse_literal(self.job, _UNSOURCED_JOBS)
+        if unsourced is not None:
+            return _UNSOURCED_PREFIXES[unsourced]
         return (f"{self.source}/{self.job}/",)
 
     def __str__(self) -> str:
@@ -142,7 +150,6 @@ class Owner:
 NIGHTLY_PREPARE = Owner("nightly-prepare")
 NIGHTLY_PUBLISH = Owner("nightly-publish")
 LIVE_CHECK = Owner("live-check")
-_SOURCE_JOBS: tuple[SourceJob, ...] = ("check", "publish")
 OWNERS: tuple[Owner, ...] = (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
@@ -606,7 +613,7 @@ PREPARE_STAGE_SLUGS: Mapping[str, str] = {
     "drift after verify": "drift-after-verify",
     "bundle": "bundle",
 }
-_BUILD_PREFIX = "build/"
+_BUILD_PREFIX = NIGHTLY_PREPARE.prefixes[1]
 _UNCATEGORIZED = _BUILD_PREFIX + "uncategorized/"
 _STALE_DENIAL = _BUILD_PREFIX + "stale-denial/"
 _STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
@@ -625,7 +632,9 @@ CHECK_STEPS: Mapping[ValidationStep, tuple[str, str]] = {
     "guard": ("guard", "catalog guard"),
 }
 # The steps skipped, rather than run, when the candidate equals main's catalog.
-_SKIPPED_WHEN_UNCHANGED: tuple[ValidationStep, ...] = VALIDATION_STEPS[2:]
+_SKIPPED_WHEN_UNCHANGED: frozenset[ValidationStep] = frozenset(
+    {"tests", "build", "verify", "guard"}
+)
 
 
 def _one_line(text: str) -> str:
@@ -725,7 +734,7 @@ def emit_nightly_prepare(
     report = _read_object(report_path)
     if report is not None:
         findings += _build_warnings(report)
-        if report.get("status") == "success":
+        if parse_literal(report.get("status"), REPORT_STATUSES) == "success":
             scope.append(_BUILD_PREFIX)
     return _finish(
         owner,
@@ -773,19 +782,18 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
     return findings
 
 
-def _write_outcome(value: str | None) -> WriteOutcome | None:
-    for outcome in WRITE_OUTCOMES:
-        if value == outcome:
-            return outcome
-    return None
+class _WriteStep(NamedTuple):
+    """A write step: its key slug, its outcome variable and its finding's name."""
+
+    slug: str
+    variable: str
+    name: str
 
 
 def _publish_steps(
-    owner: Owner,
-    environ: Mapping[str, str],
-    steps: Sequence[tuple[str, str, str]],
+    owner: Owner, environ: Mapping[str, str], steps: Sequence[_WriteStep]
 ) -> FindingsFile:
-    """Findings for write steps, given as (key slug, outcome variable, name).
+    """Findings for write steps from each step's outcome variable.
 
     A step is re-checked when its `outcome` output is `ok` or `failed`; a
     `main-advanced` outcome raises nothing and re-checks nothing but still
@@ -796,7 +804,7 @@ def _publish_steps(
     scope: list[str] = []
     accounted = False
     for slug, variable, name in steps:
-        outcome = _write_outcome(environ.get(variable))
+        outcome = parse_literal(environ.get(variable), WRITE_OUTCOMES)
         if outcome in ("ok", "failed"):
             scope.append(prefix + slug)
         if outcome == "failed":
@@ -812,8 +820,8 @@ def emit_nightly_publish(environ: Mapping[str, str]) -> FindingsFile:
         NIGHTLY_PUBLISH,
         environ,
         (
-            ("push", "PUSH_OUTCOME", "Nightly push to main"),
-            ("release", "RELEASE_OUTCOME", "Rolling release synchronization"),
+            _WriteStep("push", "PUSH_OUTCOME", "Nightly push to main"),
+            _WriteStep("release", "RELEASE_OUTCOME", "Rolling release synchronization"),
         ),
     )
 
@@ -822,7 +830,13 @@ def emit_source_publish(environ: Mapping[str, str], source: SourceName) -> Findi
     return _publish_steps(
         Owner("publish", source),
         environ,
-        (("proposal", "PUBLISH_OUTCOME", f"Publishing the {source} source proposal"),),
+        (
+            _WriteStep(
+                "proposal",
+                "PUBLISH_OUTCOME",
+                f"Publishing the {source} source proposal",
+            ),
+        ),
     )
 
 
@@ -867,14 +881,15 @@ def emit_live_check(
     """Findings from the live check's report, read only when the check step ran."""
     ran = _result(environ, "CHECK_RESULT") in ("success", "failure")
     report = _read_object(report_path) if ran else None
-    if report is not None and report.get("status") not in ("success", "failed"):
-        report = None
+    report_status: ReportStatus | None = None
+    if report is not None:
+        report_status = parse_literal(report.get("status"), REPORT_STATUSES)
     findings: list[Finding] = []
     scope: list[str] = []
     unchecked: list[str] = []
-    if report is not None:
+    if report is not None and report_status is not None:
         scope.append(_LIVE_READ)
-        if report["status"] == "failed":
+        if report_status == "failed":
             findings.append(
                 _finding(
                     _LIVE_READ,
@@ -933,15 +948,18 @@ def emit(
     owner: Owner, environ: Mapping[str, str], report_path: Path | None = None
 ) -> FindingsFile:
     """The findings file for `owner` from the environment `EMIT_HELP` documents."""
-    if owner.source is not None:
-        if owner.job == "check":
-            return emit_source_check(environ, owner.source)
-        return emit_source_publish(environ, owner.source)
-    if owner == NIGHTLY_PREPARE:
-        return emit_nightly_prepare(environ, report_path or BUILD_REPORT)
-    if owner == NIGHTLY_PUBLISH:
-        return emit_nightly_publish(environ)
-    return emit_live_check(environ, report_path or LIVE_CHECK_REPORT)
+    match owner.job, owner.source:
+        case "nightly-prepare", None:
+            return emit_nightly_prepare(environ, report_path or BUILD_REPORT)
+        case "nightly-publish", None:
+            return emit_nightly_publish(environ)
+        case "live-check", None:
+            return emit_live_check(environ, report_path or LIVE_CHECK_REPORT)
+        case "check", str(source):
+            return emit_source_check(environ, source)
+        case "publish", str(source):
+            return emit_source_publish(environ, source)
+    raise ValueError(f"no emitter for {owner}")
 
 
 def write_findings(file: FindingsFile, output: Path) -> None:
@@ -1026,7 +1044,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         description=EMIT_HELP,
         formatter_class=argparse.RawDescriptionHelpFormatter,
     )
-    emit_parser.add_argument("owner", type=_owner_argument, choices=OWNERS)
+    emit_parser.add_argument("owner", type=_owner_argument)
     emit_parser.add_argument("--report", type=Path, default=None)
     emit_parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     arguments = parser.parse_args(argv)

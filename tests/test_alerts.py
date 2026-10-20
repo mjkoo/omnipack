@@ -202,6 +202,16 @@ def test_each_source_has_its_own_check_and_publish_owners() -> None:
         parse_owner("quiver")
 
 
+@pytest.mark.parametrize(
+    ("job", "source"), [("check", None), ("publish", None), ("live-check", "codm")]
+)
+def test_an_owner_has_a_source_exactly_when_its_job_belongs_to_one(
+    job: str, source: str | None
+) -> None:
+    with pytest.raises(ValueError, match="job with source"):
+        Owner(job, source)  # ty: ignore[invalid-argument-type]
+
+
 def test_check_step_table_covers_exactly_the_validation_steps_in_order() -> None:
     assert tuple(CHECK_STEPS) == VALIDATION_STEPS
     slugs = [slug for slug, _ in CHECK_STEPS.values()]
