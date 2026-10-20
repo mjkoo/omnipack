@@ -15,6 +15,7 @@ import pytest
 
 from scripts import nightly_write as write_module
 from scripts.nightly_write import (
+    ALLOWED_PATHS,
     MARKER,
     run_push,
     run_release,
@@ -24,12 +25,16 @@ from tests.publication_support import (
     OK,
     CommandResult,
     FakeGh,
+    advance_main,
     bare_remote,
     bundle,
+    commit_as_bot,
     failure,
     install_failing_hooks,
     isolated_git_identity,
+    push_gh,
     repository,
+    seed_repository,
     shallow_checkout,
 )
 from tests.publication_support import (
@@ -38,98 +43,89 @@ from tests.publication_support import (
 
 pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
 
-ALLOWED_PATHS = (
-    "dist/single-screen.json",
-    "dist/dual-screen.json",
-    "README.md",
-)
-
-
-def _push_gh(*, auth_ok: bool = True) -> FakeGh:
-    return FakeGh({("auth", "setup-git"): OK if auth_ok else failure()})
-
-
-def _seed(tmp_path: Path, name: str = "seed") -> Path:
-    return repository(
-        tmp_path,
-        {relative: f"base:{relative}\n" for relative in ALLOWED_PATHS},
-        name=name,
-    )
-
-
-def _bot_commit(root: Path, changes: dict[str, str]) -> str:
-    for relative, content in changes.items():
-        path = root / relative
-        path.write_text(content)
-        _git(root, "add", "--", relative)
-    _git(
-        root,
-        "-c",
-        "user.name=github-actions[bot]",
-        "-c",
-        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
-        "commit",
-        "-qm",
-        "chore(dist): nightly rebuild 2026-09-12",
-    )
-    return _git(root, "rev-parse", "HEAD")
-
 
 def test_advanced_main_fails_before_push_and_reports_main_advanced(
     tmp_path: Path,
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
 
     # Another run's push lands on main first.
-    other = tmp_path / "other"
-    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
-    _git(other, "config", "user.name", "Test")
-    _git(other, "config", "user.email", "test@example.invalid")
-    (other / "tracked.txt").write_text("advance\n")
-    _git(other, "add", "tracked.txt")
-    _git(other, "commit", "-qm", "advance")
-    _git(other, "push", "-q", "origin", "HEAD:main")
-    advanced = _git(other, "rev-parse", "HEAD")
+    advanced = advance_main(bare, tmp_path)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
+    result = run_push(write_side, bundle_path, sha, base, gh=push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}: main advanced"
+    assert result.outcome == "main-advanced"
     assert _git(bare, "rev-parse", "main") == advanced
+
+
+def test_push_rejected_after_main_advances_past_the_check_reports_main_advanced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = seed_repository(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = bare_remote(seed, tmp_path)
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
+    real_ls_remote = write_module.ls_remote_sha
+    advanced: list[str] = []
+
+    def ls_remote_then_race(root: Path, ref: str) -> str | None:
+        # Another run's push lands between the check and this run's push.
+        seen = real_ls_remote(root, ref)
+        if not advanced:
+            advanced.append(advance_main(bare, tmp_path))
+        return seen
+
+    monkeypatch.setattr(write_module, "ls_remote_sha", ls_remote_then_race)
+
+    result = run_push(write_side, bundle_path, sha, base, gh=push_gh())
+
+    assert result.status == "failed"
+    assert result.summary == f"push failed for {sha}: main advanced"
+    assert result.outcome == "main-advanced"
+    assert _git(bare, "rev-parse", "main") == advanced[0]
 
 
 def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     _git(seed, "push", "-q", str(bare), "HEAD:main")
     assert _git(bare, "rev-parse", "main") == sha
     write_side = shallow_checkout(tmp_path, bare, base)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
+    result = run_push(write_side, bundle_path, sha, base, gh=push_gh())
 
     assert result.status == "failed"
     assert "main advanced" in result.summary
+    assert result.outcome == "main-advanced"
     assert _git(bare, "rev-parse", "main") == sha
 
     summary_path = tmp_path / "summary.md"
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    output_path = tmp_path / "output.txt"
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
 
     assert write_module.main(["push", "--bundle", str(bundle_path)]) == 1
+    assert output_path.read_text() == "outcome=main-advanced\n"
     assert "main advanced" in summary_path.read_text()
     assert _git(bare, "rev-parse", "main") == sha
 
@@ -140,7 +136,7 @@ def test_push_propagates_handoff_rejection_before_remote_write(
     capsys: pytest.CaptureFixture[str],
 ) -> None:
     candidate = "a" * 40
-    gh = _push_gh()
+    gh = push_gh()
 
     def reject(*_args: object) -> None:
         raise HandoffRejected("fixture rejection")
@@ -158,11 +154,11 @@ def test_push_propagates_handoff_rejection_before_remote_write(
 
 @pytest.mark.parametrize("case", ["disallowed", "empty", "symlink", "executable"])
 def test_unsafe_candidate_commit_is_rejected(tmp_path: Path, case: str) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
     if case == "disallowed":
-        sha = _bot_commit(seed, {"tracked.txt": "sneaky\n"})
+        sha = commit_as_bot(seed, {"tracked.txt": "sneaky\n"})
     elif case == "empty":
         _git(seed, "commit", "--allow-empty", "-qm", "empty")
         sha = _git(seed, "rev-parse", "HEAD")
@@ -171,16 +167,16 @@ def test_unsafe_candidate_commit_is_rejected(tmp_path: Path, case: str) -> None:
         target.unlink()
         target.symlink_to(seed / "README.md")
         _git(seed, "add", "--", ALLOWED_PATHS[0])
-        sha = _bot_commit(seed, {})
+        sha = commit_as_bot(seed, {})
     else:
         _git(seed, "config", "core.fileMode", "true")
         (seed / "README.md").chmod(0o755)
         _git(seed, "add", "--", "README.md")
-        sha = _bot_commit(seed, {})
+        sha = commit_as_bot(seed, {})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
 
-    result = run_push(write_side, bundle_path, sha, base, gh=_push_gh())
+    result = run_push(write_side, bundle_path, sha, base, gh=push_gh())
 
     assert result.status == "failed"
     assert result.summary == f"push failed for {sha}"
@@ -204,7 +200,7 @@ def test_malformed_shas_are_rejected_before_any_fetch_or_push(
         "run",
         lambda *_args, **_kwargs: pytest.fail("unexpected subprocess"),
     )
-    gh = _push_gh()
+    gh = push_gh()
 
     result = run_push(
         tmp_path, tmp_path / "absent.bundle", candidate_sha, base_sha, gh=gh
@@ -218,14 +214,14 @@ def test_malformed_shas_are_rejected_before_any_fetch_or_push(
 def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     summary_path = tmp_path / "summary.md"
-    gh = _push_gh(auth_ok=False)
+    gh = push_gh(auth_ok=False)
     monkeypatch.setattr(write_module, "SubprocessGhRunner", lambda: gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
@@ -242,26 +238,29 @@ def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
 def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     install_failing_hooks(
         write_side, "pre-push", "post-checkout", "reference-transaction"
     )
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
 
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
 
     assert exit_code == 0
+    assert output_path.read_text() == "outcome=ok\n"
     assert summary_path.read_text() == f"published {sha}\n"
     assert _git(bare, "rev-parse", "main") == sha
     assert _git(write_side, "rev-parse", "HEAD") == sha
@@ -272,10 +271,10 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     pre_receive = bare / "hooks" / "pre-receive"
@@ -284,15 +283,18 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
     )
     pre_receive.chmod(0o755)
     summary_path = tmp_path / "summary.md"
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    output_path = tmp_path / "output.txt"
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert summary_path.read_text() == f"push failed for {sha}\n"
     assert "protected branch: fixture says no" in capsys.readouterr().err
     assert _git(bare, "rev-parse", "main") == base
@@ -303,10 +305,10 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     # The remote accepts the push, then leaves the write side's index locked,
@@ -315,15 +317,18 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
     post_receive.write_text(f"#!/bin/sh\ntouch '{write_side}/.git/index.lock'\n")
     post_receive.chmod(0o755)
     summary_path = tmp_path / "summary.md"
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    output_path = tmp_path / "output.txt"
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", push_gh)
     monkeypatch.chdir(write_side)
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["push", "--bundle", str(bundle_path)])
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert summary_path.read_text() == f"published {sha}\n"
     assert _git(bare, "rev-parse", "main") == sha
     assert "index.lock" in capsys.readouterr().err
@@ -496,6 +501,7 @@ def test_differing_record_uploads_and_edits_with_canonical_body(
     result = run_release(root, gh=gh)
 
     assert result.status == "advanced"
+    assert result.outcome == "ok"
     assert result.summary == "revision 4"
     upload_calls = [call for call in gh.calls if call[:2] == ("release", "upload")]
     edit_calls = [call for call in gh.calls if call[:2] == ("release", "edit")]
@@ -727,17 +733,7 @@ def test_remote_main_other_than_head_fails_without_bootstrap_guidance(
 ) -> None:
     root, _sha = _release_repo(tmp_path)
     # A later run pushed past this run's HEAD.
-    other = root.parent / "other"
-    subprocess.run(
-        ["git", "clone", "-q", str(root.parent / "release-remote.git"), str(other)],
-        check=True,
-    )
-    _git(other, "config", "user.name", "Test")
-    _git(other, "config", "user.email", "test@example.invalid")
-    (other / "tracked.txt").write_text("advance\n")
-    _git(other, "add", "tracked.txt")
-    _git(other, "commit", "-qm", "advance")
-    _git(other, "push", "-q", "origin", "HEAD:main")
+    advance_main(root.parent / "release-remote.git", root.parent)
 
     gh = _release_gh(view=None, view_ok=False)
 
@@ -745,6 +741,7 @@ def test_remote_main_other_than_head_fails_without_bootstrap_guidance(
 
     assert result.status == "failed"
     assert result.summary == "release failed: main advanced"
+    assert result.outcome == "main-advanced"
     assert "gh release create" not in result.summary
     assert gh.calls == [("auth", "setup-git")]
 
@@ -817,16 +814,19 @@ def test_release_cli_exit_code_and_summary(
     root, sha = _release_repo(tmp_path)
     view = _valid_release(sha)
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
 
     monkeypatch.setattr(
         write_module, "SubprocessGhRunner", lambda: _release_gh(view=view)
     )
     monkeypatch.chdir(root)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["release"])
 
     assert exit_code == 0
+    assert output_path.read_text() == "outcome=ok\n"
     assert summary_path.read_text() == "unchanged at revision 3\n"
 
 
@@ -867,6 +867,7 @@ def test_release_cli_fails_when_the_release_edit_fails(
         assets=[],
     )
     summary_path = tmp_path / "summary.md"
+    output_path = tmp_path / "output.txt"
     monkeypatch.setattr(
         write_module,
         "SubprocessGhRunner",
@@ -874,8 +875,39 @@ def test_release_cli_fails_when_the_release_edit_fails(
     )
     monkeypatch.chdir(root)
     monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(summary_path))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
 
     exit_code = write_module.main(["release"])
 
     assert exit_code == 1
+    assert output_path.read_text() == "outcome=failed\n"
     assert summary_path.read_text() == "release failed: release edit failed\n"
+
+
+def test_repaired_release_is_ok(tmp_path: Path) -> None:
+    root, sha = _release_repo(tmp_path)
+
+    repaired = run_release(root, gh=_release_gh(view=_valid_release(sha, assets=[])))
+
+    assert (repaired.status, repaired.outcome) == ("repaired", "ok")
+
+
+@pytest.mark.parametrize(
+    "command", [["push", "--bundle", "absent.bundle"], ["release"]]
+)
+def test_outcome_output_is_written_before_the_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    output_path = tmp_path / "output.txt"
+    unwritable_summary = tmp_path / "summary"
+    unwritable_summary.mkdir()
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(unwritable_summary))
+    monkeypatch.delenv("CANDIDATE_SHA", raising=False)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", lambda: FakeGh({}))
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(OSError):
+        write_module.main(command)
+
+    assert output_path.read_text() == "outcome=failed\n"

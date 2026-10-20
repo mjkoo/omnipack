@@ -62,7 +62,8 @@ outcome.
 
 - **WHEN** main publication succeeds but release synchronization fails
 - **THEN** the workflow fails with the pushed commit and the release failure reported separately
-- **AND** no rollback or issue maintenance occurs
+- **AND** no rollback occurs, and the release failure is raised as a finding as
+  maintenance-alerts requires
 
 ### Requirement: Main publication is one normal push
 
@@ -114,12 +115,16 @@ and structural verification report produced by the run SHALL be uploaded as
 artifacts with 14-day retention on success and failure when they exist. Missing
 reports after an early failure SHALL NOT imply verification success.
 Verification reports SHALL be identified as structural/offline without
-live-health claims. The workflow SHALL NOT maintain failure issues or request
-issue-write permission. Summary or upload failure SHALL remain a visible failed
-step and SHALL NOT undo a completed push. A failure in the job that prepares the
-candidate, a summary or upload failure there included, SHALL keep that
+live-health claims. Failures and build warnings SHALL be raised as findings as
+maintenance-alerts requires; only the workflow's alert job SHALL hold issue
+write access. A summary failure, or a failure uploading the build and
+verification reports or the hand-off, SHALL remain a visible failed step and
+SHALL NOT undo a completed push. A failure in the job that prepares the
+candidate, such a summary or upload failure there included, SHALL keep that
 attempt's write job from running, so the attempt publishes nothing, and a rerun
-or a later run SHALL make its own attempt.
+or a later run SHALL make its own attempt. A failure writing or uploading the
+findings file SHALL change neither the job's verdict nor whether the write job
+runs, as maintenance-alerts requires.
 
 Summaries and artifacts SHALL exclude credentials, raw HTTP caches and APK
 downloads, and source text SHALL be treated as data rather than executable
@@ -128,7 +133,9 @@ input.
 #### Scenario: Setup fails before reports exist
 
 - **WHEN** runtime setup fails before any report is written
-- **THEN** Actions shows the failed step and its logs, with no issue write or fabricated verification evidence
+- **THEN** Actions shows the failed step and its logs, with no fabricated verification evidence
+- **AND** the preparation job's early-failure finding is raised, and no open
+  stage issue is closed
 
 #### Scenario: Reused workspace fails before verification
 

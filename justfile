@@ -53,7 +53,7 @@ check-py312 python="":
         python="$(nix build --inputs-from . --no-link --print-out-paths nixpkgs#python312)/bin/python3.12"
     fi
     uv run --no-project --python "$python" --with pytest \
-        pytest tests/test_nightly_write.py tests/test_source_proposal.py \
+        pytest tests/test_alerts.py tests/test_nightly_write.py tests/test_source_proposal.py \
         tests/test_workflow_support.py
 
 # Lint the workflows with actionlint and zizmor

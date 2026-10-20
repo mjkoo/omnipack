@@ -26,12 +26,15 @@ from scripts.workflow_support import (
     GhRunner,
     HandoffRejected,
     SubprocessGhRunner,
+    WriteOutcome,
     append_summary,
     git,
     log,
     ls_remote_sha,
     regular_file_problem,
     verify_handoff,
+    write_outcome,
+    write_outcome_output,
 )
 
 PACK_PATHS = ("dist/single-screen.json", "dist/dual-screen.json")
@@ -53,16 +56,20 @@ BOOTSTRAP_GUIDANCE = (
 
 
 class PushFailure(RuntimeError):
-    def __init__(self, summary: str) -> None:
+    def __init__(self, summary: str, *, main_advanced: bool = False) -> None:
         super().__init__(summary)
         self.summary = summary
+        self.main_advanced = main_advanced
 
 
 class ReleaseFailure(RuntimeError):
-    def __init__(self, reason: str, *, bootstrap: bool = False) -> None:
+    def __init__(
+        self, reason: str, *, bootstrap: bool = False, main_advanced: bool = False
+    ) -> None:
         super().__init__(reason)
         self.reason = reason
         self.bootstrap = bootstrap
+        self.main_advanced = main_advanced
 
 
 PushStatus = Literal["published", "detach-failed", "failed"]
@@ -72,6 +79,13 @@ PushStatus = Literal["published", "detach-failed", "failed"]
 class PushOutcome:
     status: PushStatus
     summary: str
+    main_advanced: bool = False
+
+    @property
+    def outcome(self) -> WriteOutcome:
+        return write_outcome(
+            succeeded=self.status == "published", main_advanced=self.main_advanced
+        )
 
 
 ReleaseStatus = Literal["unchanged", "repaired", "advanced", "failed"]
@@ -81,6 +95,13 @@ ReleaseStatus = Literal["unchanged", "repaired", "advanced", "failed"]
 class ReleaseOutcome:
     status: ReleaseStatus
     summary: str
+    main_advanced: bool = False
+
+    @property
+    def outcome(self) -> WriteOutcome:
+        return write_outcome(
+            succeeded=self.status != "failed", main_advanced=self.main_advanced
+        )
 
 
 def run_push(
@@ -124,10 +145,14 @@ def run_push(
         if remote_main is None:
             raise PushFailure(generic)
         if remote_main != base_sha:
-            raise PushFailure(f"{generic}: main advanced")
+            raise PushFailure(f"{generic}: main advanced", main_advanced=True)
 
         push_result = git(root, "push", "origin", f"{candidate_sha}:refs/heads/main")
         if push_result.returncode != 0:
+            # Another push can land between the check above and this one, and
+            # its rejection is the same refusal the check reports.
+            if ls_remote_sha(root, "refs/heads/main") not in (None, base_sha):
+                raise PushFailure(f"{generic}: main advanced", main_advanced=True)
             raise PushFailure(generic)
 
         detach_result = git(root, "checkout", "--detach", candidate_sha)
@@ -137,7 +162,7 @@ def run_push(
             log("the push landed, but checking out the published commit failed")
             return PushOutcome("detach-failed", f"published {candidate_sha}")
     except PushFailure as failure:
-        return PushOutcome("failed", failure.summary)
+        return PushOutcome("failed", failure.summary, failure.main_advanced)
     return PushOutcome("published", f"published {candidate_sha}")
 
 
@@ -171,7 +196,7 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
         if remote_main is None:
             raise ReleaseFailure("could not read remote main")
         if remote_main != head:
-            raise ReleaseFailure("main advanced")
+            raise ReleaseFailure("main advanced", main_advanced=True)
 
         view_result = selected_gh.run(
             [
@@ -241,7 +266,11 @@ def run_release(root: Path, *, gh: GhRunner | None = None) -> ReleaseOutcome:
         return ReleaseOutcome("advanced", f"revision {new_revision}")
     except ReleaseFailure as failure:
         guidance = f"; {BOOTSTRAP_GUIDANCE}" if failure.bootstrap else ""
-        return ReleaseOutcome("failed", f"release failed: {failure.reason}{guidance}")
+        return ReleaseOutcome(
+            "failed",
+            f"release failed: {failure.reason}{guidance}",
+            failure.main_advanced,
+        )
 
 
 def _upload(gh: GhRunner, root: Path) -> None:
@@ -341,10 +370,13 @@ def main(argv: Sequence[str] | None = None) -> int:
             environ.get("CANDIDATE_SHA", ""),
             environ.get("BASE_SHA", ""),
         )
+        # The outcome goes first, so a failed summary write cannot hide it.
+        write_outcome_output(environ, outcome.outcome)
         append_summary(environ, outcome.summary + "\n")
         return 0 if outcome.status == "published" else 1
 
     outcome = run_release(Path.cwd())
+    write_outcome_output(environ, outcome.outcome)
     append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 

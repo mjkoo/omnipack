@@ -6,6 +6,7 @@ import os
 import re
 import shlex
 import subprocess
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -13,6 +14,7 @@ import yaml
 
 from omnipack.live_check import REPORT, SUMMARY
 from omnipack.source_registry import GENERATED
+from scripts.alerts import parse_owner
 
 WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
 
@@ -29,6 +31,24 @@ def command_step(job, *words):
     return next(s for s in job["steps"] if command(s) == list(words))
 
 
+GUARD = "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
+FINDINGS_PATH = ".build/alerts/findings.json"
+
+
+def is_findings_upload(step):
+    return step.get("uses", "").startswith("actions/upload-artifact@") and step["with"][
+        "name"
+    ].startswith("alert-findings-")
+
+
+def is_emit(step):
+    return command(step)[:4] == ["python3", "-m", "scripts.alerts", "emit"]
+
+
+def producing_jobs(workflow):
+    return {n: j for n, j in workflow["jobs"].items() if n != "alert"}
+
+
 def output(owner, field):
     return "${{ " + owner + ".outputs." + field + " }}"
 
@@ -36,6 +56,10 @@ def output(owner, field):
 @pytest.fixture(params=["nightly.yml", "source-maintenance.yml"])
 def workflow(request):
     return yaml.safe_load((WORKFLOWS / request.param).read_text())
+
+
+def check_job_name(workflow):
+    return workflow["jobs"]["publish"]["needs"]
 
 
 def triggers(workflow):
@@ -80,10 +104,9 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
         assert checkout["with"]["ref"] == "${{ github.sha }}"
         assert checkout["with"]["persist-credentials"] is False
         assert checkout["with"]["fetch-depth"] == depth
-    for job_name, job in workflow["jobs"].items():
-        assert job["if"] == (
-            "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
-        )
+    assert set(workflow["jobs"]) == {check_job_name(workflow), "publish", "alert"}
+    for job_name, job in producing_jobs(workflow).items():
+        assert job["if"] == GUARD
         if job_name != "publish":
             assert job.get("permissions", {}) in ({}, {"contents": "read"})
         for setup in action_steps(job, "astral-sh/setup-uv"):
@@ -98,8 +121,11 @@ def test_publication_permissions_and_runtime_boundaries(workflow):
                 fn in step.get("if", "")
                 for fn in ("always()", "failure()", "cancelled()")
             ):
-                if step.get("id") == "summary":
+                if step.get("id") == "summary" or is_emit(step):
                     assert step["if"] == "always()"
+                elif is_findings_upload(step):
+                    assert step["if"] == "always()"
+                    assert step["with"]["if-no-files-found"] == "ignore"
                 else:
                     assert step in action_steps(check, "actions/upload-artifact")
                     assert step["with"]["if-no-files-found"] == "ignore"
@@ -140,7 +166,11 @@ def test_handoff_connects_checked_candidate_to_writer(workflow):
         k: output(f"steps.{stage_id}", k) for k in ("changed", "sha", "base")
     }
     [download] = action_steps(publish, "actions/download-artifact")
-    uploads = action_steps(check, "actions/upload-artifact")
+    uploads = [
+        s
+        for s in action_steps(check, "actions/upload-artifact")
+        if not is_findings_upload(s)
+    ]
     handoff = next(s for s in uploads if s["with"]["name"] == download["with"]["name"])
     assert handoff["if"] == f"steps.{stage_id}.outputs.changed == 'true'"
     assert download["if"] == f"needs.{check_name}.outputs.changed == 'true'"
@@ -276,7 +306,7 @@ def test_sources_run_independent_complete_check_publish_chains():
     }
     assert caller["permissions"] == {}
     assert "concurrency" not in caller
-    assert set(caller["jobs"]) == {*GENERATED, "live-check"}
+    assert set(caller["jobs"]) == {*GENERATED, "live-check", "alert-live-check"}
     for source in GENERATED:
         job = caller["jobs"][source]
         assert job["uses"] == "./.github/workflows/source-maintenance.yml"
@@ -286,11 +316,13 @@ def test_sources_run_independent_complete_check_publish_chains():
             "cancel-in-progress": False,
         }
         assert "needs" not in job
-        assert job["permissions"] == {"contents": "write", "pull-requests": "write"}
-        assert (
-            job["if"]
-            == "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
-        )
+        # Only the called alert job uses issues: write.
+        assert job["permissions"] == {
+            "contents": "write",
+            "pull-requests": "write",
+            "issues": "write",
+        }
+        assert job["if"] == GUARD
 
 
 def test_live_check_job_reads_only_and_reports_its_findings():
@@ -324,7 +356,11 @@ def test_live_check_job_reads_only_and_reports_its_findings():
     assert summary["if"] == "always()"
     assert str(SUMMARY) in summary["run"]
 
-    (upload,) = action_steps(job, "actions/upload-artifact")
+    (upload,) = [
+        s
+        for s in action_steps(job, "actions/upload-artifact")
+        if not is_findings_upload(s)
+    ]
     assert upload["if"] == "always()"
     assert upload["with"]["path"] == str(REPORT)
     assert upload["with"]["if-no-files-found"] == "ignore"
@@ -333,8 +369,10 @@ def test_live_check_job_reads_only_and_reports_its_findings():
     assert steps.index(check) < steps.index(summary)
     assert steps.index(check) < steps.index(upload)
 
+    emit = next(s for s in job["steps"] if is_emit(s))
+
     # Nothing in the job can change a branch, a PR or a committed file.
-    assert all("env" not in step for step in job["steps"])
+    assert [s for s in job["steps"] if "env" in s] == [emit]
     runs = " ".join(step.get("run", "") for step in job["steps"])
     for word in ("git", "gh ", "GITHUB_TOKEN", "github.token"):
         assert word not in runs
@@ -375,3 +413,246 @@ def test_source_artifacts_and_actual_validation_outcomes_are_scoped():
         if s["with"]["if-no-files-found"] == "error"
     )
     assert check["steps"].index(summary) < check["steps"].index(handoff)
+
+
+def findings_name(owner):
+    return f"alert-findings-{owner}-${{{{ github.run_id }}}}"
+
+
+def alert_cases():
+    """Each alert job with its producers, as (file, job, {owner: producer job})."""
+    return [
+        (
+            "nightly.yml",
+            "alert",
+            {"nightly-prepare": "prepare", "nightly-publish": "publish"},
+        ),
+        (
+            "source-maintenance.yml",
+            "alert",
+            {"$SOURCE-check": "check", "$SOURCE-publish": "publish"},
+        ),
+        ("source-catalog.yml", "alert-live-check", {"live-check": "live-check"}),
+    ]
+
+
+def load(name):
+    return yaml.safe_load((WORKFLOWS / name).read_text())
+
+
+@pytest.mark.parametrize(("file", "alert_name", "producers"), alert_cases())
+def test_alert_job_holds_only_issue_access_and_reconciles_producer_findings(
+    file, alert_name, producers
+):
+    workflow = load(file)
+    job = workflow["jobs"][alert_name]
+    assert job["permissions"] == {"issues": "write"}
+    assert job["if"] == "always() && " + GUARD
+    assert set(
+        job["needs"] if isinstance(job["needs"], list) else [job["needs"]]
+    ) == set(producers.values())
+    assert "uses" not in job
+    # The caller's group serializes the source alert job; live-check has its own.
+    if file == "source-catalog.yml":
+        assert job["concurrency"] == {
+            "group": "omnipack-live-check-alerts",
+            "cancel-in-progress": False,
+        }
+    else:
+        assert "concurrency" not in job
+
+    (checkout,) = action_steps(job, "actions/checkout")
+    assert checkout["with"]["sparse-checkout"] == "scripts"
+    assert checkout["with"]["persist-credentials"] is False
+    assert not action_steps(job, "astral-sh/setup-uv")
+    assert all("uv" not in command(s) for s in job["steps"])
+    for step in job["steps"]:
+        assert "${{" not in step.get("run", "")
+        if "uses" in step:
+            assert re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", step["uses"])
+
+    downloads = action_steps(job, "actions/download-artifact")
+    assert len(downloads) == len(producers)
+    assert all(d["continue-on-error"] is True for d in downloads)
+    paths = [d["with"]["path"] for d in downloads]
+    assert len(set(paths)) == len(paths)
+    names = [d["with"]["name"] for d in downloads]
+    assert len(set(names)) == len(names)
+
+    reconcile = next(s for s in job["steps"] if "reconcile" in command(s))
+    assert [s for s in job["steps"] if "GH_TOKEN" in s.get("env", {})] == [reconcile]
+    assert "continue-on-error" not in reconcile
+    expected_env = {"GH_TOKEN": "${{ github.token }}"}
+    parsed = reconcile_producers(reconcile)
+    assert len(parsed) == len(producers)
+    # Each producer's owner is the one its job's emit step passes, and its
+    # result is that job's own, so a misspelled or swapped owner fails here.
+    assert {owner for owner, _, _ in parsed} == set(producers)
+    for owner, variable, path in parsed:
+        job_name = producers[owner]
+        assert emitted_owner(workflow["jobs"][job_name]) == owner
+        result = "needs." + job_name + ".result"
+        # A dependent job that never started reads as skipped, whatever its
+        # upstream's own result, so it raises no early failure of its own.
+        upstream = workflow["jobs"][job_name].get("needs")
+        if upstream is not None:
+            result = f"needs.{upstream}.result == 'success' && {result} || 'skipped'"
+        expected_env[variable] = "${{ " + result + " }}"
+        for source in GENERATED if "$SOURCE" in owner else [""]:
+            parse_owner(owner.replace("$SOURCE", source))
+    assert reconcile["env"] == expected_env
+    assert len({variable for _, variable, _ in parsed}) == len(parsed)
+    # Each download lands in the directory its own producer reads.
+    for download, (owner, _, path) in zip(downloads, parsed, strict=True):
+        directory = download["with"]["path"].replace(
+            "${{ runner.temp }}", "$RUNNER_TEMP"
+        )
+        directory = directory.replace("${{ inputs.source }}", "$SOURCE")
+        assert path == directory + "/findings.json"
+        assert owner == directory.rsplit("/", 1)[1]
+
+
+def reconcile_producers(reconcile):
+    """Each `--producer OWNER=$VARIABLE:PATH` as (owner, variable, path)."""
+    words = command(reconcile)
+    values = [w for previous, w in pairwise(words) if previous == "--producer"]
+    parsed = []
+    for value in values:
+        match = re.fullmatch(r"(?P<o>[^=]+)=\$(?P<v>\w+):(?P<p>.+)", value)
+        assert match, value
+        parsed.append((match["o"], match["v"], match["p"]))
+    return parsed
+
+
+def emitted_owner(job):
+    return command(emit_step(job["steps"]))[4]
+
+
+def emit_step(job_steps):
+    emit = [s for s in job_steps if is_emit(s)]
+    assert len(emit) == 1
+    return emit[0]
+
+
+EMIT_BINDINGS = {
+    ("nightly.yml", "prepare"): (
+        "nightly-prepare",
+        {
+            "PREPARE_STAGE": "${{ steps.prepare.outputs.stage }}",
+            "PREPARE_STAGES": "${{ steps.prepare.outputs.stages }}",
+        },
+    ),
+    ("nightly.yml", "publish"): (
+        "nightly-publish",
+        {
+            "PUSH_OUTCOME": "${{ steps.push.outputs.outcome }}",
+            "RELEASE_OUTCOME": "${{ steps.release.outputs.outcome }}",
+        },
+    ),
+    ("source-maintenance.yml", "check"): (
+        '"$SOURCE-check"',
+        {
+            "CHANGED": "${{ steps.stage.outputs.changed }}",
+            "GENERATION_RESULT": "${{ steps.generation.outcome }}",
+            "STAGING_RESULT": "${{ steps.stage.outcome }}",
+            "TESTS_RESULT": "${{ steps.tests.outcome }}",
+            "BUILD_RESULT": "${{ steps.build.outcome }}",
+            "VERIFY_RESULT": "${{ steps.verify.outcome }}",
+            "GUARD_RESULT": "${{ steps.guard.outcome }}",
+        },
+    ),
+    ("source-maintenance.yml", "publish"): (
+        '"$SOURCE-publish"',
+        {"PUBLISH_OUTCOME": "${{ steps.publish.outputs.outcome }}"},
+    ),
+    ("source-catalog.yml", "live-check"): (
+        "live-check",
+        {"CHECK_RESULT": "${{ steps.check.outcome }}"},
+    ),
+}
+
+
+@pytest.mark.parametrize(("file", "job_name"), list(EMIT_BINDINGS))
+def test_producing_jobs_emit_findings_last_and_tolerate_emit_failure(file, job_name):
+    workflow = load(file)
+    job = workflow["jobs"][job_name]
+    owner, bindings = EMIT_BINDINGS[(file, job_name)]
+    steps = job["steps"]
+    emit = emit_step(steps)
+    assert emit["if"] == "always()"
+    assert emit["continue-on-error"] is True
+    assert emit["env"] == {"JOB_STATUS": "${{ job.status }}", **bindings}
+    assert emit["run"] == f"python3 -m scripts.alerts emit {owner}"
+    (upload,) = [s for s in steps if is_findings_upload(s)]
+    assert steps[-2:] == [emit, upload]
+    assert upload["if"] == "always()"
+    assert upload["continue-on-error"] is True
+    assert upload["with"]["path"] == FINDINGS_PATH
+    assert upload["with"]["overwrite"] is True
+    assert upload["with"]["if-no-files-found"] == "ignore"
+    # Every bound step id exists, and the job gained no permission.
+    ids = {s.get("id") for s in steps}
+    for value in bindings.values():
+        assert value.split(".")[1] in ids
+    assert (
+        job["permissions"]
+        == {
+            "nightly.yml": {
+                "prepare": {"contents": "read"},
+                "publish": {"contents": "write"},
+            },
+            "source-maintenance.yml": {
+                "check": {"contents": "read"},
+                "publish": {"contents": "write", "pull-requests": "write"},
+            },
+            "source-catalog.yml": {"live-check": {"contents": "read"}},
+        }[file][job_name]
+    )
+
+
+def test_findings_uploads_are_unique_and_each_alert_downloads_its_producers():
+    nightly = load("nightly.yml")
+    names = {
+        job: next(s for s in nightly["jobs"][job]["steps"] if is_findings_upload(s))[
+            "with"
+        ]["name"]
+        for job in ("prepare", "publish")
+    }
+    assert names == {
+        "prepare": findings_name("nightly-prepare"),
+        "publish": findings_name("nightly-publish"),
+    }
+    downloads = action_steps(nightly["jobs"]["alert"], "actions/download-artifact")
+    assert [d["with"]["name"] for d in downloads] == list(names.values())
+
+    source = load("source-maintenance.yml")
+    uploads = {
+        job: next(s for s in source["jobs"][job]["steps"] if is_findings_upload(s))[
+            "with"
+        ]["name"]
+        for job in ("check", "publish")
+    }
+    assert uploads == {
+        "check": findings_name("${{ inputs.source }}-check"),
+        "publish": findings_name("${{ inputs.source }}-publish"),
+    }
+    downloads = action_steps(source["jobs"]["alert"], "actions/download-artifact")
+    assert [d["with"]["name"] for d in downloads] == list(uploads.values())
+
+    catalog = load("source-catalog.yml")
+    live = next(
+        s for s in catalog["jobs"]["live-check"]["steps"] if is_findings_upload(s)
+    )["with"]["name"]
+    assert live == findings_name("live-check")
+    (download,) = action_steps(
+        catalog["jobs"]["alert-live-check"], "actions/download-artifact"
+    )
+    assert download["with"]["name"] == live
+
+    # One run holds the codm, Quiver and live-check uploads: all distinct.
+    run_names = [
+        n.replace("${{ inputs.source }}", source_name)
+        for source_name in GENERATED
+        for n in uploads.values()
+    ] + [live, *names.values()]
+    assert len(set(run_names)) == len(run_names)

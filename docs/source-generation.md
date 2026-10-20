@@ -174,9 +174,11 @@ The codm and Quiver caller jobs invoke the same reusable workflow, each under it
 own non-canceling concurrency group covering the complete check-and-publish chain.
 They do not wait on, count PRs from, close proposals from, or stage catalogs from
 the other source. Each source runs a read-only `check` job followed by its own
-write-capable `publish` job, each limited to 60 minutes.
+write-capable `publish` job, each limited to 60 minutes, then an `alert` job that
+raises and clears [maintenance alert](alerts.md) issues.
 
-The caller grants the reusable workflow only the ceiling needed for publication;
+The caller grants the reusable workflow only the ceiling needed for publication
+and alerting (`contents: write`, `pull-requests: write` and `issues: write`);
 its check job reduces permissions to `contents: read`. No workflow grants
 permissions at workflow level. Every check step, including checkout, setup,
 generation, tests and build, has only that read-only job token available, and
@@ -243,7 +245,9 @@ characters. The publisher compares the whole candidate tree to that source branc
 remote tree, avoiding a push when they match even if commits differ. Otherwise it
 replaces that source branch with the checked commit. It then edits its existing PR
 or opens one to main, titled `chore(catalog): update reviewed <source> source`.
-No automatic merge, direct-main write, issue or release operation occurs.
+The publish job performs no automatic merge, direct-main write, issue or
+release operation; issues come only from the separate alert job described in
+[maintenance alerts](alerts.md).
 
 The body links the checking workflow run, records the base SHA, and lists the
 added, removed and changed catalog URLs, the skipped listings and the actual
@@ -339,7 +343,9 @@ inputs and receives no token. No step receives a write token. Only `publish`
 holds `contents: write` and `pull-requests: write`, and only its one step
 receives `GH_TOKEN`; its checkout uses the job token only to fetch the
 triggering revision, and `persist-credentials: false` keeps it out of
-`.git/config`. `scripts/source_proposal.py` serves both jobs and, like
+`.git/config`. The `alert` job holds only `issues: write`, which the callers
+grant for it alone; see [maintenance alerts](alerts.md#security). The
+`scripts/source_proposal.py` script serves both jobs and, like
 `scripts/nightly_write.py`, imports only the standard library and the shared
 helpers in `scripts/workflow_support.py`, and runs on the runner's preinstalled
 `python3` in the write job. Source text, project URLs, asset names and other
@@ -372,11 +378,14 @@ state. It holds only `contents: read`, checks out with
 `omnipack-live-check` concurrency group without waiting on any source job, and
 is limited to 30 minutes, above the command's own 20-minute budget.
 
-A URL that answers 404 or 410 is unreachable and fails the run, so GitHub's
-failed-run notification reaches the owner. Packs that cannot be read also fail
-it. Any other outcome, such as a 403, a 429, a server error, a timeout or the
-URLs left unchecked when the budget runs out, is inconclusive: it is listed with
-its reason but does not fail the run. The run summary lists the unreachable and
+A URL that answers 404 or 410 is unreachable: it fails the run and raises an
+issue (see [maintenance alerts](alerts.md)). Packs that cannot be read also
+fail it. Any other outcome, such as a 403, one of the statuses the HTTP client
+retries (408, 425, 429, 500, 502, 503, 504), a timeout or the URLs left
+unchecked when the budget runs out, is inconclusive: it is listed with its
+reason but does not fail the run. An error status the client does not retry,
+such as a 403, still raises an issue; a status it retries, a timeout or an
+unchecked URL does not. The run summary lists the unreachable and
 inconclusive URLs, or the error of a failed check, and the
 `live-check-report-<run id>` artifact keeps `.build/live-check/report.json` for
 14 days.

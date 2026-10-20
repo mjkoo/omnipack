@@ -8,6 +8,7 @@ does.
 
 from __future__ import annotations
 
+import html
 import re
 import stat
 import subprocess
@@ -15,7 +16,7 @@ import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Literal, NamedTuple, Protocol
+from typing import Literal, NamedTuple, Protocol, get_args
 
 FULL_SHA = re.compile(r"[0-9a-f]{40}")
 BOT_NAME = "github-actions[bot]"
@@ -217,6 +218,58 @@ def verify_handoff(
 
 FileProblem = Literal["missing", "symlink", "irregular", "executable"]
 
+# How a write step ended, as the `outcome` step output reports it. A write
+# refused because `main` advanced past the run's base is its own outcome, since
+# a later run retries it and it is no problem to report.
+WriteOutcome = Literal["ok", "main-advanced", "failed"]
+WRITE_OUTCOMES: frozenset[WriteOutcome] = frozenset(get_args(WriteOutcome))
+
+# The values GitHub reports for a step's `outcome` and for a job's `result`.
+StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
+STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
+
+# How a build or live-check report says its run ended. It mirrors the project's
+# report status, which this module cannot import.
+ReportStatus = Literal["success", "failed"]
+REPORT_STATUSES: frozenset[ReportStatus] = frozenset(get_args(ReportStatus))
+
+# The reviewed sources, each generated, checked and published by its own jobs.
+SourceName = Literal["codm", "quiver"]
+SOURCE_NAMES: tuple[SourceName, ...] = get_args(SourceName)
+
+# A source check's steps, in order. Each step's `outcome` reaches the scripts
+# in the variable `step_result_variable` names.
+ValidationStep = Literal["generation", "staging", "tests", "build", "verify", "guard"]
+VALIDATION_STEPS: tuple[ValidationStep, ...] = get_args(ValidationStep)
+
+# Joins the nightly prepare stage names in its `stages` step output; no stage
+# name contains it.
+STAGE_SEPARATOR = ","
+
+
+def write_outcome(*, succeeded: bool, main_advanced: bool) -> WriteOutcome:
+    """A write step's outcome: ok, else main-advanced when that refused it."""
+    if succeeded:
+        return "ok"
+    return "main-advanced" if main_advanced else "failed"
+
+
+def parse_literal[T: str](value: object, options: frozenset[T]) -> T | None:
+    """The option `value` names, or None for any other value."""
+    for option in options:
+        if value == option:
+            return option
+    return None
+
+
+def parse_step_outcome(value: str | None) -> StepOutcome | None:
+    """The step outcome or job result `value` names, or None for any other value."""
+    return parse_literal(value, STEP_OUTCOMES)
+
+
+def step_result_variable(step: ValidationStep) -> str:
+    return step.upper() + "_RESULT"
+
 
 def regular_file_problem(
     path: Path, *, executable_ok: bool = True
@@ -233,6 +286,62 @@ def regular_file_problem(
     if not executable_ok and info.st_mode & 0o111:
         return "executable"
     return None
+
+
+def render_escaped_pre(
+    head: Sequence[str],
+    notes: Sequence[str],
+    sections: Sequence[tuple[str | None, Sequence[str]]],
+    *,
+    limit: int,
+) -> str:
+    """Render raw text lines HTML-escaped inside a `<pre>` block within `limit`.
+
+    `head` lines come first and are written as given, so the caller escapes
+    anything upstream-derived in them. `notes` and each section's lines are
+    escaped here. A section header of None writes no header line. When the
+    text would exceed `limit`, lines that do not fit are left out and counted
+    in a final "and N more" line, while every section header stays.
+    """
+    escaped_notes = [html.escape(note) for note in notes]
+    escaped_sections = [
+        (header, [html.escape(line) for line in lines]) for header, lines in sections
+    ]
+
+    def render(kept_notes: list[str], kept: list[list[str]], omitted: int) -> str:
+        lines = [*head, "<pre>"]
+        for note in kept_notes:
+            lines += [note, ""]
+        for index, (header, _) in enumerate(escaped_sections):
+            if index:
+                lines.append("")
+            if header is not None:
+                lines.append(header)
+            lines += kept[index]
+        if omitted:
+            lines.append(f"and {omitted} more")
+        return "\n".join([*lines, "</pre>"]) + "\n"
+
+    full = render(escaped_notes, [lines for _, lines in escaped_sections], 0)
+    if len(full) <= limit:
+        return full
+    # Keep what fits, in order, leaving room for the longest omission line.
+    total = len(escaped_notes) + sum(len(lines) for _, lines in escaped_sections)
+    budget = limit - len(render([], [[] for _ in escaped_sections], total))
+    kept_notes: list[str] = []
+    for note in escaped_notes:
+        if len(note) + 2 <= budget:
+            kept_notes.append(note)
+            budget -= len(note) + 2
+    kept: list[list[str]] = []
+    for _, lines in escaped_sections:
+        kept.append([])
+        for line in lines:
+            if len(line) + 1 <= budget:
+                kept[-1].append(line)
+                budget -= len(line) + 1
+    omitted = total - len(kept_notes) - sum(len(lines) for lines in kept)
+    return render(kept_notes, kept, omitted)
 
 
 def require_env(environ: Mapping[str, str], name: str) -> str:
@@ -264,6 +373,10 @@ def write_github_output(environ: Mapping[str, str], values: Mapping[str, str]) -
         return
     with Path(output).open("a", encoding="utf-8") as stream:
         stream.writelines(f"{key}={value}\n" for key, value in values.items())
+
+
+def write_outcome_output(environ: Mapping[str, str], outcome: WriteOutcome) -> None:
+    write_github_output(environ, {"outcome": outcome})
 
 
 def log(message: str) -> None:

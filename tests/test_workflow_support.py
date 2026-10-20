@@ -20,8 +20,11 @@ from scripts.workflow_support import (
     git,
     git_output,
     ls_remote_sha,
+    parse_step_outcome,
+    render_escaped_pre,
     run_url,
     verify_handoff,
+    write_outcome,
 )
 from tests.publication_support import (
     bare_remote,
@@ -181,3 +184,52 @@ def test_run_url_requires_every_variable(missing: str) -> None:
 
     with pytest.raises(SystemExit, match=f"^{missing} is required$"):
         run_url(environ)
+
+
+def test_render_escaped_pre_escapes_lines_and_notes_but_not_the_head() -> None:
+    text = render_escaped_pre(
+        ["<!-- head -->"],
+        ["<b>note</b>"],
+        [("Items:", ["<script>", "a & b"]), (None, ["plain"])],
+        limit=10_000,
+    )
+
+    assert text == (
+        "<!-- head -->\n<pre>\n&lt;b&gt;note&lt;/b&gt;\n\nItems:\n"
+        "&lt;script&gt;\na &amp; b\n\nplain\n</pre>\n"
+    )
+
+
+def test_render_escaped_pre_counts_lines_that_exceed_the_limit() -> None:
+    lines = [f"line {index:02d}" for index in range(20)]
+
+    text = render_escaped_pre(["head"], [], [("Items:", lines)], limit=80)
+
+    assert len(text) <= 80
+    assert text.startswith("head\n<pre>\nItems:\nline 00\n")
+    kept = text.count("line ")
+    assert 0 < kept < 20
+    assert f"and {20 - kept} more\n</pre>\n" in text
+
+
+def test_step_outcome_parses_known_values_and_nothing_else() -> None:
+    assert parse_step_outcome("cancelled") == "cancelled"
+    assert parse_step_outcome("success") == "success"
+    assert parse_step_outcome("") is None
+    assert parse_step_outcome("weird") is None
+    assert parse_step_outcome(None) is None
+
+
+@pytest.mark.parametrize(
+    ("succeeded", "main_advanced", "expected"),
+    [
+        (True, False, "ok"),
+        (True, True, "ok"),
+        (False, True, "main-advanced"),
+        (False, False, "failed"),
+    ],
+)
+def test_write_outcome_names_main_advanced_only_for_a_refused_write(
+    succeeded: bool, main_advanced: bool, expected: str
+) -> None:
+    assert write_outcome(succeeded=succeeded, main_advanced=main_advanced) == expected

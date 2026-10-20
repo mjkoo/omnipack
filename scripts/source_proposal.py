@@ -10,22 +10,28 @@ import anything from `omnipack` or from a module that does.
 from __future__ import annotations
 
 import argparse
-import html
 import json
 import os
 import sys
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, get_args
+from typing import Literal
 
 from scripts.workflow_support import (
     FULL_SHA,
+    SOURCE_NAMES,
+    STEP_OUTCOMES,
+    VALIDATION_STEPS,
     DiffEntry,
     FileProblem,
     GhRunner,
     HandoffRejected,
+    SourceName,
+    StepOutcome,
     SubprocessGhRunner,
+    ValidationStep,
+    WriteOutcome,
     append_summary,
     bot_commit,
     diff_raw_entries,
@@ -36,17 +42,18 @@ from scripts.workflow_support import (
     log,
     ls_remote_sha,
     regular_file_problem,
+    render_escaped_pre,
     require_env,
     run_url,
+    step_result_variable,
     verify_handoff,
     write_github_output,
+    write_outcome,
+    write_outcome_output,
 )
 
 CANONICAL_REPOSITORY = "mjkoo/omnipack"
 CANONICAL_OWNER = "mjkoo"
-
-
-SourceName = Literal["codm", "quiver"]
 
 
 @dataclass(frozen=True)
@@ -68,7 +75,7 @@ SOURCES: Mapping[SourceName, SourceDescriptor] = {
         f".build/source-generation/{name}/report.json",
         f"chore(catalog): update reviewed {name} source",
     )
-    for name in get_args(SourceName)
+    for name in SOURCE_NAMES
 }
 GENERATION_SUCCESS_STATUS = "success"
 HANDOFF_DIRECTORY = "source-handoff"
@@ -83,12 +90,8 @@ SUMMARY_LIMIT = 250_000
 # added, removed or changed, so a reviewer is not left with three empty lists.
 BYTES_ONLY_CHANGE = "Catalog bytes changed without entry changes"
 
-# The values GitHub reports for a step's `outcome`.
-StepOutcome = Literal["success", "failure", "skipped", "cancelled"]
-STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
 # The summary reports this for a step whose outcome is absent or unrecognized.
 StepResult = StepOutcome | Literal["unavailable"]
-VALIDATION_STEPS = ("generation", "staging", "tests", "build", "verify", "guard")
 
 
 # --- stage (read-only check job) -----------------------------------------
@@ -276,12 +279,12 @@ def _render_report(
     head: list[str] = []
     if run_url is not None:
         head += [f"Workflow run: {run_url}", ""]
-    head += [f"Base SHA: {base_sha}", "", "<pre>"]
+    head += [f"Base SHA: {base_sha}", ""]
     notes: list[str] = []
     error = report.get("error")
     if isinstance(error, str):
         notes.append(f"Error: {error}")
-    sections: list[tuple[str, Sequence[str]]] = []
+    sections: list[tuple[str | None, Sequence[str]]] = []
     changes = _report_changes(report)
     if changes is not None:
         added, removed, changed = changes
@@ -289,44 +292,7 @@ def _render_report(
             notes.append(BYTES_ONLY_CHANGE)
         sections += [("Added:", added), ("Removed:", removed), ("Changed:", changed)]
     sections.append(("Skipped:", _report_skipped(report)))
-    escaped_notes = [html.escape(note) for note in notes]
-    escaped_sections = [
-        (header, [html.escape(line) for line in lines]) for header, lines in sections
-    ]
-
-    def render(kept_notes: list[str], kept: list[list[str]], omitted: int) -> str:
-        lines = list(head)
-        for note in kept_notes:
-            lines += [note, ""]
-        for index, (header, _) in enumerate(escaped_sections):
-            if index:
-                lines.append("")
-            lines += [header, *kept[index]]
-        if omitted:
-            lines.append(f"and {omitted} more")
-        return "\n".join([*lines, "</pre>"]) + "\n"
-
-    full = render(escaped_notes, [lines for _, lines in escaped_sections], 0)
-    if len(full) <= limit:
-        return full
-    # Keep what fits, in order, leaving room for the longest omission line.
-    # The full diagnostics remain in the generation report.
-    total = len(escaped_notes) + sum(len(lines) for _, lines in escaped_sections)
-    budget = limit - len(render([], [[] for _ in escaped_sections], total))
-    kept_notes: list[str] = []
-    for note in escaped_notes:
-        if len(note) + 2 <= budget:
-            kept_notes.append(note)
-            budget -= len(note) + 2
-    kept: list[list[str]] = []
-    for _, lines in escaped_sections:
-        kept.append([])
-        for line in lines:
-            if len(line) + 1 <= budget:
-                kept[-1].append(line)
-                budget -= len(line) + 1
-    omitted = total - len(kept_notes) - sum(len(lines) for lines in kept)
-    return render(kept_notes, kept, omitted)
+    return render_escaped_pre(head, notes, sections, limit=limit)
 
 
 def _commit_candidate(
@@ -342,9 +308,10 @@ def _commit_candidate(
 
 
 class PublishFailure(RuntimeError):
-    def __init__(self, summary: str) -> None:
+    def __init__(self, summary: str, *, main_advanced: bool = False) -> None:
         super().__init__(summary)
         self.summary = summary
+        self.main_advanced = main_advanced
 
 
 PublishStatus = Literal["closed", "unchanged", "published", "failed"]
@@ -354,6 +321,13 @@ PublishStatus = Literal["closed", "unchanged", "published", "failed"]
 class PublishOutcome:
     status: PublishStatus
     summary: str
+    main_advanced: bool = False
+
+    @property
+    def outcome(self) -> WriteOutcome:
+        return write_outcome(
+            succeeded=self.status != "failed", main_advanced=self.main_advanced
+        )
 
 
 def run_publish(
@@ -393,7 +367,7 @@ def run_publish(
         if remote_main is None:
             raise PublishFailure(f"{generic}: could not read remote main")
         if remote_main != base_sha:
-            raise PublishFailure(f"{generic}: main advanced")
+            raise PublishFailure(f"{generic}: main advanced", main_advanced=True)
 
         selected_number = _selected_pr_number(selected_gh, descriptor)
 
@@ -501,7 +475,7 @@ def run_publish(
             raise PublishFailure(f"{generic}: PR create failed")
         return PublishOutcome("published", "publish created PR")
     except PublishFailure as failure:
-        return PublishOutcome("failed", failure.summary)
+        return PublishOutcome("failed", failure.summary, failure.main_advanced)
 
 
 def _selected_pr_number(gh: GhRunner, descriptor: SourceDescriptor) -> int | None:
@@ -641,6 +615,7 @@ def _run_publish_command(
         body_path,
         source=source,
     )
+    write_outcome_output(environ, outcome.outcome)
     return _report_outcome(environ, outcome.summary, failed=outcome.status == "failed")
 
 
@@ -672,7 +647,7 @@ def _step_result(value: str) -> StepResult:
     return value if value in STEP_OUTCOMES else "unavailable"
 
 
-def _render_validation(results: Mapping[str, StepResult]) -> str:
+def _render_validation(results: Mapping[ValidationStep, StepResult]) -> str:
     lines = [f"{step}: {result}" for step, result in results.items()]
     return "Validation outcomes:\n" + "\n".join(lines) + "\n"
 
@@ -682,7 +657,7 @@ def render_pr_body(
     *,
     base_sha: str,
     run_url: str,
-    results: Mapping[str, StepResult],
+    results: Mapping[ValidationStep, StepResult],
 ) -> str:
     """The escaped PR body: the run, base, changes, skipped listings and results.
 
@@ -709,7 +684,7 @@ def _run_summary_command(environ: Mapping[str, str], source: SourceName) -> int:
     """
     descriptor = SOURCES[source]
     results = {
-        step: _step_result(environ.get(step.upper() + "_RESULT", ""))
+        step: _step_result(environ.get(step_result_variable(step), ""))
         for step in VALIDATION_STEPS
     }
     validation = _render_validation(results)

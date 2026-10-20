@@ -1,11 +1,13 @@
 """Small, explicit fixtures shared by the isolated publication tests.
 
-This test support module deliberately imports only the standard library and
-pytest because the publication suite also runs on the runner's stock Python.
+This test support module deliberately imports only the standard library,
+pytest and the standard-library `scripts` modules, because the publication
+suite also runs on the runner's stock Python.
 """
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 from collections.abc import Callable, Mapping, Sequence
@@ -13,6 +15,9 @@ from pathlib import Path
 from typing import Any, NamedTuple
 
 import pytest
+
+from scripts.alerts import Finding, build_body
+from scripts.nightly_write import ALLOWED_PATHS
 
 
 class CommandResult(NamedTuple):
@@ -149,3 +154,160 @@ OK = CommandResult(0, "", "")
 
 def failure(stderr: str = "") -> CommandResult:
     return CommandResult(1, "", stderr)
+
+
+# --- alert reconciliation ----------------------------------------------------
+
+REPOSITORY = "mjkoo/omnipack"
+RUN_1 = "https://github.com/mjkoo/omnipack/actions/runs/1"
+RUN_2 = "https://github.com/mjkoo/omnipack/actions/runs/2"
+ISSUE_LISTING = ("api", "--paginate")
+
+
+def alert_issue(
+    number: int,
+    key: str,
+    *,
+    details: tuple[str, ...] = ("boom",),
+    title: str | None = None,
+    state: str = "open",
+    reason: str | None = None,
+    run: str = RUN_1,
+    body: str | None = None,
+) -> dict:
+    """One labelled issue as the listing returns it, keyed `key`."""
+    return {
+        "number": number,
+        "title": title or f"title of {key}",
+        "body": body
+        if body is not None
+        else build_body(Finding(key, "t", details), run),
+        "state": state,
+        "state_reason": reason,
+    }
+
+
+def alert_gh(
+    issues: list[dict] | list[list[dict]] | None = None,
+    *,
+    label: CommandResult = OK,
+    listing: CommandResult | None = None,
+    **operations: CommandResult,
+) -> FakeGh:
+    """A `gh` listing `issues` (one page, or a list of pages) where every write
+    succeeds unless an `issue_<verb>` keyword says otherwise."""
+    pages = issues or []
+    if pages and isinstance(pages[0], dict):
+        pages = [pages]
+    text = "".join(json.dumps(page) for page in pages) or "[]"
+    responses = {
+        ("label", "create"): label,
+        ISSUE_LISTING: listing or CommandResult(0, text, ""),
+        ("issue", "create"): OK,
+        ("issue", "edit"): OK,
+        ("issue", "reopen"): OK,
+        ("issue", "close"): OK,
+    }
+    responses.update(
+        {tuple(name.split("_")): value for name, value in operations.items()}
+    )
+    return FakeGh(responses)
+
+
+def issue_writes(gh: FakeGh) -> list[tuple[str, ...]]:
+    """Each issue write as (verb, number-or-title)."""
+    return [
+        (call[1], call[call.index("--title") + 1] if call[1] == "create" else call[2])
+        for call in gh.calls
+        if call[0] == "issue"
+    ]
+
+
+# --- write-side repositories -------------------------------------------------
+
+README_BYTES = (
+    b"guide\n<!-- omnipack:catalog:start -->\nbase catalog\n"
+    b"<!-- omnipack:catalog:end -->\ncredits\n"
+)
+
+
+def push_gh(*, auth_ok: bool = True) -> FakeGh:
+    return FakeGh({("auth", "setup-git"): OK if auth_ok else failure()})
+
+
+def seed_repository(tmp_path: Path, name: str = "seed") -> Path:
+    """A repository holding a base version of each published file."""
+    return repository(
+        tmp_path,
+        {relative: f"base:{relative}\n" for relative in ALLOWED_PATHS},
+        name=name,
+    )
+
+
+def commit_as_bot(root: Path, changes: dict[str, str]) -> str:
+    """Commit `changes` as the Actions bot's nightly rebuild; return the SHA."""
+    for relative, content in changes.items():
+        path = root / relative
+        path.write_text(content)
+        git(root, "add", "--", relative)
+    git(
+        root,
+        "-c",
+        "user.name=github-actions[bot]",
+        "-c",
+        "user.email=41898282+github-actions[bot]@users.noreply.github.com",
+        "commit",
+        "-qm",
+        "chore(dist): nightly rebuild 2026-09-12",
+    )
+    return git(root, "rev-parse", "HEAD")
+
+
+def advance_main(remote: Path, workdir: Path) -> str:
+    """Push another commit to `remote`'s main, as a later run would; return it."""
+    other = workdir / "other"
+    subprocess.run(["git", "clone", "-q", str(remote), str(other)], check=True)
+    git(other, "config", "user.name", "Test")
+    git(other, "config", "user.email", "test@example.invalid")
+    (other / "tracked.txt").write_text("advance\n")
+    git(other, "add", "tracked.txt")
+    git(other, "commit", "-qm", "advance")
+    git(other, "push", "-q", "origin", "HEAD:main")
+    return git(other, "rev-parse", "HEAD")
+
+
+def prepare_repository(tmp_path: Path, name: str = "repo") -> Path:
+    """A repository the nightly prepare step can run in."""
+    files: dict[str, str | bytes] = {
+        relative: README_BYTES if relative == "README.md" else f"base:{relative}\n"
+        for relative in ALLOWED_PATHS
+    }
+    files.update(
+        {
+            "tracked.txt": "base\n",
+            "config/catalogs/codm.json": '{"apps": []}\n',
+            ".gitignore": ".build/\n",
+        }
+    )
+    return repository(tmp_path, files, name=name)
+
+
+def prepare_environment(
+    monkeypatch: pytest.MonkeyPatch, root: Path, tmp_path: Path
+) -> Path:
+    """The prepare step's Actions environment in `root`; returns RUNNER_TEMP.
+
+    Step outputs go to `tmp_path/output.txt` and the summary to
+    `tmp_path/summary.md`.
+    """
+    runner_temp = tmp_path / "runner-temp"
+    runner_temp.mkdir()
+    monkeypatch.chdir(root)
+    monkeypatch.setenv("GITHUB_SHA", git(root, "rev-parse", "HEAD"))
+    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp))
+    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output.txt"))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
+    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.example")
+    monkeypatch.setenv("GITHUB_REPOSITORY", REPOSITORY)
+    monkeypatch.setenv("GITHUB_RUN_ID", "42")
+    return runner_temp

@@ -209,5 +209,8 @@ See [nightly publishing](publishing.md) for scheduled refreshes, permissions,
 the one-time release bootstrap, failure and rerun behavior, diagnostics, and
 rollback.
 
+See [maintenance alerts](alerts.md) for the issues that scheduled workflows
+open, update and close, and how to mute one.
+
 See [onboarding validation](../openspec/changes/archive/2026-09-10-simplify-pack-onboarding/onboarding-validation.md) for the latest README,
 schedule, tracker-exclusion, and pack verification evidence.

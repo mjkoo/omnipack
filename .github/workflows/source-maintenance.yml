@@ -109,6 +109,31 @@ jobs:
           retention-days: 14
           overwrite: true
 
+      - name: Write the alert findings
+        if: always()
+        continue-on-error: true
+        env:
+          JOB_STATUS: ${{ job.status }}
+          CHANGED: ${{ steps.stage.outputs.changed }}
+          GENERATION_RESULT: ${{ steps.generation.outcome }}
+          STAGING_RESULT: ${{ steps.stage.outcome }}
+          TESTS_RESULT: ${{ steps.tests.outcome }}
+          BUILD_RESULT: ${{ steps.build.outcome }}
+          VERIFY_RESULT: ${{ steps.verify.outcome }}
+          GUARD_RESULT: ${{ steps.guard.outcome }}
+        run: python3 -m scripts.alerts emit "$SOURCE-check"
+
+      - name: Upload the alert findings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.0
+        with:
+          name: alert-findings-${{ inputs.source }}-check-${{ github.run_id }}
+          path: .build/alerts/findings.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
   publish:
     name: Push and open the reviewed source proposal
     needs: check
@@ -137,7 +162,8 @@ jobs:
           name: source-handoff-${{ inputs.source }}-${{ github.run_id }}
           path: ${{ runner.temp }}/source-handoff
 
-      - name: Publish the reviewed source proposal
+      - id: publish
+        name: Publish the reviewed source proposal
         env:
           GH_TOKEN: ${{ github.token }}
           CHANGED: ${{ needs.check.outputs.changed }}
@@ -147,3 +173,65 @@ jobs:
           python3 -m scripts.source_proposal publish --source "$SOURCE" \
             --bundle "$RUNNER_TEMP/source-handoff/candidate.bundle" \
             --body-file "$RUNNER_TEMP/source-handoff/pr-body.md"
+
+      - name: Write the alert findings
+        if: always()
+        continue-on-error: true
+        env:
+          JOB_STATUS: ${{ job.status }}
+          PUBLISH_OUTCOME: ${{ steps.publish.outputs.outcome }}
+        run: python3 -m scripts.alerts emit "$SOURCE-publish"
+
+      - name: Upload the alert findings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.0
+        with:
+          name: alert-findings-${{ inputs.source }}-publish-${{ github.run_id }}
+          path: .build/alerts/findings.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+  alert:
+    name: Raise and clear maintenance issues
+    needs: [check, publish]
+    if: always() && github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write # Required to open, update and close the alert issues.
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The job holds only `issues: write`, so this sparse checkout relies on
+      # the repository being public.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Download the check findings
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: alert-findings-${{ inputs.source }}-check-${{ github.run_id }}
+          path: ${{ runner.temp }}/alert-findings/${{ inputs.source }}-check
+
+      - name: Download the publish findings
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: alert-findings-${{ inputs.source }}-publish-${{ github.run_id }}
+          path: ${{ runner.temp }}/alert-findings/${{ inputs.source }}-publish
+
+      - name: Reconcile the alert issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          CHECK_RESULT: ${{ needs.check.result }}
+          # publish starts only after check succeeds, so any other check result means
+          # publish never started and contributes nothing.
+          PUBLISH_RESULT: ${{ needs.check.result == 'success' && needs.publish.result || 'skipped' }}
+        run: |
+          python3 -m scripts.alerts reconcile \
+            --producer "$SOURCE-check=$CHECK_RESULT:$RUNNER_TEMP/alert-findings/$SOURCE-check/findings.json" \
+            --producer "$SOURCE-publish=$PUBLISH_RESULT:$RUNNER_TEMP/alert-findings/$SOURCE-publish/findings.json"

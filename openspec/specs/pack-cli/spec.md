@@ -514,7 +514,9 @@ run-summary rendering of it, on success and failure alike, replacing any
 earlier run's report. The report's status SHALL record whether the check
 ran: a run that checked the packs SHALL write a success report, even when a URL
 is unreachable and the command exits nonzero, listing each unreachable URL with
-its status and each inconclusive URL with its reason, in pack order; a run that
+its status and each inconclusive URL with its reason, in pack order, where an
+inconclusive URL whose outcome was an error status the HTTP client does not
+retry also records that status and no other inconclusive URL records one; a run that
 could not check them, such as when the packs cannot be read, SHALL write a
 failure report recording the error.
 The run-summary rendering SHALL HTML-escape every URL, reason and error inside
@@ -547,6 +549,7 @@ and SHALL keep no state between invocations.
 - **THEN** the report lists each as inconclusive, the 403 and 429 reasons
   naming their statuses and the timeout's reason naming the timeout, and the
   command exits zero
+- **AND** only the 403 entry records a status
 
 #### Scenario: An entry declares request headers
 
