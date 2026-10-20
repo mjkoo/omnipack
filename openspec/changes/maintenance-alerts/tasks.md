@@ -22,4 +22,4 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `just check-all`, `uv run pack build` (dist and README unchanged) and `openspec validate maintenance-alerts --strict`; verify all pass.
+- [x] 5.1 Run `just check-all`, `uv run pack build` (dist and README unchanged) and `openspec validate maintenance-alerts --strict`; verify all pass.
