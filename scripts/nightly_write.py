@@ -149,6 +149,10 @@ def run_push(
 
         push_result = git(root, "push", "origin", f"{candidate_sha}:refs/heads/main")
         if push_result.returncode != 0:
+            # Another push can land between the check above and this one, and
+            # its rejection is the same refusal the check reports.
+            if ls_remote_sha(root, "refs/heads/main") not in (None, base_sha):
+                raise PushFailure(f"{generic}: main advanced", main_advanced=True)
             raise PushFailure(generic)
 
         detach_result = git(root, "checkout", "--detach", candidate_sha)

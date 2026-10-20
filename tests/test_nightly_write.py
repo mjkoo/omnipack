@@ -65,6 +65,36 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
     assert _git(bare, "rev-parse", "main") == advanced
 
 
+def test_push_rejected_after_main_advances_past_the_check_reports_main_advanced(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    seed = seed_repository(tmp_path)
+    base = _git(seed, "rev-parse", "HEAD")
+    bare = bare_remote(seed, tmp_path)
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
+    bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
+    write_side = shallow_checkout(tmp_path, bare, base)
+    real_ls_remote = write_module.ls_remote_sha
+    advanced: list[str] = []
+
+    def ls_remote_then_race(root: Path, ref: str) -> str | None:
+        # Another run's push lands between the check and this run's push.
+        seen = real_ls_remote(root, ref)
+        if not advanced:
+            advanced.append(advance_main(bare, tmp_path))
+        return seen
+
+    monkeypatch.setattr(write_module, "ls_remote_sha", ls_remote_then_race)
+
+    result = run_push(write_side, bundle_path, sha, base, gh=push_gh())
+
+    assert result.status == "failed"
+    assert result.summary == f"push failed for {sha}: main advanced"
+    assert result.outcome == "main-advanced"
+    assert _git(bare, "rev-parse", "main") == advanced[0]
+
+
 def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
