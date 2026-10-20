@@ -33,6 +33,6 @@
   },
   {
     "url": "https://github.com/kandowontu/starfox-enhanced",
-    "reason": "The project moved to github.com/kandowontu2/starfox-enhanced, which extras lists until Quiver follows."
+    "reason": "The project moved to github.com/kandowontu2/starfox-enhanced, which extras lists until Quiver follows. Then remove this denial and the extra, and add an overlay id patch of com.starfox.enhanced at the new URL so the package id survives."
   }
 ]
