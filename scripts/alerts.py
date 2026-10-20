@@ -616,14 +616,16 @@ PREPARE_STAGE_SLUGS: Mapping[str, str] = {
     "drift after verify": "drift-after-verify",
     "bundle": "bundle",
 }
+# The key prefixes of the build warnings and live-check findings, each a kind
+# under its owner's prefix.
 _BUILD_PREFIX = NIGHTLY_PREPARE.prefixes[1]
-_UNCATEGORIZED = _BUILD_PREFIX + "uncategorized/"
-_STALE_DENIAL = _BUILD_PREFIX + "stale-denial/"
-_STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
+BUILD_UNCATEGORIZED = _BUILD_PREFIX + "uncategorized/"
+BUILD_STALE_DENIAL = _BUILD_PREFIX + "stale-denial/"
+BUILD_STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
 _LIVE_PREFIX = LIVE_CHECK.prefixes[0]
-_LIVE_READ = _LIVE_PREFIX + "read"
-_GONE = _LIVE_PREFIX + "gone/"
-_STATUS = _LIVE_PREFIX + "status/"
+LIVE_READ = _LIVE_PREFIX + "read"
+LIVE_GONE = _LIVE_PREFIX + "gone/"
+LIVE_STATUS = _LIVE_PREFIX + "status/"
 # Each source check step's key slug and the name its finding gives it, in the
 # order the steps run.
 CHECK_STEPS: Mapping[ValidationStep, tuple[str, str]] = {
@@ -766,7 +768,7 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
             variants = ", ".join(_strings(item.get("variants")))
             findings.append(
                 _finding(
-                    subject_key(_UNCATEGORIZED, family),
+                    subject_key(BUILD_UNCATEGORIZED, family),
                     f"Family has no category: {family}",
                     [f"Family: {family}", f"Variants: {variants}"],
                 )
@@ -779,7 +781,7 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
                 details.append(f"Reason: {reason}")
             findings.append(
                 _finding(
-                    subject_key(_STALE_DENIAL, url),
+                    subject_key(BUILD_STALE_DENIAL, url),
                     f"Denial matches nothing: {url}",
                     details,
                 )
@@ -787,7 +789,7 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
     for key in _strings(report.get("staleCategoryAssignments")):
         findings.append(
             _finding(
-                subject_key(_STALE_CATEGORY, key),
+                subject_key(BUILD_STALE_CATEGORY, key),
                 f"Category assignment matches nothing: {key}",
                 [f"Category key: {key}"],
             )
@@ -795,7 +797,7 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
     return findings
 
 
-class _WriteStep(NamedTuple):
+class WriteStep(NamedTuple):
     """A write step: its key slug, its outcome variable and its finding's name."""
 
     slug: str
@@ -803,8 +805,16 @@ class _WriteStep(NamedTuple):
     name: str
 
 
+NIGHTLY_PUBLISH_STEPS = (
+    WriteStep("push", "PUSH_OUTCOME", "Nightly push to main"),
+    WriteStep("release", "RELEASE_OUTCOME", "Rolling release synchronization"),
+)
+# The key slug of a source's proposal publication step.
+PROPOSAL_SLUG = "proposal"
+
+
 def _publish_steps(
-    owner: Owner, environ: Mapping[str, str], steps: Sequence[_WriteStep]
+    owner: Owner, environ: Mapping[str, str], steps: Sequence[WriteStep]
 ) -> FindingsFile:
     """Findings for write steps from each step's outcome variable.
 
@@ -829,14 +839,7 @@ def _publish_steps(
 
 
 def emit_nightly_publish(environ: Mapping[str, str]) -> FindingsFile:
-    return _publish_steps(
-        NIGHTLY_PUBLISH,
-        environ,
-        (
-            _WriteStep("push", "PUSH_OUTCOME", "Nightly push to main"),
-            _WriteStep("release", "RELEASE_OUTCOME", "Rolling release synchronization"),
-        ),
-    )
+    return _publish_steps(NIGHTLY_PUBLISH, environ, NIGHTLY_PUBLISH_STEPS)
 
 
 def emit_source_publish(environ: Mapping[str, str], source: SourceName) -> FindingsFile:
@@ -844,8 +847,8 @@ def emit_source_publish(environ: Mapping[str, str], source: SourceName) -> Findi
         Owner("publish", source),
         environ,
         (
-            _WriteStep(
-                "proposal",
+            WriteStep(
+                PROPOSAL_SLUG,
                 "PUBLISH_OUTCOME",
                 f"Publishing the {source} source proposal",
             ),
@@ -901,11 +904,11 @@ def emit_live_check(
     scope: list[str] = []
     unchecked: list[str] = []
     if report is not None and report_status is not None:
-        scope.append(_LIVE_READ)
+        scope.append(LIVE_READ)
         if report_status == "failed":
             findings.append(
                 _finding(
-                    _LIVE_READ,
+                    LIVE_READ,
                     "Live check could not read the committed packs",
                     [
                         "The committed packs could not be read; no URL was checked.",
@@ -914,7 +917,7 @@ def emit_live_check(
                 )
             )
         else:
-            scope += [_GONE, _STATUS]
+            scope += [LIVE_GONE, LIVE_STATUS]
             for item in _objects(report.get("unreachable")):
                 url, status = item.get("url"), item.get("status")
                 if not isinstance(url, str):
@@ -923,7 +926,7 @@ def emit_live_check(
                 known = _http_status(status)
                 findings.append(
                     _finding(
-                        subject_key(_GONE, url),
+                        subject_key(LIVE_GONE, url),
                         f"Project URL is gone{f' (HTTP {status})' if known else ''}: {url}",
                         [f"URL: {url}", *([f"Status: HTTP {status}"] if known else [])],
                     )
@@ -935,13 +938,16 @@ def emit_live_check(
                 if _http_status(status):
                     findings.append(
                         _finding(
-                            subject_key(_STATUS, url),
+                            subject_key(LIVE_STATUS, url),
                             f"Project URL answers HTTP {status}: {url}",
                             [f"URL: {url}", f"Status: HTTP {status}"],
                         )
                     )
                 else:
-                    unchecked += [subject_key(_GONE, url), subject_key(_STATUS, url)]
+                    unchecked += [
+                        subject_key(LIVE_GONE, url),
+                        subject_key(LIVE_STATUS, url),
+                    ]
     return _finish(
         LIVE_CHECK,
         environ,
@@ -951,7 +957,7 @@ def emit_live_check(
         # The check step fails the job for unreadable packs or a gone URL, never
         # for an inconclusive status, so only those findings account for it.
         accounted=any(
-            finding.key == _LIVE_READ or finding.key.startswith(_GONE)
+            finding.key == LIVE_READ or finding.key.startswith(LIVE_GONE)
             for finding in findings
         ),
     )

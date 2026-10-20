@@ -13,7 +13,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
-| `live-check` (`live-check`) | Packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403 |
+| `live-check` (`live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403 |
 
 Each owner also has an early-failure finding, titled "<owner> job failed
 without reporting findings". A cancelled job raises only that finding and

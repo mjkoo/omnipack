@@ -35,7 +35,7 @@ from scripts.alerts import (
     parse_findings,
     reconcile,
 )
-from scripts.workflow_support import ReportStatus, StepOutcome
+from scripts.workflow_support import SOURCE_NAMES, ReportStatus, StepOutcome
 from tests.publication_support import (
     REPOSITORY,
     RUN_2,
@@ -282,6 +282,43 @@ def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> No
         assert set(prefixes) <= named
     assert set(alerts_module.PREPARE_STAGE_SLUGS.values()) <= named
     assert {slug for slug, _ in alerts_module.CHECK_STEPS.values()} <= named
+    slugs = {
+        alerts_module.EARLY_FAILURE_SLUG,
+        alerts_module.PROPOSAL_SLUG,
+        *(step.slug for step in alerts_module.NIGHTLY_PUBLISH_STEPS),
+        alerts_module.LIVE_READ.removeprefix(LIVE_CHECK.prefixes[0]),
+    }
+    assert slugs <= named
+    # A kind with a subject is named with a placeholder, as in `gone/<url>`.
+    kinds = [
+        *(
+            key.removeprefix(LIVE_CHECK.prefixes[0])
+            for key in (alerts_module.LIVE_GONE, alerts_module.LIVE_STATUS)
+        ),
+        *(
+            key.removeprefix(NIGHTLY_PREPARE.prefixes[1])
+            for key in (
+                alerts_module.BUILD_UNCATEGORIZED,
+                alerts_module.BUILD_STALE_DENIAL,
+                alerts_module.BUILD_STALE_CATEGORY,
+            )
+        ),
+    ]
+    for kind in kinds:
+        assert any(re.fullmatch(re.escape(kind) + "<[a-z]+>", n) for n in named), kind
+    assert {
+        str(alerts_module.BUILD_REPORT),
+        str(alerts_module.LIVE_CHECK_REPORT),
+    } <= named
+
+    # Each owner table row names its owners, then its job in parentheses.
+    job_of = {
+        owner: re.findall(r"`([^`]+)`", jobs)
+        for owners, jobs in re.findall(
+            r"^\| ([^(|]+)\(([^)]*)\) \|", docs, re.MULTILINE
+        )
+        for owner in re.findall(r"`([^`]+)`", owners)
+    }
 
     (artifact_pattern,) = [name for name in named if name.startswith("alert-findings-")]
     for workflow in WORKFLOWS.glob("*.yml"):
@@ -291,6 +328,8 @@ def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> No
                 assert name in named
             if any(is_emit(step) for step in steps):
                 owner = emitted_owner(job)
+                for source in SOURCE_NAMES if "$SOURCE" in owner else ("",):
+                    assert name in job_of[owner.replace("$SOURCE", source)]
                 (upload,) = [s for s in steps if is_findings_upload(s)]
                 assert upload["with"]["name"] == artifact_pattern.replace(
                     "<owner>", owner.replace("$SOURCE", "${{ inputs.source }}")
