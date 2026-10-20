@@ -55,10 +55,10 @@
       "github.com/josh-daniels/openmw-ds"
     ],
     [
-      "bboi",
-      "bboi-standard-asset",
-      "com.xyzz.openmw",
-      "github.com/xyzz/openmw-android"
+      "extras",
+      "extras",
+      "com.ast.openmw",
+      "github.com/andiweli/openmw-android"
     ]
   ],
   "github.com/aureliob/banjorecomp-android": [

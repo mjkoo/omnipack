@@ -117,7 +117,7 @@ and SleepManager keep the main app rather than their companion apps (which
 declare their own packages), GameNative keeps the non-XR build, and Citron
 keeps the mainline build rather than the Snapdragon 8 Elite build. Releases
 whose APKs are alternative builds of one app for different Android versions,
-regions or preferences, such as ARMSX2, Citra MMJ and Simpsons Hit and Run,
+regions or preferences, such as ARMSX2 and Simpsons Hit and Run,
 keep every alternative, so Obtainium asks which one to install. Filters exclude
 the unwanted asset rather than spell out the wanted name, so an upstream rename
 surfaces as an install prompt instead of a silent fallback to an older release.

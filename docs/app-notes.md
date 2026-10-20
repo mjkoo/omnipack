@@ -38,6 +38,13 @@ registers as an update.
 The entry follows the single rolling `continuous` release and is tracked by its
 release date, so every new build registers as an update.
 
+## Pegasus
+
+Pegasus has published no tagged release since 2024, so the pack opts into
+prereleases and follows the rolling `continuous` build, tracked by its latest
+asset date. An upload of only another platform's build also registers as an
+update.
+
 ## Xash3D FWGS
 
 The entry follows the rolling continuous master Android build. When that
