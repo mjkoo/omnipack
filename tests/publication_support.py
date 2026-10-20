@@ -17,6 +17,7 @@ from typing import Any, NamedTuple
 import pytest
 
 from scripts.alerts import Finding, build_body
+from scripts.nightly_write import ALLOWED_PATHS
 
 
 class CommandResult(NamedTuple):
@@ -224,11 +225,6 @@ def issue_writes(gh: FakeGh) -> list[tuple[str, ...]]:
 
 # --- write-side repositories -------------------------------------------------
 
-PUBLISHED_FILES = (
-    "dist/single-screen.json",
-    "dist/dual-screen.json",
-    "README.md",
-)
 README_BYTES = (
     b"guide\n<!-- omnipack:catalog:start -->\nbase catalog\n"
     b"<!-- omnipack:catalog:end -->\ncredits\n"
@@ -243,7 +239,7 @@ def seed_repository(tmp_path: Path, name: str = "seed") -> Path:
     """A repository holding a base version of each published file."""
     return repository(
         tmp_path,
-        {relative: f"base:{relative}\n" for relative in PUBLISHED_FILES},
+        {relative: f"base:{relative}\n" for relative in ALLOWED_PATHS},
         name=name,
     )
 
@@ -284,7 +280,7 @@ def prepare_repository(tmp_path: Path, name: str = "repo") -> Path:
     """A repository the nightly prepare step can run in."""
     files: dict[str, str | bytes] = {
         relative: README_BYTES if relative == "README.md" else f"base:{relative}\n"
-        for relative in PUBLISHED_FILES
+        for relative in ALLOWED_PATHS
     }
     files.update(
         {

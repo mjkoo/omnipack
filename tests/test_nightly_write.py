@@ -15,6 +15,7 @@ import pytest
 
 from scripts import nightly_write as write_module
 from scripts.nightly_write import (
+    ALLOWED_PATHS,
     MARKER,
     run_push,
     run_release,
@@ -22,7 +23,6 @@ from scripts.nightly_write import (
 from scripts.workflow_support import HandoffRejected
 from tests.publication_support import (
     OK,
-    PUBLISHED_FILES,
     CommandResult,
     FakeGh,
     advance_main,
@@ -50,7 +50,7 @@ def test_advanced_main_fails_before_push_and_reports_main_advanced(
     seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = commit_as_bot(seed, {PUBLISHED_FILES[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
 
@@ -72,7 +72,7 @@ def test_rerun_after_own_push_fails_as_main_advanced_through_cli(
     seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = commit_as_bot(seed, {PUBLISHED_FILES[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     _git(seed, "push", "-q", str(bare), "HEAD:main")
     assert _git(bare, "rev-parse", "main") == sha
@@ -133,10 +133,10 @@ def test_unsafe_candidate_commit_is_rejected(tmp_path: Path, case: str) -> None:
         _git(seed, "commit", "--allow-empty", "-qm", "empty")
         sha = _git(seed, "rev-parse", "HEAD")
     elif case == "symlink":
-        target = seed / PUBLISHED_FILES[0]
+        target = seed / ALLOWED_PATHS[0]
         target.unlink()
         target.symlink_to(seed / "README.md")
-        _git(seed, "add", "--", PUBLISHED_FILES[0])
+        _git(seed, "add", "--", ALLOWED_PATHS[0])
         sha = commit_as_bot(seed, {})
     else:
         _git(seed, "config", "core.fileMode", "true")
@@ -187,7 +187,7 @@ def test_push_cli_fails_when_gh_cannot_hand_git_the_credential(
     seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = commit_as_bot(seed, {PUBLISHED_FILES[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     summary_path = tmp_path / "summary.md"
@@ -211,7 +211,7 @@ def test_push_cli_reads_env_and_exit_code_and_writes_summary(
     seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = commit_as_bot(seed, {PUBLISHED_FILES[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     install_failing_hooks(
@@ -244,7 +244,7 @@ def test_rejected_push_logs_the_remote_error_and_keeps_it_out_of_the_summary(
     seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = commit_as_bot(seed, {PUBLISHED_FILES[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     pre_receive = bare / "hooks" / "pre-receive"
@@ -278,7 +278,7 @@ def test_detach_failure_after_a_landed_push_reports_published_and_fails(
     seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = commit_as_bot(seed, {PUBLISHED_FILES[0]: "changed\n"})
+    sha = commit_as_bot(seed, {ALLOWED_PATHS[0]: "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     write_side = shallow_checkout(tmp_path, bare, base)
     # The remote accepts the push, then leaves the write side's index locked,
