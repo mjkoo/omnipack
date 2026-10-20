@@ -239,11 +239,14 @@ def early_failure_finding(owner: Owner) -> Finding:
 
 
 def encode_subject(subject: str) -> str:
-    """Percent-encode every UTF-8 byte outside letters, digits and `/:._~+-`."""
+    """Percent-encode every UTF-8 byte outside letters, digits and `/:._~+-`.
+
+    A lone surrogate, which has no UTF-8 encoding, is encoded as `?`.
+    """
     return "".join(
         char
         if char in _SAFE_SUBJECT
-        else "".join(f"%{byte:02X}" for byte in char.encode())
+        else "".join(f"%{byte:02X}" for byte in char.encode(errors="replace"))
         for char in subject
     )
 
@@ -649,8 +652,18 @@ def _one_line(text: str) -> str:
     )
 
 
+def _well_formed(text: str) -> str:
+    """`text` with each lone surrogate, which no file or issue can carry, as `?`."""
+    return text.encode(errors="replace").decode()
+
+
 def _finding(key: str, title: str, details: Sequence[str]) -> Finding:
-    return Finding(key, truncate_title(_one_line(title)), tuple(details))
+    """A finding from report-derived text, made valid for a findings file."""
+    return Finding(
+        key,
+        truncate_title(_one_line(_well_formed(title))),
+        tuple(_well_formed(line) for line in details),
+    )
 
 
 def _finish(

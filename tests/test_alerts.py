@@ -1684,6 +1684,40 @@ def test_overlong_url_and_family_still_yield_a_valid_file_keeping_other_findings
     assert len(prepare.findings) == 2
 
 
+def test_report_rows_with_lone_surrogates_still_yield_a_valid_file(
+    tmp_path: Path,
+) -> None:
+    live = _emit(
+        LIVE_CHECK,
+        "failure",
+        report=_live_report(
+            unreachable=[
+                {"url": "https://bad.example/\ud800", "status": 404},
+                {"url": "https://ok.example/gone", "status": 404},
+            ]
+        ),
+        tmp_path=tmp_path,
+        CHECK_RESULT="failure",
+    )
+    prepare = _emit(
+        NIGHTLY_PREPARE,
+        report=_build_report(
+            uncategorizedFamilies=[
+                {"family": "Bad \udfff", "variants": ["\ud800"]},
+                {"family": "Good", "variants": []},
+            ]
+        ),
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert "live-check/gone/https://ok.example/gone" in _keys(live)
+    assert len(live.findings) == 2
+    assert "build/uncategorized/Good" in _keys(prepare)
+    assert len(prepare.findings) == 2
+
+
 def test_multiline_and_padded_subjects_give_one_line_trimmed_titles(
     tmp_path: Path,
 ) -> None:
