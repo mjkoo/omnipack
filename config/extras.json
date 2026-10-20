@@ -177,6 +177,14 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.ast.openmw",
+    "url": "https://github.com/Andiweli/OpenMW-Android",
+    "name": "Elder Scrolls 3 Morrowind (OpenMW)",
+    "author": "Andiweli",
+    "categories": [],
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "omnipack updates",

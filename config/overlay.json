@@ -246,6 +246,16 @@
     }
   },
   {
+    "url": "https://github.com/mmatyas/pegasus-frontend",
+    "patch": {
+      "additionalSettings": {
+        "includePrereleases": true,
+        "releaseDateAsVersion": true,
+        "useLatestAssetDateAsReleaseDate": true
+      }
+    }
+  },
+  {
     "url": "https://github.com/moonlight-stream/moonlight-android",
     "patch": {
       "additionalSettings": {

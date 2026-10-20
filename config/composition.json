@@ -13,13 +13,13 @@
     },
     {
       "match": {
-        "source": "bboi",
-        "origin": "bboi-standard-asset",
-        "id": "com.xyzz.openmw",
-        "url": "https://github.com/xyzz/openmw-android"
+        "source": "extras",
+        "origin": "extras",
+        "id": "com.ast.openmw",
+        "url": "https://github.com/Andiweli/OpenMW-Android"
       },
       "family": "app:openmw",
-      "rationale": "The recorded BBoi standard and dual assets are maintained as target-specific builds of this app, with different package identities: the standard build serves single and the dual asset is preferred for dual."
+      "rationale": "The maintained baseline OpenMW port serves single, and the dual-screen OpenMW-DS build at another repository is preferred for dual."
     },
     {
       "match": {
