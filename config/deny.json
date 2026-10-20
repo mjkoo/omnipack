@@ -30,5 +30,9 @@
   {
     "url": "https://play.google.com/store/apps/details?id=com.chimbori.hermitcrab&pli=1",
     "reason": "A Google Play page Obtainium cannot install from; Native Alpha is the open-source alternative already in the pack."
+  },
+  {
+    "url": "https://github.com/kandowontu/starfox-enhanced",
+    "reason": "The project moved to github.com/kandowontu2/starfox-enhanced, which extras lists until Quiver follows."
   }
 ]

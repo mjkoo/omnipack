@@ -16,7 +16,7 @@ before changing between forks or uninstalling an app.
 | --- | --- | --- |
 | [AeroGauge Recompiled](https://github.com/alondero/aerogauge-recomp) | Supported USA AeroGauge `.z64` ROM | Experimental Android release; touch controls and graphics have limited testing. |
 | [Automobili Lamborghini Recompiled](https://github.com/alondero/automobililamborghini-recomp) | Supported USA N64 ROM | Experimental Android port. Uninstalling or clearing private app data can erase saves. |
-| [Star Fox Enhanced](https://github.com/kandowontu/starfox-enhanced) | Supported Star Fox/Starwing ROM or generated `Starfox-Assets.BIN` | Android arm64 build; optional MSU content is separate. |
+| [Star Fox Enhanced](https://github.com/kandowontu2/starfox-enhanced) | Supported Star Fox/Starwing ROM or generated `Starfox-Assets.BIN` | Android arm64 build; optional MSU content is separate. |
 | [Melee PC](https://github.com/999sian/melee-pc) | USA 1.02 GALE01 game image | Its overlay opts into beta releases. Requires arm64 and Vulkan 1.1. The app also has its own update checker. |
 | [Open Nectar](https://github.com/SSunnKing/Open-Nectar---Pikmin-Native-PC-Port) | Supported Pikmin USA Rev 1 or Europe ISO/GCM | Android needs an unpacked image rather than RVZ/WIA/GCZ. Requires Android 10+, arm64 and GLES 3.0; allow space for imported data. |
 | [Resident Evil Gaiden Recompiled](https://github.com/sergiomanzur/regaiden-recomp) | Exact supported USA `.gbc` ROM | Use the first-run picker. The project's README supplies the required ROM hash. |
