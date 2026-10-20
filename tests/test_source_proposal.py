@@ -33,6 +33,7 @@ from tests.publication_support import (
     OK,
     CommandResult,
     FakeGh,
+    advance_main,
     bare_remote,
     failure,
     install_failing_hooks,
@@ -909,14 +910,7 @@ def test_remote_main_other_than_base_fails_on_both_paths(
     seed, base, sha, bundle_path, body_path = _staged_candidate(tmp_path, source=source)
     bare = _bare_from(seed, tmp_path)
 
-    other = tmp_path / "other"
-    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
-    _git(other, "config", "user.name", "Test")
-    _git(other, "config", "user.email", "test@example.invalid")
-    (other / "tracked.txt").write_text("advance\n")
-    _git(other, "add", "tracked.txt")
-    _git(other, "commit", "-qm", "advance")
-    _git(other, "push", "-q", "origin", "HEAD:main")
+    advance_main(bare, tmp_path)
 
     write_side = shallow_checkout(tmp_path, bare, base)
     gh = _proposal_gh(pr_list=[_pr(9, source=source)])
@@ -1530,14 +1524,7 @@ def test_publish_cli_writes_ok_and_main_advanced_outcomes(
     assert proposal_module.main(["publish"]) == 0
     assert output_path.read_text() == "outcome=ok\n"
 
-    other = tmp_path / "other"
-    subprocess.run(["git", "clone", "-q", str(bare), str(other)], check=True)
-    _git(other, "config", "user.name", "Test")
-    _git(other, "config", "user.email", "test@example.invalid")
-    (other / "tracked.txt").write_text("advance\n")
-    _git(other, "add", "tracked.txt")
-    _git(other, "commit", "-qm", "advance")
-    _git(other, "push", "-q", "origin", "HEAD:main")
+    advance_main(bare, tmp_path)
     output_path.write_text("")
 
     assert proposal_module.main(["publish"]) == 1

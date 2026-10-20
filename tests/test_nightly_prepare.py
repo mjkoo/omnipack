@@ -29,11 +29,13 @@ from scripts.nightly_write import run_push
 from scripts.workflow_support import BOT_EMAIL, BOT_NAME
 from tests.publication_support import (
     OK,
+    README_BYTES,
     FakeGh,
     bare_remote,
     install_failing_hooks,
     isolated_git_identity,
-    repository,
+    prepare_environment,
+    prepare_repository,
     shallow_checkout,
 )
 from tests.publication_support import (
@@ -41,27 +43,6 @@ from tests.publication_support import (
 )
 
 pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
-
-
-README_BYTES = (
-    b"guide\n<!-- omnipack:catalog:start -->\nbase catalog\n"
-    b"<!-- omnipack:catalog:end -->\ncredits\n"
-)
-
-
-def _repo(tmp_path: Path, name: str = "repo") -> Path:
-    files: dict[str, str | bytes] = {
-        relative: README_BYTES if relative == "README.md" else f"base:{relative}\n"
-        for relative in ALLOWED_PATHS
-    }
-    files.update(
-        {
-            "tracked.txt": "base\n",
-            "config/catalogs/codm.json": '{"apps": []}\n',
-            ".gitignore": ".build/\n",
-        }
-    )
-    return repository(tmp_path, files, name=name)
 
 
 class ScriptedProcess:
@@ -106,7 +87,7 @@ def _now() -> datetime:
 
 
 def test_head_other_than_github_sha_fails(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     process = ScriptedProcess(root)
 
     outcome = run_prepare(
@@ -124,7 +105,7 @@ def test_head_other_than_github_sha_fails(tmp_path: Path) -> None:
 
 
 def test_readme_catalog_interior_change_is_committed(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_build.append(
@@ -151,28 +132,12 @@ _ALL_STAGES = (
 _NO_OP_STAGES = "checkout,build,allowlist,README boundary,verify,drift after verify"
 
 
-def _prepare_environment(
-    monkeypatch: pytest.MonkeyPatch, root: Path, tmp_path: Path
-) -> Path:
-    runner_temp = tmp_path / "runner-temp"
-    runner_temp.mkdir()
-    monkeypatch.chdir(root)
-    monkeypatch.setenv("GITHUB_SHA", _git(root, "rev-parse", "HEAD"))
-    monkeypatch.setenv("RUNNER_TEMP", str(runner_temp))
-    monkeypatch.setenv("GITHUB_OUTPUT", str(tmp_path / "output.txt"))
-    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(tmp_path / "summary.md"))
-    monkeypatch.setenv("GITHUB_SERVER_URL", "https://github.example")
-    monkeypatch.setenv("GITHUB_REPOSITORY", "mjkoo/omnipack")
-    monkeypatch.setenv("GITHUB_RUN_ID", "42")
-    return runner_temp
-
-
 def test_prepare_cli_writes_changed_sha_and_base_for_a_candidate(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
-    runner_temp = _prepare_environment(monkeypatch, root, tmp_path)
+    runner_temp = prepare_environment(monkeypatch, root, tmp_path)
     install_failing_hooks(root, "pre-commit", "commit-msg", "post-commit")
     process = ScriptedProcess(root)
     process.on_build.append(
@@ -213,9 +178,9 @@ def test_prepare_cli_writes_changed_sha_and_base_for_a_candidate(
 def test_prepare_cli_writes_changed_false_for_a_no_op(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
-    runner_temp = _prepare_environment(monkeypatch, root, tmp_path)
+    runner_temp = prepare_environment(monkeypatch, root, tmp_path)
     process = ScriptedProcess(root)
     monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
 
@@ -237,7 +202,7 @@ def test_prepare_cli_writes_changed_false_for_a_no_op(
     ["out-of-scope", "catalog", "deleted", "symlink", "executable", "absent-at-base"],
 )
 def test_unsafe_build_output_fails_allowlist(tmp_path: Path, case: str) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     if case == "absent-at-base":
         (root / ALLOWED_PATHS[1]).unlink()
         _git(root, "add", "-A")
@@ -279,7 +244,7 @@ def test_unsafe_build_output_fails_allowlist(tmp_path: Path, case: str) -> None:
 
 
 def test_readme_change_outside_markers_fails(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_build.append(
@@ -299,7 +264,7 @@ def test_readme_change_outside_markers_fails(tmp_path: Path) -> None:
 
 
 def test_verification_failure_fails_the_run(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_build.append(
@@ -316,7 +281,7 @@ def test_verification_failure_fails_the_run(tmp_path: Path) -> None:
 
 
 def test_allowed_file_changed_during_verification_fails_drift(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_verify.append(lambda: (root / ALLOWED_PATHS[0]).write_text("drifted\n"))
@@ -330,7 +295,7 @@ def test_allowed_file_changed_during_verification_fails_drift(tmp_path: Path) ->
 
 
 def test_stale_reports_are_removed_even_when_build_fails(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     (root / ".build").mkdir()
     (root / ".build/report.json").write_text('{"stale": true}')
@@ -351,7 +316,7 @@ def test_stale_reports_are_removed_even_when_build_fails(tmp_path: Path) -> None
 def test_stale_reports_are_removed_even_when_the_checkout_check_fails(
     tmp_path: Path,
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     (root / ".build").mkdir()
     (root / ".build/report.json").write_text('{"stale": true}')
@@ -378,7 +343,7 @@ def _corrupt_index(root: Path) -> None:
 def test_git_failure_reading_the_checkout_fails_the_checkout_stage(
     tmp_path: Path,
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     _corrupt_index(root)
     process = ScriptedProcess(root)
@@ -393,7 +358,7 @@ def test_git_failure_reading_the_checkout_fails_the_checkout_stage(
 
 
 def test_git_failure_after_the_build_fails_the_allowlist_stage(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_build.append(lambda: _corrupt_index(root))
@@ -409,7 +374,7 @@ def test_git_failure_after_the_build_fails_the_allowlist_stage(tmp_path: Path) -
 def test_git_failure_committing_the_candidate_fails_the_commit_stage(
     tmp_path: Path,
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     bundle = tmp_path / "candidate.bundle"
     process = ScriptedProcess(root)
@@ -430,7 +395,7 @@ def test_git_failure_committing_the_candidate_fails_the_commit_stage(
 
 
 def test_git_failure_after_verification_fails_the_drift_stage(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_verify.append(lambda: _corrupt_index(root))
@@ -459,7 +424,7 @@ def test_build_and_verify_output_passes_through_to_the_log(
 def test_prepare_cli_without_runner_temp_exits_with_a_clear_message(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     monkeypatch.chdir(root)
     monkeypatch.delenv("RUNNER_TEMP", raising=False)
     monkeypatch.setenv("GITHUB_SHA", _git(root, "rev-parse", "HEAD"))
@@ -473,7 +438,7 @@ def test_prepare_cli_without_runner_temp_exits_with_a_clear_message(
 
 def test_real_prepare_commit_hands_off_to_push(tmp_path: Path) -> None:
     """The bundle a real `prepare` run writes is exactly what `push` accepts."""
-    seed = _repo(tmp_path, "seed")
+    seed = prepare_repository(tmp_path, "seed")
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
     _git(seed, "remote", "add", "origin", str(bare))
@@ -517,7 +482,7 @@ def _stages(outcome) -> str:
 
 
 def test_published_candidate_lists_every_stage(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
     process.on_build.append(
@@ -533,7 +498,7 @@ def test_published_candidate_lists_every_stage(tmp_path: Path) -> None:
 
 
 def test_no_op_success_lists_neither_commit_nor_bundle(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
 
     outcome = run_prepare(
@@ -605,7 +570,7 @@ def _fail_at(stage: str, root: Path, tmp_path: Path) -> tuple[ScriptedProcess, P
 def test_failure_lists_the_stages_started_through_the_failing_one(
     tmp_path: Path, stage: str, expected: str
 ) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process, bundle = _fail_at(stage, root, tmp_path)
 
@@ -617,7 +582,7 @@ def test_failure_lists_the_stages_started_through_the_failing_one(
 
 
 def test_failure_removing_stale_reports_lists_only_build(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     (root / ".build/report.json").mkdir(parents=True)
     (root / ".build/report.json/keep").write_text("x")
@@ -636,8 +601,8 @@ def test_failure_removing_stale_reports_lists_only_build(tmp_path: Path) -> None
 def test_prepare_cli_writes_the_failing_stage_and_stages_on_failure(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _repo(tmp_path)
-    _prepare_environment(monkeypatch, root, tmp_path)
+    root = prepare_repository(tmp_path)
+    prepare_environment(monkeypatch, root, tmp_path)
     process = ScriptedProcess(root)
     _fail_build(process)
     monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
@@ -659,7 +624,7 @@ def test_alert_stage_table_covers_exactly_the_prepare_stages() -> None:
 
 
 def test_emitted_scope_follows_the_stages_prepare_reports(tmp_path: Path) -> None:
-    root = _repo(tmp_path)
+    root = prepare_repository(tmp_path)
     base = _git(root, "rev-parse", "HEAD")
     process = ScriptedProcess(root)
 
@@ -679,4 +644,3 @@ def test_emitted_scope_follows_the_stages_prepare_reports(tmp_path: Path) -> Non
     assert file.scope == tuple(
         f"nightly/prepare/{PREPARE_STAGE_SLUGS[stage]}" for stage in outcome.started
     )
-    assert len(file.scope) == len(outcome.started)

@@ -16,7 +16,6 @@ from pathlib import Path
 from typing import get_args
 
 import pytest
-import yaml
 
 from omnipack.live_check import REPORT, check_live, write_live_report
 from omnipack.merge import CompositionReport, StaleExclusion, UncategorizedFamily
@@ -38,20 +37,35 @@ from scripts.alerts import (
 )
 from scripts.workflow_support import ReportStatus, StepOutcome
 from tests.publication_support import (
+    REPOSITORY,
+    RUN_2,
+    alert_gh,
+    alert_issue,
     bare_remote,
     bundle,
+    commit_as_bot,
     isolated_git_identity,
+    issue_writes,
+    prepare_environment,
+    prepare_repository,
+    push_gh,
+    seed_repository,
     shallow_checkout,
 )
 from tests.publication_support import git as _git
-from tests.test_alerts import REPOSITORY, RUN_2, _gh, _issue, _verbs
 from tests.test_live_check import Transport, client, entry, write_packs
-from tests.test_nightly_prepare import ScriptedProcess, _prepare_environment, _repo
-from tests.test_nightly_write import _bot_commit, _push_gh, _seed
+from tests.test_nightly_prepare import ScriptedProcess
+from tests.test_publication_workflows import (
+    WORKFLOWS,
+    emit_step,
+    emitted_owner,
+    is_emit,
+    is_findings_upload,
+    load,
+)
 
 pytestmark = pytest.mark.usefixtures(isolated_git_identity.__name__)
 
-WORKFLOWS = Path(__file__).resolve().parents[1] / ".github/workflows"
 _EXPRESSION = re.compile(
     r"\$\{\{ (?:steps\.(?P<step>[\w-]+)\.(?:outputs\.(?P<output>\w+)|(?P<outcome>outcome))"
     r"|(?P<job>job\.status)) \}\}"
@@ -59,9 +73,7 @@ _EXPRESSION = re.compile(
 
 
 def _emit_step(workflow: str, job: str) -> dict:
-    steps = yaml.safe_load((WORKFLOWS / workflow).read_text())["jobs"][job]["steps"]
-    (step,) = [s for s in steps if "scripts.alerts emit" in s.get("run", "")]
-    return step
+    return emit_step(load(workflow)["jobs"][job]["steps"])
 
 
 def _resolve(
@@ -108,7 +120,7 @@ def _outputs(path: Path) -> dict[str, str]:
 
 
 def _reconcile(owner: Owner, path: Path, result: StepOutcome, issues: list[dict]):
-    gh = _gh(issues)
+    gh = alert_gh(issues)
     reconcile(gh, [Producer(owner, path, result)], repository=REPOSITORY, url=RUN_2)
     return gh
 
@@ -116,8 +128,8 @@ def _reconcile(owner: Owner, path: Path, result: StepOutcome, issues: list[dict]
 def test_no_op_prepare_closes_a_stage_it_ran_and_leaves_one_it_did_not(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    root = _repo(tmp_path)
-    _prepare_environment(monkeypatch, root, tmp_path)
+    root = prepare_repository(tmp_path)
+    prepare_environment(monkeypatch, root, tmp_path)
     process = ScriptedProcess(root)
     monkeypatch.setattr(nightly_module, "PrepareSubprocess", lambda: process)
     assert nightly_module.main(["prepare"]) == 0
@@ -134,19 +146,22 @@ def test_no_op_prepare_closes_a_stage_it_ran_and_leaves_one_it_did_not(
         NIGHTLY_PREPARE,
         findings,
         "success",
-        [_issue(1, "nightly/prepare/build"), _issue(2, "nightly/prepare/commit")],
+        [
+            alert_issue(1, "nightly/prepare/build"),
+            alert_issue(2, "nightly/prepare/commit"),
+        ],
     )
 
-    assert _verbs(gh) == [("close", "1")]
+    assert issue_writes(gh) == [("close", "1")]
 
 
 def test_push_refused_as_main_advanced_raises_nothing_and_leaves_its_issue(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    seed = _seed(tmp_path)
+    seed = seed_repository(tmp_path)
     base = _git(seed, "rev-parse", "HEAD")
     bare = bare_remote(seed, tmp_path)
-    sha = _bot_commit(seed, {"dist/single-screen.json": "changed\n"})
+    sha = commit_as_bot(seed, {"dist/single-screen.json": "changed\n"})
     bundle_path = bundle(seed, base, tmp_path / "candidate.bundle")
     _git(seed, "push", "-q", str(bare), "HEAD:main")
     write_side = shallow_checkout(tmp_path, bare, base)
@@ -154,7 +169,7 @@ def test_push_refused_as_main_advanced_raises_nothing_and_leaves_its_issue(
     monkeypatch.setenv("GITHUB_OUTPUT", str(output))
     monkeypatch.setenv("CANDIDATE_SHA", sha)
     monkeypatch.setenv("BASE_SHA", base)
-    monkeypatch.setattr(write_module, "SubprocessGhRunner", _push_gh)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", push_gh)
     monkeypatch.chdir(write_side)
     assert write_module.main(["push", "--bundle", str(bundle_path)]) == 1
     findings = tmp_path / "findings.json"
@@ -169,13 +184,13 @@ def test_push_refused_as_main_advanced_raises_nothing_and_leaves_its_issue(
     )
     parsed = parse_findings(NIGHTLY_PUBLISH, findings.read_text())
     gh = _reconcile(
-        NIGHTLY_PUBLISH, findings, "failure", [_issue(1, "nightly/publish/push")]
+        NIGHTLY_PUBLISH, findings, "failure", [alert_issue(1, "nightly/publish/push")]
     )
 
     assert parsed is not None
     assert parsed.findings == ()
     assert parsed.scope == ()
-    assert _verbs(gh) == []
+    assert issue_writes(gh) == []
 
 
 def test_build_report_from_the_real_writer_raises_its_warnings(
@@ -270,19 +285,13 @@ def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> No
 
     (artifact_pattern,) = [name for name in named if name.startswith("alert-findings-")]
     for workflow in WORKFLOWS.glob("*.yml"):
-        for name, job in yaml.safe_load(workflow.read_text())["jobs"].items():
+        for name, job in load(workflow.name)["jobs"].items():
             steps = job.get("steps", [])
             if any("scripts.alerts reconcile" in step.get("run", "") for step in steps):
                 assert name in named
-            emits = [s for s in steps if "scripts.alerts emit" in s.get("run", "")]
-            for emit in emits:
-                owner = shlex.split(emit["run"])[4]
-                (upload,) = [
-                    s
-                    for s in steps
-                    if s.get("uses", "").startswith("actions/upload-artifact")
-                    and s["with"]["name"].startswith("alert-findings-")
-                ]
+            if any(is_emit(step) for step in steps):
+                owner = emitted_owner(job)
+                (upload,) = [s for s in steps if is_findings_upload(s)]
                 assert upload["with"]["name"] == artifact_pattern.replace(
                     "<owner>", owner.replace("$SOURCE", "${{ inputs.source }}")
                 ).replace("<run id>", "${{ github.run_id }}")

@@ -525,10 +525,10 @@ def reconcile_producers(reconcile):
 
 
 def emitted_owner(job):
-    return command(producing_env(job["steps"]))[4]
+    return command(emit_step(job["steps"]))[4]
 
 
-def producing_env(job_steps):
+def emit_step(job_steps):
     emit = [s for s in job_steps if is_emit(s)]
     assert len(emit) == 1
     return emit[0]
@@ -578,7 +578,7 @@ def test_producing_jobs_emit_findings_last_and_tolerate_emit_failure(file, job_n
     job = workflow["jobs"][job_name]
     owner, bindings = EMIT_BINDINGS[(file, job_name)]
     steps = job["steps"]
-    emit = producing_env(steps)
+    emit = emit_step(steps)
     assert emit["if"] == "always()"
     assert emit["continue-on-error"] is True
     assert emit["env"] == {"JOB_STATUS": "${{ job.status }}", **bindings}
