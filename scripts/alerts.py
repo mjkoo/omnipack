@@ -241,7 +241,7 @@ def early_failure_finding(owner: Owner) -> Finding:
 def encode_subject(subject: str) -> str:
     """Percent-encode every UTF-8 byte outside letters, digits and `/:._~+-`.
 
-    A lone surrogate, which has no UTF-8 encoding, is encoded as `?`.
+    A lone surrogate, which has no UTF-8 encoding, becomes `%3F`.
     """
     return "".join(
         char
