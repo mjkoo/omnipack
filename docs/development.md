@@ -26,7 +26,8 @@ for generation, acceptance and output review.
   candidates for both packs; optional `"dualScreen": true` makes one dual-only.
   Selection compares eligible builds, so an extra does not always win. See
   [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
-  and add a [setup note](curation.md#port-setup) for required user files or components.
+  and add an [app note](app-notes.md) when its configuration changes what users
+  see; see [port setup](curation.md#port-setup).
 - **Refresh a generated source:** the codm and Quiver catalogs come from
   their upstream lists alone; there is no per-project generation policy. Give
   a generated app its name and settings with an overlay record and its

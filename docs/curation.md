@@ -54,43 +54,20 @@ live publication acceptance.
 
 ## Quiver-discovered ports
 
-[Quiver port setup](quiver-ports.md) lists required game data and known setup
-limitations for the additional baseline ports. Their names and settings are
+[Quiver game ports](quiver-ports.md) describes how Quiver's ports rank against
+other sources. Their names and settings are
 overlay records and their categories are category map keys, so a catalog refresh
 keeps them. To exclude an app from both packs regardless of source, deny its
 project URL in `config/deny.json`.
 
 ## Port setup
 
-The entries below need user action beyond installing them. Each note restates
-what the upstream project documents; it is not a device validation record.
-
-- **Aurora Store** selects the ordinary GitLab APK rather than hardware-specific
-  or preload variants. On first open it asks the user to log in, with a Google
-  Play account or anonymously; an anonymous login leaves some features
-  unavailable.
-- **Cinderbox** requires a user-supplied legitimate copy of Stardew Valley; the
-  project distributes no game assets.
-- **Ghostship** requires a user-supplied US or JP Super Mario 64 ROM (`.z64`),
-  chosen in the app.
-- **Pokémon Red/Blue Recomp** requires a user-supplied canonical US Pokémon Game
-  Boy ROM (`.gb` or `.gbc`), chosen in the app. The upstream README lists the
-  accepted ROMs and their checksums.
-- **MetroidArch (Super Metroid)** requires a user-supplied, uncompressed Super
-  Metroid ROM, the app's own asset and core-info updates, and separate writable
-  directories. The [MetroidArch setup guide](metroidarch.md) describes each
-  step.
-- **idTech4A++** requires user-supplied data for a supported id Tech game.
-- **VCMI** requires user-supplied Heroes of Might and Magic III data and lets
-  Obtainium select the APK matching the device architecture.
-- **Julius** requires user-supplied Caesar III data.
-- **Xash3D FWGS** requires user-supplied Half-Life data. It follows the rolling
-  continuous-master Android build; temporary absence of that build is an update
-  failure rather than permission to select another channel.
-- **Hollow Knight: Dual Souls** requires user-supplied Hollow Knight files.
-- **Hollow Knight: Silksong** requires user-supplied Linux game files and builds
-  on-device. Its upstream setup currently documents Android 13 only and says
-  Android 15 is unsupported.
+User-facing notes live in [app notes](app-notes.md). An app gets one only when
+the pack's configuration or combination of apps changes what a user sees, such
+as MetroidArch sharing RetroArch's directories or a rolling channel tracked by
+date. Requirements the upstream project documents, such as game data, logins or
+supported devices, are not restated; the catalog links each project. Add or
+update a note in the same change as the overlay or extra that causes it.
 
 ## Version-policy observations
 

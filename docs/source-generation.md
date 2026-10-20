@@ -116,10 +116,9 @@ them. Examples:
   separate app for a second handheld that is not catalogued.
 - Silent Hill Decomp excludes its `_OLD` APK assets, and LEGO Island
   Portable selects `app-release.apk`.
-- Kanto Gear is track-only. Obtainium reports its releases but cannot install
-  the Lua mod or detect its installed version. Install or update Kanto through
-  official [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) using its
-  Mod Index or ZIP import. Gen1Recomp remains the Android host in both packs.
+- Kanto Gear is track-only, since Obtainium cannot install the Lua mod; its
+  [app note](app-notes.md#kanto-gear-mod-updates) says how users install it.
+  Gen1Recomp remains the Android host in both packs.
 
 A repository renamed upstream yields a removal of the old URL and a new
 placeholder-id entry at the new one. A family rule, an overlay `id` patch or a
