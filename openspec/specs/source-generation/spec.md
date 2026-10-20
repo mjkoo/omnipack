@@ -407,8 +407,9 @@ structurally verify both pack variants with the candidate catalog and main's
 configuration. Any failure, including stale selectors and repeated entry ids,
 SHALL block those writes. When a successful generation reproduces main's
 committed catalog for that source, closing an open PR from that source's
-source-update branch SHALL be the only permitted write, and it SHALL require no
-tests, build or verification. Generated pack outputs and the pack README SHALL
+source-update branch SHALL be the only permitted branch or PR write, and it
+SHALL require no tests, build or verification; the alert job's issue
+reconciliation SHALL still be permitted, as maintenance-alerts requires. Generated pack outputs and the pack README SHALL
 serve only this run's checks and SHALL NOT be part of the proposal. The proposed catalog
 SHALL be byte-identical to the checked candidate: the read-only job SHALL commit
 the candidate before the checks and confirm afterwards that the workspace
@@ -485,7 +486,8 @@ the one open PR from that branch to main. A source's source-update PR SHALL be
 an open PR whose head is that source's branch in the canonical repository and
 whose base is main. A PR from another repository whose branch has the same name
 SHALL be neither edited nor closed. If more than one source-update PR is open
-for one source, that source's run SHALL fail before any remote write; open PRs
+for one source, that source's run SHALL fail before any branch or PR write,
+and the alert job SHALL still report that failure; open PRs
 of other sources SHALL NOT count. Content equality SHALL be judged on the
 branch's whole tree: a branch whose tree equals the rebuilt proposal's tree
 SHALL be left as it is, even when its commits differ from the rebuilt commit,
@@ -495,8 +497,8 @@ for that source, the workflow SHALL make no proposal and SHALL close an open
 source-update PR of that source only, without running the tests, build or
 verification. Upstream edits that leave the generated catalog unchanged SHALL
 NOT produce a proposal. No automatic merge, direct-main
-write, failure issue lifecycle or release write SHALL be introduced.
-
+write or release write SHALL be introduced. A source's failures SHALL be raised
+as findings as maintenance-alerts requires.
 
 Each invocation SHALL make one generation and check attempt per source. A failed
 branch or PR write SHALL fail that source's run visibly, and the next run SHALL
@@ -512,7 +514,7 @@ SHALL show as stale or conflicting until a later run rebuilds it.
 
 - **WHEN** a successful generation produces the committed catalog and main is still the run's base revision
 - **THEN** no tests, build or verification are required, and no branch push, PR creation or PR edit occurs
-- **AND** any open PR from that source's source-update branch is closed, which is the only write the run makes
+- **AND** any open PR from that source's source-update branch is closed, which is the only branch or PR write the run makes, and the alert job still reconciles that source's issues
 
 #### Scenario: Existing PR has the same candidate
 
@@ -552,7 +554,8 @@ SHALL show as stale or conflicting until a later run rebuilds it.
 ### Requirement: Source maintenance keeps its credential and source text scoped
 
 The workflow SHALL grant no permissions at workflow level and SHALL perform no
-issue or release operations. Its read-only job SHALL run generation, staging,
+release operations. Its issue operations SHALL be only those of its alert job,
+as maintenance-alerts requires. Its read-only job SHALL run generation, staging,
 tests, building and verification; every step of that job, including checkout
 and runtime setup, SHALL run with a job token limited to reading repository
 contents, and none SHALL receive the write credential. The write credential
@@ -630,7 +633,11 @@ command's report as an artifact for 14 days whenever the report exists, and its
 run summary SHALL show the unreachable and inconclusive URLs with their
 reasons, or the error on a failed check, HTML-escaped inside a preformatted
 block. The job SHALL change no branch, PR or committed file. A deny record
-SHALL reach main only through the owner editing the deny list.
+SHALL reach main only through the owner editing the deny list. A live check
+that cannot run, and each URL that is unreachable or ends in a non-retried
+error status, SHALL be raised as a finding as maintenance-alerts requires, by
+an alert job of the live check's own that is serialized without canceling
+active runs and does not wait on a source's runs.
 
 The job SHALL fail visibly when any URL is unreachable or the check cannot run,
 and SHALL succeed when every URL answered or was only inconclusive. Because each
@@ -641,22 +648,26 @@ again, SHALL stop failing the job on the next run.
 
 - **WHEN** a pack URL returns HTTP 404
 - **THEN** the job fails, its run summary lists that URL with its status, its
-  report is retained, and no branch, PR or committed file changes
+  report is retained, a finding is raised for that URL, and no branch, PR or
+  committed file changes
 
 #### Scenario: Only inconclusive outcomes
 
 - **WHEN** a run finds no unreachable URL but some inconclusive ones
 - **THEN** the job succeeds and its run summary lists those URLs with their
   reasons
+- **AND** a finding is raised only for each URL whose outcome was a
+  non-retried error status
 
 #### Scenario: The check cannot run
 
 - **WHEN** main's committed packs cannot be read
-- **THEN** the job fails, its run summary shows the error, and its report is
-  retained
+- **THEN** the job fails, its run summary shows the error, its report is
+  retained, and a finding is raised for the check that could not run
 
 #### Scenario: The owner denies the project
 
 - **WHEN** the owner commits a denial for an unreachable URL and main's rebuilt
   packs no longer contain it
-- **THEN** the next run does not request that URL and does not fail on it
+- **THEN** the next run does not request that URL, does not fail on it, and
+  closes that URL's issue as completed
