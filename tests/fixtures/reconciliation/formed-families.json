@@ -1,18 +1,4 @@
 {
-  "app:cemu": [
-    [
-      "rjny",
-      "rjny-catalog",
-      "info.cemu.cemu",
-      "github.com/sapphirerhodonite/cemu"
-    ],
-    [
-      "rjny",
-      "rjny-catalog",
-      "info.cemu.cemu",
-      "github.com/ssimco/cemu"
-    ]
-  ],
   "app:dusklight": [
     [
       "bboi",

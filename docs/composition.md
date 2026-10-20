@@ -16,7 +16,7 @@ different families, each covers only the candidates there carrying its
 selector's package id, and any other build at that URL stays in the URL's
 family; that is how melonDS stable and nightly, which RJNY lists at one
 repository, ship as two apps. Rules at different URLs naming one family join
-those URLs, as the Cemu, Minish Cap, CTR and Dusklight rules do. The exported
+those URLs, as the Minish Cap, CTR and Dusklight rules do. The exported
 Obtainium records carry each selected build's package id as its source supplied
 it, or as an overlay patches it; family and source-selection metadata remain
 internal.
@@ -257,7 +257,7 @@ none, the family still ships in single and the build records a single-only
 coverage finding with its single selection's package id and normalized URL.
 This is the usual result of an upstream single-only build and a dual-only fork
 at another repository that share a package id: they no longer pair, and a
-family rule joining the two URLs fixes it, as the Cemu rules do. A
+family rule joining the two URLs fixes it. A
 different-repository replacement in one family satisfies coverage, and an app
 with only a dual-screen build needs no single counterpart. To keep an app out
 of both packs, deny every project URL its family's builds sit at.

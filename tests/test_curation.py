@@ -149,7 +149,9 @@ def test_policies_preserve_existing_entries_and_settings():
                 expected.update(
                     versionExtractionRegEx=r"[0-9]+(?:\.[0-9]+)+", matchGroupToUse="0"
                 )
-            elif old["id"] == "info.cemu.cemu":
+            elif (
+                normalize_project_url(old["url"]) == "github.com/sapphirerhodonite/cemu"
+            ):
                 expected["releaseTitleAsVersion"] = False
             assert json.loads(new["additionalSettings"]) == expected
             expected_record = {
@@ -252,7 +254,8 @@ def test_split_and_joined_families_ship_as_intended(
     current_configuration: CurrentConfiguration,
 ) -> None:
     """melonDS stable and nightly share a repository but ship separately, and
-    Minish Cap and Cemu each ship one build per pack from different repositories.
+    Minish Cap ships one build per pack from different repositories, and Cemu
+    ships the one build RJNY exports, in both packs.
     """
     apps = current_configuration.result.apps
     for variant in Variant:
@@ -267,11 +270,11 @@ def test_split_and_joined_families_ship_as_intended(
         } == {"me.magnum.melonds", "me.magnum.melonds.nightly"}
         assert len(by_family["app:minish-cap"]) == 1
         assert [app.id for app in apps[variant]].count("dev.picori.tmc") == 1
-        assert by_family["app:cemu"] == [
-            "github.com/ssimco/cemu"
-            if variant is Variant.SINGLE
-            else "github.com/sapphirerhodonite/cemu"
-        ]
+        assert [
+            normalize_project_url(app.url)
+            for app in apps[variant]
+            if app.id == "info.cemu.cemu"
+        ] == ["github.com/sapphirerhodonite/cemu"]
 
 
 def test_open_nectar_entries_keep_their_published_id(

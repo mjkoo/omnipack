@@ -215,26 +215,6 @@
       },
       "family": "app:melonds-nightly",
       "rationale": "RJNY lists melonDS stable and nightly at one repository; separate families let both ship."
-    },
-    {
-      "match": {
-        "source": "rjny",
-        "origin": "rjny-catalog",
-        "id": "info.cemu.cemu",
-        "url": "https://github.com/SSimco/Cemu"
-      },
-      "family": "app:cemu",
-      "rationale": "RJNY's single-only SSimco build and its dual-only replacement at another repository are one app."
-    },
-    {
-      "match": {
-        "source": "rjny",
-        "origin": "rjny-catalog",
-        "id": "info.cemu.cemu",
-        "url": "https://github.com/sapphirerhodonite/cemu"
-      },
-      "family": "app:cemu",
-      "rationale": "RJNY's dual-only replacement for the single-only SSimco build at another repository."
     }
   ],
   "pins": [

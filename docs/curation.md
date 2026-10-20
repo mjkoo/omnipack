@@ -112,8 +112,8 @@ from release tags. Obtainium evaluates this extraction; a missing match does
 not block structural pack verification or nightly publication. Symphony's observed tags yield distinct 0.9, 0.9.1, 0.10 and
 0.10.1 versions. This treats trailing `b` as a channel label; a future
 stable/beta pair sharing a numeric version requires revisiting the policy.
-Cemu uses each variant's own release tag (0.5 single, 0.5.2 dual), retaining
-its source URL and asset selection. RPCSX retains v20250425 unchanged.
+Cemu uses its release tag rather than its release title, retaining its source
+URL and asset selection. RPCSX retains v20250425 unchanged.
 
 CTR, Shipwright, Citron, Vita3K, XenDroid, Ludashi, Cmod and Mjolnir explicitly
 set only `versionDetection: false`. Their complete source versions remain
