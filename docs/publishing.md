@@ -6,11 +6,11 @@ dispatched manually with no inputs. Both paths run only for `mjkoo/omnipack`
 on `main`; a dispatch from another ref, or a run in a fork, does not publish.
 One `omnipack-nightly-publisher` concurrency group serializes runs without
 canceling one already in progress. The workflow runs two jobs in sequence,
-each limited to 60 minutes, so a run can take about 120 minutes end to end,
-then an `alert` job that raises and clears
-[maintenance alert](alerts.md) issues from their findings.
-Scheduling is best effort: GitHub does not guarantee an exact start time or
-execution of every queued trigger.
+each limited to 60 minutes, so they can take about 120 minutes end to end. An
+`alert` job limited to 10 minutes then raises and clears
+[maintenance alert](alerts.md) issues from their findings. Scheduling is best
+effort: GitHub does not guarantee an exact start time or execution of every
+queued trigger.
 
 ## Two-job flow and credential split
 
@@ -99,12 +99,12 @@ module starts with `from __future__ import annotations` so that no
 annotation is evaluated at import time, and `pyproject.toml` pins their ruff
 target to `py312`. `just check-py312` runs the tests of the write jobs'
 scripts (`tests/test_alerts.py`, `tests/test_nightly_write.py`,
-`tests/test_source_proposal.py` and `tests/test_workflow_support.py`) under a real CPython 3.12, without the
-project environment, since ruff alone cannot catch a 3.13-or-later
-standard-library API or an annotation-evaluation difference. Locally it
-uses `python312` from the `nixpkgs` this repository's flake pins; CI's
-`check` job runs `just check-py312 /usr/bin/python3` against the runner's
-own interpreter.
+`tests/test_source_proposal.py` and `tests/test_workflow_support.py`) under a
+real CPython 3.12, without the project environment, since ruff alone cannot
+catch a 3.13-or-later standard-library API or an annotation-evaluation
+difference. Locally it uses `python312` from the `nixpkgs` this repository's
+flake pins; CI's `check` job runs `just check-py312 /usr/bin/python3` against
+the runner's own interpreter.
 
 Every git command the write job's scripts run adds `-c core.hooksPath=/dev/null`,
 even though the write job's checkout is fresh and runs no project code before
@@ -115,10 +115,9 @@ that installs a hook.
 
 The workflow grants no permissions at workflow level; `prepare` holds
 `contents: read`, `publish` holds `contents: write`, and `alert` holds only
-`issues: write`. `publish` pushes with
-the ordinary job token (`${{ github.token }}`), handed to `git` through
-`gh auth setup-git`, so there is no personal access token and no automatic
-change to repository settings.
+`issues: write`. `publish` pushes with the ordinary job token
+(`${{ github.token }}`), handed to `git` through `gh auth setup-git`, so there
+is no personal access token and no automatic change to repository settings.
 
 Before relying on nightly publishing, confirm that:
 

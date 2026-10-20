@@ -81,7 +81,7 @@ class PrepareOutcome:
 
     `stage` names the failing stage on failure, or `"complete"` otherwise.
     `started` lists every stage the run began, in order: a no-op lists neither
-    `commit` nor `bundle`, and a failure ends with the failing stage.
+    `commit` nor `bundle`, and a failure includes the failing stage.
     """
 
     status: PrepareStatus

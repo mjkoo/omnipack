@@ -15,21 +15,22 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
 | `live-check` (`live-check`) | Packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403 |
 
-A job that fails or is cancelled without any of the above accounting for it
-(for example `uv sync` failing, a download failing, or the findings file
-missing or invalid) raises that owner's early-failure finding, titled
-"<owner> job failed without reporting findings".
+Each owner also has an early-failure finding, titled "<owner> job failed
+without reporting findings". A cancelled job raises only that finding and
+closes nothing. A failed job that nothing above accounts for, such as one whose
+`uv sync` failed, raises it too, and so does any job whose findings file is
+missing or invalid, for example because its upload or the download failed.
 
 What does not raise a finding:
 
 - A push, release or proposal publication refused because `main` advanced. It
   self-heals on the next run.
 - Routine screening results, such as the listings a source skips.
-- Live-check outcomes with no usable status: a retried status after retries
-  (429, server errors), a timeout, a connection failure, or URLs left
-  unchecked when the budget runs out. Malformed request settings land here
-  too. Such a URL neither raises nor closes anything, so an existing issue for
-  it stays as it is.
+- Live-check outcomes with no usable status: one of the statuses the client
+  retries (408, 425, 429, 500, 502, 503, 504) after its retries, a timeout, a
+  connection failure, or URLs left unchecked when the budget runs out.
+  Malformed request settings land here too. Such a URL neither raises nor
+  closes anything, so an existing issue for it stays as it is.
 - A skipped job, such as nightly `publish` after `prepare` failed. A `publish`
   job whose upstream did not succeed never started, so it counts as skipped
   even when Actions reports it as failed or cancelled.
@@ -86,10 +87,10 @@ A run closes only what it re-checked. Each key is in scope only when the stage
 or step it names actually ran: a failed `prepare` does not close a release
 issue, a failed generation does not close a verification issue, and build
 warnings count as re-checked only when the build report records success. For
-live check, the report must be a successful one, and URLs the budget left
-unchecked or that came back inconclusive without a status are left alone, so a
-host alternating between 403 and a timeout does not open and close an issue
-each night. A URL no longer in the packs does close.
+live check, URL keys are re-checked only by a successful report, and URLs the
+budget left unchecked or that came back inconclusive without a status are left
+alone, so a host alternating between 403 and a timeout does not open and close
+an issue each night. A URL no longer in the packs does close.
 
 ## Muting an issue
 
@@ -134,7 +135,7 @@ recurrence reopens the issue.
 ## Security
 
 Findings files are written next to upstream-derived data, so they are treated
-as untrusted. The alert job holds only `issues: write`, checks out only
-`scripts/`, and renders detail lines HTML-escaped inside `<pre>` within the
-issue size limit. See [nightly publishing](publishing.md) and
+as untrusted. The alert job holds only `issues: write`, runs from a sparse
+checkout of `scripts/`, and renders detail lines HTML-escaped inside `<pre>`
+within the issue size limit. See [nightly publishing](publishing.md) and
 [source generation](source-generation.md) for the producing jobs.
