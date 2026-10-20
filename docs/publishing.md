@@ -237,10 +237,12 @@ and `release` requires it to report `HEAD` (the pushed commit, or the base
 for a no-op). Either check failing means a push landed on `main` after this
 run's `prepare` checked out its revision. That push may be another run's, or
 this run's own: a write job re-run after its push landed finds `main` at its
-candidate, not its base. In either case the write
-job fails without writing anything: `push` summarizes
-`push failed for <sha>: main advanced`, and `release` summarizes
-`release failed: main advanced` with no bootstrap guidance. Re-running that
+candidate, not its base. In either case the write job fails without writing
+anything: `push` summarizes `push failed for <sha>: main advanced`, and
+`release` summarizes `release failed: main advanced` with no bootstrap
+guidance. A push that `git push` rejects because another push landed after
+the check is reported the same way, since `push` re-reads remote `main` after a
+rejected push and finds it past the base. Re-running that
 same failed job reuses the same stale checkout and stale `prepare` outputs,
 so it fails the same way again; a new workflow dispatch is what builds and
 verifies the newer `main` and lets that newer run publish or synchronize it.
