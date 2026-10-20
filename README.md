@@ -6,9 +6,6 @@
 Curated Obtainium app collections, combining several upstream catalogs with
 hand-added apps and choosing a suitable build for your device.
 
-For the Super Metroid dual-screen companion, see [MetroidArch setup](docs/metroidarch.md).
-It needs separate writable directories to avoid sharing saves and remaps with RetroArch.
-
 ## Install
 
 1. **Install [Obtainium](https://obtainium.imranr.dev/)** on your Android device.
@@ -19,7 +16,9 @@ It needs separate writable directories to avoid sharing saves and remaps with Re
    import**, and select the downloaded `.json` file.
 4. **Install the apps you want.** Open an imported app in Obtainium and tap
    **Install**. Importing the pack adds app configurations; it does not install
-   every app automatically.
+   every app automatically. Many ports need game data you supply; see
+   [app notes](docs/app-notes.md) for that and for apps the pack configures
+   unusually.
 
 The catalog below also provides individual app configurations. An **Add to
 Obtainium** link opens an import confirmation; after confirming, install the app
