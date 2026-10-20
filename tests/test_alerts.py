@@ -513,7 +513,7 @@ def test_muted_403_does_not_hide_a_later_404(tmp_path: Path) -> None:
 
     _run(gh, Producer(LIVE_CHECK, path, "success"))
 
-    assert _verbs(gh)[0] == ("create", "gone")
+    assert _verbs(gh) == [("create", "gone"), ("reopen", "7"), ("close", "7")]
 
 
 def test_key_outside_scope_or_unchecked_is_left_unchanged(tmp_path: Path) -> None:
@@ -1111,6 +1111,20 @@ def test_prepare_failing_at_build_leaves_later_stages_out_of_scope(
     assert file.findings[0].title == "Nightly preparation failed at the build stage"
 
 
+def test_prepare_reporting_only_a_later_stage_leaves_checkout_out_of_scope(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        NIGHTLY_PREPARE,
+        "failure",
+        tmp_path=tmp_path,
+        PREPARE_STAGE="build",
+        PREPARE_STAGES="build",
+    )
+
+    assert file.scope == ("nightly/prepare/build",)
+
+
 def test_stage_with_spaces_maps_through_its_slug(tmp_path: Path) -> None:
     file = _emit(
         NIGHTLY_PREPARE,
@@ -1284,6 +1298,13 @@ def test_main_advanced_raises_nothing_and_leaves_its_key_out_of_scope() -> None:
 
     assert file.findings == ()
     assert file.scope == ()
+
+
+@pytest.mark.parametrize("owner", [CODM_PUBLISH, QUIVER_PUBLISH], ids=str)
+def test_source_publish_refused_as_main_advanced_raises_nothing(owner: Owner) -> None:
+    file = _emit(owner, "failure", PUBLISH_OUTCOME="main-advanced")
+
+    assert file == FindingsFile(owner)
 
 
 def test_release_main_advanced_after_an_ok_push_scopes_only_the_push() -> None:
@@ -1486,18 +1507,20 @@ def test_budget_spent_urls_are_unchecked(tmp_path: Path) -> None:
     assert "live-check/status/https://a.example/x" in file.unchecked
 
 
-def test_a_url_absent_from_the_report_falls_in_scope(tmp_path: Path) -> None:
+def test_a_url_absent_from_the_report_closes_its_issue(tmp_path: Path) -> None:
     file = _emit(
         LIVE_CHECK,
         report=_live_report(),
         tmp_path=tmp_path,
         CHECK_RESULT="success",
     )
+    path = tmp_path / "live.json"
+    path.write_text(file.to_json())
+    gh = _gh([_issue(3, "live-check/gone/https://removed.example/x")])
 
-    assert alerts_module._in_scope(
-        "live-check/gone/https://removed.example/x", file.scope
-    )
-    assert file.unchecked == ()
+    _run(gh, Producer(LIVE_CHECK, path, "success"))
+
+    assert _verbs(gh) == [("close", "3")]
 
 
 def test_unreadable_packs_raise_the_read_finding_and_scope_only_it(
