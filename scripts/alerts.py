@@ -16,6 +16,7 @@ import os
 import re
 import sys
 import tempfile
+import unicodedata
 from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from hashlib import sha256
@@ -60,7 +61,7 @@ _MARKER_SUFFIX = " -->"
 _MARKER = re.compile(re.escape(_MARKER_PREFIX) + r"(\S+)" + re.escape(_MARKER_SUFFIX))
 _RUN_LINE = "\nRun: "
 _ALREADY_EXISTS = "already exists"
-_MUTE_REASONS = frozenset({"not_planned", "duplicate"})
+_MUTE_REASONS = frozenset({"not_planned"})
 EARLY_FAILURE_SLUG = "run"
 _SEE_RUN = "See the workflow run linked below for the failing step."
 
@@ -270,12 +271,23 @@ def valid_key(owner: Owner, key: object) -> bool:
     )
 
 
+def _encodable(text: str) -> bool:
+    """Whether `text` encodes as UTF-8, which a lone surrogate does not."""
+    try:
+        text.encode("utf-8")
+    except UnicodeEncodeError:
+        return False
+    return True
+
+
 def _valid_title(title: object) -> bool:
+    # A title is a `gh` argument, which cannot carry a NUL, and GitHub keeps it
+    # as one line, so no control character is allowed.
     return (
         isinstance(title, str)
         and 0 < len(title) <= TITLE_LIMIT
-        and "\n" not in title
-        and "\r" not in title
+        and _encodable(title)
+        and not any(unicodedata.category(char) == "Cc" for char in title)
         and title == title.strip()
     )
 
@@ -307,7 +319,7 @@ def parse_findings(owner: Owner, text: str) -> FindingsFile | None:
         if not valid_key(owner, key) or not _valid_title(title):
             return None
         if not isinstance(details, list) or not all(
-            isinstance(line, str) for line in details
+            isinstance(line, str) and _encodable(line) for line in details
         ):
             return None
         findings.setdefault(key, Finding(key, title, tuple(details)))
@@ -613,8 +625,15 @@ _SKIPPED_WHEN_UNCHANGED: tuple[ValidationStep, ...] = VALIDATION_STEPS[2:]
 
 
 def _one_line(text: str) -> str:
-    """`text` as one trimmed line, the shape GitHub keeps a title in."""
-    return " ".join(text.split())
+    """`text` as one trimmed line, the shape GitHub keeps a title in.
+
+    Control characters split words like whitespace, so no title carries one.
+    """
+    return " ".join(
+        "".join(
+            " " if unicodedata.category(char) == "Cc" else char for char in text
+        ).split()
+    )
 
 
 def _finding(key: str, title: str, details: Sequence[str]) -> Finding:
@@ -632,7 +651,8 @@ def _finish(
 ) -> FindingsFile:
     """The owner's file, adding its early-failure finding for a failed job that
     nothing else accounts for, and keeping only that finding for a cancelled one."""
-    status = parse_step_outcome(require_env(environ, "JOB_STATUS"))
+    # An unrecognized status counts as a failure, so it cannot hide one.
+    status = parse_step_outcome(require_env(environ, "JOB_STATUS")) or "failure"
     if status == "cancelled":
         return FindingsFile(owner, findings=(early_failure_finding(owner),))
     raised = {finding.key: finding for finding in findings}

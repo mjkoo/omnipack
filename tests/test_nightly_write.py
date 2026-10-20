@@ -909,3 +909,24 @@ def test_repaired_release_is_ok(tmp_path: Path) -> None:
     repaired = run_release(root, gh=_release_gh(view=_valid_release(sha, assets=[])))
 
     assert (repaired.status, repaired.outcome) == ("repaired", "ok")
+
+
+@pytest.mark.parametrize(
+    "command", [["push", "--bundle", "absent.bundle"], ["release"]]
+)
+def test_outcome_output_is_written_before_the_summary(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, command: list[str]
+) -> None:
+    output_path = tmp_path / "output.txt"
+    unwritable_summary = tmp_path / "summary"
+    unwritable_summary.mkdir()
+    monkeypatch.setenv("GITHUB_OUTPUT", str(output_path))
+    monkeypatch.setenv("GITHUB_STEP_SUMMARY", str(unwritable_summary))
+    monkeypatch.delenv("CANDIDATE_SHA", raising=False)
+    monkeypatch.setattr(write_module, "SubprocessGhRunner", lambda: FakeGh({}))
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(OSError):
+        write_module.main(command)
+
+    assert output_path.read_text() == "outcome=failed\n"

@@ -366,13 +366,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             environ.get("CANDIDATE_SHA", ""),
             environ.get("BASE_SHA", ""),
         )
-        append_summary(environ, outcome.summary + "\n")
+        # The outcome goes first, so a failed summary write cannot hide it.
         write_outcome_output(environ, outcome.outcome)
+        append_summary(environ, outcome.summary + "\n")
         return 0 if outcome.status == "published" else 1
 
     outcome = run_release(Path.cwd())
-    append_summary(environ, outcome.summary + "\n")
     write_outcome_output(environ, outcome.outcome)
+    append_summary(environ, outcome.summary + "\n")
     return 0 if outcome.status != "failed" else 1
 
 

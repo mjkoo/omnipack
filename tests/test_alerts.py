@@ -450,17 +450,8 @@ def test_mute_survives_a_run_that_did_not_re_check_the_key(tmp_path: Path) -> No
     assert _verbs(gh) == []
 
 
-def test_duplicate_closure_is_a_mute(tmp_path: Path) -> None:
-    path = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
-    gh = _gh([_issue(7, NIGHTLY_STAGE, state="closed", reason="duplicate")])
-
-    _run(gh, _nightly(path))
-
-    assert _verbs(gh) == [("reopen", "7"), ("close", "7")]
-
-
-@pytest.mark.parametrize("reason", ["completed", None])
-def test_completed_or_unreasoned_closures_reopen_when_raised(
+@pytest.mark.parametrize("reason", ["completed", "duplicate", None])
+def test_completed_duplicate_or_unreasoned_closures_reopen_when_raised(
     tmp_path: Path, reason: str | None
 ) -> None:
     path = _file(
@@ -744,6 +735,37 @@ def test_pathologically_nested_file_is_rejected_with_the_early_failure(
     assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
 
 
+@pytest.mark.parametrize(
+    "entry",
+    [
+        _entry(NIGHTLY_STAGE, title="a\x00b"),
+        _entry(NIGHTLY_STAGE, title="bell\x07"),
+        _entry(NIGHTLY_STAGE, title="half \ud800 pair"),
+        _entry(NIGHTLY_STAGE, details=["half \udfff pair"]),
+    ],
+    ids=["nul-title", "control-title", "surrogate-title", "surrogate-detail"],
+)
+def test_text_gh_cannot_carry_rejects_the_file_with_the_early_failure(
+    tmp_path: Path, entry: dict[str, object]
+) -> None:
+    path = tmp_path / "findings.json"
+    path.write_text(
+        json.dumps(
+            {
+                "owner": NIGHTLY_PREPARE.value,
+                "scope": [NIGHTLY_STAGE],
+                "unchecked": [],
+                "findings": [entry],
+            }
+        )
+    )
+    gh = _gh([_issue(1, NIGHTLY_STAGE), _issue(2, "codm/check/verify")])
+
+    _run(gh, _nightly(path))
+
+    assert _verbs(gh) == [("create", early_failure_finding(NIGHTLY_PREPARE).title)]
+
+
 def test_symlinked_findings_file_is_rejected(tmp_path: Path) -> None:
     real = _file(tmp_path, NIGHTLY_PREPARE, scope=(NIGHTLY_STAGE,))
     link = tmp_path / "link.json"
@@ -1013,6 +1035,13 @@ def _build_report(status: str = "success", **lists: list) -> dict:
         "staleCategoryAssignments": [],
         **lists,
     }
+
+
+@pytest.mark.parametrize("owner", [NIGHTLY_PUBLISH, CODM_CHECK], ids=str)
+def test_an_unrecognized_job_status_counts_as_failure(owner: Owner) -> None:
+    file = _emit(owner, "bogus")
+
+    assert _keys(file) == _early(owner)
 
 
 def test_emit_requires_the_job_status() -> None:
@@ -1640,6 +1669,7 @@ def test_multiline_and_padded_subjects_give_one_line_trimmed_titles(
                 {"family": "  two\nlines\r\n ", "variants": []},
                 {"family": "", "variants": []},
                 {"family": "x" * 400, "variants": []},
+                {"family": "nul\x00bell\x07", "variants": []},
             ]
         ),
         tmp_path=tmp_path,
@@ -1648,6 +1678,7 @@ def test_multiline_and_padded_subjects_give_one_line_trimmed_titles(
     )
 
     assert file.findings[0].title == "Family has no category: two lines"
+    assert file.findings[3].title == "Family has no category: nul bell"
     assert file.findings[1].title == "Family has no category:"
     assert file.findings[2].title.endswith("…")
     assert all(f.title == f.title.strip() for f in file.findings)

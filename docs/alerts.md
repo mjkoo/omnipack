@@ -93,13 +93,13 @@ each night. A URL no longer in the packs does close.
 
 ## Muting an issue
 
-Close an issue as not planned (or as a duplicate) to mute it: while the
-finding keeps recurring, the issue stays closed and silent. The mute lasts one
-occurrence. The first run that re-checks the key and does not raise it reopens
-the issue and closes it as completed with the comment "Cleared in run <url>";
-a later recurrence then reopens it as usual. A run that did not re-check the
-key leaves the mute in place. Closing as completed does not mute: a recurrence
-reopens the issue.
+Close an issue as not planned to mute it: while the finding keeps recurring,
+the issue stays closed and silent. The mute lasts one occurrence. The first run
+that re-checks the key and does not raise it reopens the issue and closes it as
+completed with the comment "Cleared in run <url>"; a later recurrence then
+reopens it as usual. A run that did not re-check the key leaves the mute in
+place. Any other closure, as completed or as a duplicate, does not mute: a
+recurrence reopens the issue.
 
 ## Residual risks
 
