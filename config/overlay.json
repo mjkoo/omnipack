@@ -328,14 +328,6 @@
     }
   },
   {
-    "url": "https://github.com/SSimco/Cemu",
-    "patch": {
-      "additionalSettings": {
-        "releaseTitleAsVersion": false
-      }
-    }
-  },
-  {
     "url": "https://github.com/SSunnKing/Open-Nectar---Pikmin-Native-PC-Port",
     "patch": {
       "id": "org.opennectar"
