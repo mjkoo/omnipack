@@ -301,6 +301,17 @@ def test_body_truncates_to_the_limit_counting_the_rest() -> None:
     assert body.endswith(f"Run: {RUN_1}")
 
 
+def test_overflowing_body_keeps_the_same_details_whatever_the_run_url() -> None:
+    details = tuple("x" * 9 for _ in range(10_000))
+    finding = Finding(CODM_STEP, "t", details)
+
+    short = build_body(finding, RUN_1)
+    long = build_body(finding, RUN_1.replace("/1", "/" + "9" * 20))
+
+    assert len(long) <= BODY_LIMIT
+    assert short.rsplit("Run: ", 1)[0] == long.rsplit("Run: ", 1)[0]
+
+
 # --- lifecycle -------------------------------------------------------------
 
 

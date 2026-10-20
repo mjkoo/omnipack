@@ -60,6 +60,10 @@ _MARKER_PREFIX = "<!-- omnipack-alert-key: "
 _MARKER_SUFFIX = " -->"
 _MARKER = re.compile(re.escape(_MARKER_PREFIX) + r"(\S+)" + re.escape(_MARKER_SUFFIX))
 _RUN_LINE = "\nRun: "
+# The room a body keeps for its run line, which fits any GitHub run URL. The
+# details budget is fixed by it rather than by the current URL, so a run ID
+# with more digits cannot drop a detail line and force an edit.
+_RUN_LINE_RESERVE = 512
 _ALREADY_EXISTS = "already exists"
 _MUTE_REASONS = frozenset({"not_planned"})
 EARLY_FAILURE_SLUG = "run"
@@ -337,7 +341,7 @@ def build_body(finding: Finding, url: str) -> str:
         [marker_line(finding.key)],
         [],
         [(None, finding.details)],
-        limit=BODY_LIMIT - len(run_line),
+        limit=BODY_LIMIT - max(len(run_line), _RUN_LINE_RESERVE),
     )
     return core + run_line
 
