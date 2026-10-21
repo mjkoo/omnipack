@@ -631,16 +631,19 @@ job's timeout SHALL be 30 minutes, above the command's own time budget, so the
 command's report is written before the job is stopped. The job SHALL retain the
 command's report as an artifact for 14 days whenever the report exists, and its
 run summary SHALL show the unreachable and inconclusive URLs with their
-reasons, or the error on a failed check, HTML-escaped inside a preformatted
+reasons, the stale and archived URLs, and the health-inconclusive URLs with
+their reasons, or the error on a failed check, HTML-escaped inside a preformatted
 block. The job SHALL change no branch, PR or committed file. A deny record
 SHALL reach main only through the owner editing the deny list. A live check
-that cannot run, and each URL that is unreachable or ends in a non-retried
-error status, SHALL be raised as a finding as maintenance-alerts requires, by
+that cannot run, each URL that is unreachable or ends in a non-retried
+error status, and each URL reported stale or archived, SHALL be raised as a
+finding as maintenance-alerts requires, by
 an alert job of the live check's own that is serialized without canceling
 active runs and does not wait on a source's runs.
 
 The job SHALL fail visibly when any URL is unreachable or the check cannot run,
-and SHALL succeed when every URL answered or was only inconclusive. Because each
+and SHALL succeed when every URL answered or was only inconclusive, whatever its
+health result. Because each
 run checks main's packs afresh, a project the owner denies, or that answers
 again, SHALL stop failing the job on the next run.
 
@@ -656,8 +659,9 @@ again, SHALL stop failing the job on the next run.
 - **WHEN** a run finds no unreachable URL but some inconclusive ones
 - **THEN** the job succeeds and its run summary lists those URLs with their
   reasons
-- **AND** a finding is raised only for each URL whose outcome was a
-  non-retried error status
+- **AND** a reachability finding is raised only for each URL whose outcome
+  was a non-retried error status, and stale and archived findings follow each
+  URL's health result
 
 #### Scenario: The check cannot run
 
