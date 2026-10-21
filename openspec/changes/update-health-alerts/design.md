@@ -116,9 +116,10 @@ The run summary gains three sections in the same escaped `<pre>` block.
 
 **Alert mapping.** It adds the prefixes `LIVE_STALE = "live-check/stale/"` and
 `LIVE_ARCHIVED = "live-check/archived/"`, added to the scope whenever the
-report status is success. For each `healthInconclusive` URL, each
-`unreachable` URL and each inconclusive URL with the time-budget reason, both
-health keys go in `unchecked`. Every other health key under the two prefixes
+report status is success. For each `healthInconclusive` URL and each
+`unreachable` URL, both health keys go in `unchecked`. A GitHub URL the time
+budget cut is covered without matching its reason text, since the check lists
+it as health-inconclusive. Every other health key under the two prefixes
 counts as re-checked, including the keys of a URL no longer in the packs, so
 its stale and archived issues are closed. That leaves health keys unchecked
 only for URLs the lookup never reached or could not finish, as the spec
@@ -148,7 +149,8 @@ without a monotonic clock, which only measures the budget.
   jobs in the repository] -> One run uses about two per GitHub project, a
   little over 200. A limit that is spent
   reads as health-inconclusive, which raises and closes nothing.
-- [A first run opens about 17 issues] -> Expected and documented. The owner
+- [A first run opens an issue per dormant or archived project] -> Expected
+  and documented. The owner
   mutes each dormant upstream once, by closing its issue as not planned.
 - [The heuristic differs from Obtainium for entries whose APK filter rejects
   every recent APK] -> The URL reads as fresh here while Obtainium has
