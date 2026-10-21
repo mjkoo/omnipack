@@ -183,6 +183,16 @@ def _is_transient(error: OSError | HTTPException) -> bool:
     }
 
 
+def failure_reason(error: Exception) -> str:
+    """Name a failure's cause: the last attempt's HTTP status when it got one,
+    otherwise the failure's own message."""
+    if isinstance(error, HttpStatusError):
+        return f"HTTP {error.status}"
+    if isinstance(error, TransientHttpError):
+        return f"HTTP {error.status}" if error.status is not None else error.detail
+    return str(error) or type(error).__name__
+
+
 def redact_url(url: str) -> str:
     """Remove user information and query values from a diagnostic URL."""
     parsed = urlsplit(url)

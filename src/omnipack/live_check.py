@@ -20,7 +20,8 @@ from pathlib import Path
 from typing import NotRequired, TypedDict
 
 from omnipack.build import OUTPUTS
-from omnipack.http import HttpClient, HttpError, HttpStatusError, TransientHttpError
+from omnipack.forge_health import decode_settings
+from omnipack.http import HttpClient, HttpError, HttpStatusError, failure_reason
 from omnipack.model import Variant
 from omnipack.report_model import Status
 from omnipack.strict_json import reject_duplicate_keys
@@ -114,7 +115,7 @@ def check_live(
                 )
         except (HttpError, ValueError) as error:
             report["inconclusive"].append(
-                {"url": target.url, "reason": _failure_reason(error)}
+                {"url": target.url, "reason": failure_reason(error)}
             )
     report["status"] = Status.SUCCESS
     return report
@@ -152,20 +153,10 @@ def request_headers(settings: object) -> dict[str, str]:
 
     `settings` is the entry's `additionalSettings`, a JSON-encoded object in
     the committed packs. Each line is split at its first colon. Raises
-    `RequestHeaderError` naming the problem when the settings or a line are
-    malformed.
+    `SettingsError` or `RequestHeaderError` naming the problem when the
+    settings or a line are malformed.
     """
-    if not isinstance(settings, str):
-        raise RequestHeaderError("additionalSettings is not a JSON string")
-    try:
-        decoded = json.loads(settings)
-    except ValueError as error:
-        raise RequestHeaderError(
-            f"additionalSettings is not valid JSON: {error}"
-        ) from error
-    if not isinstance(decoded, dict):
-        raise RequestHeaderError("additionalSettings is not a JSON object")
-    lines = decoded.get("requestHeader")
+    lines = decode_settings(settings).get("requestHeader")
     if lines is None:
         return {}
     if not isinstance(lines, list) or not all(
@@ -185,14 +176,6 @@ def request_headers(settings: object) -> dict[str, str]:
             )
         headers[name.strip()] = value.strip()
     return headers
-
-
-def _failure_reason(error: Exception) -> str:
-    """Name a failure's cause: the last attempt's HTTP status when it got one,
-    otherwise the failure's own message."""
-    if isinstance(error, TransientHttpError):
-        return f"HTTP {error.status}" if error.status is not None else error.detail
-    return str(error) or type(error).__name__
 
 
 def render_summary(report: LiveCheckReport) -> str:
