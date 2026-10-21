@@ -8,6 +8,8 @@ periodically, by hand or with an agent sweep using the project's
 of the project) and remove it here. Drop an entry that is abandoned or rejected;
 a rejected app needs a `config/deny.json` denial only when a catalog actually
 brings it in.
+Declined apps that a later search could find again are listed at the end, so
+they are not re-proposed unless something material changes.
 
 ## No trackable Android build
 
@@ -51,3 +53,15 @@ brings it in.
   for it: a smaller feature set, a short AI-written history, and accessibility
   service plus Shizuku access. Promote as an optional alternative to Wayfinder
   once it has a sustained release history and outside use.
+
+## Declined
+
+- **Jet Force Gemini recomp** - https://github.com/TK22-26/JetForceGemini-Recomp.
+  Windows only.
+- **Pokemon Emerald 3DS** - https://github.com/ZallaxDev/emerald-3ds. Nintendo
+  3DS homebrew; no Android app.
+- **Pokemon Odyssey** - a FireRed ROM hack distributed as a patch, not an app.
+- **Repugnant Bounty** - a commercial Game Boy Color ROM; no Android app.
+- **Vita3K-Plus** - https://github.com/nckstwrt/Vita3K-Plus. Declares the same
+  package id as the official Vita3K entry, so both cannot be in a pack, and it
+  does not follow upstream.
