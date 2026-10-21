@@ -917,7 +917,7 @@ def test_cli_exits_zero_on_stale_and_archived_projects(
     assert [item["url"] for item in report["stale"]] == ["https://github.com/a/old"]
 
 
-@pytest.mark.parametrize("token", ["secret", None])
+@pytest.mark.parametrize("token", ["secret", "", None])
 def test_cli_passes_the_environment_token_to_the_api(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch, token: str | None
 ) -> None:
@@ -934,5 +934,5 @@ def test_cli_passes_the_environment_token_to_the_api(
     page, *lookups = transport.requests
     assert page.get_header("Authorization") is None
     assert [request.get_header("Authorization") for request in lookups] == [
-        None if token is None else f"Bearer {token}"
+        f"Bearer {token}" if token else None
     ] * 2

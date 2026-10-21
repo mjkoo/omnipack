@@ -1444,7 +1444,207 @@ LIVE_ENV = {"CHECK_RESULT": "failure"}
 
 
 def _live_report(**overrides: object) -> dict:
-    return {"status": "success", "unreachable": [], "inconclusive": [], **overrides}
+    return {
+        "status": "success",
+        "unreachable": [],
+        "inconclusive": [],
+        "stale": [],
+        "archived": [],
+        "healthInconclusive": [],
+        **overrides,
+    }
+
+
+def _reconcile_live(tmp_path: Path, report: dict, issues: list[dict]) -> FakeGh:
+    """Emit the live-check findings for `report` and reconcile them."""
+    file = _emit(LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success")
+    path = tmp_path / "live.json"
+    path.write_text(file.to_json())
+    gh = alert_gh(issues)
+    _run(gh, Producer(LIVE_CHECK, path, "success"))
+    return gh
+
+
+def test_stale_and_archived_urls_raise_health_findings(tmp_path: Path) -> None:
+    report = _live_report(
+        stale=[
+            {
+                "url": "https://github.com/a/old",
+                "name": "Old App",
+                "tag": "v1.0",
+                "date": "2026-01-02",
+            },
+            {"url": "https://github.com/a/none", "name": "No APK"},
+        ],
+        archived=[{"url": "https://github.com/a/shut", "name": "Shut"}],
+        healthInconclusive=[
+            {"url": "https://github.com/a/limited", "name": "Q", "reason": "HTTP 403"}
+        ],
+    )
+
+    file = _emit(LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success")
+
+    assert [(f.key, f.title, f.details) for f in file.findings] == [
+        (
+            "live-check/stale/https://github.com/a/old",
+            (
+                "Project has had no qualifying release in 180 days: "
+                "https://github.com/a/old"
+            ),
+            (
+                "URL: https://github.com/a/old",
+                "Entry: Old App",
+                "Newest qualifying release: v1.0 (2026-01-02)",
+            ),
+        ),
+        (
+            "live-check/stale/https://github.com/a/none",
+            "Project has no qualifying release: https://github.com/a/none",
+            (
+                "URL: https://github.com/a/none",
+                "Entry: No APK",
+                "No release qualified.",
+            ),
+        ),
+        (
+            "live-check/archived/https://github.com/a/shut",
+            "Project repository is archived: https://github.com/a/shut",
+            ("URL: https://github.com/a/shut", "Entry: Shut"),
+        ),
+    ]
+    assert file.scope == (
+        "live-check/read",
+        "live-check/gone/",
+        "live-check/status/",
+        "live-check/stale/",
+        "live-check/archived/",
+    )
+    assert file.unchecked == (
+        "live-check/stale/https://github.com/a/limited",
+        "live-check/archived/https://github.com/a/limited",
+    )
+
+
+def test_health_findings_do_not_account_for_a_failed_live_check_job(
+    tmp_path: Path,
+) -> None:
+    report = _live_report(
+        stale=[{"url": "https://github.com/a/old", "name": "Old"}],
+        archived=[{"url": "https://github.com/a/old", "name": "Old"}],
+    )
+
+    file = _emit(LIVE_CHECK, "failure", report=report, tmp_path=tmp_path, **LIVE_ENV)
+
+    assert _keys(file) == [
+        "live-check/stale/https://github.com/a/old",
+        "live-check/archived/https://github.com/a/old",
+        *_early(LIVE_CHECK),
+    ]
+
+
+def test_health_findings_follow_health_alone(tmp_path: Path) -> None:
+    url = "https://github.com/a/slow"
+    report = _live_report(
+        inconclusive=[{"url": url, "reason": "timed out"}],
+        stale=[{"url": url, "name": "Slow"}],
+    )
+
+    file = _emit(LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success")
+
+    assert _keys(file) == [f"live-check/stale/{url}"]
+    assert file.unchecked == (f"live-check/gone/{url}", f"live-check/status/{url}")
+
+
+def test_a_blocked_page_with_a_rate_limited_lookup_keeps_its_health_issues(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/a/blocked"
+    report = _live_report(
+        inconclusive=[{"url": url, "reason": "HTTP 403", "status": 403}],
+        healthInconclusive=[{"url": url, "name": "B", "reason": "HTTP 403"}],
+    )
+
+    gh = _reconcile_live(
+        tmp_path,
+        report,
+        [
+            alert_issue(1, f"live-check/stale/{url}"),
+            alert_issue(2, f"live-check/archived/{url}"),
+        ],
+    )
+
+    assert issue_writes(gh) == [("create", f"Project URL answers HTTP 403: {url}")]
+
+
+def test_a_rate_limited_lookup_leaves_an_open_stale_issue_unchanged(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/a/app"
+    report = _live_report(
+        healthInconclusive=[{"url": url, "name": "App", "reason": "HTTP 429"}]
+    )
+
+    gh = _reconcile_live(tmp_path, report, [alert_issue(1, f"live-check/stale/{url}")])
+
+    assert issue_writes(gh) == []
+
+
+def test_unreachable_urls_leave_their_health_issues_unchanged(tmp_path: Path) -> None:
+    url = "https://github.com/a/gone"
+    report = _live_report(unreachable=[{"url": url, "status": 404}])
+
+    file = _emit(LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success")
+
+    assert file.unchecked == (
+        f"live-check/stale/{url}",
+        f"live-check/archived/{url}",
+    )
+
+
+def test_a_muted_stale_issue_clears_on_a_fresh_release(tmp_path: Path) -> None:
+    url = "https://github.com/a/app"
+    muted = alert_issue(
+        1, f"live-check/stale/{url}", state="closed", reason="not_planned"
+    )
+
+    gh = _reconcile_live(tmp_path, _live_report(), [muted])
+
+    assert issue_writes(gh) == [("reopen", "1"), ("close", "1")]
+    close = next(call for call in gh.calls if call[:2] == ("issue", "close"))
+    assert close[close.index("--reason") + 1] == "completed"
+    assert close[close.index("--comment") + 1] == f"Cleared in run {RUN_2}"
+
+
+def test_health_issues_of_a_url_that_left_the_packs_are_closed(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/a/denied"
+    issues = [
+        alert_issue(1, f"live-check/stale/{url}"),
+        alert_issue(2, f"live-check/archived/{url}"),
+        alert_issue(
+            3, f"live-check/stale/{url}x", state="closed", reason="not_planned"
+        ),
+        alert_issue(
+            4, f"live-check/archived/{url}x", state="closed", reason="not_planned"
+        ),
+    ]
+
+    gh = _reconcile_live(tmp_path, _live_report(), issues)
+
+    assert issue_writes(gh) == [
+        ("close", "1"),
+        ("close", "2"),
+        ("reopen", "3"),
+        ("close", "3"),
+        ("reopen", "4"),
+        ("close", "4"),
+    ]
+    closes = [call for call in gh.calls if call[:2] == ("issue", "close")]
+    assert all(call[call.index("--reason") + 1] == "completed" for call in closes)
+    assert [
+        call[call.index("--comment") + 1] for call in closes if call[2] in ("3", "4")
+    ] == [f"Cleared in run {RUN_2}"] * 2
 
 
 def test_live_check_outcomes_raise_findings_for_404_and_403_only(
@@ -1465,12 +1665,20 @@ def test_live_check_outcomes_raise_findings_for_404_and_403_only(
         "live-check/gone/https://a.example/gone",
         "live-check/status/https://b.example/blocked",
     ]
-    assert file.scope == ("live-check/read", "live-check/gone/", "live-check/status/")
+    assert file.scope == (
+        "live-check/read",
+        "live-check/gone/",
+        "live-check/status/",
+        "live-check/stale/",
+        "live-check/archived/",
+    )
     assert file.unchecked == (
         "live-check/gone/https://c.example/limited",
         "live-check/status/https://c.example/limited",
         "live-check/gone/https://d.example/slow",
         "live-check/status/https://d.example/slow",
+        "live-check/stale/https://a.example/gone",
+        "live-check/archived/https://a.example/gone",
     )
 
 

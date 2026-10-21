@@ -70,6 +70,9 @@ jobs:
       - id: check
         name: Check pack projects
         run: uv run --no-sync pack check-live
+        env:
+          # Read-only, for the GitHub API release and archive lookups only.
+          GITHUB_TOKEN: ${{ github.token }}
 
       - name: Report the check
         if: always()
