@@ -129,6 +129,19 @@
     }
   },
   {
+    "url": "https://github.com/hung-eggie-do-covergo/stardew-thor-dual-screen",
+    "patch": {
+      "name": "Stardew-Thor-DS (mod updates)",
+      "additionalSettings": {
+        "trackOnly": true,
+        "versionDetection": false,
+        "includeZips": false,
+        "autoApkFilterByArch": false,
+        "about": "Thor Dual Screen is a SMAPI mod for Stardew Valley running in Cinderbox, distributed as a ZIP, not an Android application. Install or update it by following https://github.com/hung-eggie-do-covergo/stardew-thor-dual-screen. Obtainium only tracks release notifications; acknowledgement does not install the mod or detect its installed version."
+      }
+    }
+  },
+  {
     "url": "https://github.com/igawa6/ctr-native-android",
     "patch": {
       "name": "Crash Team Racing",
@@ -150,6 +163,19 @@
     "url": "https://github.com/igawa6/dusklight",
     "patch": {
       "id": "dev.twilitrealm.dusk"
+    }
+  },
+  {
+    "url": "https://github.com/igawa6/eden-duo-companions",
+    "patch": {
+      "name": "Eden Duo Companions (mod updates)",
+      "additionalSettings": {
+        "trackOnly": true,
+        "versionDetection": false,
+        "includeZips": false,
+        "autoApkFilterByArch": false,
+        "about": "Second-screen companion packages for Eden Duo, one .dsmod.zip per game, not an Android application. Install or update a game's companion from that game's Add-ons menu in Eden Duo. Each release is one game's package, so a notification may concern a game you do not play. Obtainium only tracks release notifications; acknowledgement does not install a package or detect its installed version."
+      }
     }
   },
   {
@@ -350,6 +376,14 @@
       "additionalSettings": {
         "apkFilterRegEx": "vanilla",
         "versionDetection": false
+      }
+    }
+  },
+  {
+    "url": "https://github.com/StoneColdOS/pt-pc",
+    "patch": {
+      "additionalSettings": {
+        "includePrereleases": true
       }
     }
   },
