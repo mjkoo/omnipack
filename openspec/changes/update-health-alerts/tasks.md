@@ -28,5 +28,5 @@
 
 ## 5. Integration
 
-- [ ] 5.1 Run `just check-all` and verify that it passes
-- [ ] 5.2 Run `uv run pack check-live` locally against the committed packs with a token, and verify that the report lists stale and archived GitHub URLs and no URL is health-inconclusive for a rate limit
+- [x] 5.1 Run `just check-all` and verify that it passes
+- [x] 5.2 Run `uv run pack check-live` locally against the committed packs with a token, and verify that the report lists stale and archived GitHub URLs and no URL is health-inconclusive for a rate limit
