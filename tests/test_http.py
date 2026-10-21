@@ -245,3 +245,47 @@ def test_given_headers_are_sent_and_may_replace_the_default_user_agent() -> None
     assert replaced.get_header("User-agent") == "Obtainium/1.0"
     assert added.get_header("User-agent") == "omnipack/0.1"
     assert added.get_header("Referer") == "https://example.com"
+
+
+def test_a_credential_is_sent_as_an_unredirected_authorization_header() -> None:
+    transport = RecordingTransport([response(), response()])
+    client = HttpClient(transport=transport)
+
+    client.get("https://api.example/data", credential="Bearer secret")
+    client.get("https://api.example/data")
+
+    credentialed, plain = transport.requests
+    assert credentialed.unredirected_hdrs == {"Authorization": "Bearer secret"}
+    assert "Authorization" not in credentialed.headers
+    assert plain.get_header("Authorization") is None
+
+
+def test_a_credential_is_not_forwarded_on_a_redirect(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    requests: list[Request] = []
+
+    class FixtureResponse(addinfourl):
+        msg = "fixture response"
+
+    def open_fixture(
+        handler: urllib.request.HTTPSHandler, request: Request
+    ) -> FixtureResponse:
+        requests.append(request)
+        headers = Message()
+        if request.full_url == "https://api.example/old":
+            headers["Location"] = "https://api.example/new"
+            return FixtureResponse(BytesIO(b""), headers, request.full_url, 301)
+        return FixtureResponse(BytesIO(b"payload"), headers, request.full_url, 200)
+
+    monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
+
+    result = HttpClient(retries=0).get(
+        "https://api.example/old", credential="Bearer secret"
+    )
+
+    assert result.body == b"payload"
+    first, redirected = requests
+    assert first.get_header("Authorization") == "Bearer secret"
+    assert redirected.full_url == "https://api.example/new"
+    assert redirected.get_header("Authorization") is None

@@ -2,8 +2,8 @@
 
 ## 1. Scoped credential in the HTTP client
 
-- [ ] 1.1 Add an optional `credential` argument to `HttpClient.get` that sends an `Authorization` value as an unredirected header, update the module and class docstrings, and verify with new tests in `tests/test_http.py`: the header is present on the request, absent from the redirected request urllib builds, and absent when no credential is passed
-- [ ] 1.2 Confirm every existing caller passes no credential, and verify that `uv run pytest tests/test_http.py tests/test_live_check.py` still passes unchanged
+- [x] 1.1 Add an optional `credential` argument to `HttpClient.get` that sends an `Authorization` value as an unredirected header, update the module and class docstrings, and verify with new tests in `tests/test_http.py`: the header is present on the request, absent from the redirected request urllib builds, and absent when no credential is passed
+- [x] 1.2 Confirm every existing caller passes no credential, and verify that `uv run pytest tests/test_http.py tests/test_live_check.py` still passes unchanged
 
 ## 2. Forge health lookups
 
