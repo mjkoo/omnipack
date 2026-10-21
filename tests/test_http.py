@@ -260,15 +260,17 @@ def test_a_credential_is_sent_as_an_unredirected_authorization_header() -> None:
     assert plain.get_header("Authorization") is None
 
 
-def test_an_unprintable_credential_is_refused_without_echoing_it() -> None:
+@pytest.mark.parametrize("secret", ["se\ncret", "se€cret"])
+def test_a_credential_outside_printable_ascii_is_refused_without_echoing_it(
+    secret: str,
+) -> None:
     transport = RecordingTransport([response()])
     client = HttpClient(transport=transport)
 
     with pytest.raises(ValueError, match="credential") as raised:
-        client.get("https://api.example/data", credential="Bearer se\ncret")
+        client.get("https://api.example/data", credential=f"Bearer {secret}")
 
-    assert "se\ncret" not in str(raised.value)
-    assert "cret" not in str(raised.value)
+    assert secret not in str(raised.value)
     assert transport.requests == []
 
 
