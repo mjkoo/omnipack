@@ -1,32 +1,57 @@
 ---
 name: vet-candidates
-description: Vet candidate Android apps for inclusion in the omnipack packs, or sweep docs/watchlist.md to promote or drop waiting entries. Use when the user lists apps to consider adding, asks whether an app belongs in the pack, or a scheduled run asks for the weekly watchlist re-evaluation.
+description: Vet candidate Android apps for inclusion in the omnipack packs - a user's list, newly released projects found by discovery, the docs/watchlist.md sweep, or a new catalog arrival flagged by an uncategorized-family alert. Use when the user lists apps to consider, asks whether an app belongs in the pack, a scheduled run asks for the weekly sweep and discovery, or an omnipack-alert issue reports an uncategorized family.
 ---
 
 # Vetting pack candidates
 
 omnipack ships two Obtainium import packs (single-screen and dual-screen). Every
 app in them must be trackable by Obtainium and trustworthy enough to recommend.
-This skill covers two modes:
+This skill covers four modes:
 
 - **Intake**: the user hands over a list of candidates (names, links, feed notes).
-- **Watchlist sweep**: re-evaluate every entry in `docs/watchlist.md`, the
-  scheduled weekly run.
+- **Watchlist sweep**: re-evaluate every entry in `docs/watchlist.md`.
+- **Discovery**: find projects released recently that no pack, denial or
+  watchlist entry covers yet, so vetted additions land before the catalogs
+  pick them up. The scheduled weekly run does discovery, then the sweep.
+- **Arrival triage**: a catalog brought a new family into the packs and the
+  nightly build raised a `build/uncategorized/<family>` alert. Vet the arrival
+  and categorize or deny it (section 6).
 
-Both modes end with the same output: additions in `config/extras.json`, an
-updated `docs/watchlist.md`, and a report.
+Intake, sweep and discovery end with the same output: additions in
+`config/extras.json`, an updated `docs/watchlist.md`, and a report.
 
 ## 1. Pre-filter
 
 Before researching anything, drop what needs no research:
 
 - **Already in a pack.** Search `dist/single-screen.json` and
-  `dist/dual-screen.json` by name and URL fragment, and `config/deny.json` for
-  earlier rejections. Note near matches (a dual-screen fork of the candidate, a
+  `dist/dual-screen.json` by name and URL fragment, `config/deny.json` for
+  earlier rejections, and `docs/watchlist.md` (waiting and declined entries). Note near matches (a dual-screen fork of the candidate, a
   sibling build) rather than silently dropping them.
 - **Obviously out of scope.** Paid store games, PC-only tools, ROM hacks or
   patches, homebrew for other consoles. These get a one-line reason in the
   report and nothing else.
+
+## Discovery
+
+Look for Android projects first released or first given an Android build
+recently (since the previous weekly run, or the last two weeks when unsure):
+
+- GitHub: repositories created or pushed recently with APK release assets in
+  the pack's space - static recomps (N64Recomp, Xbox, GameCube and Wii U
+  recomps), decomp-based native ports, emulators and emulator forks,
+  frontends, handheld utilities (AYN Thor, Retroid, Odin). Search by topic and
+  keyword, and check what established porters and emulator projects shipped.
+- Community and press: r/EmulationOnAndroid, r/SBCGaming, r/AYNThor and
+  r/RetroidPocket, portcove intake issues, and the port-news coverage that
+  links Android builds.
+
+Run every find through the pre-filter, then research and judge it exactly as an
+intake candidate. Consider at most about ten new candidates per run, most
+promising first; leave the rest for the next run rather than rushing them.
+Discovery adds only clear passes. Anything borderline goes to the watchlist, or
+to the report's owner questions when it is the owner's call.
 
 ## 2. Research each remaining candidate
 
@@ -127,7 +152,10 @@ the intended packs with no duplicate ids.
 
 ## 4. Maintain the watchlist
 
-`docs/watchlist.md` holds every WAIT verdict. Each entry gives the name,
+`docs/watchlist.md` holds every WAIT verdict, and under "Declined" one line per
+SKIP verdict for a project a later discovery could plausibly find again, so it is
+not re-proposed every week. A declined app that changes materially (an Android
+build appears, a package id conflict goes away) may be reconsidered. Each entry gives the name,
 canonical URL, why it waits and what would promote it, stated as stable facts:
 no counts, dates or other details that go stale quickly.
 
@@ -141,15 +169,41 @@ meanwhile reached a pack through a catalog, and remove it from the doc if so.
 ## 5. Deliver
 
 - Work on a branch off main (`feat/feed-additions-<date>` for intake,
-  `chore/watchlist-sweep-<date>` for a sweep), confirming the branch before each
+  `chore/watchlist-sweep-<date>` for a sweep or discovery run, unless the
+  request names a branch), confirming the branch before each
   commit. Never commit on main. Stage files by name. Conventional commit with
   the co-author trailer.
 - Do not push, open a PR or merge unless the request (or the scheduled task's
   prompt) explicitly authorizes it. A PR body carries a "## Specs" section
   ruling that specs are skipped: adding apps is configuration, not behavior.
-- A sweep with nothing to change makes no branch and no commit; it reports
-  that every entry was re-checked and still waits.
+- A sweep or discovery run with nothing to change makes no branch and no
+  commit; it reports what was re-checked and what was considered.
 - The report lists, per candidate: verdict, canonical URL, package id, and a
   one-line reason; then the promotions, drops and owner questions.
 - No device checks: never use ADB or test on a device as part of vetting.
 - Plain hyphens only; no em or en dashes in anything written.
+
+## 6. Arrival triage
+
+An issue labeled `omnipack-alert` whose first body line is
+`<!-- omnipack-alert-key: build/uncategorized/<family> -->` means a family in
+the built packs has no category. Usually a catalog (RJNY, BBoi, Quiver or codm)
+added an app that nobody has reviewed. The family is a normalized project URL
+(`github.com/<owner>/<repo>`) or an `app:<label>` family from
+`config/composition.json`.
+
+1. Find the family's entries in `dist/*.json` and the app's project.
+2. Vet it with section 2 and the bar, as any candidate.
+3. If it clears, add a category for the family to the `categories` map in
+   `config/composition.json`, keyed as the alert names it, using the taxonomy in
+   section 3.
+4. If it fails the bar, add a `config/deny.json` record with a reason instead.
+   Denials are owner decisions: say so prominently in the PR body so the owner
+   reviews it before merging.
+5. Build, verify and test as in section 3, then open a PR whose body links the
+   issue. Do not close the issue: the next nightly build closes it when the
+   warning stops.
+
+Several uncategorized alerts open at once go into one PR. An issue already
+closed, or a family already categorized on main, needs nothing.
+
