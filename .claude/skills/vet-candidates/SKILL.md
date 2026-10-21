@@ -31,8 +31,23 @@ Before researching anything, drop what needs no research:
 ## 2. Research each remaining candidate
 
 Use subagents for breadth (about seven candidates per agent, run in parallel).
-Research is read-only: `gh api`, `gh release list`, web search and fetch. Each
-candidate needs:
+Research is read-only: `gh api`, `gh release list`, web search and fetch.
+
+In a cloud session, `gh api` may be refused for repositories other than this
+one. Do not ask for access to them; fall back in this order:
+
+1. The unauthenticated REST API, for example
+   `curl -s https://api.github.com/repos/<owner>/<repo>/releases?per_page=10`
+   (rate limited, so batch the calls).
+2. The release asset list for one tag, which the releases page loads lazily:
+   `https://github.com/<owner>/<repo>/releases/expanded_assets/<tag>`. The
+   releases page itself often omits asset names, so never conclude that a
+   release has no APK from that page alone.
+3. A shallow clone (`git clone --depth 1`) to read gradle files and manifests
+   for the package id.
+
+If a fact still cannot be established, say so in the report rather than
+inferring it. Each candidate needs:
 
 1. **Identity**: the canonical repository (follow redirects and transfers; an
    old URL that 301s means the entry uses the new one), author, what it is
