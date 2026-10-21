@@ -155,9 +155,10 @@ def _newest_qualifying(releases: object, options: dict[str, Any]) -> Release | N
             raise ResponseError("release is not an object")
         # Drafts carry no publication date, so they are dropped before any
         # date is read.
-        if release.get("draft") is not False:
-            continue
-        if release.get("prerelease") is not False and not include_prereleases:
+        draft, prerelease = release.get("draft"), release.get("prerelease")
+        if not isinstance(draft, bool) or not isinstance(prerelease, bool):
+            raise ResponseError("release lacks draft and prerelease flags")
+        if draft or (prerelease and not include_prereleases):
             continue
         candidates.append((_release_date(release, by_assets=by_assets), release))
     candidates.sort(key=lambda candidate: candidate[0], reverse=True)

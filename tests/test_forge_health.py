@@ -248,6 +248,7 @@ def test_a_draft_never_qualifies_even_when_dated() -> None:
         ({REPO_API: {"archived": "yes", "disabled": False}}, "repository"),
         ({RELEASES_API: ["release object expected"]}, "release"),
         ({RELEASES_API: [{"draft": False, "prerelease": False}]}, "date"),
+        ({RELEASES_API: [{"published_at": "2026-01-01T00:00:00Z"}]}, "draft"),
         (
             {RELEASES_API: [release("v1", 10, "app.apk") | {"published_at": "soon"}]},
             "soon",
@@ -328,3 +329,20 @@ def test_each_request_is_preceded_by_the_callers_check() -> None:
     )
 
     assert calls == [0, 1]
+
+
+def test_an_exception_from_the_callers_check_stops_the_lookup() -> None:
+    class Stop(Exception):
+        pass
+
+    def stop() -> None:
+        raise Stop
+
+    api = Api({})
+    client = HttpClient(transport=api, sleep=lambda _seconds: None)
+
+    with pytest.raises(Stop):
+        check_health(
+            "owner/app", "{}", client, token=None, now=NOW, before_request=stop
+        )
+    assert api.requests == []

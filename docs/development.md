@@ -188,10 +188,18 @@ than the current one requires regeneration with `uv run pack verify` or
 Run `uv run pack check-live` to check that each project in the committed packs
 still answers. It requests each distinct pack URL once, with the request headers
 the entry declares, and prints the URLs that answered 404 or 410 (unreachable)
-and those with any other failed outcome (inconclusive, with the reason). It
-exits nonzero when a URL is unreachable, the packs cannot be read, or the report
-cannot be written, and writes `.build/live-check/report.json` and `summary.md`
-on every run. It changes no committed file; see
+and those with any other failed outcome (inconclusive, with the reason). For a
+GitHub repository URL that is not unreachable it also reads the repository and
+its newest 100 releases from the GitHub API, and prints the URL as stale when
+its newest qualifying release is 180 or more days old or none qualifies, as
+archived when GitHub reports the repository archived or disabled, and as
+health inconclusive, with the reason, when the lookup fails. Set
+`GITHUB_TOKEN` to authenticate those API requests; without it they are
+anonymous and rate-limited after about 60 requests, so later URLs read as
+health inconclusive. The token is sent to no other request and never follows
+a redirect. The command exits nonzero when a URL is unreachable, the packs
+cannot be read, or the report cannot be written, whatever the health results,
+and writes `.build/live-check/report.json` and `summary.md` on every run. It changes no committed file; see
 [source generation](source-generation.md#live-project-check) for acting on its
 findings.
 
