@@ -55,7 +55,7 @@ def test_tracker_keeps_its_curated_identity_and_notification_settings(
     for variant in Variant:
         document = json.loads(render(current_configuration.result.apps[variant]))
         entry = next(e for e in document["apps"] if e["id"] == TRACKER_ID)
-        assert entry["name"] == "omnipack updates"
+        assert entry["name"] == "Omnipack Updates"
         assert entry["url"] == "https://github.com/mjkoo/omnipack"
         assert entry["categories"] == ["Track Only"]
         assert entry["overrideSource"] == "GitHub"
