@@ -274,6 +274,22 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.izzy2lost.psx2",
+    "url": "https://github.com/izzy2lost/PSX2",
+    "name": "PSX2",
+    "author": "izzy2lost",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.izzy2lost.super3",
+    "url": "https://github.com/izzy2lost/Super3",
+    "name": "Super3",
+    "author": "izzy2lost",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
