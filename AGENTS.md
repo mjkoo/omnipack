@@ -9,6 +9,15 @@ References to `RJNY/Obtainium-Emulation-Pack` identify a separate upstream,
 not this repository. Preserve upstream URLs, fixture provenance and archived
 planning artifacts.
 
+## Vetting candidate apps
+
+Use the project skill at
+[`.claude/skills/vet-candidates/SKILL.md`](.claude/skills/vet-candidates/SKILL.md)
+when evaluating apps for inclusion or sweeping the
+[candidate watchlist](docs/watchlist.md). It holds the inclusion bar, the
+research checklist, how additions are written and how waiting candidates are
+tracked.
+
 ## OpenSpec workflow boundaries
 
 Apply, verify, and archive are separately requested workflow steps. Completing

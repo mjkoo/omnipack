@@ -14,7 +14,7 @@ apps it accompanied. Export exclusion does not guarantee deletion on a device.
 
 ### Tracking omnipack itself
 
-Both packs include the same track-only GitHub entry, **omnipack updates**
+Both packs include the same track-only GitHub entry, **Omnipack Updates**
 (`809443320`). Like every track-only entry it carries the Track Only
 [category](composition.md#categories). It follows the numeric title of the owned
 `continuous` prerelease.
@@ -121,6 +121,17 @@ regions or preferences, such as ARMSX2 and Simpsons Hit and Run,
 keep every alternative, so Obtainium asks which one to install. Filters exclude
 the unwanted asset rather than spell out the wanted name, so an upstream rename
 surfaces as an install prompt instead of a silent fallback to an older release.
+
+Halo: Combat Evolved (OpenCE) ships its APK inside `halo-android-release.zip`,
+beside debug and other platforms' zips, so it sets `includeZips` and names that
+zip. Naming the asset is the exception to the rule above: every asset is a zip,
+and only one holds the release APK. It sets `fallbackToOlderReleases: false`, so
+an upstream rename surfaces as a missing-asset error rather than a fallback, and
+`versionDetection: false`, because its `build-N` tags do not match the APK's
+version name.
+
+Candidates that do not yet meet the bar for addition are recorded in the
+[watchlist](watchlist.md) with what would promote them.
 
 Winlator-Ludashi's RJNY entry (`com.winlator.ludashi`) ships as
 `com.winlator.vanilla` through an overlay `id` patch on its project URL and

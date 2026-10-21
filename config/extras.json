@@ -185,9 +185,90 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.nireves333.melonmix",
+    "url": "https://github.com/Nireves333/melonMix-android",
+    "name": "Kingdom Hearts DS (Melon Mix)",
+    "author": "Nireves333",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.seedlessds.app",
+    "url": "https://github.com/SapphireRhodonite/SeedlessDS",
+    "name": "SeedlessDS",
+    "author": "SapphireRhodonite",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "dev.igawa6.edenduo",
+    "url": "https://github.com/igawa6/eden-duo",
+    "name": "Eden Duo",
+    "author": "igawa6",
+    "categories": ["Emulator"],
+    "dualScreen": true,
+    "additionalSettings": {}
+  },
+  {
+    "id": "org.dolphinemu.primehack",
+    "url": "https://github.com/Starlightbotanist/PrimeHack-Android",
+    "name": "PrimeHack",
+    "author": "Starlightbotanist",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.halo.decomp",
+    "url": "https://github.com/OpenCommunityEdition/OpenCE",
+    "name": "Halo: Combat Evolved (OpenCE)",
+    "author": "OpenCommunityEdition",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": false,
+      "apkFilterRegEx": "^halo-android-release[.]zip$",
+      "autoApkFilterByArch": false,
+      "versionDetection": false,
+      "includeZips": true,
+      "trackOnly": false
+    }
+  },
+  {
+    "id": "org.metroidprime.port",
+    "url": "https://github.com/Odrannnn/MetroidPrimePort",
+    "name": "Metroid Prime Port",
+    "author": "Odrannnn",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "org.wwhdrecomp.app",
+    "url": "https://github.com/GreenNaugahyde/ZeldaWWHDRecompAndroid",
+    "name": "Zelda: The Wind Waker HD Recomp",
+    "author": "GreenNaugahyde",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.jumatt.jsrfunleashed",
+    "url": "https://github.com/JuMatt/JetSetRadioFuture-Unleashed",
+    "name": "Jet Set Radio Future (JSRF Unleashed)",
+    "author": "JuMatt",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.ducvd89.bloodborne",
+    "url": "https://github.com/ducvd89/Bloodborne-Android",
+    "name": "Bloodborne",
+    "author": "ducvd89",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
-    "name": "omnipack updates",
+    "name": "Omnipack Updates",
     "author": "mjkoo",
     "categories": ["Track Only"],
     "additionalSettings": {
