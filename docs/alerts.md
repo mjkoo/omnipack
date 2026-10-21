@@ -101,19 +101,19 @@ close too.
 ### Stale and archived projects
 
 `pack check-live` reads the newest 100 releases and the archive state of each
-GitHub repository URL that is not unreachable; [source generation](source-generation.md#live-project-check)
-describes which releases qualify. A stale finding is titled "Project has had
-no qualifying release in 180 days: <url>", with the newest qualifying
-release's tag and date in its details, or "Project has no qualifying release:
-<url>" when none of those releases qualifies. An archived finding is titled
-"Project repository is archived: <url>". Each names the pack entry. Neither
-fails the live-check job.
+GitHub repository URL that is not unreachable;
+[source generation](source-generation.md#live-project-check) describes which
+releases qualify. A stale finding is titled "Project has had no qualifying
+release in 180 days: <url>", with the newest qualifying release's tag and date
+in its details, or "Project has no qualifying release: <url>" when none of
+those releases qualifies. An archived finding is titled "Project repository is
+archived: <url>". Each names the pack entry. Neither fails the live-check job.
 
 A project that is already dormant or archived gets an issue on the first live
-check that sees it. Review each one, and either act on it (a curation change, a deny record) or mute it,
-as below, to accept a project that is simply quiet. A muted stale issue clears
-when the project publishes a qualifying release, and a later dormancy opens it
-again.
+check that sees it. Review each one, and either act on it (a curation change,
+a deny record) or mute it, as below, to accept a project that is simply quiet.
+A muted stale issue clears when the project publishes a qualifying release, and
+a later dormancy opens it again.
 
 ## Muting an issue
 

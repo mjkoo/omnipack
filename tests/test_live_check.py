@@ -488,6 +488,10 @@ def test_unusable_urls_are_inconclusive_and_the_rest_still_checked(
             '{"apps": [{"url": "https://github.com/a/one"}]}',
             "pack single-screen.json is malformed",
         ),
+        (
+            '{"apps": [{"url": "https://github.com/a/one", "name": 1}]}',
+            "pack single-screen.json is malformed",
+        ),
     ],
 )
 def test_unreadable_packs_give_a_failure_report(

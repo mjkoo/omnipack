@@ -393,11 +393,11 @@ reads, made with the token: the repository and its newest 100 releases. A
 release qualifies when it is not a draft, is a prerelease only if the entry
 sets `includePrereleases`, and carries an asset ending in `.apk`, `.xapk`,
 `.apkm` or `.apks` (or `.zip` when the entry sets `includeZips`); a track-only
-entry needs no such asset. A release is dated by its newest
-asset when the entry sets `useLatestAssetDateAsReleaseDate` and the release has
-assets, and by its publication date otherwise. The URL is stale when its newest qualifying release
-is 180 or more whole days old, Obtainium's default threshold, or when none
-qualifies, and archived when GitHub reports the repository archived or
+entry needs no such asset. A release is dated by its newest asset when the
+entry sets `useLatestAssetDateAsReleaseDate` and the release has assets, and by
+its publication date otherwise. The URL is stale when its newest qualifying
+release is 180 or more whole days old, Obtainium's default threshold, or when
+none qualifies, and archived when GitHub reports the repository archived or
 disabled. Health uses the settings of the first entry at the URL. A lookup that
 fails for any reason, such as a spent rate limit, is health inconclusive. URLs
 on other hosts, gitlab.com included, get no lookup. Stale, archived and
@@ -406,9 +406,8 @@ issues as [maintenance alerts](alerts.md) describes.
 
 The run summary lists the unreachable and inconclusive URLs, the stale and
 archived URLs, and the health-inconclusive URLs with their reasons, or the
-error of a failed check, and the
-`live-check-report-<run id>` artifact keeps `.build/live-check/report.json` for
-14 days.
+error of a failed check, and the `live-check-report-<run id>` artifact keeps
+`.build/live-check/report.json` for 14 days.
 
 The job changes no branch, PR or committed file. To drop a project that is gone,
 the owner confirms the URL by hand and then, in one commit, adds the deny record

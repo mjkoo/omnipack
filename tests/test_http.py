@@ -260,6 +260,18 @@ def test_a_credential_is_sent_as_an_unredirected_authorization_header() -> None:
     assert plain.get_header("Authorization") is None
 
 
+def test_an_unprintable_credential_is_refused_without_echoing_it() -> None:
+    transport = RecordingTransport([response()])
+    client = HttpClient(transport=transport)
+
+    with pytest.raises(ValueError, match="credential") as raised:
+        client.get("https://api.example/data", credential="Bearer se\ncret")
+
+    assert "se\ncret" not in str(raised.value)
+    assert "cret" not in str(raised.value)
+    assert transport.requests == []
+
+
 def test_a_credential_is_not_forwarded_on_a_redirect(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

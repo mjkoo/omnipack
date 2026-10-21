@@ -110,6 +110,10 @@ class HttpClient:
         default user agent. `credential` is an `Authorization` value sent
         only to `url` itself, never to a redirect target.
         """
+        # http.client would reject an unprintable value with a message quoting
+        # it, and failure reasons reach published reports.
+        if credential is not None and not credential.isprintable():
+            raise ValueError("credential is not a valid header value")
         request = _build_request(url, user_agent=self.user_agent, headers=headers)
         if credential is not None:
             # urllib copies only `Request.headers` into a redirected request.
