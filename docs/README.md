@@ -6,6 +6,7 @@ Start with [development](development.md) for setup, building packs, and running 
 - [App curation](curation.md): maintained policies, port setup, and shared pack tracking.
 - [Source generation](source-generation.md): codm and Quiver catalog generation, isolated candidates, and the source proposal workflow.
 - [Source reconciliation](source-reconciliation.md): reviewed game sources and installed package identities.
+- [Candidate watchlist](watchlist.md): apps waiting on an Android release or a longer track record.
 - [App notes](app-notes.md): user-facing notes for apps whose pack configuration changes what users see.
 - [Quiver game ports](quiver-ports.md): how Quiver's ports rank against other sources.
 - [MetroidArch](metroidarch.md): dual-screen MetroidArch setup and vetting.
