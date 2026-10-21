@@ -2,7 +2,8 @@
 
 Apps considered for the packs that are waiting on something before they can be
 added. Each entry says why it waits and what would promote it. Re-check entries
-periodically, by hand or with an agent sweep. To promote one, add it to
+periodically, by hand or with an agent sweep using the project's
+`vet-candidates` skill, which holds the inclusion bar. To promote one, add it to
 `config/extras.json` (with the usual provenance check against the current state
 of the project) and remove it here. Drop an entry that is abandoned or rejected;
 a rejected app needs a `config/deny.json` denial only when a catalog actually
