@@ -371,8 +371,13 @@ def test_live_check_job_reads_only_and_reports_its_findings():
 
     emit = next(s for s in job["steps"] if is_emit(s))
 
-    # Nothing in the job can change a branch, a PR or a committed file.
-    assert [s for s in job["steps"] if "env" in s] == [emit]
+    # Nothing in the job can change a branch, a PR or a committed file. The
+    # read-only token reaches the check step alone, for its GitHub API reads.
+    assert [s for s in job["steps"] if "env" in s] == [check, emit]
+    assert check["env"] == {"GITHUB_TOKEN": "${{ github.token }}"}
+    assert "GITHUB_TOKEN" not in job.get("env", {})
+    workflow = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())
+    assert "GITHUB_TOKEN" not in workflow.get("env", {})
     runs = " ".join(step.get("run", "") for step in job["steps"])
     for word in ("git", "gh ", "GITHUB_TOKEN", "github.token"):
         assert word not in runs

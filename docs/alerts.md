@@ -13,7 +13,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
-| `live-check` (`live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403 |
+| `live-check` (`live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403; a GitHub project the check reports stale (no qualifying release in 180 days, or none at all) or archived |
 
 Each owner also has an early-failure finding, titled "<owner> job failed
 without reporting findings". A cancelled job raises only that finding and
@@ -48,22 +48,23 @@ owner's prefix, the stage or kind, and a subject where there is one:
 | `nightly/publish/` | `push`, `release` |
 | `<source>/check/` | `generation`, `stage`, `tests`, `build`, `verify`, `guard` |
 | `<source>/publish/` | `proposal` |
-| `live-check/` | `read`, `gone/<url>`, `status/<url>` |
+| `live-check/` | `read`, `gone/<url>`, `status/<url>`, `stale/<url>`, `archived/<url>` |
 
 Every owner also has a `run` key under its first prefix (for example
 `nightly/prepare/run`, `codm/check/run`, `live-check/run`) for the
 early-failure finding. `<source>` is `codm` or `quiver`.
 
 A subject is percent-encoded: each UTF-8 byte of a character outside letters,
-digits and `/:._~+-` becomes `%XX`. So `https://dolphin-emu.org/download/?ref=btn`
-raised as a gone URL has the key
+digits and `/:._~+-` becomes `%XX`. So
+`https://dolphin-emu.org/download/?ref=btn` raised as a gone URL has the key
 `live-check/gone/https://dolphin-emu.org/download/%3Fref%3Dbtn`. A subject too
 long for the key limit is cut and ends in `~` and a digest. The 404 and 410
-class and the other-status class are separate keys, so a muted 403 does not
-hide a later 404 for the same project. The issue title carries the unencoded
-subject. Issues without a valid key on the first line of the body are ignored,
-so do not delete or edit that line; if one is removed, the next run opens a
-fresh issue.
+class and the other-status class are separate keys, so a muted 403 does not hide
+a later 404 for the same project. Stale and archived are separate keys too,
+independent of the URL's reachability keys. The issue title carries the
+unencoded subject. Issues without a valid key on the first line of the body are
+ignored, so do not delete or edit that line; if one is removed, the next run
+opens a fresh issue.
 
 ## How an issue opens, updates and closes
 
@@ -90,7 +91,29 @@ warnings count as re-checked only when the build report records success. For
 live check, URL keys are re-checked only by a successful report, and URLs the
 budget left unchecked or that came back inconclusive without a status are left
 alone, so a host alternating between 403 and a timeout does not open and close
-an issue each night. A URL no longer in the packs does close.
+an issue each night. A URL no longer in the packs does close. Stale and
+archived keys are re-checked by every successful report except for a URL whose
+health lookup did not finish (health inconclusive, such as a spent rate limit
+or the budget running out) or that is unreachable, which leave those issues
+as they were. The stale and archived issues of a URL no longer in the packs
+close too.
+
+### Stale and archived projects
+
+`pack check-live` reads the newest 100 releases and the archive state of each
+GitHub repository URL that is not unreachable;
+[source generation](source-generation.md#live-project-check) describes which
+releases qualify. A stale finding is titled "Project has had no qualifying
+release in 180 days: <url>", with the newest qualifying release's tag and date
+in its details, or "Project has no qualifying release: <url>" when none of
+those releases qualifies. An archived finding is titled "Project repository is
+archived: <url>". Each names the pack entry. Neither fails the live-check job.
+
+A project that is already dormant or archived gets an issue on the first live
+check that sees it. Review each one, and either act on it (a curation change,
+a deny record) or mute it, as below, to accept a project that is simply quiet.
+A muted stale issue clears when the project publishes a qualifying release, and
+a later dormancy opens it again.
 
 ## Muting an issue
 
@@ -109,6 +132,12 @@ recurrence reopens the issue.
   publishing** and in the source maintenance workflow, and `alert-live-check`
   in **Reviewed source catalog**. A producer's own verdict never depends on
   them.
+- **Health lookups that never finish.** A URL whose GitHub lookup fails on
+  every run, for example because the token is missing or the API rate limit
+  is spent each time, is health inconclusive on every run and raises nothing.
+  The run summary lists such URLs with their reasons. A renamed repository's
+  API redirect is followed without the token, so its lookup is anonymous and
+  more likely to be rate limited until its pack URL is updated.
 - **A flake opens an issue and the next clean run closes it.** This costs two
   notifications; it is accepted to keep the workflows stateless.
 - **A queued live check replaced by a newer one.** Its group does not cancel

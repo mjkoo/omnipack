@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -10,7 +11,7 @@ from pathlib import Path
 from omnipack.build import BuildInputs, previous_entries, publish_build
 from omnipack.generation import generate
 from omnipack.http import HttpClient
-from omnipack.live_check import check_live, write_live_report
+from omnipack.live_check import check_live, stale_line, write_live_report
 from omnipack.merge import CompositionReport, CompositionResult, compose
 from omnipack.model import App, Source
 from omnipack.report import format_reports, write_report
@@ -135,7 +136,10 @@ def generate_source(args: argparse.Namespace) -> int:
 
 def check_live_command(_args: argparse.Namespace) -> int:
     root = Path.cwd()
-    result = check_live(root)
+    # A stray newline would make the header invalid and put the token in the
+    # failure reason, so surrounding whitespace is dropped.
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    result = check_live(root, github_token=token or None)
     # Findings print first so a report that cannot be written loses none.
     failed = result["status"] == Status.FAILED
     if failed:
@@ -145,6 +149,15 @@ def check_live_command(_args: argparse.Namespace) -> int:
             print(f"unreachable: {item['url']} (HTTP {item['status']})")
         for item in result["inconclusive"]:
             print(f"inconclusive: {item['url']}: {item['reason']}")
+        for stale in result["stale"]:
+            print(f"stale: {stale_line(stale)}")
+        for archived in result["archived"]:
+            print(f"archived: {archived['url']} ({archived['name']})")
+        for health in result["healthInconclusive"]:
+            print(
+                f"health inconclusive: {health['url']} ({health['name']}): "
+                f"{health['reason']}"
+            )
     try:
         write_live_report(root, result)
     except (OSError, ValueError) as error:

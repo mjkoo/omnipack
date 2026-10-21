@@ -52,6 +52,7 @@ KEY_LIMIT = 1024
 TITLE_LIMIT = 255
 ELLIPSIS = "…"
 DIGEST_LENGTH = 16
+STALE_DAYS = 180
 
 _SAFE_SUBJECT = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/:._~+-"
@@ -626,6 +627,8 @@ _LIVE_PREFIX = LIVE_CHECK.prefixes[0]
 LIVE_READ = _LIVE_PREFIX + "read"
 LIVE_GONE = _LIVE_PREFIX + "gone/"
 LIVE_STATUS = _LIVE_PREFIX + "status/"
+LIVE_STALE = _LIVE_PREFIX + "stale/"
+LIVE_ARCHIVED = _LIVE_PREFIX + "archived/"
 # Each source check step's key slug and the name its finding gives it, in the
 # order the steps run.
 CHECK_STEPS: Mapping[ValidationStep, tuple[str, str]] = {
@@ -948,6 +951,19 @@ def emit_live_check(
                         subject_key(LIVE_GONE, url),
                         subject_key(LIVE_STATUS, url),
                     ]
+            scope += [LIVE_STALE, LIVE_ARCHIVED]
+            findings += _live_health_findings(report)
+            # A URL whose health lookup never ran or could not finish leaves
+            # its health keys as they were; a budget-cut GitHub URL is listed
+            # as health-inconclusive.
+            for name in ("unreachable", "healthInconclusive"):
+                for item in _objects(report.get(name)):
+                    url = item.get("url")
+                    if isinstance(url, str):
+                        unchecked += [
+                            subject_key(LIVE_STALE, url),
+                            subject_key(LIVE_ARCHIVED, url),
+                        ]
     return _finish(
         LIVE_CHECK,
         environ,
@@ -961,6 +977,46 @@ def emit_live_check(
             for finding in findings
         ),
     )
+
+
+def _live_health_findings(report: Mapping[str, object]) -> list[Finding]:
+    """The stale and archived findings of a successful live-check report."""
+    findings: list[Finding] = []
+    for item in _objects(report.get("stale")):
+        url = item.get("url")
+        if not isinstance(url, str):
+            continue
+        tag, date = item.get("tag"), item.get("date")
+        if isinstance(tag, str):
+            title = f"Project has had no qualifying release in {STALE_DAYS} days: {url}"
+            newest = f"Newest qualifying release: {tag}"
+            detail = f"{newest} ({date})" if isinstance(date, str) else newest
+        else:
+            title = f"Project has no qualifying release: {url}"
+            detail = "No release qualified."
+        findings.append(
+            _finding(
+                subject_key(LIVE_STALE, url),
+                title,
+                [f"URL: {url}", *_entry_line(item), detail],
+            )
+        )
+    for item in _objects(report.get("archived")):
+        url = item.get("url")
+        if isinstance(url, str):
+            findings.append(
+                _finding(
+                    subject_key(LIVE_ARCHIVED, url),
+                    f"Project repository is archived: {url}",
+                    [f"URL: {url}", *_entry_line(item)],
+                )
+            )
+    return findings
+
+
+def _entry_line(item: Mapping[str, object]) -> list[str]:
+    name = item.get("name")
+    return [f"Entry: {name}"] if isinstance(name, str) and name else []
 
 
 def emit(

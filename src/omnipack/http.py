@@ -1,8 +1,9 @@
 """Plain retrying HTTP GET for every upstream read.
 
 The build and source generation fetch public catalogs and lists, so
-`HttpClient` sends no credentials and follows redirects with urllib's
-defaults.
+`HttpClient` sends no credentials unless a caller passes one, and follows
+redirects with urllib's defaults. A credential a caller passes is never
+forwarded to a redirect target.
 """
 
 from __future__ import annotations
@@ -72,7 +73,10 @@ class Transport(Protocol):
 
 
 class HttpClient:
-    """Fetch public URLs with bounded transient retries and no credentials."""
+    """Fetch public URLs with bounded transient retries.
+
+    A request carries no credentials unless the caller passes one to `get`.
+    """
 
     def __init__(
         self,
@@ -93,13 +97,29 @@ class HttpClient:
         self.backoff = backoff
         self.sleep = sleep
 
-    def get(self, url: str, headers: Mapping[str, str] | None = None) -> HttpResponse:
+    def get(
+        self,
+        url: str,
+        headers: Mapping[str, str] | None = None,
+        *,
+        credential: str | None = None,
+    ) -> HttpResponse:
         """Fetch one URL, retrying transient failures up to the configured bound.
 
         `headers` are sent with the request and may replace the client's
-        default user agent.
+        default user agent. `credential` is an `Authorization` value sent
+        only to `url` itself, never to a redirect target.
         """
+        # http.client rejects a control or non-Latin-1 character with a message
+        # quoting it, and failure reasons reach published reports.
+        if credential is not None and not (
+            credential.isascii() and credential.isprintable()
+        ):
+            raise ValueError("credential is not a valid header value")
         request = _build_request(url, user_agent=self.user_agent, headers=headers)
+        if credential is not None:
+            # urllib copies only `Request.headers` into a redirected request.
+            request.add_unredirected_header("Authorization", credential)
         attempts = self.retries + 1
         for number in range(attempts):
             try:
@@ -131,7 +151,7 @@ class HttpClient:
 def _build_request(
     url: str, *, user_agent: str, headers: Mapping[str, str] | None = None
 ) -> urllib.request.Request:
-    """Build a request that carries no credentials."""
+    """Build a request that carries no credentials of its own."""
     parsed = urlsplit(url)
     if parsed.username is not None or parsed.password is not None:
         raise ValueError("embedded URL credentials are not allowed")
@@ -167,6 +187,16 @@ def _is_transient(error: OSError | HTTPException) -> bool:
         503,
         504,
     }
+
+
+def failure_reason(error: Exception) -> str:
+    """Name a failure's cause: the last attempt's HTTP status when it got one,
+    otherwise the failure's own message."""
+    if isinstance(error, HttpStatusError):
+        return f"HTTP {error.status}"
+    if isinstance(error, TransientHttpError):
+        return f"HTTP {error.status}" if error.status is not None else error.detail
+    return str(error) or type(error).__name__
 
 
 def redact_url(url: str) -> str:

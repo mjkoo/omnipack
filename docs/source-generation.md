@@ -371,9 +371,10 @@ The same **Reviewed source catalog** workflow also runs a read-only job,
 `live-check`, which runs `uv run --no-sync pack check-live` against `main`'s
 committed packs. Generation itself still inspects no project; this job requests
 each distinct pack URL once, with the request headers the entry declares (for
-example `User-Agent: Obtainium/1.0`), and inspects no release, asset or archive
-state. It holds only `contents: read`, checks out with
-`persist-credentials: false`, runs in its own non-canceling
+example `User-Agent: Obtainium/1.0`), and for each GitHub repository URL also
+looks up its update health, as below. It holds only `contents: read`, passes
+the job's `github.token` as `GITHUB_TOKEN` to the check step alone, checks out
+with `persist-credentials: false`, runs in its own non-canceling
 `omnipack-live-check` concurrency group without waiting on any source job, and
 is limited to 30 minutes, above the command's own 20-minute budget.
 
@@ -384,10 +385,29 @@ retries (408, 425, 429, 500, 502, 503, 504), a timeout or the URLs left
 unchecked when the budget runs out, is inconclusive: it is listed with its
 reason but does not fail the run. An error status the client does not retry,
 such as a 403, still raises an issue; a status it retries, a timeout or an
-unchecked URL does not. The run summary lists the unreachable and
-inconclusive URLs, or the error of a failed check, and the
-`live-check-report-<run id>` artifact keeps `.build/live-check/report.json` for
-14 days.
+unchecked URL does not.
+
+A GitHub repository URL, one whose normalized project URL is
+`github.com/<owner>/<repo>`, that is not unreachable also gets two GitHub API
+reads, made with the token: the repository and its newest 100 releases. A
+release qualifies when it is not a draft, is a prerelease only if the entry
+sets `includePrereleases`, and carries an asset ending in `.apk`, `.xapk`,
+`.apkm` or `.apks` (or `.zip` when the entry sets `includeZips`); a track-only
+entry needs no such asset. A release is dated by its newest asset when the
+entry sets `useLatestAssetDateAsReleaseDate` and the release has assets, and by
+its publication date otherwise. The URL is stale when its newest qualifying
+release is 180 or more whole days old, Obtainium's default threshold, or when
+none qualifies, and archived when GitHub reports the repository archived or
+disabled. Health uses the settings of the first entry at the URL. A lookup that
+fails for any reason, such as a spent rate limit, is health inconclusive. URLs
+on other hosts, gitlab.com included, get no lookup. Stale, archived and
+health-inconclusive URLs never fail the run; stale and archived URLs raise
+issues as [maintenance alerts](alerts.md) describes.
+
+The run summary lists the unreachable and inconclusive URLs, the stale and
+archived URLs, and the health-inconclusive URLs with their reasons, or the
+error of a failed check, and the `live-check-report-<run id>` artifact keeps
+`.build/live-check/report.json` for 14 days.
 
 The job changes no branch, PR or committed file. To drop a project that is gone,
 the owner confirms the URL by hand and then, in one commit, adds the deny record
