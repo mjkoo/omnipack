@@ -441,12 +441,13 @@ def test_spent_budget_starts_no_further_request(tmp_path: Path) -> None:
     report = check_live(tmp_path, http=client(transport), clock=lambda: next(ticks))
 
     assert transport.urls() == urls[:2]
-    assert report["status"] == Status.SUCCESS
-    assert report["unreachable"] == [{"url": urls[1], "status": 404}]
-    assert report["inconclusive"] == [
-        {"url": urls[2], "reason": NOT_CHECKED},
-        {"url": urls[3], "reason": NOT_CHECKED},
-    ]
+    assert report == success(
+        unreachable=[{"url": urls[1], "status": 404}],
+        inconclusive=[
+            {"url": urls[2], "reason": NOT_CHECKED},
+            {"url": urls[3], "reason": NOT_CHECKED},
+        ],
+    )
 
 
 def test_unusable_urls_are_inconclusive_and_the_rest_still_checked(
@@ -483,6 +484,10 @@ def test_unusable_urls_are_inconclusive_and_the_rest_still_checked(
         ("{", "pack single-screen.json is unreadable"),
         ('{"apps": {}}', "pack single-screen.json is malformed"),
         ('{"apps": [{"url": 1}]}', "pack single-screen.json is malformed"),
+        (
+            '{"apps": [{"url": "https://github.com/a/one"}]}',
+            "pack single-screen.json is malformed",
+        ),
     ],
 )
 def test_unreadable_packs_give_a_failure_report(
@@ -764,6 +769,43 @@ def test_a_rate_limited_lookup_is_health_inconclusive_only(tmp_path: Path) -> No
     )
 
 
+def test_undecodable_github_settings_are_inconclusive_without_a_request(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/a/broken"
+    write_packs(tmp_path, [entry(url, "{not json")])
+    transport = Transport(health("a/broken"))
+
+    report = check_live(tmp_path, http=client(transport), now=NOW)
+
+    (inconclusive,) = report["inconclusive"]
+    (unknown,) = report["healthInconclusive"]
+    assert inconclusive["url"] == unknown["url"] == url
+    assert inconclusive["reason"].startswith("additionalSettings is not valid JSON")
+    assert unknown["reason"] == inconclusive["reason"]
+    assert report["stale"] == report["archived"] == []
+    assert transport.requests == []
+
+
+def test_a_release_date_is_reported_as_its_utc_calendar_date(tmp_path: Path) -> None:
+    url = "https://github.com/a/late"
+    write_packs(tmp_path, [entry(url)])
+    release = {
+        "tag_name": "v1",
+        "draft": False,
+        "prerelease": False,
+        "published_at": "2025-01-31T22:00:00-05:00",
+        "assets": [{"name": "app.apk", "updated_at": "2025-01-31T22:00:00-05:00"}],
+    }
+    transport = Transport(health("a/late") | {releases_api("a/late"): [[release]]})
+
+    report = check_live(tmp_path, http=client(transport), now=NOW)
+
+    assert report["stale"] == [
+        {"url": url, "name": "Fixture", "tag": "v1", "date": "2025-02-01"}
+    ]
+
+
 def test_an_inconclusive_page_still_gets_its_health_result(tmp_path: Path) -> None:
     url = "https://github.com/a/blocked"
     write_packs(tmp_path, [entry(url)])
@@ -917,9 +959,21 @@ def test_cli_exits_zero_on_stale_and_archived_projects(
     assert [item["url"] for item in report["stale"]] == ["https://github.com/a/old"]
 
 
-@pytest.mark.parametrize("token", ["secret", "", None])
+@pytest.mark.parametrize(
+    ("token", "sent"),
+    [
+        ("secret", "secret"),
+        ("secret\n", "secret"),
+        ("", None),
+        (" ", None),
+        (None, None),
+    ],
+)
 def test_cli_passes_the_environment_token_to_the_api(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, token: str | None
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    token: str | None,
+    sent: str | None,
 ) -> None:
     write_packs(tmp_path, [entry("https://github.com/a/app")])
     transport = fixture_transport(monkeypatch, health("a/app"))
@@ -934,5 +988,5 @@ def test_cli_passes_the_environment_token_to_the_api(
     page, *lookups = transport.requests
     assert page.get_header("Authorization") is None
     assert [request.get_header("Authorization") for request in lookups] == [
-        f"Bearer {token}" if token else None
+        f"Bearer {sent}" if sent else None
     ] * 2

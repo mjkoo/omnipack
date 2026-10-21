@@ -394,8 +394,8 @@ release qualifies when it is not a draft, is a prerelease only if the entry
 sets `includePrereleases`, and carries an asset ending in `.apk`, `.xapk`,
 `.apkm` or `.apks` (or `.zip` when the entry sets `includeZips`); a track-only
 entry needs no such asset. A release is dated by its newest
-asset when the entry sets `useLatestAssetDateAsReleaseDate`, and by its
-publication date otherwise. The URL is stale when its newest qualifying release
+asset when the entry sets `useLatestAssetDateAsReleaseDate` and the release has
+assets, and by its publication date otherwise. The URL is stale when its newest qualifying release
 is 180 or more whole days old, Obtainium's default threshold, or when none
 qualifies, and archived when GitHub reports the repository archived or
 disabled. Health uses the settings of the first entry at the URL. A lookup that

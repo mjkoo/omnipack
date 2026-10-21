@@ -17,7 +17,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 
 from omnipack.http import HttpClient, HttpError, failure_reason
@@ -39,7 +39,7 @@ class ResponseError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Release:
-    """A qualifying release: its tag and the date it is judged by."""
+    """A qualifying release: its tag and the UTC date it is judged by."""
 
     tag: str
     date: datetime
@@ -55,7 +55,7 @@ class Health:
 
 
 @dataclass(frozen=True, slots=True)
-class Inconclusive:
+class HealthUnknown:
     """A lookup that could not finish, with the reason naming its cause."""
 
     reason: str
@@ -100,7 +100,7 @@ def check_health(
     token: str | None,
     now: datetime,
     before_request: Callable[[], None] = lambda: None,
-) -> Health | Inconclusive:
+) -> Health | HealthUnknown:
     """Look up one repository's archive state and newest qualifying release.
 
     `settings` is the entry's `additionalSettings`. `token`, when given, is
@@ -122,7 +122,7 @@ def check_health(
         archived = _repository_archived(state)
         newest = _newest_qualifying(releases, options)
     except (HttpError, ValueError) as error:
-        return Inconclusive(failure_reason(error))
+        return HealthUnknown(failure_reason(error))
     stale = newest is None or (now - newest.date).days >= STALE_DAYS
     return Health(archived=archived, stale=stale, newest=newest)
 
@@ -206,4 +206,7 @@ def _parse_date(value: object) -> datetime:
     date = datetime.fromisoformat(value)
     if date.tzinfo is None:
         raise ResponseError(f"release date has no time zone: {value!r}")
-    return date
+    try:
+        return date.astimezone(UTC)
+    except OverflowError as error:
+        raise ResponseError(f"release date is out of range: {value!r}") from error

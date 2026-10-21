@@ -23,9 +23,14 @@ from datetime import UTC, datetime
 from pathlib import Path
 from typing import NotRequired, TypedDict
 
-from omnipack import forge_health
 from omnipack.build import OUTPUTS
-from omnipack.forge_health import check_health, decode_settings, github_repository
+from omnipack.forge_health import (
+    Health,
+    HealthUnknown,
+    check_health,
+    decode_settings,
+    github_repository,
+)
 from omnipack.http import HttpClient, HttpError, HttpStatusError, failure_reason
 from omnipack.model import Variant
 from omnipack.report_model import Status
@@ -136,18 +141,19 @@ def check_live(
     now = now or datetime.now(UTC)
     start = clock()
 
+    def spent() -> bool:
+        return clock() - start >= budget
+
     def before_request() -> None:
-        if clock() - start >= budget:
+        if spent():
             raise _BudgetSpent
 
     for target in targets:
         repository = github_repository(target.url)
-        try:
-            before_request()
-        except _BudgetSpent:
+        if spent():
             report["inconclusive"].append({"url": target.url, "reason": NOT_CHECKED})
             if repository is not None:
-                _add_health(report, target, forge_health.Inconclusive(NOT_CHECKED))
+                _add_health(report, target, HealthUnknown(NOT_CHECKED))
             continue
         if _check_reachability(report, client, target) and repository is not None:
             try:
@@ -160,7 +166,7 @@ def check_live(
                     before_request=before_request,
                 )
             except _BudgetSpent:
-                result = forge_health.Inconclusive(NOT_CHECKED)
+                result = HealthUnknown(NOT_CHECKED)
             _add_health(report, target, result)
     report["status"] = Status.SUCCESS
     return report
@@ -179,7 +185,7 @@ def _check_reachability(
         report["inconclusive"].append(
             {
                 "url": target.url,
-                "reason": f"HTTP {error.status}",
+                "reason": failure_reason(error),
                 "status": error.status,
             }
         )
@@ -193,9 +199,9 @@ def _check_reachability(
 def _add_health(
     report: LiveCheckReport,
     target: Target,
-    result: forge_health.Health | forge_health.Inconclusive,
+    result: Health | HealthUnknown,
 ) -> None:
-    if isinstance(result, forge_health.Inconclusive):
+    if isinstance(result, HealthUnknown):
         report["healthInconclusive"].append(
             {"url": target.url, "name": target.name, "reason": result.reason}
         )
@@ -204,7 +210,7 @@ def _add_health(
         stale: Stale = {"url": target.url, "name": target.name}
         if result.newest is not None:
             stale["tag"] = result.newest.tag
-            stale["date"] = result.newest.date.astimezone(UTC).date().isoformat()
+            stale["date"] = result.newest.date.date().isoformat()
         report["stale"].append(stale)
     if result.archived:
         report["archived"].append({"url": target.url, "name": target.name})
@@ -230,20 +236,18 @@ def _pack_entries(path: Path, name: str) -> list[Target]:
         raise PackReadError(f"pack {name} is unreadable: {error}") from error
     apps = document.get("apps") if isinstance(document, dict) else None
     if not isinstance(apps, list) or not all(
-        isinstance(entry, dict) and isinstance(entry.get("url"), str) for entry in apps
+        isinstance(entry, dict)
+        and isinstance(entry.get("url"), str)
+        and isinstance(entry.get("name"), str)
+        for entry in apps
     ):
         raise PackReadError(
-            f"pack {name} is malformed: apps must be objects with a string url"
+            f"pack {name} is malformed: apps must be objects with a string url and name"
         )
     return [
-        Target(entry["url"], _entry_name(entry), entry.get("additionalSettings"))
+        Target(entry["url"], entry["name"], entry.get("additionalSettings"))
         for entry in apps
     ]
-
-
-def _entry_name(entry: dict[str, object]) -> str:
-    name = entry.get("name")
-    return name if isinstance(name, str) else ""
 
 
 def request_headers(settings: object) -> dict[str, str]:

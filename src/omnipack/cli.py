@@ -136,7 +136,10 @@ def generate_source(args: argparse.Namespace) -> int:
 
 def check_live_command(_args: argparse.Namespace) -> int:
     root = Path.cwd()
-    result = check_live(root, github_token=os.environ.get("GITHUB_TOKEN") or None)
+    # A stray newline would make the header invalid and put the token in the
+    # failure reason, so surrounding whitespace is dropped.
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    result = check_live(root, github_token=token or None)
     # Findings print first so a report that cannot be written loses none.
     failed = result["status"] == Status.FAILED
     if failed:

@@ -52,6 +52,7 @@ KEY_LIMIT = 1024
 TITLE_LIMIT = 255
 ELLIPSIS = "…"
 DIGEST_LENGTH = 16
+STALE_DAYS = 180
 
 _SAFE_SUBJECT = frozenset(
     "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789/:._~+-"
@@ -982,39 +983,40 @@ def _live_health_findings(report: Mapping[str, object]) -> list[Finding]:
     """The stale and archived findings of a successful live-check report."""
     findings: list[Finding] = []
     for item in _objects(report.get("stale")):
-        url, name = item.get("url"), item.get("name")
+        url = item.get("url")
         if not isinstance(url, str):
             continue
         tag, date = item.get("tag"), item.get("date")
-        released = isinstance(tag, str) and isinstance(date, str)
+        if isinstance(tag, str):
+            title = f"Project has had no qualifying release in {STALE_DAYS} days: {url}"
+            newest = f"Newest qualifying release: {tag}"
+            detail = f"{newest} ({date})" if isinstance(date, str) else newest
+        else:
+            title = f"Project has no qualifying release: {url}"
+            detail = "No release qualified."
         findings.append(
             _finding(
                 subject_key(LIVE_STALE, url),
-                (
-                    f"Project has had no qualifying release in 180 days: {url}"
-                    if released
-                    else f"Project has no qualifying release: {url}"
-                ),
-                [
-                    f"URL: {url}",
-                    f"Entry: {name}",
-                    f"Newest qualifying release: {tag} ({date})"
-                    if released
-                    else "No release qualified.",
-                ],
+                title,
+                [f"URL: {url}", *_entry_line(item), detail],
             )
         )
     for item in _objects(report.get("archived")):
-        url, name = item.get("url"), item.get("name")
+        url = item.get("url")
         if isinstance(url, str):
             findings.append(
                 _finding(
                     subject_key(LIVE_ARCHIVED, url),
                     f"Project repository is archived: {url}",
-                    [f"URL: {url}", f"Entry: {name}"],
+                    [f"URL: {url}", *_entry_line(item)],
                 )
             )
     return findings
+
+
+def _entry_line(item: Mapping[str, object]) -> list[str]:
+    name = item.get("name")
+    return [f"Entry: {name}"] if isinstance(name, str) and name else []
 
 
 def emit(

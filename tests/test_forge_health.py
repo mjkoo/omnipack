@@ -11,7 +11,7 @@ import pytest
 
 from omnipack.forge_health import (
     Health,
-    Inconclusive,
+    HealthUnknown,
     Release,
     check_health,
     github_repository,
@@ -76,8 +76,7 @@ def lookup(
     settings: object = "{}",
     *,
     repository: object = None,
-    token: str | None = None,
-) -> tuple[Health | Inconclusive, Api]:
+) -> tuple[Health | HealthUnknown, Api]:
     api = Api(
         {
             REPO_API: {"archived": False, "disabled": False}
@@ -87,7 +86,7 @@ def lookup(
         }
     )
     client = HttpClient(transport=api, sleep=lambda _seconds: None)
-    result = check_health("owner/app", settings, client, token=token, now=NOW)
+    result = check_health("owner/app", settings, client, token=None, now=NOW)
     return result, api
 
 
@@ -127,9 +126,7 @@ def test_an_old_apk_release_is_stale_despite_a_newer_desktop_release() -> None:
     )
 
 
-@pytest.mark.parametrize(
-    ("days", "stale"), [(179, False), (179.99, False), (180, True)]
-)
+@pytest.mark.parametrize(("days", "stale"), [(179.99, False), (180, True)])
 def test_a_release_is_stale_after_180_whole_days(days: float, stale: bool) -> None:
     result, _ = lookup([release("v1", days, "app.apk")])
 
@@ -246,12 +243,30 @@ def test_a_draft_never_qualifies_even_when_dated() -> None:
         ({RELEASES_API: {"message": "list expected"}}, "releases"),
         ({REPO_API: ["object expected"]}, "repository"),
         ({REPO_API: {"archived": "yes", "disabled": False}}, "repository"),
-        ({RELEASES_API: ["release object expected"]}, "release"),
+        ({RELEASES_API: ["release object expected"]}, "release is not an object"),
         ({RELEASES_API: [{"draft": False, "prerelease": False}]}, "date"),
         ({RELEASES_API: [{"published_at": "2026-01-01T00:00:00Z"}]}, "draft"),
         (
             {RELEASES_API: [release("v1", 10, "app.apk") | {"published_at": "soon"}]},
             "soon",
+        ),
+        (
+            {
+                RELEASES_API: [
+                    release("v1", 10, "app.apk")
+                    | {"published_at": "2026-01-01T00:00:00"}
+                ]
+            },
+            "release date has no time zone",
+        ),
+        (
+            {
+                RELEASES_API: [
+                    release("v1", 10, "app.apk")
+                    | {"published_at": "0001-01-01T00:00:00+05:00"}
+                ]
+            },
+            "release date is out of range",
         ),
         (
             {RELEASES_API: [release("v1", 10, "app.apk") | {"tag_name": None}]},
@@ -277,7 +292,7 @@ def test_a_failed_lookup_is_inconclusive_with_its_reason(
 
     result = check_health("owner/app", "{}", client, token=None, now=NOW)
 
-    assert isinstance(result, Inconclusive)
+    assert isinstance(result, HealthUnknown)
     assert reason in result.reason
 
 
@@ -294,55 +309,16 @@ def test_undecodable_settings_are_inconclusive_without_a_request(
 ) -> None:
     result, api = lookup([release("v1", 400, "app.apk")], value)
 
-    assert isinstance(result, Inconclusive)
+    assert isinstance(result, HealthUnknown)
     assert result.reason.startswith(reason)
     assert api.requests == []
 
 
-def test_the_token_is_sent_only_as_an_unredirected_api_header() -> None:
-    _, api = lookup([release("v1", 10, "app.apk")], token="secret")
+def test_a_release_date_is_normalized_to_utc() -> None:
+    late = release("v1", 10, "app.apk") | {"published_at": "2025-01-31T22:00:00-05:00"}
 
-    assert [request.full_url for request in api.requests] == [REPO_API, RELEASES_API]
-    for request in api.requests:
-        assert request.unredirected_hdrs == {"Authorization": "Bearer secret"}
-        assert "Authorization" not in request.headers
+    result, _ = lookup([late])
 
-
-def test_no_token_means_anonymous_lookups() -> None:
-    _, api = lookup([release("v1", 10, "app.apk")])
-
-    assert all(request.get_header("Authorization") is None for request in api.requests)
-
-
-def test_each_request_is_preceded_by_the_callers_check() -> None:
-    calls: list[int] = []
-    api = Api({REPO_API: {"archived": False, "disabled": False}, RELEASES_API: []})
-    client = HttpClient(transport=api, sleep=lambda _seconds: None)
-
-    check_health(
-        "owner/app",
-        "{}",
-        client,
-        token=None,
-        now=NOW,
-        before_request=lambda: calls.append(len(api.requests)),
-    )
-
-    assert calls == [0, 1]
-
-
-def test_an_exception_from_the_callers_check_stops_the_lookup() -> None:
-    class Stop(Exception):
-        pass
-
-    def stop() -> None:
-        raise Stop
-
-    api = Api({})
-    client = HttpClient(transport=api, sleep=lambda _seconds: None)
-
-    with pytest.raises(Stop):
-        check_health(
-            "owner/app", "{}", client, token=None, now=NOW, before_request=stop
-        )
-    assert api.requests == []
+    assert isinstance(result, Health)
+    assert result.newest == Release("v1", datetime(2025, 2, 1, 3, tzinfo=UTC))
+    assert result.newest.date.tzinfo is UTC

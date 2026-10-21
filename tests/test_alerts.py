@@ -1525,6 +1525,26 @@ def test_stale_and_archived_urls_raise_health_findings(tmp_path: Path) -> None:
     )
 
 
+def test_a_stale_release_without_a_date_or_entry_name_is_still_described(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/a/old"
+    report = _live_report(
+        stale=[{"url": url, "name": "", "tag": "v1.0"}],
+        archived=[{"url": url}],
+    )
+
+    file = _emit(LIVE_CHECK, report=report, tmp_path=tmp_path, CHECK_RESULT="success")
+
+    assert [(f.title, f.details) for f in file.findings] == [
+        (
+            f"Project has had no qualifying release in 180 days: {url}",
+            (f"URL: {url}", "Newest qualifying release: v1.0"),
+        ),
+        (f"Project repository is archived: {url}", (f"URL: {url}",)),
+    ]
+
+
 def test_health_findings_do_not_account_for_a_failed_live_check_job(
     tmp_path: Path,
 ) -> None:
@@ -1601,18 +1621,44 @@ def test_unreachable_urls_leave_their_health_issues_unchanged(tmp_path: Path) ->
     )
 
 
-def test_a_muted_stale_issue_clears_on_a_fresh_release(tmp_path: Path) -> None:
+def test_a_muted_stale_issue_stays_closed_and_clears_on_a_fresh_release(
+    tmp_path: Path,
+) -> None:
     url = "https://github.com/a/app"
     muted = alert_issue(
         1, f"live-check/stale/{url}", state="closed", reason="not_planned"
     )
+    dormant = _live_report(stale=[{"url": url, "name": "App"}])
 
-    gh = _reconcile_live(tmp_path, _live_report(), [muted])
+    accepted = _reconcile_live(tmp_path, dormant, [muted])
 
-    assert issue_writes(gh) == [("reopen", "1"), ("close", "1")]
-    close = next(call for call in gh.calls if call[:2] == ("issue", "close"))
+    assert issue_writes(accepted) == []
+
+    # The first run wrote nothing, so the issue is still muted.
+    released = _reconcile_live(tmp_path, _live_report(), [muted])
+
+    assert issue_writes(released) == [("reopen", "1"), ("close", "1")]
+    close = next(call for call in released.calls if call[:2] == ("issue", "close"))
     assert close[close.index("--reason") + 1] == "completed"
     assert close[close.index("--comment") + 1] == f"Cleared in run {RUN_2}"
+
+
+def test_a_lookup_cut_by_the_time_budget_leaves_a_muted_stale_issue_unchanged(
+    tmp_path: Path,
+) -> None:
+    url = "https://github.com/a/app"
+    not_checked = "not checked: time budget spent"
+    report = _live_report(
+        inconclusive=[{"url": url, "reason": not_checked}],
+        healthInconclusive=[{"url": url, "name": "App", "reason": not_checked}],
+    )
+    muted = alert_issue(
+        1, f"live-check/stale/{url}", state="closed", reason="not_planned"
+    )
+
+    gh = _reconcile_live(tmp_path, report, [muted])
+
+    assert issue_writes(gh) == []
 
 
 def test_health_issues_of_a_url_that_left_the_packs_are_closed(
