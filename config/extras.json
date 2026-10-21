@@ -266,6 +266,14 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.defnf.icopc",
+    "url": "https://github.com/nathanialf/ico-pc",
+    "name": "ICO (ico-pc)",
+    "author": "nathanialf",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
