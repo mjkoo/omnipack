@@ -26,9 +26,15 @@ finding for each of these problems, and for no other outcome:
   whether its result reads cancelled or failed.
 
 A nightly push or release synchronization, or a source publication, refused
-because `main` advanced past the run's base revision SHALL raise no finding. Skipped listings, live-check outcomes
-that end in a retried status, a timeout, a connection failure or the time
-budget running out, and health-inconclusive URLs, SHALL raise no finding. A
+because `main` advanced past the run's base revision SHALL raise no finding. Skipped listings SHALL raise no finding, and live-check reachability
+outcomes that end in a retried status, a timeout, a connection failure or the
+time budget running out SHALL raise no reachability finding. A URL's reachability outcome and
+its health outcome, as `pack check-live` defines them, SHALL be mapped to
+findings independently. A health-inconclusive result SHALL raise no stale or
+archived finding and SHALL NOT suppress that URL's reachability findings. An
+inconclusive reachability outcome SHALL raise no reachability finding other
+than the finding for an error status the HTTP client does not retry, and SHALL
+NOT suppress that URL's conclusive stale or archived findings. A
 stale or archived finding's details SHALL name the URL and the entry, and a
 stale finding's details SHALL give the qualifying release's tag and date or
 say that no release qualified. A stale or archived finding SHALL NOT be
@@ -57,7 +63,7 @@ uploading them fails.
 
 - **WHEN** one pack URL answers 404, another 403, another 429 after retries,
   and another times out
-- **THEN** findings are raised for the 404 and 403 URLs only
+- **THEN** reachability findings are raised for the 404 and 403 URLs only
 
 #### Scenario: Build warnings
 
@@ -111,8 +117,17 @@ uploading them fails.
 - **WHEN** a live check reports one URL stale, another archived, and a third
   health-inconclusive
 - **THEN** a stale finding is raised for the first and an archived finding for
-  the second, nothing is raised for the third, and the live-check job's
-  verdict is unchanged
+  the second, no stale or archived finding is raised for the third, and the
+  live-check job's verdict is unchanged
+- **AND** each URL's reachability findings are raised or not by its
+  reachability outcome alone
+
+#### Scenario: A blocked page with a rate-limited health lookup
+
+- **WHEN** a URL's project page answers HTTP 403, its health lookup is rate
+  limited, and it has an open stale issue and an open archived issue
+- **THEN** the HTTP 403 finding is raised, and its stale and archived issues
+  are left open and unchanged
 
 ### Requirement: Each finding has one issue that follows its latest re-check
 
@@ -139,13 +154,13 @@ skipped only because generation and staging succeeded with a candidate equal
 to main's catalog. A producing job's early-failure key SHALL count as
 re-checked whenever that job ran, including when it was cancelled; a
 cancelled job SHALL re-check no other key. A live check that read the packs SHALL count
-as re-checking every live-check URL key except those of URLs the time budget
+as re-checking every unreachable and error-status URL key except those of URLs the time budget
 left unchecked and of inconclusive URLs that recorded no status, such as a
 retried status after retries, a timeout or a connection failure, so the issue
-of a URL no longer in the packs is closed. It SHALL count as re-checking a
-URL's stale and archived keys only when that URL's health lookup finished:
-the keys of a health-inconclusive URL, an unreachable URL and a URL the time
-budget left unchecked SHALL NOT be re-checked. A build SHALL count as re-checking
+of a URL no longer in the packs is closed. A live check that read the packs
+SHALL count as re-checking every stale and archived key except those of a
+health-inconclusive URL, an unreachable URL and a URL the time budget left
+unchecked, so the health issues of a URL no longer in the packs are closed. A build SHALL count as re-checking
 the build-warning keys only when its report records success; a failed
 build's report SHALL still raise the warnings it lists but SHALL close no
 build-warning issue.
@@ -207,6 +222,13 @@ label but identifying no valid key SHALL be left alone.
 - **WHEN** a URL with an open issue is denied and main's rebuilt packs no
   longer contain it
 - **THEN** the next live check closes that URL's issue as completed
+
+#### Scenario: A URL with health issues leaves the packs
+
+- **WHEN** a URL has an open stale issue and a muted archived issue, and it is
+  denied so that main's rebuilt packs no longer contain it
+- **THEN** the next live check closes the stale issue as completed, and marks
+  the archived issue closed as completed with a comment naming that run
 
 #### Scenario: A key is not re-checked
 
