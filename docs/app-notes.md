@@ -23,9 +23,23 @@ but cannot install the Lua mod or detect its installed version. Install or
 update it through [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp)
 using its Mod Index or ZIP import.
 
+## Stardew-Thor-DS and Eden Duo Companions (mod updates)
+
+Dual-screen pack only, and track-only: both ship mod packages, not Android
+apps, so Obtainium reports their releases but cannot install them or detect an
+installed version. Install Stardew-Thor-DS, a SMAPI mod for Stardew Valley in
+Cinderbox, as its project describes. Install an Eden Duo companion from that
+game's Add-ons menu in Eden Duo. Each companion release covers one game, so a
+notification may be for a game you do not play.
+
 ## Melee PC
 
 The pack opts into prereleases, so Obtainium offers beta builds.
+
+## PT-PC
+
+Dual-screen pack only. The project publishes every Android build as a
+prerelease, so the pack opts into prereleases.
 
 ## Silent Hill Decomp
 

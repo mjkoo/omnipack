@@ -42,5 +42,9 @@
   {
     "url": "https://github.com/weihuoya/citra",
     "reason": "Citra MMJ is a fork of the discontinued Citra with no release since November 2025; Azahar, Citra's maintained successor, covers 3DS."
+  },
+  {
+    "url": "https://github.com/enrique-paulino/DualScreenDex",
+    "reason": "Archived, with no release since February 2026; Darkaxt's maintained fork, DualDex, is in the dual-screen pack."
   }
 ]
