@@ -45,7 +45,9 @@ recently (since the previous weekly run, or the last two weeks when unsure):
   keyword, and check what established porters and emulator projects shipped.
 - Community and press: r/EmulationOnAndroid, r/SBCGaming, r/AYNThor and
   r/RetroidPocket, portcove intake issues, and the port-news coverage that
-  links Android builds.
+  links Android builds. Reddit refuses direct requests from cloud sessions, so
+  reach it through web search (`site:reddit.com/r/<subreddit> <terms>`) and
+  follow the projects linked from the results.
 
 Run every find through the pre-filter, then research and judge it exactly as an
 intake candidate. Consider at most about ten new candidates per run, most
