@@ -38,8 +38,9 @@ they are not re-proposed unless something material changes.
   accounts, one-off or download-less releases).
   Promote when a release from a project with a real history carries an Android APK.
 - **RetroArch transfer** - a utility for moving RetroArch data between devices,
-  not yet identified. Promote once its source link is known and it passes the
-  usual checks.
+  teased by ItsRetroPup (https://github.com/ItsRetroPup) but not yet published.
+  Promote once a repository with an Android APK release appears under that
+  account and it passes the usual checks.
 
 ## Provenance or maturity
 
@@ -60,12 +61,11 @@ they are not re-proposed unless something material changes.
   releases have been pulled for game-breaking bugs. Its install permission
   serves a self-updater that checks its own release asset's digest.
   Promote when releases have stayed stable, with none pulled, for about a month.
-- **GBA Duo** - https://github.com/khumam/gba-duo.
-  A GPL mGBA-based emulator for dual-screen devices that shows companion packs
-  on the second screen. It declares no permissions and ships one APK per
-  release, but the project is new, AI-assisted and has no outside use yet.
-  Promote, dual-screen only, once it has a sustained release history and
-  outside use.
+- **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
+  `config/deny.json`: a new single-author project shipping one large APK that
+  bundles other projects' Wii and GameCube ports, with all-files storage
+  access. Reconsider, by removing the denial, once it has a sustained release
+  history and clear provenance for the bundled ports.
 - **GBA DS** - https://github.com/kyannon/gba-ds.
   A GPL libmgba emulator for dual-screen devices that shows the game's map, with
   one APK per release beside a Linux build. The history is short and almost

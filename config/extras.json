@@ -290,6 +290,15 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.khumam.gbaduo",
+    "url": "https://github.com/khumam/gba-duo",
+    "name": "GBA Duo",
+    "author": "khumam",
+    "categories": ["Emulator"],
+    "dualScreen": true,
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
