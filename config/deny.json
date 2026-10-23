@@ -46,5 +46,9 @@
   {
     "url": "https://github.com/enrique-paulino/DualScreenDex",
     "reason": "Archived, with no release since February 2026; Darkaxt's maintained fork, DualDex, is in the dual-screen pack."
+  },
+  {
+    "url": "https://github.com/Maddex712/WiiDS",
+    "reason": "A new single-author project that ships one large APK bundling other projects' Wii and GameCube ports and requests all-files storage access; revisit once it has a sustained release history and clear provenance for the bundled ports."
   }
 ]
