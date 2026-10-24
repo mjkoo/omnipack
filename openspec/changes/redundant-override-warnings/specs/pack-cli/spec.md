@@ -29,10 +29,10 @@ the build. The system SHALL write a build report recording:
   that set no selected entry's category, whether the key names no selected
   family or a family whose selected entries are all track-only;
 - the overlay records with patch keys that change nothing, each with its
-  normalized project URL and those keys, and the extras a catalog lists, each
-  with its normalized project URL, package id, the other sources listing it
-  and, for each, the fields that differ, as "Overrides that change nothing are
-  reported" in pack-composition defines;
+  normalized project URL and those keys, and the extras a catalog lists, one
+  entry per extra, each with its normalized project URL, published package id,
+  the other sources listing it and, for each, the fields that differ, as
+  "Overrides that change nothing are reported" in pack-composition defines;
 - source ingestion failures.
 
 Upstream-list diagnostics SHALL belong to source generation reports, not
