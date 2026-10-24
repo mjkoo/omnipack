@@ -240,7 +240,8 @@ each patch key by its dotted path, the keys along it joined with `.`, and the
 nightly alerts join that path to the project URL with `/`, so the two
 characters would let two keys share one name. A patch may not be empty or hold
 an empty object at any level: a record with no keys left is removed, not
-emptied, and one that patches nothing fails naming the record.
+emptied, and one that patches nothing fails the build and `pack verify` naming
+the record.
 
 A patch may set `id` to a nonempty string, which is how a source's wrong package
 id is fixed by hand; [curation](curation.md#wrong-package-ids) describes when.

@@ -25,4 +25,4 @@
 ## 5. Integration
 
 - [ ] 5.1 Run `just check-all` and verify that it passes
-- [ ] 5.2 Run `uv run pack build` and `uv run pack report` on the live inputs and verify the report lists the redundant overlay keys and the extras Quiver lists that the proposal counted, adjusting the proposal's counts only if upstream changed
+- [x] 5.2 Run `uv run pack build` and `uv run pack report` on the live inputs and verify the report lists the redundant overlay keys and the extras Quiver lists that the proposal counted, adjusting the proposal's counts only if upstream changed

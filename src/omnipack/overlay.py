@@ -131,12 +131,12 @@ def _check_patch_keys(
     judge: a record whose last live key was deleted is removed, not left in
     place. Arrays are values, so keys inside them are not checked.
     """
+    where = f" under {'.'.join(path)!r}" if path else ""
     if not patch:
-        where = f" under {'.'.join(path)!r}" if path else ""
         raise OverlayError(f"{label} patches nothing{where}")
     for key, value in patch.items():
         if "." in key or "/" in key:
-            raise OverlayError(f"{label} has key {key!r} containing '.' or '/'")
+            raise OverlayError(f"{label} has key {key!r} containing '.' or '/'{where}")
         if isinstance(value, dict):
             _check_patch_keys(value, label, (*path, key))
 

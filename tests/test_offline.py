@@ -249,6 +249,25 @@ def test_malformed_source_produces_findings_without_stopping_other_entries(
     } <= located(findings)
 
 
+@pytest.mark.parametrize(
+    "patch",
+    [{}, {"additionalSettings": {}}, {"guard.flag": True}, {"guard/flag": True}],
+    ids=["empty", "empty-nested", "dot", "slash"],
+)
+def test_overlay_key_and_empty_patch_rules_are_verification_findings(
+    patch: dict[str, object],
+) -> None:
+    findings = validate_offline(
+        inputs(
+            [app("present")],
+            [app("present")],
+            overlay=[{"url": "https://example.com/app", "patch": patch}],
+        )
+    )
+    assert [finding.code for finding in findings] == ["invalid_composition_config"]
+    assert "overlay[0].patch" in findings[0].message
+
+
 @pytest.mark.parametrize("field", ["overrideSource", "additionalSettings"])
 def test_raw_ids_survive_other_entry_errors(field: str) -> None:
     malformed = app("present")

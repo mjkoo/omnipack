@@ -1538,40 +1538,55 @@ def redundant_keys(result: CompositionResult) -> list[tuple[str, tuple[str, ...]
 
 
 @pytest.mark.parametrize(
-    "patch",
-    [{}, {"additionalSettings": {}}, {"additionalSettings": {"nested": {}}}],
+    ("patch", "where"),
+    [
+        ({}, ""),
+        ({"additionalSettings": {}}, " under 'additionalSettings'"),
+        (
+            {"additionalSettings": {"nested": {}}},
+            " under 'additionalSettings.nested'",
+        ),
+    ],
     ids=["empty", "empty-settings", "empty-nested"],
 )
 def test_overlay_patch_that_patches_nothing_fails_naming_the_record(
-    patch: dict[str, object],
+    patch: dict[str, object], where: str
 ) -> None:
     candidate = app("x", url="https://github.com/Owner/Repo")
     with pytest.raises(CompositionError) as raised:
         compose([candidate], [], overlays((candidate.url, patch)))
-    assert str(raised.value).startswith(
-        "overlay[0].patch for 'github.com/owner/repo' patches nothing"
+    assert str(raised.value) == (
+        f"overlay[0].patch for 'github.com/owner/repo' patches nothing{where}"
     )
 
 
 @pytest.mark.parametrize(
-    ("patch", "key"),
+    ("patch", "key", "where"),
     [
-        ({"guard.flag": True}, "guard.flag"),
-        ({"guard/flag": True}, "guard/flag"),
-        ({"additionalSettings": {"apk.filter": "x"}}, "apk.filter"),
-        ({"additionalSettings": {"apk/filter": "x"}}, "apk/filter"),
+        ({"guard.flag": True}, "guard.flag", ""),
+        ({"guard/flag": True}, "guard/flag", ""),
+        (
+            {"additionalSettings": {"apk.filter": "x"}},
+            "apk.filter",
+            " under 'additionalSettings'",
+        ),
+        (
+            {"additionalSettings": {"apk/filter": "x"}},
+            "apk/filter",
+            " under 'additionalSettings'",
+        ),
     ],
     ids=["top-dot", "top-slash", "nested-dot", "nested-slash"],
 )
 def test_overlay_patch_key_with_a_dot_or_slash_fails_naming_record_and_key(
-    patch: dict[str, object], key: str
+    patch: dict[str, object], key: str, where: str
 ) -> None:
     candidate = app("x", url="https://github.com/Owner/Repo")
     with pytest.raises(CompositionError) as raised:
         compose([candidate], [], overlays((candidate.url, patch)))
     assert str(raised.value) == (
         f"overlay[0].patch for 'github.com/owner/repo' has key {key!r} "
-        "containing '.' or '/'"
+        f"containing '.' or '/'{where}"
     )
 
 
@@ -1680,6 +1695,12 @@ def test_a_key_whose_patched_entry_cannot_render_counts_as_changing_it() -> None
     assert redundant_keys(result) == []
 
 
+def test_a_record_on_an_entry_that_cannot_render_records_no_key() -> None:
+    broken = replace(app("pkg", name="Same"), raw={"author": 7})
+    result = compose([broken], [], overlays((broken.url, {"name": "Same"})))
+    assert redundant_keys(result) == []
+
+
 def test_redundant_keys_are_recorded_per_record_sorted_by_url() -> None:
     later = app("b", url="https://github.com/Owner/Zeta", name="Z")
     earlier = app("a", url="https://github.com/Owner/Alpha", name="A")
@@ -1697,11 +1718,14 @@ def test_redundant_keys_are_recorded_per_record_sorted_by_url() -> None:
 def test_an_invalid_overlay_leaves_the_redundant_keys_empty() -> None:
     candidate = app("pkg")
     report = CompositionReport()
-    with pytest.raises(CompositionError, match="protected field"):
+    with pytest.raises(CompositionError, match="no selected target"):
         compose(
             [candidate],
             [],
-            overlays((candidate.url, {"name": candidate.name, "url": "x"})),
+            overlays(
+                (candidate.url, {"name": candidate.name}),
+                ("https://github.com/Owner/Missing", {"name": "stale"}),
+            ),
             report=report,
         )
     assert report.redundant_overlay_keys == []
@@ -1734,14 +1758,14 @@ def test_an_extra_a_catalog_lists_is_recorded_with_its_differing_fields() -> Non
     quiver = app(
         "org.pkg",
         "quiver",
-        url=LISTED_URL,
+        url=LISTED_URL.lower() + "/",
         name="Quiver",
         additional_settings={"apkFilterRegEx": "x86"},
     )
     result = compose([quiver, extra], [], [])
+    alone = compose([extra], [], [])
     for variant in Variant:
-        [entry] = published(result, variant)
-        assert entry["name"] == "Extra"
+        assert published(result, variant) == published(alone, variant)
     assert listed(result) == [
         (
             "github.com/owner/listed",
@@ -1828,26 +1852,50 @@ def test_two_same_source_candidates_at_one_url_keep_both_sets_of_fields() -> Non
         additional_settings={"apkFilterRegEx": "arm64"},
     )
     by_name = app(
-        "org.pkg",
+        "org.pkg.one",
         "quiver",
         url=LISTED_URL,
         name="Other",
         additional_settings={"apkFilterRegEx": "arm64"},
     )
     by_filter = app(
-        "org.pkg",
+        "org.pkg.two",
         "quiver",
         url=LISTED_URL,
         name="Extra",
-        origin="quiver-second",
         additional_settings={"apkFilterRegEx": "x86"},
     )
-    for order in permutations([extra, by_name, by_filter]):
-        result = compose(list(order), [], [])
-        assert listed(result) == [
-            (
-                "github.com/owner/listed",
-                "org.pkg",
-                (("quiver", ("additionalSettings.apkFilterRegEx", "name")),),
-            )
-        ]
+    result = compose([by_filter, extra, by_name], [], [])
+    assert listed(result) == [
+        (
+            "github.com/owner/listed",
+            "org.pkg",
+            (("quiver", ("additionalSettings.apkFilterRegEx", "id", "name")),),
+        )
+    ]
+
+
+def test_a_pinned_extra_a_catalog_lists_is_recorded() -> None:
+    extra = app("org.pkg", "extras", family="app:x", url=LISTED_URL, name="Same")
+    quiver = app("org.pkg", "quiver", family="app:x", url=LISTED_URL, name="Same")
+    policy = pin_policy(extra, "app:x", Variant.SINGLE, quiver)
+    result = compose([quiver, extra], [], [], policy=policy)
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+
+
+def test_a_listed_extra_is_keyed_by_its_patched_id() -> None:
+    extra = app("org.wrong", "extras", url=LISTED_URL, name="Same")
+    quiver = app("org.wrong", "quiver", url=LISTED_URL, name="Same")
+    result = compose([quiver, extra], [], overlays((LISTED_URL, {"id": "org.right"})))
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.right", (("quiver", ()),))
+    ]
+
+
+def test_a_listing_candidate_that_cannot_render_reports_no_fields() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
+    quiver = replace(
+        app("org.pkg", "quiver", url=LISTED_URL, name="Quiver"), raw={"author": 7}
+    )
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]

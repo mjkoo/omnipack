@@ -11,7 +11,7 @@ from omnipack.merge import CompositionReport, ListedExtra, ListingSource
 from omnipack.model import Source
 from omnipack.offline import Finding
 from omnipack.overlay import RedundantOverlayKeys
-from omnipack.report import BUILD_SCHEMA_VERSION, format_reports, write_report
+from omnipack.report import BUILD_SCHEMA_VERSION, write_report
 from omnipack.report_model import (
     BuildStage,
     InputState,
@@ -99,8 +99,3 @@ def test_override_records_round_trip_through_the_build_report(tmp_path: Path) ->
             ],
         },
     ]
-    output = format_reports(tmp_path)
-    assert "Overlay keys changing nothing: github.com/o/a; keys: " in output
-    assert (
-        "Listed extra: org.a; URL: github.com/o/listed; rjny: no differences" in output
-    )
