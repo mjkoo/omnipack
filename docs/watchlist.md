@@ -62,16 +62,13 @@ they are not re-proposed unless something material changes.
   serves a self-updater that checks its own release asset's digest.
   Promote when releases have stayed stable, with none pulled, for about a month.
 - **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
-  `config/deny.json`: a new single-author project shipping one large APK that
-  bundles other projects' Wii and GameCube ports, with all-files storage
-  access. Reconsider, by removing the denial, once it has a sustained release
-  history and clear provenance for the bundled ports.
-- **GBA DS** - https://github.com/kyannon/gba-ds.
-  A GPL libmgba emulator for dual-screen devices that shows the game's map, with
-  one APK per release beside a Linux build. The history is short and almost
-  entirely AI-written, and the app requests all-files storage and handles
-  RetroAchievements credentials. Promote, dual-screen only, once it has a
-  sustained history and outside use.
+  `config/deny.json` while it has a single release: whether a later release
+  installs over it with the same signing key is not yet known, and its Super
+  Mario Galaxy integration has been validated only in emulation, not on an AYN
+  Thor. It ships Nintendo's own menu music, HUD art and cover scans in the APK
+  rather than taking them from the user's disc, which raises takedown risk
+  without disqualifying it. Promote, dual-screen only, by removing the denial
+  once a later release installs over the first.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
   A gbarecomp-based recomp with APK releases from a brand-new account, with
   drifting asset names and a package id set by the external engine's build

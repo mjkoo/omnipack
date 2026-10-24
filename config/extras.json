@@ -299,6 +299,15 @@
     "additionalSettings": {}
   },
   {
+    "id": "io.github.kyannon.gbads",
+    "url": "https://github.com/kyannon/gba-ds",
+    "name": "GBA DS",
+    "author": "kyannon",
+    "categories": ["Emulator"],
+    "dualScreen": true,
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
