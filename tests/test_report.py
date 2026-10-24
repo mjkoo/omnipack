@@ -67,8 +67,9 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
     [
         {"status": "success"},
         {"schemaVersion": 4, "status": "success", "denylistRemovals": []},
+        {"schemaVersion": 5, "status": "success", "denylistRemovals": []},
     ],
-    ids=["schemaless", "schema-4"],
+    ids=["schemaless", "schema-4", "schema-5"],
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
@@ -322,6 +323,8 @@ def test_malformed_build_report_is_concise_cli_failure(
         "sameRankTies",
         "uncategorizedFamilies",
         "staleCategoryAssignments",
+        "redundantOverlayKeys",
+        "extrasListedByCatalog",
         "offlineVerification",
     ],
 )
@@ -465,7 +468,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
 ) -> None:
     # The writer's document shape, built literally so the lists can be long.
     document = {
-        "schemaVersion": 5,
+        "schemaVersion": 6,
         "status": "failed" if failed else "success",
         "changes": {
             variant: {
@@ -530,6 +533,27 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             for i in range(40)
         ],
         "staleCategoryAssignments": [f"app:gone-{i}" for i in range(40)],
+        "redundantOverlayKeys": [
+            {
+                "url": f"example.test/dead/{i}",
+                "keys": ["additionalSettings.about", "name"],
+            }
+            for i in range(40)
+        ],
+        "extrasListedByCatalog": [
+            {
+                "url": f"example.test/listed/{i}",
+                "id": f"extra.{i}",
+                "sources": [
+                    {
+                        "source": "quiver",
+                        "fields": ["additionalSettings.apkFilterRegEx"],
+                    },
+                    {"source": "rjny", "fields": []},
+                ],
+            }
+            for i in range(40)
+        ],
         "offlineVerification": {
             "status": "not-run",
             "findings": [],
@@ -582,6 +606,14 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             f"Uncategorized: example.test/bare/{i}; variants: single, dual\n" in output
         )
         assert f"Stale category assignment: app:gone-{i}\n" in output
+        assert (
+            f"Overlay keys changing nothing: example.test/dead/{i}; keys: "
+            f"additionalSettings.about, name\n"
+        ) in output
+        assert (
+            f"Listed extra: extra.{i}; URL: example.test/listed/{i}; "
+            f"quiver: additionalSettings.apkFilterRegEx; rjny: no differences\n"
+        ) in output
     assert (
         output.index("Selection:")
         < output.index(prefix + ":")
@@ -786,6 +818,7 @@ def test_empty_and_unavailable_comparisons_are_distinct_cli_output(
 
 
 SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.test/a"}
+SOURCE_FIELDS = {"source": "quiver", "fields": ["name"]}
 
 
 @pytest.mark.parametrize(
@@ -847,6 +880,31 @@ SELECTOR = {"source": "rjny", "origin": "rjny-catalog", "id": "x", "url": "x.tes
         ("uncategorizedFamilies", {"family": "app:x", "variants": ["bogus"]}),
         ("uncategorizedFamilies", "app:x"),
         ("staleCategoryAssignments", 7),
+        ("redundantOverlayKeys", {"url": "x.test/a"}),
+        ("redundantOverlayKeys", {"url": "x.test/a", "keys": []}),
+        ("redundantOverlayKeys", {"url": "x.test/a", "keys": [7]}),
+        ("redundantOverlayKeys", {"keys": ["name"]}),
+        ("redundantOverlayKeys", "x.test/a"),
+        ("extrasListedByCatalog", {"url": "x.test/a", "id": "x"}),
+        ("extrasListedByCatalog", {"url": "x.test/a", "id": "x", "sources": []}),
+        ("extrasListedByCatalog", {"url": "x.test/a", "sources": [SOURCE_FIELDS]}),
+        (
+            "extrasListedByCatalog",
+            {"url": "x.test/a", "id": "x", "sources": [{"source": "quiver"}]},
+        ),
+        (
+            "extrasListedByCatalog",
+            {"url": "x.test/a", "id": "x", "sources": [{"fields": ["name"]}]},
+        ),
+        (
+            "extrasListedByCatalog",
+            {
+                "url": "x.test/a",
+                "id": "x",
+                "sources": [{"source": "quiver", "fields": [1]}],
+            },
+        ),
+        ("extrasListedByCatalog", "x.test/a"),
     ],
 )
 def test_malformed_diagnostic_elements_raise_report_format_error(
@@ -889,6 +947,40 @@ def test_category_lists_alone_are_displayed(
         "Build report\nStatus: success\n"
         "Uncategorized: example.test/bare; variants: dual\n"
         "Stale category assignment: app:gone\n"
+        "Offline verification: not-run\n\n"
+        "Verification report\nNo standalone verification recorded\n"
+    )
+
+
+def test_overrides_changing_nothing_alone_are_displayed(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    output = only(
+        tmp_path,
+        monkeypatch,
+        capsys,
+        redundantOverlayKeys=[
+            {"url": "github.com/o/dead", "keys": ["additionalSettings.about", "name"]}
+        ],
+        extrasListedByCatalog=[
+            {
+                "url": "github.com/o/listed",
+                "id": "org.listed",
+                "sources": [
+                    {"source": "quiver", "fields": ["id", "name"]},
+                    {"source": "rjny", "fields": []},
+                ],
+            }
+        ],
+    )
+    assert output == (
+        "Build report\nStatus: success\n"
+        "Overlay keys changing nothing: github.com/o/dead; keys: "
+        "additionalSettings.about, name\n"
+        "Listed extra: org.listed; URL: github.com/o/listed; quiver: id, name; "
+        "rjny: no differences\n"
         "Offline verification: not-run\n\n"
         "Verification report\nNo standalone verification recorded\n"
     )

@@ -221,6 +221,8 @@ BUILD_REPORT_FIELDS = {
     "sameRankTies",
     "uncategorizedFamilies",
     "staleCategoryAssignments",
+    "redundantOverlayKeys",
+    "extrasListedByCatalog",
     "offlineVerification",
 }
 
@@ -237,7 +239,7 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
         build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["schemaVersion"] == 5
+    assert report["schemaVersion"] == 6
     assert set(report) == BUILD_REPORT_FIELDS
     write_report(
         tmp_path,

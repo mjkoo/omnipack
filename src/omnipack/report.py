@@ -29,7 +29,7 @@ from omnipack.report_model import (
 )
 from omnipack.sources import IngestionReport
 
-BUILD_SCHEMA_VERSION = 5
+BUILD_SCHEMA_VERSION = 6
 _VARIANT_VALUES = frozenset(variant.value for variant in Variant)
 _SELECTION_REASONS = frozenset(reason.value for reason in SelectionReason)
 
@@ -82,6 +82,18 @@ def write_report(
             _record(item) for item in records.uncategorized_families
         ],
         "staleCategoryAssignments": list(records.stale_category_assignments),
+        "redundantOverlayKeys": [
+            _record(item)
+            for item in sorted(
+                records.redundant_overlay_keys, key=lambda item: item.url
+            )
+        ],
+        "extrasListedByCatalog": [
+            _record(item)
+            for item in sorted(
+                records.extras_listed_by_catalog, key=lambda item: (item.url, item.id)
+            )
+        ],
         "offlineVerification": offline_verification or not_run_verdict(),
     }
     if error is not None:
@@ -194,6 +206,15 @@ def format_reports(root: Path) -> str:
             )
         for key in build["staleCategoryAssignments"]:
             lines.append(f"Stale category assignment: {key}")
+        for item in build["redundantOverlayKeys"]:
+            keys = item.get("keys") if isinstance(item, dict) else None
+            if not _strings(item, ("url",)) or not _string_list(keys):
+                raise ReportFormatError("malformed build redundant overlay keys")
+            lines.append(
+                f"Overlay keys changing nothing: {item['url']}; keys: {', '.join(keys)}"
+            )
+        for item in build["extrasListedByCatalog"]:
+            lines.append(f"Listed extra: {_format_listed_extra(item)}")
         for item in build["sourceAdmissions"]:
             if not _strings(item, ("source", "url", "id")):
                 raise ReportFormatError("malformed build source admission")
@@ -274,6 +295,26 @@ def _format_considered(item: object) -> str:
     )
 
 
+def _format_listed_extra(item: object) -> str:
+    sources = item.get("sources") if isinstance(item, dict) else None
+    if (
+        not _strings(item, ("url", "id"))
+        or not isinstance(sources, list)
+        or not sources
+        or not all(
+            _strings(source, ("source",))
+            and isinstance(source.get("fields"), list)
+            and all(isinstance(field, str) for field in source["fields"])
+            for source in sources
+        )
+    ):
+        raise ReportFormatError("malformed build listed extra")
+    return f"{item['id']}; URL: {item['url']}; " + "; ".join(
+        f"{source['source']}: {', '.join(source['fields']) or 'no differences'}"
+        for source in sources
+    )
+
+
 def _variant_record(item: object, keys: tuple[str, ...]) -> bool:
     """Whether `item` holds string `keys`, its `variant` naming a pack variant."""
     return _strings(item, keys) and item["variant"] in _VARIANT_VALUES
@@ -330,6 +371,8 @@ _BUILD_FIELDS = frozenset(
         "sameRankTies",
         "uncategorizedFamilies",
         "staleCategoryAssignments",
+        "redundantOverlayKeys",
+        "extrasListedByCatalog",
         "offlineVerification",
     }
 )
@@ -343,6 +386,8 @@ _BUILD_RECORD_FIELDS = (
     "singleOnlyFamilies",
     "sameRankTies",
     "uncategorizedFamilies",
+    "redundantOverlayKeys",
+    "extrasListedByCatalog",
 )
 
 
