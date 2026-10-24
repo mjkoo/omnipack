@@ -266,6 +266,48 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.defnf.icopc",
+    "url": "https://github.com/nathanialf/ico-pc",
+    "name": "ICO (ico-pc)",
+    "author": "nathanialf",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.izzy2lost.psx2",
+    "url": "https://github.com/izzy2lost/PSX2",
+    "name": "PSX2",
+    "author": "izzy2lost",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.izzy2lost.super3",
+    "url": "https://github.com/izzy2lost/Super3",
+    "name": "Super3",
+    "author": "izzy2lost",
+    "categories": ["Emulator"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.khumam.gbaduo",
+    "url": "https://github.com/khumam/gba-duo",
+    "name": "GBA Duo",
+    "author": "khumam",
+    "categories": ["Emulator"],
+    "dualScreen": true,
+    "additionalSettings": {}
+  },
+  {
+    "id": "io.github.kyannon.gbads",
+    "url": "https://github.com/kyannon/gba-ds",
+    "name": "GBA DS",
+    "author": "kyannon",
+    "categories": ["Emulator"],
+    "dualScreen": true,
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",

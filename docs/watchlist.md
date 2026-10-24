@@ -32,13 +32,15 @@ they are not re-proposed unless something material changes.
   user's ROM set, so no release ships a distributable APK.
   Promote when a release carries an Android APK.
 - **F-Zero GX recomp** - https://github.com/Pipyakas/fzero-gx-recomp.
-  Android is described but there are no releases. Other F-Zero repositories that
+  Android is buildable from source as a self-built debug APK, but there are no
+  releases. Other F-Zero repositories that
   do publish APKs were rejected for thin or suspicious provenance (brand new
   accounts, one-off or download-less releases).
   Promote when a release from a project with a real history carries an Android APK.
 - **RetroArch transfer** - a utility for moving RetroArch data between devices,
-  not yet identified. Promote once its source link is known and it passes the
-  usual checks.
+  teased by ItsRetroPup (https://github.com/ItsRetroPup) but not yet published.
+  Promote once a repository with an Android APK release appears under that
+  account and it passes the usual checks.
 
 ## Provenance or maturity
 
@@ -53,6 +55,57 @@ they are not re-proposed unless something material changes.
   for it: a smaller feature set, a short AI-written history, and accessibility
   service plus Shizuku access. Promote as an optional alternative to Wayfinder
   once it has a sustained release history and outside use.
+- **New Super Mario Bros. Wii (NSMBW Recompiled)** - https://github.com/WitherBlitz/NSMB-Wii-Multiplayer-Recompilation.
+  A GPL static recomp on WiiCompiled and aurora with one APK per release and
+  outside contributors, but a young, almost entirely AI-written history in which
+  releases have been pulled for game-breaking bugs. Its install permission
+  serves a self-updater that checks its own release asset's digest.
+  Promote when releases have stayed stable, with none pulled, for about a month.
+- **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
+  `config/deny.json` while it has a single release: whether a later release
+  installs over it with the same signing key is not yet known, and its Super
+  Mario Galaxy integration has been validated only in emulation, not on an AYN
+  Thor. It ships Nintendo's own menu music, HUD art and cover scans in the APK
+  rather than taking them from the user's disc, which raises takedown risk
+  without disqualifying it. Promote, dual-screen only, by removing the denial
+  once a later release installs over the first.
+- **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
+  A gbarecomp-based recomp with APK releases from a brand-new account, with
+  drifting asset names and a package id set by the external engine's build
+  rather than the repository. Promote when the account has a sustained history,
+  asset names are stable and the shipped package id is confirmed.
+- **Resident Evil 4 Prototype (CubeEvil4)** - https://github.com/Andiweli/CubeEvil4-Android.
+  A native port of the RE4 GameCube debug-build decompilation by the author of
+  the pack's OpenMW build, with one APK per release and minimal permissions.
+  Its package id has changed between flavors and releases, and which flavor
+  ships is unconfirmed. Promote when the package id holds across several
+  releases; the legal exposure of the reconstructed Capcom code is the owner's
+  call.
+- **Super Mario Sunshine (Mareshine)** - https://github.com/TheM3dium/mareshine.
+  A fork of jbcgames/sms-android on the Sunshine decompilation, from a brand-new
+  single-repository account with a burst of commits and releases. It requests
+  all-files storage, and its install permission serves a self-updater that
+  verifies its own signature. Upstream states no license.
+  Promote when it has a sustained history and outside use and the upstream
+  license is settled.
+- **Grand Theft Auto IV (LibertyRecompAndroid)** - https://github.com/vaduur/LibertyRecompAndroid.
+  An Android fork of the established LibertyRecomp Xbox 360 recomp with high
+  reach, but the Android work comes from a single-repository account that calls
+  it AI-generated and disclaims it, uses prereleases heavily, and requests
+  all-files storage. Promote when the maintainer shows a sustained, owned release
+  history; trademark and takedown exposure is the owner's call.
+- **Call of Duty: Modern Warfare 2 (mw2-android)** - https://github.com/OpenPort-Labs/mw2-android.
+  A GPL fork of mw2-recompiled from the Galaxy-Android organization, with
+  inconsistent asset names and multiple flavors, and a self-updater that installs
+  APKs from a different repository without its own signature check, alongside
+  all-files storage. Promote when one repository publishes the releases with
+  consistent asset names, the updater follows it, and the history is sustained.
+- **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
+  An Android port of the DK64 N64 recomp with one APK per release, from an author
+  of many quick ports, with a short burst of largely automated commits and
+  little outside use; development went quiet after its first releases.
+  Promote when new APK releases show sustained maintenance and the project gains
+  outside use.
 
 ## Declined
 
@@ -62,6 +115,9 @@ they are not re-proposed unless something material changes.
   3DS homebrew; no Android app.
 - **Pokemon Odyssey** - a FireRed ROM hack distributed as a patch, not an app.
 - **Repugnant Bounty** - a commercial Game Boy Color ROM; no Android app.
+- **Zelda: A Link to the Past (moonpearl)** - https://github.com/DoutorRaposo/moonpearl.
+  Duplicates the zelda3 port already in both packs, from a single burst of
+  commits and releases.
 - **Vita3K-Plus** - https://github.com/nckstwrt/Vita3K-Plus. Declares the same
   package id as the official Vita3K entry, so both cannot be in a pack, and it
   does not follow upstream.
