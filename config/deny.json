@@ -49,6 +49,6 @@
   },
   {
     "url": "https://github.com/Maddex712/WiiDS",
-    "reason": "A new single-author project that ships one large APK bundling other projects' Wii and GameCube ports and requests all-files storage access; revisit once it has a sustained release history and clear provenance for the bundled ports."
+    "reason": "Held while it has a single release, so whether a later release installs over it is unproven, and its Super Mario Galaxy integration has been validated only in emulation; remove this denial once a later release installs over the first. It also ships Nintendo menu music, HUD art and cover scans in the APK, which raises takedown risk."
   }
 ]
