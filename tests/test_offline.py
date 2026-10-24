@@ -257,7 +257,7 @@ def test_raw_ids_survive_other_entry_errors(field: str) -> None:
         inputs(
             [malformed, deepcopy(malformed)],
             [deepcopy(malformed)],
-            overlay=[{"url": "https://example.com/app", "patch": {}}],
+            overlay=[{"url": "https://example.com/app", "patch": {"name": "x"}}],
             deny=[{"url": "https://example.com/app", "reason": "excluded"}],
         )
     )

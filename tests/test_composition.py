@@ -812,8 +812,8 @@ def test_nonarray_overlay_error_identifies_the_overlay() -> None:
 def test_two_overlay_records_for_one_project_and_a_nonobject_patch_fail() -> None:
     candidate = app("x", url="https://github.com/Owner/Repo")
     records = [
-        {"url": "https://github.com/Owner/Repo", "patch": {}},
-        {"url": "github.com/owner/repo.git/", "patch": {}},
+        {"url": "https://github.com/Owner/Repo", "patch": {"name": "first"}},
+        {"url": "github.com/owner/repo.git/", "patch": {"name": "second"}},
     ]
     with pytest.raises(CompositionError) as duplicate:
         compose([candidate], [], records)
@@ -1527,3 +1527,181 @@ def test_key_used_in_one_variant_only_is_not_stale() -> None:
         ("y", Variant.DUAL): ["Track Only"],
     }
     assert result.report.stale_category_assignments == []
+
+
+def published(result: CompositionResult, variant: Variant) -> list[dict[str, object]]:
+    return json.loads(render_pack(result.apps[variant]))["apps"]
+
+
+def redundant_keys(result: CompositionResult) -> list[tuple[str, tuple[str, ...]]]:
+    return [(item.url, item.keys) for item in result.report.redundant_overlay_keys]
+
+
+@pytest.mark.parametrize(
+    "patch",
+    [{}, {"additionalSettings": {}}, {"additionalSettings": {"nested": {}}}],
+    ids=["empty", "empty-settings", "empty-nested"],
+)
+def test_overlay_patch_that_patches_nothing_fails_naming_the_record(
+    patch: dict[str, object],
+) -> None:
+    candidate = app("x", url="https://github.com/Owner/Repo")
+    with pytest.raises(CompositionError) as raised:
+        compose([candidate], [], overlays((candidate.url, patch)))
+    assert str(raised.value).startswith(
+        "overlay[0].patch for 'github.com/owner/repo' patches nothing"
+    )
+
+
+@pytest.mark.parametrize(
+    ("patch", "key"),
+    [
+        ({"guard.flag": True}, "guard.flag"),
+        ({"guard/flag": True}, "guard/flag"),
+        ({"additionalSettings": {"apk.filter": "x"}}, "apk.filter"),
+        ({"additionalSettings": {"apk/filter": "x"}}, "apk/filter"),
+    ],
+    ids=["top-dot", "top-slash", "nested-dot", "nested-slash"],
+)
+def test_overlay_patch_key_with_a_dot_or_slash_fails_naming_record_and_key(
+    patch: dict[str, object], key: str
+) -> None:
+    candidate = app("x", url="https://github.com/Owner/Repo")
+    with pytest.raises(CompositionError) as raised:
+        compose([candidate], [], overlays((candidate.url, patch)))
+    assert str(raised.value) == (
+        f"overlay[0].patch for 'github.com/owner/repo' has key {key!r} "
+        "containing '.' or '/'"
+    )
+
+
+def test_nested_overlay_key_without_a_dot_or_slash_loads() -> None:
+    candidate = app("x")
+    patch: dict[str, object] = {"additionalSettings": {"apkFilterRegEx": "arm64"}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    for variant in Variant:
+        [entry] = result.apps[variant]
+        assert entry.data["additionalSettings"] == {"apkFilterRegEx": "arm64"}
+
+
+def test_a_patch_value_the_entry_already_carries_changes_nothing() -> None:
+    candidate = app("pkg", name="Same")
+    plain = compose([candidate], [], [])
+    result = compose([candidate], [], overlays((candidate.url, {"name": "Same"})))
+    assert redundant_keys(result) == [(url_family(candidate), ("name",))]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_only_the_dead_key_of_a_patch_is_recorded() -> None:
+    candidate = app("pkg", additional_settings={"includeZips": True})
+    patch: dict[str, object] = {
+        "name": "New",
+        "additionalSettings": {"includeZips": True},
+    }
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [
+        (url_family(candidate), ("additionalSettings.includeZips",))
+    ]
+    for variant in Variant:
+        [entry] = published(result, variant)
+        assert entry["name"] == "New"
+
+
+def test_a_key_that_changes_only_the_dual_entry_is_not_recorded() -> None:
+    url = "https://github.com/Owner/Both"
+    single = app("a", eligibility=SINGLE_ONLY, url=url, name="Patched")
+    dual = app("b", "bboi", eligibility=DUAL_ONLY, url=url, name="Other")
+    result = compose([single, dual], [], overlays((url, {"name": "Patched"})))
+    assert redundant_keys(result) == []
+    [dual_entry] = published(result, Variant.DUAL)
+    assert dual_entry["name"] == "Patched"
+
+
+def test_a_patch_setting_a_rendering_default_changes_nothing() -> None:
+    candidate = app("pkg")
+    plain = compose([candidate], [], [])
+    patch: dict[str, object] = {"additionalSettings": {"includeZips": False}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [
+        (url_family(candidate), ("additionalSettings.includeZips",))
+    ]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_a_patch_on_a_field_rendering_forces_changes_nothing() -> None:
+    candidate = app("pkg")
+    plain = compose([candidate], [], [])
+    result = compose(
+        [candidate], [], overlays((candidate.url, {"allowIdChange": False}))
+    )
+    assert redundant_keys(result) == [(url_family(candidate), ("allowIdChange",))]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_a_null_deleting_an_absent_key_changes_nothing() -> None:
+    candidate = app("pkg")
+    plain = compose([candidate], [], [])
+    result = compose([candidate], [], overlays((candidate.url, {"pinned": None})))
+    assert redundant_keys(result) == [(url_family(candidate), ("pinned",))]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+@pytest.mark.parametrize(
+    "settings", [{}, {"includeZips": False}], ids=["absent", "at-default"]
+)
+def test_a_null_deleting_a_defaulted_setting_changes_nothing(
+    settings: dict[str, object],
+) -> None:
+    candidate = app("pkg", additional_settings=settings)
+    plain = compose([candidate], [], [])
+    patch: dict[str, object] = {"additionalSettings": {"includeZips": None}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [
+        (url_family(candidate), ("additionalSettings.includeZips",))
+    ]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_a_null_deleting_a_setting_the_entry_sets_is_live() -> None:
+    candidate = app("pkg", additional_settings={"includeZips": True})
+    patch: dict[str, object] = {"additionalSettings": {"includeZips": None}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == []
+
+
+def test_a_key_whose_patched_entry_cannot_render_counts_as_changing_it() -> None:
+    candidate = app("pkg")
+    result = compose([candidate], [], overlays((candidate.url, {"author": 7})))
+    assert redundant_keys(result) == []
+
+
+def test_redundant_keys_are_recorded_per_record_sorted_by_url() -> None:
+    later = app("b", url="https://github.com/Owner/Zeta", name="Z")
+    earlier = app("a", url="https://github.com/Owner/Alpha", name="A")
+    result = compose(
+        [later, earlier],
+        [],
+        overlays((later.url, {"name": "Z"}), (earlier.url, {"name": "A"})),
+    )
+    assert redundant_keys(result) == [
+        ("github.com/owner/alpha", ("name",)),
+        ("github.com/owner/zeta", ("name",)),
+    ]
+
+
+def test_an_invalid_overlay_leaves_the_redundant_keys_empty() -> None:
+    candidate = app("pkg")
+    report = CompositionReport()
+    with pytest.raises(CompositionError, match="protected field"):
+        compose(
+            [candidate],
+            [],
+            overlays((candidate.url, {"name": candidate.name, "url": "x"})),
+            report=report,
+        )
+    assert report.redundant_overlay_keys == []

@@ -24,10 +24,12 @@ from omnipack.overlay import (
     ComposedApp,
     OverlayError,
     OverlayPatch,
+    RedundantOverlayKeys,
     apply_overlay,
     parse_overlay,
+    redundant_overlay_keys,
 )
-from omnipack.render import canonical_serialization
+from omnipack.render import canonical_serialization, published_form
 from omnipack.report_model import SelectionReason
 from omnipack.source_registry import PRECEDENCE
 from omnipack.urls import normalize_project_url, parse_project_url
@@ -146,6 +148,8 @@ class CompositionReport:
     stale_category_assignments: list[str] = field(default_factory=list)
     single_only_families: list[SingleOnlyFamily] = field(default_factory=list)
     repeated_ids: list[RepeatedId] = field(default_factory=list)
+    # Overlay records with patch keys that change no published entry.
+    redundant_overlay_keys: list[RedundantOverlayKeys] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,6 +190,13 @@ def compose(
         patches = parse_overlay(overlay, "overlay")
         check_overlay_id_patches(policy, patches)
         _validate_overlay_targets(selected, patches)
+        report.redundant_overlay_keys.extend(
+            redundant_overlay_keys(
+                (app for values in selected.values() for app in values),
+                patches,
+                published_form,
+            )
+        )
         for variant in Variant:
             selected[variant] = apply_overlay(selected[variant], patches)
     except (OverlayError, CompositionPolicyError) as error:

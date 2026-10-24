@@ -79,6 +79,20 @@ def render_pack(apps: list[ComposedApp]) -> str:
     )
 
 
+def published_form(app: ComposedApp) -> dict[str, Any]:
+    """One entry as a published pack carries it, with its settings decoded.
+
+    The form carries everything rendering fills or forces: `allowIdChange`
+    true, an empty `author` when the entry has none, and the settings defaults
+    of the entry's source type. Categories are left out because the category
+    map, not the entry, decides them. Raises RenderError as `render_pack` does.
+    """
+    [rendered] = json.loads(render_pack([app]))["apps"]
+    rendered["additionalSettings"] = json.loads(rendered["additionalSettings"])
+    del rendered["categories"]
+    return rendered
+
+
 def render(apps: list[ComposedApp]) -> str:
     """Return a deterministic Obtainium import document as JSON text."""
     rendered_apps = [_render_app(app) for app in apps]
