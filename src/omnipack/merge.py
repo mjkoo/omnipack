@@ -26,10 +26,11 @@ from omnipack.overlay import (
     OverlayPatch,
     RedundantOverlayKeys,
     apply_overlay,
+    merge_patch,
     parse_overlay,
     redundant_overlay_keys,
 )
-from omnipack.render import canonical_serialization, published_form
+from omnipack.render import RenderError, canonical_serialization, published_form
 from omnipack.report_model import SelectionReason
 from omnipack.source_registry import PRECEDENCE
 from omnipack.urls import normalize_project_url, parse_project_url
@@ -137,6 +138,30 @@ class UncategorizedFamily:
     variants: tuple[Variant, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class ListingSource:
+    """A source listing an extra's project, with the fields whose published
+    values differ between the extra and that source's candidates there.
+
+    A settings field is named `additionalSettings.<key>`; `variants` names a
+    difference in the packs the two are offered to.
+    """
+
+    source: Source
+    fields: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ListedExtra:
+    """A selected extra that another source also lists at its project URL,
+    identified by its normalized URL and published package id.
+    """
+
+    url: str
+    id: str
+    sources: tuple[ListingSource, ...]
+
+
 @dataclass(slots=True)
 class CompositionReport:
     removals: list[Removal] = field(default_factory=list)
@@ -150,6 +175,7 @@ class CompositionReport:
     repeated_ids: list[RepeatedId] = field(default_factory=list)
     # Overlay records with patch keys that change no published entry.
     redundant_overlay_keys: list[RedundantOverlayKeys] = field(default_factory=list)
+    extras_listed_by_catalog: list[ListedExtra] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -201,6 +227,9 @@ def compose(
             selected[variant] = apply_overlay(selected[variant], patches)
     except (OverlayError, CompositionPolicyError) as error:
         raise CompositionError(str(error)) from error
+    report.extras_listed_by_catalog.extend(
+        _listed_extras(report.selections, selected, formed, patches)
+    )
     applied = _assign_categories(selected, policy)
     report.uncategorized_families.extend(_uncategorized_families(selected))
     report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
@@ -490,6 +519,104 @@ def _repeated_ids(apps: dict[Variant, list[ComposedApp]]) -> list[RepeatedId]:
             ).items()
         )
     return result
+
+
+def _listed_extras(
+    selections: list[FamilySelection],
+    apps: dict[Variant, list[ComposedApp]],
+    formed: tuple[App, ...],
+    patches: tuple[OverlayPatch, ...],
+) -> list[ListedExtra]:
+    """Selected extras that another source lists at the same project URL.
+
+    Only the candidates the extra's own family selection considered count, so
+    a candidate that a split family rule puts in another family never lists
+    it, and neither does a denied one. Each record is merged across variants:
+    its sources are unioned, and so are each source's differing fields, so
+    two candidates of one source at the URL both keep their differences.
+    """
+    by_selector = {candidate_selector(item).key: item for item in formed}
+    overlay = {item.url: item.patch for item in patches}
+    found: dict[tuple[str, str], dict[Source, set[str]]] = {}
+    for selection in selections:
+        if selection.source is not Source.EXTRAS:
+            continue
+        url = normalize_project_url(selection.url)
+        listings = [
+            item
+            for item in selection.considered
+            if item.source is not Source.EXTRAS
+            and normalize_project_url(item.url) == url
+        ]
+        if not listings:
+            continue
+        extra = next(
+            app for app in apps[selection.variant] if app.family == selection.family
+        )
+        winner = by_selector[
+            (selection.source.value, selection.origin, selection.id, url)
+        ]
+        sources = found.setdefault((url, extra.id), {})
+        for listing in listings:
+            candidate = by_selector[
+                (listing.source.value, listing.origin, listing.id, url)
+            ]
+            fields = sources.setdefault(listing.source, set())
+            fields.update(_differing_fields(extra, candidate, overlay.get(url)))
+            if candidate.eligibility != winner.eligibility:
+                fields.add("variants")
+    return [
+        ListedExtra(
+            url,
+            package_id,
+            tuple(
+                ListingSource(source, tuple(sorted(fields)))
+                for source, fields in sorted(sources.items())
+            ),
+        )
+        for (url, package_id), sources in sorted(found.items())
+    ]
+
+
+_ABSENT = object()
+
+
+def _differing_fields(
+    extra: ComposedApp, candidate: App, patch: dict[str, Any] | None
+) -> set[str]:
+    """Fields whose published values differ between the selected extra and the
+    candidate's import data with the same overlay record applied.
+
+    Top-level keys and settings keys are compared; categories are the category
+    map's and the project URL matches by construction. A candidate whose data
+    cannot be published is compared on nothing: it lost the selection, so the
+    build never renders it.
+    """
+    data = _import_data(candidate)
+    if patch is not None:
+        patched = merge_patch(data, patch)
+        assert isinstance(patched, dict)
+        data = patched
+    try:
+        ours = published_form(extra)
+        theirs = published_form(ComposedApp(extra.family, data))
+    except RenderError:
+        return set()
+    fields = {
+        key
+        for key in (ours.keys() | theirs.keys()) - {"url", "additionalSettings"}
+        if ours.get(key, _ABSENT) != theirs.get(key, _ABSENT)
+    }
+    our_settings, their_settings = (
+        ours["additionalSettings"],
+        theirs["additionalSettings"],
+    )
+    fields.update(
+        f"additionalSettings.{key}"
+        for key in our_settings.keys() | their_settings.keys()
+        if our_settings.get(key, _ABSENT) != their_settings.get(key, _ABSENT)
+    )
+    return fields
 
 
 def _validate_overlay_targets(

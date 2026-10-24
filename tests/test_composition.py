@@ -1705,3 +1705,149 @@ def test_an_invalid_overlay_leaves_the_redundant_keys_empty() -> None:
             report=report,
         )
     assert report.redundant_overlay_keys == []
+
+
+LISTED_URL = "https://github.com/Owner/Listed"
+
+
+def listed(
+    result: CompositionResult,
+) -> list[tuple[str, str, tuple[tuple[str, tuple[str, ...]], ...]]]:
+    return [
+        (
+            item.url,
+            item.id,
+            tuple((source.source.value, source.fields) for source in item.sources),
+        )
+        for item in result.report.extras_listed_by_catalog
+    ]
+
+
+def test_an_extra_a_catalog_lists_is_recorded_with_its_differing_fields() -> None:
+    extra = app(
+        "org.pkg",
+        "extras",
+        url=LISTED_URL,
+        name="Extra",
+        additional_settings={"apkFilterRegEx": "arm64"},
+    )
+    quiver = app(
+        "org.pkg",
+        "quiver",
+        url=LISTED_URL,
+        name="Quiver",
+        additional_settings={"apkFilterRegEx": "x86"},
+    )
+    result = compose([quiver, extra], [], [])
+    for variant in Variant:
+        [entry] = published(result, variant)
+        assert entry["name"] == "Extra"
+    assert listed(result) == [
+        (
+            "github.com/owner/listed",
+            "org.pkg",
+            (("quiver", ("additionalSettings.apkFilterRegEx", "name")),),
+        )
+    ]
+
+
+@pytest.mark.parametrize("difference", ["allowIdChange", "author"])
+def test_differences_rendering_erases_leave_no_differing_field(
+    difference: str,
+) -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Same")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Same")
+    if difference == "allowIdChange":
+        quiver = replace(quiver, raw={"allowIdChange": False})
+    else:
+        extra = replace(extra, raw={"author": ""})
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+
+
+def test_a_dual_only_extra_over_a_both_pack_candidate_differs_in_variants() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, eligibility=DUAL_ONLY, name="S")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="S")
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.pkg", (("quiver", ("variants",)),))
+    ]
+
+
+def test_an_extra_replacing_another_project_in_its_family_is_not_listed() -> None:
+    extra = app("a", "extras", family="app:x", url="https://github.com/Owner/A")
+    quiver = app("b", "quiver", family="app:x", url="https://github.com/Owner/B")
+    result = compose([quiver, extra], [], [])
+    assert ids(result, Variant.SINGLE) == {"a"}
+    assert listed(result) == []
+
+
+def test_a_split_project_url_shipping_both_builds_lists_no_extra() -> None:
+    extra = app("a", "extras", family="app:a", url=LISTED_URL)
+    quiver = app("b", "quiver", family="app:b", url=LISTED_URL)
+    result = compose([quiver, extra], [], [])
+    assert ids(result, Variant.SINGLE) == {"a", "b"}
+    assert listed(result) == []
+
+
+def test_two_extras_at_one_url_in_separate_families_are_two_records() -> None:
+    first = app("a", "extras", family="app:a", url=LISTED_URL)
+    first_catalog = app("a.catalog", "quiver", family="app:a", url=LISTED_URL)
+    second = app("b", "extras", family="app:b", url=LISTED_URL)
+    second_catalog = app("b.catalog", "rjny", family="app:b", url=LISTED_URL)
+    result = compose([second_catalog, first, second, first_catalog], [], [])
+    assert ids(result, Variant.SINGLE) == {"a", "b"}
+    assert listed(result) == [
+        ("github.com/owner/listed", "a", (("quiver", ("id", "name")),)),
+        ("github.com/owner/listed", "b", (("rjny", ("id", "name")),)),
+    ]
+
+
+def test_a_denied_project_url_lists_no_extra() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Quiver")
+    result = compose([quiver, extra], deny(LISTED_URL), [])
+    assert ids(result, Variant.SINGLE) == set()
+    assert listed(result) == []
+
+
+def test_a_candidate_identical_after_the_overlay_has_no_differing_field() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Quiver")
+    result = compose([quiver, extra], [], overlays((LISTED_URL, {"name": "Patched"})))
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+    assert redundant_keys(result) == []
+
+
+def test_two_same_source_candidates_at_one_url_keep_both_sets_of_fields() -> None:
+    extra = app(
+        "org.pkg",
+        "extras",
+        url=LISTED_URL,
+        name="Extra",
+        additional_settings={"apkFilterRegEx": "arm64"},
+    )
+    by_name = app(
+        "org.pkg",
+        "quiver",
+        url=LISTED_URL,
+        name="Other",
+        additional_settings={"apkFilterRegEx": "arm64"},
+    )
+    by_filter = app(
+        "org.pkg",
+        "quiver",
+        url=LISTED_URL,
+        name="Extra",
+        origin="quiver-second",
+        additional_settings={"apkFilterRegEx": "x86"},
+    )
+    for order in permutations([extra, by_name, by_filter]):
+        result = compose(list(order), [], [])
+        assert listed(result) == [
+            (
+                "github.com/owner/listed",
+                "org.pkg",
+                (("quiver", ("additionalSettings.apkFilterRegEx", "name")),),
+            )
+        ]
