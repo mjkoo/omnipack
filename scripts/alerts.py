@@ -623,6 +623,8 @@ _BUILD_PREFIX = NIGHTLY_PREPARE.prefixes[1]
 BUILD_UNCATEGORIZED = _BUILD_PREFIX + "uncategorized/"
 BUILD_STALE_DENIAL = _BUILD_PREFIX + "stale-denial/"
 BUILD_STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
+BUILD_REDUNDANT_PATCH = _BUILD_PREFIX + "redundant-patch/"
+BUILD_LISTED_EXTRA = _BUILD_PREFIX + "listed-extra/"
 _LIVE_PREFIX = LIVE_CHECK.prefixes[0]
 LIVE_READ = _LIVE_PREFIX + "read"
 LIVE_GONE = _LIVE_PREFIX + "gone/"
@@ -795,6 +797,42 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
                 subject_key(BUILD_STALE_CATEGORY, key),
                 f"Category assignment matches nothing: {key}",
                 [f"Category key: {key}"],
+            )
+        )
+    # One finding per dead key, so muting one never hides another of the same
+    # record. The subject joins the URL and the dotted key with `/`; overlay
+    # parsing keeps `/` out of patch keys, so distinct pairs stay distinct even
+    # though normalized URLs have variable path depth, and the details carry
+    # both in full because a shortened key cannot be split back.
+    for item in _objects(report.get("redundantOverlayKeys")):
+        url = item.get("url")
+        if isinstance(url, str):
+            for key in _strings(item.get("keys")):
+                findings.append(
+                    _finding(
+                        subject_key(BUILD_REDUNDANT_PATCH, f"{url}/{key}"),
+                        f"Overlay patch key changes nothing: {url} {key}",
+                        [f"URL: {url}", f"Key: {key}"],
+                    )
+                )
+    # One finding per project URL, naming every listed extra there.
+    listed: dict[str, list[str]] = {}
+    for item in _objects(report.get("extrasListedByCatalog")):
+        url, package_id = item.get("url"), item.get("id")
+        if isinstance(url, str) and isinstance(package_id, str):
+            details = listed.setdefault(url, [])
+            details.append(f"Package: {package_id}")
+            for source in _objects(item.get("sources")):
+                name = source.get("source")
+                if isinstance(name, str):
+                    fields = ", ".join(_strings(source.get("fields")))
+                    details.append(f"{name}: {fields or 'no differences'}")
+    for url, details in listed.items():
+        findings.append(
+            _finding(
+                subject_key(BUILD_LISTED_EXTRA, url),
+                f"A catalog lists an extra at: {url}",
+                details,
             )
         )
     return findings
