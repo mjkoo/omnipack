@@ -7,10 +7,14 @@ from typing import get_args
 
 import pytest
 
-from omnipack.merge import CompositionReport, ListedExtra, ListingSource
+from omnipack.merge import (
+    CompositionReport,
+    ListedExtra,
+    ListingSource,
+    RedundantOverlayKeys,
+)
 from omnipack.model import Source
 from omnipack.offline import Finding
-from omnipack.overlay import RedundantOverlayKeys
 from omnipack.report import BUILD_SCHEMA_VERSION, write_report
 from omnipack.report_model import (
     BuildStage,

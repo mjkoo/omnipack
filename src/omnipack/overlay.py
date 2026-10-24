@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable, Iterator
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
@@ -36,18 +35,6 @@ class OverlayPatch:
 
     url: str
     patch: dict[str, Any]
-
-
-@dataclass(frozen=True, slots=True)
-class RedundantOverlayKeys:
-    """An overlay record's patch keys that change no published entry.
-
-    Each key is the dotted path to a leaf of the patch, the keys along it
-    joined with `.`.
-    """
-
-    url: str
-    keys: tuple[str, ...]
 
 
 # Fields only the source, composition and the category map decide.
@@ -153,6 +140,13 @@ def merge_patch(target: object, patch: object) -> object:
     return result
 
 
+def patch_object(data: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """Merge an object patch into an object, which always yields an object."""
+    patched = merge_patch(data, patch)
+    assert isinstance(patched, dict)
+    return patched
+
+
 def apply_overlay(
     apps: list[ComposedApp], overlay: tuple[OverlayPatch, ...]
 ) -> list[ComposedApp]:
@@ -162,85 +156,6 @@ def apply_overlay(
         data = deepcopy(app.data)
         patch = patches.get(normalize_project_url(app.url))
         if patch is not None:
-            patched = merge_patch(data, patch)
-            assert isinstance(patched, dict)
-            data = patched
+            data = patch_object(data, patch)
         result.append(ComposedApp(app.family, data))
     return result
-
-
-def redundant_overlay_keys(
-    apps: Iterable[ComposedApp],
-    overlay: tuple[OverlayPatch, ...],
-    published_form: Callable[[ComposedApp], object],
-) -> list[RedundantOverlayKeys]:
-    """Each record's keys that leave every targeted entry's published form as is.
-
-    `apps` are the selected entries of every variant before overlays apply,
-    and `published_form` renders one entry as a pack publishes it, raising
-    ValueError when it cannot. Each leaf of a record's patch (any value that
-    is not an object; an array counts whole) is merged alone into each entry
-    the record targets, and it changes nothing when the published forms with
-    and without it are equal for every target. A null is judged the same way,
-    so deleting an absent key or a defaulted setting changes nothing. A leaf
-    whose patched entry cannot be published counts as changing it, so this
-    never raises; the build's own rendering reports that error.
-    """
-    targets: dict[str, list[ComposedApp]] = {}
-    for app in apps:
-        targets.setdefault(normalize_project_url(app.url), []).append(app)
-    result: list[RedundantOverlayKeys] = []
-    for record in overlay:
-        entries = targets.get(record.url)
-        if not entries:
-            continue
-        try:
-            baselines = [published_form(app) for app in entries]
-        except ValueError:
-            continue
-        keys = tuple(
-            sorted(
-                ".".join(path)
-                for path, value in _leaves(record.patch)
-                if all(
-                    _unchanged(app, baseline, _leaf_patch(path, value), published_form)
-                    for app, baseline in zip(entries, baselines, strict=True)
-                )
-            )
-        )
-        if keys:
-            result.append(RedundantOverlayKeys(record.url, keys))
-    result.sort(key=lambda item: item.url)
-    return result
-
-
-def _leaves(
-    patch: dict[str, Any], path: tuple[str, ...] = ()
-) -> Iterator[tuple[tuple[str, ...], Any]]:
-    for key, value in patch.items():
-        if isinstance(value, dict):
-            yield from _leaves(value, (*path, key))
-        else:
-            yield (*path, key), value
-
-
-def _leaf_patch(path: tuple[str, ...], value: Any) -> dict[str, Any]:
-    """A patch holding `value` alone at `path`."""
-    patch: Any = value
-    for key in reversed(path):
-        patch = {key: patch}
-    return patch
-
-
-def _unchanged(
-    app: ComposedApp,
-    baseline: object,
-    patch: dict[str, Any],
-    published_form: Callable[[ComposedApp], object],
-) -> bool:
-    patched = merge_patch(app.data, patch)
-    assert isinstance(patched, dict)
-    try:
-        return published_form(ComposedApp(app.family, patched)) == baseline
-    except ValueError:
-        return False
