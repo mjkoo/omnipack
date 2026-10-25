@@ -159,6 +159,15 @@ in place.
 </details>
 
 <details>
+<summary>Other</summary>
+
+| Program | Single-screen | Dual-screen |
+| --- | --- | --- |
+| ReRAC\-DS | - | <a href="https://github.com/HighDrexler/rerac-Android-APK-and-Ayn-Thor-Dual-Screen-Mod-Beta-">GitHub</a> · <a href="https://apps.obtainium.imranr.dev/redirect?r=obtainium%3A%2F%2Fapp%2F%257B%2522id%2522%253A%25223266f8599b13%2522%252C%2522url%2522%253A%2522https%253A%252F%252Fgithub.com%252FHighDrexler%252Frerac-Android-APK-and-Ayn-Thor-Dual-Screen-Mod-Beta-%2522%252C%2522author%2522%253A%2522HighDrexler%2522%252C%2522name%2522%253A%2522ReRAC-DS%2522%252C%2522additionalSettings%2522%253A%2522%257B%255C%2522includePrereleases%255C%2522%253Afalse%252C%255C%2522fallbackToOlderReleases%255C%2522%253Atrue%252C%255C%2522filterReleaseTitlesByRegEx%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522filterReleaseNotesByRegEx%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522verifyLatestTag%255C%2522%253Afalse%252C%255C%2522sortMethodChoice%255C%2522%253A%255C%2522date%255C%2522%252C%255C%2522useLatestAssetDateAsReleaseDate%255C%2522%253Afalse%252C%255C%2522releaseTitleAsVersion%255C%2522%253Afalse%252C%255C%2522github-creds%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522GHReqPrefix%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522trackOnly%255C%2522%253Afalse%252C%255C%2522versionExtractionRegEx%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522matchGroupToUse%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522versionDetection%255C%2522%253Atrue%252C%255C%2522releaseDateAsVersion%255C%2522%253Afalse%252C%255C%2522useVersionCodeAsOSVersion%255C%2522%253Afalse%252C%255C%2522apkFilterRegEx%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522invertAPKFilter%255C%2522%253Afalse%252C%255C%2522autoApkFilterByArch%255C%2522%253Atrue%252C%255C%2522appName%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522appAuthor%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522shizukuPretendToBeGooglePlay%255C%2522%253Afalse%252C%255C%2522allowInsecure%255C%2522%253Afalse%252C%255C%2522exemptFromBackgroundUpdates%255C%2522%253Afalse%252C%255C%2522skipUpdateNotifications%255C%2522%253Afalse%252C%255C%2522about%255C%2522%253A%255C%2522%255C%2522%252C%255C%2522refreshBeforeDownload%255C%2522%253Afalse%252C%255C%2522includeZips%255C%2522%253Afalse%252C%255C%2522zippedApkFilterRegEx%255C%2522%253A%255C%2522%255C%2522%257D%2522%252C%2522categories%2522%253A%255B%255D%252C%2522overrideSource%2522%253A%2522GitHub%2522%252C%2522allowIdChange%2522%253Atrue%257D">Add to Obtainium</a> |
+
+</details>
+
+<details>
 <summary>PC Emulation</summary>
 
 | Program | Single-screen | Dual-screen |
