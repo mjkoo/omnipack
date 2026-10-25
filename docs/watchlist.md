@@ -45,11 +45,22 @@ they are not re-proposed unless something material changes.
 ## Provenance or maturity
 
 - **Super Mario Galaxy (Galaxy-Android)** - https://github.com/OpenPort-Labs/Galaxy-Android.
-  APK releases exist, but every one is a tester build with inconsistent asset
-  names, from a new organization with one heavily AI-assisted committer, and the
-  app requests all-files storage access.
-  Promote when releases move past tester builds with consistent asset names and
-  the project has a sustained history.
+  A Petari-based port with APK releases, but they are tester builds whose asset
+  names only recently settled, from a new organization with one heavily
+  AI-assisted committer. Its original signing key and password were committed to
+  the public repository, so every release before the key change is signed with a
+  compromised key, and moving to the new key needs an uninstall. The APKs are
+  debuggable, and the app requests all-files storage access to keep the cooked
+  game and saves in shared storage.
+  Promote when stable (non-prerelease) releases are signed with the new key and
+  are no longer debuggable, asset names stay consistent, and the project has a
+  sustained history.
+- **Super Mario Galaxy (Nebula)** - https://github.com/keepvaibin/nebula.
+  A GPL Petari-based native port, playable to the end on Windows, with an
+  Android app in its source tree that requests no sensitive permissions and keeps
+  game data in app-private storage. Releases carry only a Windows installer so
+  far. Promote when a release carries an Android APK and it passes the usual
+  checks; it is the stronger Galaxy candidate of the two.
 - **Pathfinder** - https://github.com/KaitonGxx/thor-pathfinder.
   An open-source AYN Thor utility in the spirit of Wayfinder, not a replacement
   for it: a smaller feature set, a short AI-written history, and accessibility
