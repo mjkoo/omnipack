@@ -936,6 +936,58 @@ def test_a_pin_on_a_project_whose_id_an_overlay_patches_builds_and_verifies(
     assert main(["verify"]) == 0
 
 
+def test_a_build_reports_a_dead_overlay_key_and_a_listed_extra(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    write_config(tmp_path)
+    url = "https://example.test/listed"
+
+    def candidate(source: Source, settings: dict[str, object]) -> App:
+        return App(
+            "listed.pkg",
+            url,
+            "Listed",
+            SourceType.HTML,
+            (),
+            Provenance(source, "https://example.test/catalog"),
+            eligibility=frozenset(Variant),
+            additional_settings=settings,
+        )
+
+    extra = candidate(Source.EXTRAS, {"apkFilterRegEx": "arm64"})
+    listing = candidate(Source.QUIVER, {})
+    (tmp_path / "config/overlay.json").write_text(
+        json.dumps([{"url": url, "patch": {"name": "Listed"}}])
+    )
+    monkeypatch.setattr(
+        cli, "_ingest_for_build", lambda root, inputs, report: [extra, listing]
+    )
+    monkeypatch.chdir(tmp_path)
+
+    assert main(["build"]) == 0
+    report = json.loads((tmp_path / ".build/report.json").read_text())
+    assert report["redundantOverlayKeys"] == [
+        {"url": "example.test/listed", "keys": ["name"]}
+    ]
+    assert report["extrasListedByCatalog"] == [
+        {
+            "url": "example.test/listed",
+            "id": "listed.pkg",
+            "sources": [
+                {"source": "quiver", "fields": ["additionalSettings.apkFilterRegEx"]}
+            ],
+        }
+    ]
+    capsys.readouterr()
+    assert main(["report"]) == 0
+    output = capsys.readouterr().out
+    assert "Overlay keys changing nothing: example.test/listed; keys: name" in output
+    assert (
+        "Listed extra: listed.pkg; URL: example.test/listed; "
+        "quiver: additionalSettings.apkFilterRegEx"
+    ) in output
+
+
 @pytest.mark.parametrize("command", ["build", "verify"])
 def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
     tmp_path: Path,
