@@ -116,7 +116,9 @@ denylist entries that matched no candidate, the package ids repeated within a
 variant, the single-only coverage findings, the same-rank tie findings, the admitted generated candidates
 with their committed ids and project URLs, the families with a selected entry left
 without a category together with the variants concerned, and the stale
-category assignments. A non-blocking outcome the build report records
+category assignments, the overlay records with patch keys that change nothing
+together with those keys, and the extras a catalog lists together with the
+other sources listing them and the fields that differ from each. A non-blocking outcome the build report records
 SHALL NOT be withheld from display, a diagnostic kind the run recorded nothing in SHALL
 contribute nothing to the output, and every recorded entry SHALL be listed in
 full on each run rather than summarized, sampled or elided, so a long
@@ -165,11 +167,13 @@ removed since the previous output.
 - **WHEN** a valid build report records apps added or removed, a denial that
   excluded a candidate, a denial that matched no candidate, a package id
   repeated within a variant, a single-only coverage finding, a same-rank tie
-  finding, an admitted generated candidate, an uncategorized family, or a stale
-  category assignment
+  finding, an admitted generated candidate, an uncategorized family, a stale
+  category assignment, an overlay key that changes nothing, or an extra a
+  catalog lists
 - **THEN** `pack report` displays each of them with the variant, package id,
-  families, reason, source, project URLs, tied selectors, chosen winner or
-  committed id the report holds for it, displays the candidate
+  families, reason, source, project URLs, tied selectors, chosen winner,
+  committed id, patch keys, listing sources or differing fields the report
+  holds for it, displays the candidate
   comparison with each entry's package id and project URL identified as added
   or removed for its variant, and exits zero
 
@@ -177,7 +181,8 @@ removed since the previous output.
 
 - **WHEN** a valid build report records no candidate change, exclusion, stale
   exclusion, repeated package id, single-only coverage finding, same-rank tie
-  finding, admission, uncategorized family or stale category assignment
+  finding, admission, uncategorized family, stale category assignment, overlay
+  key that changes nothing or extra a catalog lists
 - **THEN** `pack report` displays the build section without diagnostic output
   and exits zero
 
@@ -186,7 +191,8 @@ removed since the previous output.
 - **WHEN** a valid build report records an uncategorized family or a stale
   category assignment and records no candidate change, exclusion, stale
   exclusion, repeated package id, single-only coverage finding, same-rank tie
-  finding or admission
+  finding, admission, overlay key that changes nothing or extra a catalog
+  lists
 - **THEN** `pack report` displays each uncategorized family with its variants
   and each stale category map key, and exits zero
 
@@ -234,6 +240,14 @@ removed since the previous output.
 - **WHEN** a build report whose status is failed records a candidate comparison
 - **THEN** `pack report` displays it as candidates that were not published, not
   as apps added and removed since the previous output
+
+#### Scenario: Overrides that change nothing are the only recorded diagnostics
+
+- **WHEN** a valid build report records an overlay record with keys that change
+  nothing and an extra a catalog lists, and no other non-blocking outcome
+- **THEN** `pack report` displays the overlay record's project URL with each of
+  its keys, and the extra's project URL and package id with each listing source
+  and that source's differing fields, and exits zero
 
 ### Requirement: A failed build leaves published outputs unchanged
 
@@ -298,6 +312,12 @@ the build. The system SHALL write a build report recording:
   category list, and the stale category assignments: the category map keys
   that set no selected entry's category, whether the key names no selected
   family or a family whose selected entries are all track-only;
+- the overlay records with patch keys that change nothing, each with its
+  normalized project URL and those keys, and the extras a catalog lists, one
+  entry per extra, each with its normalized project URL, published package id,
+  the other sources listing it and, for each, the fields that differ, as
+  "Overlay patch keys that change nothing are reported" and "Extras a catalog
+  lists are reported" in pack-composition define;
 - source ingestion failures.
 
 Upstream-list diagnostics SHALL belong to source generation reports, not
@@ -313,7 +333,8 @@ this SHALL NOT be interpreted as an empty pack. The report SHALL preserve the
 selections, denylist removals, stale exclusions and category lists collected
 before a later failure, and the same-rank tie findings recorded during
 selection. When composition fails before category assignment
-runs, only the uncategorized families and stale category assignments, and the
+runs, only the uncategorized families and stale category assignments, the
+overlay keys that change nothing and the extras a catalog lists, and the
 later single-only coverage findings and repeated package ids, SHALL be
 recorded empty, because those checks have not run, while stale exclusions and
 other diagnostics collected before the failure SHALL remain preserved, and the
@@ -435,6 +456,14 @@ change.
 - **WHEN** a build selects two entries carrying one package id in one variant
 - **THEN** the build succeeds and the report lists that package id for that
   variant with both entries' families and project URLs
+
+#### Scenario: An override changes nothing
+
+- **WHEN** a build applies an overlay record one of whose keys changes no
+  entry, and selects an extra over a catalog candidate at the same project URL
+- **THEN** the build succeeds and the report lists the record's URL with that
+  key, and the extra with its URL, package id, the catalog's source and the
+  fields that differ
 
 ### Requirement: The generate-source command writes a candidate catalog and its report
 
