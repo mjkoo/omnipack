@@ -2,50 +2,15 @@
 
 ## ADDED Requirements
 
-### Requirement: Overrides that change nothing are reported
+### Requirement: Overlay patch keys that change nothing are reported
 
-After overlays apply, the system SHALL record two kinds of owner override that
-no longer change what a catalog would publish. Neither record SHALL change
-selection or any published entry, and neither SHALL fail the build.
-
-An entry's published form is the entry as pack rendering would publish it:
-its settings filled with the rendering defaults for its source type, and every
-field rendering fills or forces set as rendering sets it. Both records compare
-published forms, never raw entry data.
-
-A patch key is a path through a record's patch to a value that is not an
-object: a top-level key, or a key nested under an object such as
-`additionalSettings`. A key SHALL be identified by its dotted path, the keys
-along it joined with `.`, which names exactly one location in the patch
-because overlay validation rejects patch keys containing a `.`; because it
-also rejects patch keys containing a `/`, a dotted path holds no `/`. A key SHALL be recorded as changing
-nothing when, for every selected entry the record applies to in every variant, the entry's
-published form is the same whether or not that key alone is merged into the
-entry as it stood before the record applied. The rule SHALL apply to a null
-value as to any other value, so a null deleting a key the entry does not
-carry, or deleting a setting that rendering fills back with the same default,
-changes nothing. A key that changes at least one such entry's published form
-SHALL NOT be recorded. The system SHALL record each overlay record that has
-any such key, once, with its normalized project URL and every such key.
-
-A selected entry chosen from extras is listed by a catalog when its family's
-selection for a variant chose it over a candidate from another source at the
-same normalized project URL. Only the candidates that selection considered
-SHALL count, so a candidate at that URL that family rules put in another
-family SHALL NOT make the extra listed. The system SHALL record each such
-extra once, merged across variants, identified by its normalized project URL
-and its published package id, so two extras at one URL are two records. Each
-record SHALL carry each other source listing it and, for each of those
-candidates, the fields whose values differ between the extra's published form
-and the published form of that candidate's entry with the same overlay
-applied. Fields SHALL be compared as top-level keys and as keys under
-`additionalSettings`; categories SHALL NOT be compared, because the category
-map assigns them, and the project URL SHALL NOT be compared, because the two
-match on it by construction. The packs each is offered to SHALL also be
-compared, and recorded as the field `variants` when they differ, because they
-decide which packs carry the app and whether dual prefers it. An extra whose
-family was chosen over candidates only at other project URLs SHALL NOT be
-recorded.
+After overlays apply, the system SHALL record each overlay record with patch
+keys that change nothing, once, with its normalized project URL and those
+keys' dotted paths. A key, a path to a non-object value including null,
+SHALL be recorded only when merging it alone into each entry the record
+targets in every variant, before the record applied, leaves the entry's
+published form, as pack rendering publishes it, unchanged.
+Recording SHALL NOT change selection or output or fail the build.
 
 #### Scenario: A patch whose value the source now ships
 
@@ -93,6 +58,23 @@ recorded.
 - **THEN** the build publishes the same entries and the key is recorded as
   changing nothing
 
+#### Scenario: A null under a parent the entry lacks
+
+- **WHEN** a record's patch is `{"foo": {"bar": null}}` and the entry it
+  targets carries no `foo`
+- **THEN** the key `foo.bar` is not recorded, because merging it alone gives
+  the entry `foo: {}` and so changes its published form
+
+### Requirement: Extras a catalog lists are reported
+
+The system SHALL record each extra its family's selection chose in a variant
+over a considered candidate of another source at its normalized project URL,
+once per URL and published package id across variants. Per source it SHALL
+list the union, over that source's candidates, of fields whose published
+forms, as pack rendering publishes them, differ from the extra's under the
+same overlay, plus `variants` when their packs differ. Recording SHALL NOT
+change selection or output or fail the build.
+
 #### Scenario: A catalog lists an extra's project
 
 - **WHEN** an extra is selected over a Quiver candidate at the same project URL
@@ -135,6 +117,24 @@ recorded.
 - **THEN** two listed extras are recorded at that URL, each with its own
   package id, listing sources and differing fields
 
+#### Scenario: Fields a listed extra is compared on
+
+- **WHEN** an extra is selected over a catalog candidate at the same project
+  URL that differs from it only in its categories, in the spelling of its
+  project URL, and in one `additionalSettings` key `k`
+- **THEN** the extra is recorded with `additionalSettings.k` as its only
+  differing field: fields are compared as top-level keys and as keys under
+  `additionalSettings`, categories are not compared because the category map
+  assigns them, and the project URL is not compared because the two match on
+  it by construction
+
+#### Scenario: Two candidates from one source at one project URL
+
+- **WHEN** an extra is selected over two Quiver candidates at its project URL,
+  one differing from it in `name` and the other in an `additionalSettings` key
+- **THEN** the extra is recorded with Quiver once as a source, its differing
+  fields the union of both candidates' differences
+
 ## MODIFIED Requirements
 
 ### Requirement: Overlay records patch selected entries by project URL
@@ -151,8 +151,8 @@ whitespace; any other SHALL fail with the record, the field and the offending
 value identified. Each record SHALL apply to every selected entry whose
 normalized project URL equals the record's, in every variant that selects one.
 Two records with one normalized URL SHALL fail. A non-object patch, including
-null, SHALL fail. An empty patch object, and an empty object nested at any
-depth within a patch, SHALL fail with the record identified: a record that
+null, SHALL fail. An empty patch object, and an empty object nested within
+the patch's objects (not inside array values), SHALL fail with the record identified: a record that
 patches nothing is removed, not emptied.
 
 Patches SHALL use recursive JSON Merge Patch, where null deletes an allowed key.

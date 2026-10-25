@@ -70,15 +70,20 @@ same check, with the same error, also rejects any patch key containing a `/`,
 so a dotted path never holds a `/`; the alert key needs that (see below).
 Keys inside array values are part of a value and are not checked. An empty
 object has no leaves, so `parse_overlay` also rejects an empty patch and any
-empty object nested in a patch, failing with the record identified; a record
+empty object nested within the patch's objects (not inside array values),
+failing with the record identified; a record
 whose last live key is deleted is removed, not left empty and unreported.
 Alternative
 considered: an escaping scheme for literal dots and slashes. Rejected by the
 owner: no current overlay key contains a `.` or a `/`, and rejecting them keeps the dotted path,
 the report field and the alert key identical with no encoding to carry
-through each. The check lives beside `apply_overlay` in
-`src/omnipack/overlay.py` and is called once in `compose` before overlays
-apply. Its cost is two renders per leaf and target, linear in the patch size.
+through each. The check is `_redundant_overlay_keys` in
+`src/omnipack/merge.py`, beside `_listed_extras` and `_differing_fields`, and
+is called once in `compose` before overlays apply. It lives there rather than
+in `src/omnipack/overlay.py` because it calls `published_form` from
+`src/omnipack/render.py`, and render imports overlay; `overlay.py` keeps
+`merge_patch` and a `patch_object` helper that merges an object patch into an
+object. Its cost is two renders per leaf and target, linear in the patch size.
 Alternative considered: comparing raw values at each path after hydrating the
 settings. Rejected: it disagrees with the published effect for a null on a
 defaulted setting, which hydration makes look present, and for fields render

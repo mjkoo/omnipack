@@ -68,8 +68,8 @@ None.
 ## Impact
 
 - `src/omnipack/merge.py` (detection inside `compose`, next to the stale
-  category and repeated id records), `src/omnipack/report.py` and
-  `src/omnipack/report_model.py` (fields, validation, display, schema version).
+  category and repeated id records), `src/omnipack/report.py`
+  (fields, validation, display, schema version).
 - `src/omnipack/overlay.py`: `parse_overlay` rejects patch keys containing a
   `.` or a `/` at any depth, and empty patches or nested empty objects.
 - `scripts/alerts.py` (two build-warning key kinds and their titles and

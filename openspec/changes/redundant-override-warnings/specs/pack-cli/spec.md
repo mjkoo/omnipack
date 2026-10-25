@@ -32,7 +32,8 @@ the build. The system SHALL write a build report recording:
   normalized project URL and those keys, and the extras a catalog lists, one
   entry per extra, each with its normalized project URL, published package id,
   the other sources listing it and, for each, the fields that differ, as
-  "Overrides that change nothing are reported" in pack-composition defines;
+  "Overlay patch keys that change nothing are reported" and "Extras a catalog
+  lists are reported" in pack-composition define;
 - source ingestion failures.
 
 Upstream-list diagnostics SHALL belong to source generation reports, not
