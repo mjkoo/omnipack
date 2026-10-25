@@ -68,11 +68,11 @@ Recording SHALL NOT change selection or output or fail the build.
 ### Requirement: Extras a catalog lists are reported
 
 The system SHALL record each extra its family's selection chose in a variant
-over a considered candidate of another source at its normalized project URL,
-once per URL and published package id across variants. Per source it SHALL
-list the union, over that source's candidates, of fields whose published
-forms, as pack rendering publishes them, differ from the extra's under the
-same overlay, plus `variants` when their packs differ. Recording SHALL NOT
+over a considered candidate of another source at its normalized URL, once per
+URL and published package id across variants. Per source it SHALL list the
+union over its candidates of fields whose published forms differ from the
+extra's under the same overlay, or `unpublishable` for a candidate that alone
+fails to render, plus `variants` when packs differ. Recording SHALL NOT
 change selection or output or fail the build.
 
 #### Scenario: A catalog lists an extra's project
@@ -134,6 +134,16 @@ change selection or output or fail the build.
   one differing from it in `name` and the other in an `additionalSettings` key
 - **THEN** the extra is recorded with Quiver once as a source, its differing
   fields the union of both candidates' differences
+
+#### Scenario: A listing candidate that cannot be published
+
+- **WHEN** an extra is selected over a Quiver candidate at its project URL
+  whose import data, with the same overlay applied, pack rendering rejects,
+  while the extra renders
+- **THEN** the build succeeds and the extra is recorded with Quiver as a
+  source and `unpublishable` as its field, not with no differing fields
+- **AND** when the extra itself also fails to render, that source records no
+  differing fields, and the build fails at rendering
 
 ## MODIFIED Requirements
 

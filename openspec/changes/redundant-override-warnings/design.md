@@ -106,7 +106,14 @@ candidates' eligibilities are also compared and reported as the pseudo-field
 `variants` when they differ; dual preference derives from eligibility (a build
 offered only to dual is dual-preferred), so this one field covers both which
 packs carry the app and whether dual prefers it. A differing `overrideSource`
-is reported like any other field. Records are keyed by the extra's normalized
+is reported like any other field. When pack rendering rejects the candidate's
+import data with the overlay applied but renders the extra, that candidate's
+fields are the pseudo-field `unpublishable` instead of the field comparison,
+and `variants` is still compared and added: "no differences" would invite
+retiring an extra whose replacement cannot be published, which makes the
+catalog candidate win and the build fail at rendering. When the extra itself
+fails to render, the candidate records no fields, since the build fails at
+rendering anyway. Records are keyed by the extra's normalized
 URL and published package id and merged across variants: sources are unioned
 and each source's differing fields are unioned. Two extras at one URL in
 separate families are two records. Alternative considered: report only when

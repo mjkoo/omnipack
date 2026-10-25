@@ -24,7 +24,8 @@ but change nothing are the remaining blind spot.
   candidate from another source in its own family at the same normalized
   project URL, one record per extra (normalized URL and published package id),
   with the catalogs listing it and the fields where the two published forms
-  differ, the packs each is offered to included, with the same overlay applied.
+  differ, the packs each is offered to included, with the same overlay applied,
+  or `unpublishable` when only the catalog candidate's form cannot be rendered.
 - Both records are non-blocking build diagnostics: they never change selection
   or output and never fail the build. `pack report` displays them.
 - The nightly alert job raises one finding per no-op patch key

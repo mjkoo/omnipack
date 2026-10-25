@@ -32,7 +32,7 @@ from omnipack.merge import (
     compose as compose_apps,
 )
 from omnipack.model import App, Category, Provenance, Source, SourceType, Variant
-from omnipack.render import render_pack
+from omnipack.render import RenderError, render_pack
 from omnipack.urls import normalize_project_url
 
 SINGLE_ONLY = frozenset({Variant.SINGLE})
@@ -1923,6 +1923,17 @@ def test_a_listed_extra_is_keyed_by_its_patched_id() -> None:
     assert listed(result) == [
         ("github.com/owner/listed", "org.right", (("quiver", ()),))
     ]
+
+
+def test_an_extra_that_cannot_render_records_no_fields_and_fails_rendering() -> None:
+    extra = replace(
+        app("org.pkg", "extras", url=LISTED_URL, name="Extra"), raw={"author": None}
+    )
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Quiver")
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+    with pytest.raises(RenderError):
+        render_pack(result.apps[Variant.SINGLE])
 
 
 def test_a_listing_candidate_that_cannot_render_is_unpublishable() -> None:
