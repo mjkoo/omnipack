@@ -301,7 +301,9 @@ records each such extra once, with its URL and published package id, every
 other source listing it and, per source, the fields whose published values
 differ between the extra and that source's candidate with the same overlay
 record applied: top-level fields and settings as `additionalSettings.<key>`,
-and `variants` when the two are offered to different packs. Categories are
+and `variants` when the two are offered to different packs. A candidate that
+rendering rejects shows `unpublishable` in place of its fields: retiring the
+extra would make the build publish that candidate and fail. Categories are
 not compared, since the category map assigns them. A candidate at another URL
 in the same family does not list the extra (replacing another project's build
 is what such an extra is for), and neither does a build that rules split into

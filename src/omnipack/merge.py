@@ -155,7 +155,8 @@ class ListingSource:
     values differ between the extra and that source's candidates there.
 
     A settings field is named `additionalSettings.<key>`; `variants` names a
-    difference in the packs the two are offered to.
+    difference in the packs the two are offered to, and `unpublishable` a
+    candidate that rendering rejects.
     """
 
     source: Source
@@ -666,17 +667,21 @@ def _differing_fields(
 
     Top-level keys and settings keys are compared; categories are the category
     map's and the project URL matches by construction. A candidate whose data
-    cannot be published is compared on nothing: it lost the selection, so the
-    build never renders it.
+    cannot be published differs as `unpublishable`, since retiring the extra
+    would make the build render it. An extra that cannot be published is
+    compared on nothing; the build's own rendering reports it.
     """
     data = _import_data(candidate)
     if patch is not None:
         data = patch_object(data, patch)
     try:
         ours = published_form(extra)
-        theirs = published_form(ComposedApp(extra.family, data))
     except RenderError:
         return set()
+    try:
+        theirs = published_form(ComposedApp(extra.family, data))
+    except RenderError:
+        return {"unpublishable"}
     fields = {
         key
         for key in (ours.keys() | theirs.keys()) - {"url", "additionalSettings"}

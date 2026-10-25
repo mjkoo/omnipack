@@ -1925,10 +1925,12 @@ def test_a_listed_extra_is_keyed_by_its_patched_id() -> None:
     ]
 
 
-def test_a_listing_candidate_that_cannot_render_reports_no_fields() -> None:
+def test_a_listing_candidate_that_cannot_render_is_unpublishable() -> None:
     extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
     quiver = replace(
-        app("org.pkg", "quiver", url=LISTED_URL, name="Quiver"), raw={"author": 7}
+        app("org.pkg", "quiver", url=LISTED_URL, name="Quiver"), raw={"author": None}
     )
     result = compose([quiver, extra], [], [])
-    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.pkg", (("quiver", ("unpublishable",)),))
+    ]
