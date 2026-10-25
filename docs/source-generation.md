@@ -411,10 +411,11 @@ error of a failed check, and the `live-check-report-<run id>` artifact keeps
 
 The job changes no branch, PR or committed file. To drop a project that is gone,
 the owner confirms the URL by hand and then, in one commit, adds the deny record
-to `config/deny.json`, removes any overlay record or composition pin for that
-URL, and commits the packs and README rebuilt with `uv run pack build`. Because
-each run checks `main`'s packs afresh, the next run stops failing on that URL,
-as it does when the project answers again. An unreachable HTML-source URL may
+to `config/deny.json` and removes any overlay record or composition pin for that
+URL; the commit carries no packs or README, which nightly publishing rebuilds.
+Because each run checks `main`'s committed packs afresh, the first run after
+that nightly stops failing on that URL, as it does when the project answers
+again. An unreachable HTML-source URL may
 instead mean the project moved its downloads, which a corrected source or extras
 URL fixes.
 

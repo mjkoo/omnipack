@@ -12,6 +12,11 @@ each limited to 60 minutes, so they can take about 120 minutes end to end. An
 effort: GitHub does not guarantee an exact start time or execution of every
 queued trigger.
 
+Nightly publishing is the only writer of the two packs and the README catalog.
+Pull requests carry sources only, and CI fails one that changes those generated
+files, so a merged change reaches the packs at the next nightly run; see
+[manual review and PR contents](development.md#manual-review-and-pr-contents).
+
 ## Two-job flow and credential split
 
 The workflow splits the work into two jobs, `prepare` and `publish`, so that

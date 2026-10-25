@@ -2,7 +2,8 @@
 
 Run `direnv allow` (or `nix develop`) to get every tool the `justfile`
 targets need, then `just --list` for the available commands. `just
-check-all` runs everything CI runs.
+check-all` runs everything CI runs except the pull-request-only check that
+generated output is left to the nightly.
 
 ## Common edits
 
@@ -94,11 +95,11 @@ For every manual edit affecting pack contents:
    it creates commits and assumes workflow context.
 2. Run `uv run pack build`. Resolve or retry a failed live build before calling
    the edit built and reviewed; failure preserves the previous outputs.
-3. Review `git diff main...HEAD -- dist/ README.md` against the PR base, plus
-   `git diff HEAD -- dist/ README.md` for uncommitted build results. This output
-   diff is the primary evidence, including for overlay-only edits. Review the
-   full diff for incidental upstream refreshes rather than hiding them by editing
-   generated files. Use `uv run pack report` for supporting `selections`,
+3. Review `git diff HEAD -- dist/ README.md`, the uncommitted build results.
+   This output diff is the primary evidence, including for overlay-only edits.
+   Besides this edit, it holds any upstream refresh and any merged change the
+   nightly has not yet published, so attribute each change rather than assuming
+   it is yours. Use `uv run pack report` for supporting `selections`,
    `denylistRemovals`, `staleExclusions`, `sourceAdmissions`,
    `uncategorizedFamilies`, `staleCategoryAssignments` and `changes`,
    recorded in `.build/report.json`. `changes` holds the entries, each a package
@@ -117,26 +118,33 @@ For every manual edit affecting pack contents:
    while leaving the app selected. For a pin or rule, check the intended
    winner in `selections`.
 5. Run `uv run pack verify` and the usual development checks (`just check-all`).
-   Include every changed `dist/single-screen.json`, `dist/dual-screen.json` and
-   generated README in the same PR as the input edit, plus the accepted source
-   catalog when applicable. Green CI is structural evidence, not proof that
-   every edited input reached the outputs or that overlay values were applied.
+   Commit the input edit, plus the accepted source catalog when applicable, but
+   not the build results: discard them with `git restore dist/ README.md`.
+   Commit a README prose edit before building, or stage it alone with
+   `git add -p`, so the restore keeps it. Green
+   CI is structural evidence, not proof that every edited input reached the
+   outputs or that overlay values were applied.
 
-If main's generated files move while the PR is open, rebase onto main, rerun
-source generation where applicable and `uv run pack build`, then re-review.
-Resolve conflicts in the two pack files and between README's
-`<!-- omnipack:catalog:start -->` and `<!-- omnipack:catalog:end -->` markers
-by rebuilding, never by hand. Merge README prose outside those markers by hand
-and re-read it; the build preserves those bytes. For a source catalog conflict,
+A PR carries sources only. Nightly publishing is the only writer of
+`dist/single-screen.json`, `dist/dual-screen.json` and the README catalog
+between `<!-- omnipack:catalog:start -->` and `<!-- omnipack:catalog:end -->`,
+so a merged edit reaches the packs at the next nightly run. CI fails a PR that
+changes any of them, and builds the packs from the PR's own configuration
+before testing and verifying, since the committed packs can lag main's
+configuration between a merge and the next nightly. README prose outside the
+markers stays editable in PRs.
+
+If main moves while the PR is open, rebase onto main, rerun source generation
+where applicable and `uv run pack build`, then re-review. Merge README prose by
+hand and re-read it. For a source catalog conflict,
 take main's catalog as the base, rerun generation, inspect the new candidate and
 diagnostics, copy it using the acceptance recipe above, then build. Never
 hand-resolve the catalog. Nightly writes only the packs and README, never a
 source catalog.
 
-The [automated source proposal](source-generation.md#proposal-workflow) is the
-catalog-only exception: its builds are checks, and nightly rebuilds outputs
-after merge. Do not add packs to its branch. This manual review convention
-adds no CI gate.
+The [automated source proposal](source-generation.md#proposal-workflow)
+follows the same rule: its builds are checks, and nightly rebuilds outputs
+after merge.
 
 ## Build the packs
 

@@ -9,6 +9,12 @@ References to `RJNY/Obtainium-Emulation-Pack` identify a separate upstream,
 not this repository. Preserve upstream URLs, fixture provenance and archived
 planning artifacts.
 
+## Generated output
+
+Pull requests carry sources only. The nightly publisher is the only writer of
+`dist/*.json` and the README catalog section, and CI fails a PR that changes
+them; see [manual review and PR contents](docs/development.md#manual-review-and-pr-contents).
+
 ## Vetting candidate apps
 
 Use the project skill at
