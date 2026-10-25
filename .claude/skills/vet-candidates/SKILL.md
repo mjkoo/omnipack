@@ -25,8 +25,9 @@ Intake, sweep and discovery end with the same output: additions in
 
 Before researching anything, drop what needs no research:
 
-- **Already in a pack.** Search `dist/single-screen.json` and
-  `dist/dual-screen.json` by name and URL fragment, `config/deny.json` for
+- **Already in a pack.** Search `dist/single-screen.json`,
+  `dist/dual-screen.json` and `config/extras.json` (the packs lag merged extras
+  until the next nightly) by name and URL fragment, `config/deny.json` for
   earlier rejections, and `docs/watchlist.md` (waiting and declined entries). Note near matches (a dual-screen fork of the candidate, a
   sibling build) rather than silently dropping them.
 - **Obviously out of scope.** Paid store games, PC-only tools, ROM hacks or
@@ -150,7 +151,10 @@ tracking entry. Follow the existing entries:
 
 Then run `uv run pack build` (regenerates `dist/` and `README.md`),
 `uv run pack verify` and `uv run pytest`, and check that each new id appears in
-the intended packs with no duplicate ids.
+the intended packs with no duplicate ids. Never commit the rebuilt `dist/` or
+README catalog: the nightly publishes them, and CI fails a PR that changes
+them. Discard them with `git restore dist/ README.md` before committing, and
+say in the PR body that the packs update at the next nightly.
 
 ## 4. Maintain the watchlist
 
@@ -203,7 +207,8 @@ added an app that nobody has reviewed. The family is a normalized project URL
    Denials are owner decisions: say so prominently in the PR body so the owner
    reviews it before merging.
 5. Build, verify and test as in section 3, then open a PR whose body links the
-   issue. Do not close the issue: the next nightly build closes it when the
+   issue. The PR carries only the category or denial; the nightly rebuilds the
+   packs and README. Do not close the issue: the next nightly build closes it when the
    warning stops.
 
 Several uncategorized alerts open at once go into one PR. An issue already

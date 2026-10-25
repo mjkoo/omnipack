@@ -20,6 +20,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          # The generated-output check compares the merge commit with its
+          # first parent, the base branch tip.
+          fetch-depth: 2
           persist-credentials: false
 
       - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
@@ -46,10 +49,19 @@ jobs:
       - name: Type check
         run: just typecheck
 
+      - name: Check that generated output is left to the nightly
+        if: github.event_name == 'pull_request'
+        run: uv run python -m scripts.generated_guard
+
+      # Pull requests carry sources only, so the committed packs can lag the
+      # configuration; build them from this revision before testing them.
+      - name: Build
+        run: just build
+
       - name: Test
         run: just test
 
-      - name: Verify committed packs offline
+      - name: Verify the built packs offline
         run: just verify
 
       - name: Test write job scripts under the runner's python3

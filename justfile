@@ -36,6 +36,11 @@ lock-check:
 test:
     uv run pytest --cov
 
+# Rebuild the packs and README catalog locally; the nightly publishes them, so
+# pull requests never commit the result
+build:
+    uv run pack build
+
 # Validate committed pack bytes and local configuration without network access
 verify:
     uv run pack verify
@@ -78,4 +83,4 @@ nix-fmt-check:
     nix fmt -- --ci
 
 # Everything CI runs
-check-all: lock-check format-check lint-check typecheck test verify check-py312 lint-actions check-links nix-fmt-check flake-check
+check-all: lock-check format-check lint-check typecheck build test verify check-py312 lint-actions check-links nix-fmt-check flake-check
