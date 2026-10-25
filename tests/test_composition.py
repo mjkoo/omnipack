@@ -1689,6 +1689,16 @@ def test_a_null_deleting_a_setting_the_entry_sets_is_live() -> None:
     assert redundant_keys(result) == []
 
 
+def test_a_null_under_a_parent_the_entry_lacks_is_live() -> None:
+    candidate = app("pkg")
+    patch: dict[str, object] = {"foo": {"bar": None}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == []
+    for variant in Variant:
+        [entry] = published(result, variant)
+        assert entry["foo"] == {}
+
+
 def test_a_key_whose_patched_entry_cannot_render_counts_as_changing_it() -> None:
     candidate = app("pkg")
     result = compose([candidate], [], overlays((candidate.url, {"author": 7})))
@@ -1787,6 +1797,29 @@ def test_differences_rendering_erases_leave_no_differing_field(
         extra = replace(extra, raw={"author": ""})
     result = compose([quiver, extra], [], [])
     assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+
+
+def test_categories_and_url_spelling_are_not_differing_fields() -> None:
+    extra = app(
+        "org.pkg",
+        "extras",
+        url=LISTED_URL,
+        name="Same",
+        additional_settings={"k": 1},
+        categories=("Emulator",),
+    )
+    quiver = app(
+        "org.pkg",
+        "quiver",
+        url=LISTED_URL.lower() + ".git",
+        name="Same",
+        additional_settings={"k": 2},
+        categories=("Dual Screen",),
+    )
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.pkg", (("quiver", ("additionalSettings.k",)),))
+    ]
 
 
 def test_a_dual_only_extra_over_a_both_pack_candidate_differs_in_variants() -> None:
