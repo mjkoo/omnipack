@@ -9,7 +9,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 
 | Owner (job that produces findings) | Raises |
 | --- | --- |
-| `nightly-prepare` (**Nightly publishing**, `prepare`) | A failed preparation stage; build warnings from `.build/report.json`: a family with no category, a denial matching nothing, a category assignment matching nothing |
+| `nightly-prepare` (**Nightly publishing**, `prepare`) | A failed preparation stage; build warnings from `.build/report.json`: a family with no category, a denial matching nothing, a category assignment matching nothing, an overlay patch key that changes nothing, a project URL where a catalog lists an extra |
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
@@ -44,7 +44,7 @@ owner's prefix, the stage or kind, and a subject where there is one:
 | Prefix | Keys |
 | --- | --- |
 | `nightly/prepare/` | `<stage>`: `checkout`, `build`, `allowlist`, `readme-boundary`, `commit`, `verify`, `drift-after-verify`, `bundle` |
-| `build/` | `uncategorized/<family>`, `stale-denial/<url>`, `stale-category/<key>` |
+| `build/` | `uncategorized/<family>`, `stale-denial/<url>`, `stale-category/<key>`, `redundant-patch/<url>/<dotted key>`, `listed-extra/<url>` |
 | `nightly/publish/` | `push`, `release` |
 | `<source>/check/` | `generation`, `stage`, `tests`, `build`, `verify`, `guard` |
 | `<source>/publish/` | `proposal` |
@@ -114,6 +114,30 @@ check that sees it. Review each one, and either act on it (a curation change,
 a deny record) or mute it, as below, to accept a project that is simply quiet.
 A muted stale issue clears when the project publishes a qualifying release, and
 a later dormancy opens it again.
+
+### Overrides that change nothing
+
+The build report records two kinds of owner override that no longer change
+what a catalog would publish; [composition](composition.md#denials-and-patches)
+defines both and says how to retire them. Each overlay patch key that changes
+nothing raises its own finding, keyed `build/redundant-patch/<url>/<dotted
+key>` and titled "Overlay patch key changes nothing: <url> <key>", with the
+full URL and key in its details; the key is the dotted path through the patch,
+and patch keys may not contain `.` or `/`, so the subject names exactly one
+record and key even when it is shortened. Each project URL where a catalog
+lists an extra raises one finding, keyed `build/listed-extra/<url>` and titled
+"A catalog lists an extra at: <url>", whose details name every such extra's
+package id followed by each listing source and the fields that differ, or "no
+differences".
+
+Review each one and either retire the override or mute the issue. A mute on a
+redundant-patch issue covers that one key: another key of the same record that
+goes dead later raises its own finding, and a muted key that the source drifts
+away from clears when the build stops reporting it. A mute on a listed-extra
+issue covers every extra at that URL, including one a catalog starts listing
+later, until the URL stops being reported. The first run after these findings
+arrive is expected to open one issue per dead key and one per listed extra's
+URL; each is ordinary curation triage.
 
 ## Muting an issue
 

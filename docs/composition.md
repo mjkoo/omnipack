@@ -232,6 +232,17 @@ null deletion. Every other field is patchable. Whole-app removal uses the
 denylist, and categories use the [category map](#categories). A non-array
 overlay fails with an array-shape error.
 
+A patch key may not contain a `.` or a `/`, whether it is a top-level key or a
+key of an object nested in the patch such as `additionalSettings`; such a key
+fails the build and `pack verify` naming the record and the key. Keys inside
+array values are part of the value and are not checked. The build report names
+each patch key by its dotted path, the keys along it joined with `.`, and the
+nightly alerts join that path to the project URL with `/`, so the two
+characters would let two keys share one name. A patch may not be empty or hold
+an empty object at any level: a record with no keys left is removed, not
+emptied, and one that patches nothing fails the build and `pack verify` naming
+the record.
+
 A patch may set `id` to a nonempty string, which is how a source's wrong package
 id is fixed by hand; [curation](curation.md#wrong-package-ids) describes when.
 The patched id changes only the rendered entry: family formation, denials, pins
@@ -268,6 +279,45 @@ URLs. Obtainium stores imported apps by package id and would keep only one of
 them. The fix is a family rule putting the entries in one family, or correcting
 the overlay `id` patch that produced the repeat.
 
+Two more records report owner overrides that no longer change what a catalog
+would publish. Neither changes selection or output, and neither fails the
+build; `pack report` displays both and the nightly alerts raise an issue for
+each (see [maintenance alerts](alerts.md)).
+
+An overlay patch key changes nothing when, for every selected entry the record
+applies to in every pack, the entry's published form is the same with and
+without that key alone: the published form is the entry as rendering publishes
+it, with the settings defaults for its source type filled, a missing `author`
+filled and `allowIdChange` forced true. So a value the source now ships, a
+setting at its rendering default, `allowIdChange: false`, and a null deleting
+an absent key or a defaulted setting all change nothing, while a key that
+changes even one pack's entry is live. The build records each record with such
+keys, by project URL, with the dotted path of every dead key. To retire one,
+delete the key; delete the whole record when none of its keys is live.
+
+An extra is listed by a catalog when its family's selection chose it over a
+candidate from another source at the same normalized project URL. The build
+records each such extra once, with its URL and published package id, every
+other source listing it and, per source, the fields whose published values
+differ between the extra and that source's candidate with the same overlay
+record applied: top-level fields and settings as `additionalSettings.<key>`,
+and `variants` when the two are offered to different packs. A candidate that
+rendering rejects shows `unpublishable` in place of its fields: retiring the
+extra would make the build publish that candidate and fail. Categories are
+not compared, since the category map assigns them. A candidate at another URL
+in the same family does not list the extra (replacing another project's build
+is what such an extra is for), and neither does a build that rules split into
+another family, which ships beside it. To retire a listed extra, move the
+differing fields the pack still wants into an overlay record for the URL,
+delete the extra from `config/extras.json`, and re-point every composition
+candidate rule and pin that names the extra's selector to the catalog
+candidate's selector, which keeps any family join the URL needs, or remove the
+rule or pin when it no longer serves a purpose; a rule or pin matching no
+candidate fails the build. A differing `overrideSource` or `variants` cannot be
+moved into an overlay: `overrideSource` is a protected field, and the packs a
+build is offered to are its source's decision, so retiring the extra accepts
+the catalog's value for them.
+
 ## Build report
 
 `changes` lists the entries added and removed in each pack since the previous
@@ -283,15 +333,20 @@ it removed, and `staleExclusions` each denial that matched nothing.
 outcomes described above. `sourceAdmissions` lists each committed codm and
 Quiver entry the build admitted, with its source, URL and committed id.
 `uncategorizedFamilies` and `staleCategoryAssignments` are the
-[category outcomes](#categories); a build that fails before categories
-are assigned records both empty, along with the single-only and repeated-id
+[category outcomes](#categories). `redundantOverlayKeys` lists each overlay
+record with keys that change nothing, with its normalized URL and those dotted
+keys, and `extrasListedByCatalog` each extra a catalog lists, with its URL,
+published package id and, per listing source, the differing fields, as
+[denials and patches](#denials-and-patches) describes; both are sorted by URL,
+the extras then by package id. A build that fails before categories are
+assigned records all four empty, along with the single-only and repeated-id
 lists, while its stage and error say the checks did not run.
 `offlineVerification` holds the offline gate's status, its errors in `findings`,
 and its nonfatal findings in `nonfatalFindings`. For example:
 
 ```json
 {
-  "schemaVersion": 5,
+  "schemaVersion": 6,
   "status": "success",
   "changes": {"single": {"added": [{"id": "org.example.app", "url": "github.com/example/app"}], "removed": []}, "dual": {"added": [], "removed": []}},
   "selections": [{

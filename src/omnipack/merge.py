@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Iterator
 from copy import deepcopy
 from dataclasses import astuple, dataclass, field
 from typing import Any
@@ -26,8 +27,9 @@ from omnipack.overlay import (
     OverlayPatch,
     apply_overlay,
     parse_overlay,
+    patch_object,
 )
-from omnipack.render import canonical_serialization
+from omnipack.render import RenderError, canonical_serialization, published_form
 from omnipack.report_model import SelectionReason
 from omnipack.source_registry import PRECEDENCE
 from omnipack.urls import normalize_project_url, parse_project_url
@@ -135,6 +137,43 @@ class UncategorizedFamily:
     variants: tuple[Variant, ...]
 
 
+@dataclass(frozen=True, slots=True)
+class RedundantOverlayKeys:
+    """An overlay record's patch keys that change no published entry.
+
+    Each key is the dotted path to a leaf of the patch, the keys along it
+    joined with `.`.
+    """
+
+    url: str
+    keys: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ListingSource:
+    """A source listing an extra's project, with the fields whose published
+    values differ between the extra and that source's candidates there.
+
+    A settings field is named `additionalSettings.<key>`; `variants` names a
+    difference in the packs the two are offered to, and `unpublishable` a
+    candidate that rendering rejects.
+    """
+
+    source: Source
+    fields: tuple[str, ...]
+
+
+@dataclass(frozen=True, slots=True)
+class ListedExtra:
+    """A selected extra that another source also lists at its project URL,
+    identified by its normalized URL and published package id.
+    """
+
+    url: str
+    id: str
+    sources: tuple[ListingSource, ...]
+
+
 @dataclass(slots=True)
 class CompositionReport:
     removals: list[Removal] = field(default_factory=list)
@@ -146,6 +185,9 @@ class CompositionReport:
     stale_category_assignments: list[str] = field(default_factory=list)
     single_only_families: list[SingleOnlyFamily] = field(default_factory=list)
     repeated_ids: list[RepeatedId] = field(default_factory=list)
+    # Overlay records with patch keys that change no published entry.
+    redundant_overlay_keys: list[RedundantOverlayKeys] = field(default_factory=list)
+    extras_listed_by_catalog: list[ListedExtra] = field(default_factory=list)
 
 
 @dataclass(frozen=True, slots=True)
@@ -186,10 +228,18 @@ def compose(
         patches = parse_overlay(overlay, "overlay")
         check_overlay_id_patches(policy, patches)
         _validate_overlay_targets(selected, patches)
+        report.redundant_overlay_keys.extend(
+            _redundant_overlay_keys(
+                (app for values in selected.values() for app in values), patches
+            )
+        )
         for variant in Variant:
             selected[variant] = apply_overlay(selected[variant], patches)
     except (OverlayError, CompositionPolicyError) as error:
         raise CompositionError(str(error)) from error
+    report.extras_listed_by_catalog.extend(
+        _listed_extras(report.selections, selected, formed, patches)
+    )
     applied = _assign_categories(selected, policy)
     report.uncategorized_families.extend(_uncategorized_families(selected))
     report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
@@ -479,6 +529,174 @@ def _repeated_ids(apps: dict[Variant, list[ComposedApp]]) -> list[RepeatedId]:
             ).items()
         )
     return result
+
+
+def _listed_extras(
+    selections: list[FamilySelection],
+    apps: dict[Variant, list[ComposedApp]],
+    formed: tuple[App, ...],
+    patches: tuple[OverlayPatch, ...],
+) -> list[ListedExtra]:
+    """Selected extras that another source lists at the same project URL.
+
+    Only the candidates the extra's own family selection considered count, so
+    a candidate that a split family rule puts in another family never lists
+    it, and neither does a denied one. Each record is merged across variants:
+    its sources are unioned, and so are each source's differing fields, so
+    two candidates of one source at the URL both keep their differences.
+    """
+    by_selector = {candidate_selector(item).key: item for item in formed}
+    overlay = {item.url: item.patch for item in patches}
+    found: dict[tuple[str, str], dict[Source, set[str]]] = {}
+    for selection in selections:
+        if selection.source is not Source.EXTRAS:
+            continue
+        url = normalize_project_url(selection.url)
+        listings = [
+            item
+            for item in selection.considered
+            if item.source is not Source.EXTRAS
+            and normalize_project_url(item.url) == url
+        ]
+        if not listings:
+            continue
+        extra = next(
+            app for app in apps[selection.variant] if app.family == selection.family
+        )
+        winner = by_selector[
+            CandidateSelector(selection.source, selection.origin, selection.id, url).key
+        ]
+        sources = found.setdefault((url, extra.id), {})
+        for listing in listings:
+            candidate = by_selector[
+                CandidateSelector(listing.source, listing.origin, listing.id, url).key
+            ]
+            fields = sources.setdefault(listing.source, set())
+            fields.update(_differing_fields(extra, candidate, overlay.get(url)))
+            if candidate.eligibility != winner.eligibility:
+                fields.add("variants")
+    return [
+        ListedExtra(
+            url,
+            package_id,
+            tuple(
+                ListingSource(source, tuple(sorted(fields)))
+                for source, fields in sorted(sources.items())
+            ),
+        )
+        for (url, package_id), sources in sorted(found.items())
+    ]
+
+
+def _redundant_overlay_keys(
+    apps: Iterable[ComposedApp], overlay: tuple[OverlayPatch, ...]
+) -> list[RedundantOverlayKeys]:
+    """Each record's keys that leave every targeted entry's published form as is.
+
+    `apps` are the selected entries of every variant before overlays apply.
+    Each leaf of a record's patch (any value that is not an object; an array
+    counts whole) is merged alone into each entry the record targets, and it
+    changes nothing when the published forms with and without it are equal
+    for every target. A null is judged the same way, so deleting an absent key
+    or a defaulted setting changes nothing. A leaf whose patched entry cannot
+    be published counts as changing it, so this never raises; the build's own
+    rendering reports that error.
+    """
+    targets: dict[str, list[ComposedApp]] = {}
+    for app in apps:
+        targets.setdefault(normalize_project_url(app.url), []).append(app)
+    result: list[RedundantOverlayKeys] = []
+    for record in overlay:
+        entries = targets.get(record.url)
+        if not entries:
+            continue
+        try:
+            baselines = [published_form(app) for app in entries]
+        except RenderError:
+            continue
+        keys = tuple(
+            sorted(
+                ".".join(path)
+                for path, value in _leaves(record.patch)
+                if all(
+                    _unchanged(app, baseline, _leaf_patch(path, value))
+                    for app, baseline in zip(entries, baselines, strict=True)
+                )
+            )
+        )
+        if keys:
+            result.append(RedundantOverlayKeys(record.url, keys))
+    result.sort(key=lambda item: item.url)
+    return result
+
+
+def _leaves(
+    patch: dict[str, Any], path: tuple[str, ...] = ()
+) -> Iterator[tuple[tuple[str, ...], Any]]:
+    for key, value in patch.items():
+        if isinstance(value, dict):
+            yield from _leaves(value, (*path, key))
+        else:
+            yield (*path, key), value
+
+
+def _leaf_patch(path: tuple[str, ...], value: Any) -> dict[str, Any]:
+    """A patch holding `value` alone at `path`."""
+    patch: Any = value
+    for key in reversed(path):
+        patch = {key: patch}
+    return patch
+
+
+def _unchanged(app: ComposedApp, baseline: object, patch: dict[str, Any]) -> bool:
+    patched = patch_object(app.data, patch)
+    try:
+        return published_form(ComposedApp(app.family, patched)) == baseline
+    except RenderError:
+        return False
+
+
+_ABSENT = object()
+
+
+def _differing_fields(
+    extra: ComposedApp, candidate: App, patch: dict[str, Any] | None
+) -> set[str]:
+    """Fields whose published values differ between the selected extra and the
+    candidate's import data with the same overlay record applied.
+
+    Top-level keys and settings keys are compared; categories are the category
+    map's and the project URL matches by construction. A candidate whose data
+    cannot be published differs as `unpublishable`, since retiring the extra
+    would make the build render it. An extra that cannot be published is
+    compared on nothing; the build's own rendering reports it.
+    """
+    data = _import_data(candidate)
+    if patch is not None:
+        data = patch_object(data, patch)
+    try:
+        ours = published_form(extra)
+    except RenderError:
+        return set()
+    try:
+        theirs = published_form(ComposedApp(extra.family, data))
+    except RenderError:
+        return {"unpublishable"}
+    fields = {
+        key
+        for key in (ours.keys() | theirs.keys()) - {"url", "additionalSettings"}
+        if ours.get(key, _ABSENT) != theirs.get(key, _ABSENT)
+    }
+    our_settings, their_settings = (
+        ours["additionalSettings"],
+        theirs["additionalSettings"],
+    )
+    fields.update(
+        f"additionalSettings.{key}"
+        for key in our_settings.keys() | their_settings.keys()
+        if our_settings.get(key, _ABSENT) != their_settings.get(key, _ABSENT)
+    )
+    return fields
 
 
 def _validate_overlay_targets(

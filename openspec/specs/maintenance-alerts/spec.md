@@ -27,6 +27,16 @@ finding for each of these problems, and for no other outcome:
   archived, a separate finding per URL for each;
 - each family the build report lists as uncategorized, each stale denial and
   each stale category assignment, one finding per item;
+- each patch key that changes nothing in an overlay record the build report
+  lists, one finding per record and key, the key identified by its dotted
+  path, which names one patch location because patch keys contain no `.`;
+  because patch keys also contain no `/`, distinct URL and key pairs give
+  distinct finding subjects, the alert-key shortening that cuts a subject
+  over the key length limit and appends a digest keeps them distinct, each
+  finding's details carry the full `URL:` and `Key:`, and a later dead key in
+  the same record raises its own finding;
+- each project URL at which the build report lists one or more extras as
+  listed by a catalog, one finding per URL covering every such extra there;
 - a producing job whose findings do not reach the alert job intact, that
   fails for a reason none of its other findings reports, or that is cancelled,
   one finding per job, so a job stopped by its time limit raises this finding
@@ -44,7 +54,11 @@ than the finding for an error status the HTTP client does not retry, and SHALL
 NOT suppress that URL's conclusive stale or archived findings. A
 stale or archived finding's details SHALL name the URL and the entry, and a
 stale finding's details SHALL give the qualifying release's tag and date or
-say that no release qualified. A stale or archived finding SHALL NOT be
+say that no release qualified. A finding for a patch key
+that changes nothing SHALL name the project URL and that key, and a finding
+for the extras a catalog lists at a project URL SHALL name the project URL
+and, for each such extra, its package id, each listing source and that
+source's differing fields. A stale or archived finding SHALL NOT be
 accounted as the live-check job's failure. Each finding SHALL have a key that
 stays the same while the same problem persists, independent of the problem's
 error text, and each key SHALL belong to exactly one producing job, so the
@@ -135,6 +149,29 @@ uploading them fails.
   limited, and it has an open stale issue and an open archived issue
 - **THEN** the HTTP 403 finding is raised, and its stale and archived issues
   are left open and unchanged
+
+#### Scenario: Overrides that change nothing
+
+- **WHEN** a nightly build report lists one overlay record with two keys that
+  change nothing and one extra a catalog lists
+- **THEN** three findings are raised: one per key, each naming the record's
+  project URL and its key, and one for the extra's project URL naming the
+  extra's package id, the listing source and its differing fields, and the
+  nightly run's verdict is unchanged
+
+#### Scenario: A muted dead key and a later one
+
+- **WHEN** a patch key's finding was closed as not planned and a later build
+  report lists another key of the same overlay record as changing nothing
+- **THEN** a separate finding is raised for the new key, and the muted key's
+  issue stays closed
+
+#### Scenario: Two listed extras at one project URL
+
+- **WHEN** a nightly build report lists two extras a catalog lists at one
+  project URL, each with its own package id
+- **THEN** one finding is raised for that URL, naming both package ids, each
+  extra's listing sources and their differing fields
 
 ### Requirement: Each finding has one issue that follows its latest re-check
 

@@ -96,6 +96,7 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
             raise OverlayError(
                 f"{item_label}.patch for {url!r} must set id to a nonempty string"
             )
+        _check_patch_keys(patch, f"{item_label}.patch for {url!r}")
         if url in indexes:
             raise OverlayError(
                 f"{item_label} names the same project URL {url!r} as "
@@ -104,6 +105,27 @@ def parse_overlay(document: object, label: str) -> tuple[OverlayPatch, ...]:
         indexes[url] = index
         result.append(OverlayPatch(url, deepcopy(patch)))
     return tuple(result)
+
+
+def _check_patch_keys(
+    patch: dict[str, Any], label: str, path: tuple[str, ...] = ()
+) -> None:
+    """Refuse keys a dotted path cannot name, and objects that patch nothing.
+
+    A patch key is reported by its dotted path, and that path is joined to a
+    project URL with `/` in an alert key, so a key holding either character
+    would let two locations share one name. An empty object has no key to
+    judge: a record whose last live key was deleted is removed, not left in
+    place. Arrays are values, so keys inside them are not checked.
+    """
+    where = f" under {'.'.join(path)!r}" if path else ""
+    if not patch:
+        raise OverlayError(f"{label} patches nothing{where}")
+    for key, value in patch.items():
+        if "." in key or "/" in key:
+            raise OverlayError(f"{label} has key {key!r} containing '.' or '/'{where}")
+        if isinstance(value, dict):
+            _check_patch_keys(value, label, (*path, key))
 
 
 def merge_patch(target: object, patch: object) -> object:
@@ -118,6 +140,13 @@ def merge_patch(target: object, patch: object) -> object:
     return result
 
 
+def patch_object(data: dict[str, Any], patch: dict[str, Any]) -> dict[str, Any]:
+    """Merge an object patch into an object, which always yields an object."""
+    patched = merge_patch(data, patch)
+    assert isinstance(patched, dict)
+    return patched
+
+
 def apply_overlay(
     apps: list[ComposedApp], overlay: tuple[OverlayPatch, ...]
 ) -> list[ComposedApp]:
@@ -127,8 +156,6 @@ def apply_overlay(
         data = deepcopy(app.data)
         patch = patches.get(normalize_project_url(app.url))
         if patch is not None:
-            patched = merge_patch(data, patch)
-            assert isinstance(patched, dict)
-            data = patched
+            data = patch_object(data, patch)
         result.append(ComposedApp(app.family, data))
     return result

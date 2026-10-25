@@ -11,6 +11,7 @@ from omnipack.overlay import ComposedApp
 from omnipack.render import (
     RenderError,
     hydrate_settings,
+    published_form,
     render,
     render_pack,
 )
@@ -310,3 +311,22 @@ def test_render_rejects_a_null_source_type() -> None:
     app.data["overrideSource"] = None
     with pytest.raises(RenderError, match="overrideSource"):
         render([app])
+
+
+def test_published_form_is_the_rendered_entry_with_settings_decoded() -> None:
+    entry = composed(settings={"includeZips": True}, author=None)
+    entry = ComposedApp(entry.family, {**entry.data, "allowIdChange": False})
+    form = published_form(entry)
+    assert form["allowIdChange"] is True
+    assert form["author"] == ""
+    assert form["additionalSettings"] == hydrate_settings(
+        "GitHub", {"includeZips": True}
+    )
+    assert form["additionalSettings"]["fallbackToOlderReleases"] is True
+    assert "categories" not in form
+    assert form["id"] == "org.example.app"
+
+
+def test_published_form_rejects_what_rendering_rejects() -> None:
+    with pytest.raises(RenderError, match="invalid name"):
+        published_form(composed(name=None))

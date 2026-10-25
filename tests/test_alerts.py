@@ -1035,8 +1035,219 @@ def _build_report(status: str = "success", **lists: list) -> dict:
         "uncategorizedFamilies": [],
         "staleExclusions": [],
         "staleCategoryAssignments": [],
+        "redundantOverlayKeys": [],
+        "extrasListedByCatalog": [],
         **lists,
     }
+
+
+def _prepare_file(tmp_path: Path, report: dict, name: str = "prepare.json") -> Path:
+    """The nightly prepare findings file for `report`, written for reconciling."""
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+    path = tmp_path / name
+    path.write_text(file.to_json())
+    return path
+
+
+REDUNDANT = "build/redundant-patch/"
+LISTED = "build/listed-extra/"
+
+
+def _dead_keys(url: str, *keys: str) -> dict:
+    return {"url": url, "keys": list(keys)}
+
+
+def _listed_extra(url: str, package_id: str, **sources: list[str]) -> dict:
+    return {
+        "url": url,
+        "id": package_id,
+        "sources": [
+            {"source": source, "fields": fields} for source, fields in sources.items()
+        ],
+    }
+
+
+def test_dead_keys_and_listed_extras_are_one_finding_per_key_and_per_url(
+    tmp_path: Path,
+) -> None:
+    report = _build_report(
+        redundantOverlayKeys=[
+            _dead_keys("example.org/a", "additionalSettings.includeZips", "name")
+        ],
+        extrasListedByCatalog=[
+            _listed_extra("example.org/b", "org.b", quiver=["name", "variants"])
+        ],
+    )
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [
+        REDUNDANT + "example.org/a/additionalSettings.includeZips",
+        REDUNDANT + "example.org/a/name",
+        LISTED + "example.org/b",
+    ]
+    assert early_failure_key(NIGHTLY_PREPARE) not in _keys(file)
+    assert "build/" in file.scope
+    assert file.findings[0].title == (
+        "Overlay patch key changes nothing: example.org/a additionalSettings.includeZips"
+    )
+    assert file.findings[0].details == (
+        "URL: example.org/a",
+        "Key: additionalSettings.includeZips",
+    )
+    assert file.findings[2].title == "A catalog lists an extra at: example.org/b"
+    assert file.findings[2].details == ("Package: org.b", "quiver: name, variants")
+
+
+def test_a_muted_dead_key_stays_closed_while_a_later_one_raises_its_own(
+    tmp_path: Path,
+) -> None:
+    report = _build_report(
+        redundantOverlayKeys=[_dead_keys("example.org/a", "name", "pinned")]
+    )
+    path = _prepare_file(tmp_path, report)
+    muted = alert_issue(
+        7, REDUNDANT + "example.org/a/name", state="closed", reason="not_planned"
+    )
+    gh = alert_gh([muted])
+
+    _run(gh, _nightly(path))
+
+    assert issue_writes(gh) == [
+        ("create", "Overlay patch key changes nothing: example.org/a pinned")
+    ]
+
+
+def test_two_listed_extras_at_one_url_are_one_finding_naming_both(
+    tmp_path: Path,
+) -> None:
+    report = _build_report(
+        extrasListedByCatalog=[
+            _listed_extra("example.org/x", "org.a", quiver=["name"], rjny=[]),
+            _listed_extra("example.org/x", "org.b", codm=["additionalSettings.about"]),
+        ]
+    )
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [LISTED + "example.org/x"]
+    assert file.findings[0].details == (
+        "Package: org.a",
+        "quiver: name",
+        "rjny: no differences",
+        "Package: org.b",
+        "codm: additionalSettings.about",
+    )
+
+
+def test_dead_key_subjects_are_percent_encoded(tmp_path: Path) -> None:
+    report = _build_report(
+        redundantOverlayKeys=[_dead_keys("example.org/x?v=1", "na\u00efve")],
+        extrasListedByCatalog=[_listed_extra("example.org/x?v=1", "org.x")],
+    )
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [
+        REDUNDANT + "example.org/x%3Fv%3D1/na%C3%AFve",
+        LISTED + "example.org/x%3Fv%3D1",
+    ]
+    assert file.findings[0].details == ("URL: example.org/x?v=1", "Key: na\u00efve")
+
+
+def test_dead_key_subjects_are_distinct_across_nested_urls(tmp_path: Path) -> None:
+    # The URL and key join with `/`, so `example.org/a` with key `b` yields the
+    # subject `example.org/a/b`. Overlay parsing rejects any patch key holding
+    # a `/`, so URL `example.org` with key `a/b` never reaches a report and the
+    # subject names one pair. Nested URLs with their own keys stay distinct.
+    report = _build_report(
+        redundantOverlayKeys=[
+            _dead_keys("example.org/a", "b"),
+            _dead_keys("example.org/a/b", "c"),
+            _dead_keys("example.org/a", "b.c"),
+        ]
+    )
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [
+        REDUNDANT + "example.org/a/b",
+        REDUNDANT + "example.org/a/b/c",
+        REDUNDANT + "example.org/a/b.c",
+    ]
+
+
+def test_an_overlong_dead_key_subject_is_accepted_and_distinct(
+    tmp_path: Path,
+) -> None:
+    url = "example.org/" + "a" * (KEY_LIMIT + 10)
+    report = _build_report(redundantOverlayKeys=[_dead_keys(url, "name")])
+    neighbour = _build_report(redundantOverlayKeys=[_dead_keys(url, "nam2")])
+
+    first = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+    other = _emit(
+        NIGHTLY_PREPARE,
+        report=neighbour,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    (finding,) = first.findings
+    assert len(finding.key) <= KEY_LIMIT
+    assert finding.key.startswith(REDUNDANT)
+    assert _keys(first) != _keys(other)
+    assert finding.details == (f"URL: {url}", "Key: name")
+
+
+def test_a_muted_dead_key_clears_when_a_successful_build_drops_it(
+    tmp_path: Path,
+) -> None:
+    path = _prepare_file(tmp_path, _build_report())
+    muted = alert_issue(
+        7, REDUNDANT + "example.org/a/name", state="closed", reason="not_planned"
+    )
+    gh = alert_gh([muted])
+
+    _run(gh, _nightly(path))
+
+    assert issue_writes(gh) == [("reopen", "7"), ("close", "7")]
 
 
 @pytest.mark.parametrize("owner", [NIGHTLY_PUBLISH, CODM_CHECK], ids=str)

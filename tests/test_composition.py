@@ -32,7 +32,7 @@ from omnipack.merge import (
     compose as compose_apps,
 )
 from omnipack.model import App, Category, Provenance, Source, SourceType, Variant
-from omnipack.render import render_pack
+from omnipack.render import RenderError, render_pack
 from omnipack.urls import normalize_project_url
 
 SINGLE_ONLY = frozenset({Variant.SINGLE})
@@ -812,8 +812,8 @@ def test_nonarray_overlay_error_identifies_the_overlay() -> None:
 def test_two_overlay_records_for_one_project_and_a_nonobject_patch_fail() -> None:
     candidate = app("x", url="https://github.com/Owner/Repo")
     records = [
-        {"url": "https://github.com/Owner/Repo", "patch": {}},
-        {"url": "github.com/owner/repo.git/", "patch": {}},
+        {"url": "https://github.com/Owner/Repo", "patch": {"name": "first"}},
+        {"url": "github.com/owner/repo.git/", "patch": {"name": "second"}},
     ]
     with pytest.raises(CompositionError) as duplicate:
         compose([candidate], [], records)
@@ -1527,3 +1527,421 @@ def test_key_used_in_one_variant_only_is_not_stale() -> None:
         ("y", Variant.DUAL): ["Track Only"],
     }
     assert result.report.stale_category_assignments == []
+
+
+def published(result: CompositionResult, variant: Variant) -> list[dict[str, object]]:
+    return json.loads(render_pack(result.apps[variant]))["apps"]
+
+
+def redundant_keys(result: CompositionResult) -> list[tuple[str, tuple[str, ...]]]:
+    return [(item.url, item.keys) for item in result.report.redundant_overlay_keys]
+
+
+@pytest.mark.parametrize(
+    ("patch", "where"),
+    [
+        ({}, ""),
+        ({"additionalSettings": {}}, " under 'additionalSettings'"),
+        (
+            {"additionalSettings": {"nested": {}}},
+            " under 'additionalSettings.nested'",
+        ),
+    ],
+    ids=["empty", "empty-settings", "empty-nested"],
+)
+def test_overlay_patch_that_patches_nothing_fails_naming_the_record(
+    patch: dict[str, object], where: str
+) -> None:
+    candidate = app("x", url="https://github.com/Owner/Repo")
+    with pytest.raises(CompositionError) as raised:
+        compose([candidate], [], overlays((candidate.url, patch)))
+    assert str(raised.value) == (
+        f"overlay[0].patch for 'github.com/owner/repo' patches nothing{where}"
+    )
+
+
+@pytest.mark.parametrize(
+    ("patch", "key", "where"),
+    [
+        ({"guard.flag": True}, "guard.flag", ""),
+        ({"guard/flag": True}, "guard/flag", ""),
+        (
+            {"additionalSettings": {"apk.filter": "x"}},
+            "apk.filter",
+            " under 'additionalSettings'",
+        ),
+        (
+            {"additionalSettings": {"apk/filter": "x"}},
+            "apk/filter",
+            " under 'additionalSettings'",
+        ),
+    ],
+    ids=["top-dot", "top-slash", "nested-dot", "nested-slash"],
+)
+def test_overlay_patch_key_with_a_dot_or_slash_fails_naming_record_and_key(
+    patch: dict[str, object], key: str, where: str
+) -> None:
+    candidate = app("x", url="https://github.com/Owner/Repo")
+    with pytest.raises(CompositionError) as raised:
+        compose([candidate], [], overlays((candidate.url, patch)))
+    assert str(raised.value) == (
+        f"overlay[0].patch for 'github.com/owner/repo' has key {key!r} "
+        f"containing '.' or '/'{where}"
+    )
+
+
+def test_nested_overlay_key_without_a_dot_or_slash_loads() -> None:
+    candidate = app("x")
+    patch: dict[str, object] = {"additionalSettings": {"apkFilterRegEx": "arm64"}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    for variant in Variant:
+        [entry] = result.apps[variant]
+        assert entry.data["additionalSettings"] == {"apkFilterRegEx": "arm64"}
+
+
+def test_a_patch_value_the_entry_already_carries_changes_nothing() -> None:
+    candidate = app("pkg", name="Same")
+    plain = compose([candidate], [], [])
+    result = compose([candidate], [], overlays((candidate.url, {"name": "Same"})))
+    assert redundant_keys(result) == [(url_family(candidate), ("name",))]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_only_the_dead_key_of_a_patch_is_recorded() -> None:
+    candidate = app("pkg", additional_settings={"includeZips": True})
+    patch: dict[str, object] = {
+        "name": "New",
+        "additionalSettings": {"includeZips": True},
+    }
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [
+        (url_family(candidate), ("additionalSettings.includeZips",))
+    ]
+    for variant in Variant:
+        [entry] = published(result, variant)
+        assert entry["name"] == "New"
+
+
+def test_a_key_that_changes_only_the_dual_entry_is_not_recorded() -> None:
+    url = "https://github.com/Owner/Both"
+    single = app("a", eligibility=SINGLE_ONLY, url=url, name="Patched")
+    dual = app("b", "bboi", eligibility=DUAL_ONLY, url=url, name="Other")
+    result = compose([single, dual], [], overlays((url, {"name": "Patched"})))
+    assert redundant_keys(result) == []
+    [dual_entry] = published(result, Variant.DUAL)
+    assert dual_entry["name"] == "Patched"
+
+
+def test_a_patch_setting_a_rendering_default_changes_nothing() -> None:
+    candidate = app("pkg")
+    plain = compose([candidate], [], [])
+    patch: dict[str, object] = {"additionalSettings": {"includeZips": False}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [
+        (url_family(candidate), ("additionalSettings.includeZips",))
+    ]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_a_patch_on_a_field_rendering_forces_changes_nothing() -> None:
+    candidate = app("pkg")
+    plain = compose([candidate], [], [])
+    result = compose(
+        [candidate], [], overlays((candidate.url, {"allowIdChange": False}))
+    )
+    assert redundant_keys(result) == [(url_family(candidate), ("allowIdChange",))]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_a_null_deleting_an_absent_key_changes_nothing() -> None:
+    candidate = app("pkg")
+    plain = compose([candidate], [], [])
+    result = compose([candidate], [], overlays((candidate.url, {"pinned": None})))
+    assert redundant_keys(result) == [(url_family(candidate), ("pinned",))]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+@pytest.mark.parametrize(
+    "settings", [{}, {"includeZips": False}], ids=["absent", "at-default"]
+)
+def test_a_null_deleting_a_defaulted_setting_changes_nothing(
+    settings: dict[str, object],
+) -> None:
+    candidate = app("pkg", additional_settings=settings)
+    plain = compose([candidate], [], [])
+    patch: dict[str, object] = {"additionalSettings": {"includeZips": None}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [
+        (url_family(candidate), ("additionalSettings.includeZips",))
+    ]
+    for variant in Variant:
+        assert published(result, variant) == published(plain, variant)
+
+
+def test_a_null_deleting_a_setting_the_entry_sets_is_live() -> None:
+    candidate = app("pkg", additional_settings={"includeZips": True})
+    patch: dict[str, object] = {"additionalSettings": {"includeZips": None}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == []
+
+
+def test_a_null_under_a_parent_the_entry_lacks_is_live() -> None:
+    candidate = app("pkg")
+    patch: dict[str, object] = {"foo": {"bar": None}}
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == []
+    for variant in Variant:
+        [entry] = published(result, variant)
+        assert entry["foo"] == {}
+
+
+def test_a_key_whose_patched_entry_cannot_render_counts_as_changing_it() -> None:
+    candidate = app("pkg")
+    result = compose([candidate], [], overlays((candidate.url, {"author": 7})))
+    assert redundant_keys(result) == []
+
+
+def test_a_record_on_an_entry_that_cannot_render_records_no_key() -> None:
+    broken = replace(app("pkg", name="Same"), raw={"author": 7})
+    result = compose([broken], [], overlays((broken.url, {"name": "Same"})))
+    assert redundant_keys(result) == []
+
+
+def test_redundant_keys_are_recorded_per_record_sorted_by_url() -> None:
+    later = app("b", url="https://github.com/Owner/Zeta", name="Z")
+    earlier = app("a", url="https://github.com/Owner/Alpha", name="A")
+    result = compose(
+        [later, earlier],
+        [],
+        overlays((later.url, {"name": "Z"}), (earlier.url, {"name": "A"})),
+    )
+    assert redundant_keys(result) == [
+        ("github.com/owner/alpha", ("name",)),
+        ("github.com/owner/zeta", ("name",)),
+    ]
+
+
+def test_an_invalid_overlay_leaves_the_redundant_keys_empty() -> None:
+    candidate = app("pkg")
+    report = CompositionReport()
+    with pytest.raises(CompositionError, match="no selected target"):
+        compose(
+            [candidate],
+            [],
+            overlays(
+                (candidate.url, {"name": candidate.name}),
+                ("https://github.com/Owner/Missing", {"name": "stale"}),
+            ),
+            report=report,
+        )
+    assert report.redundant_overlay_keys == []
+
+
+LISTED_URL = "https://github.com/Owner/Listed"
+
+
+def listed(
+    result: CompositionResult,
+) -> list[tuple[str, str, tuple[tuple[str, tuple[str, ...]], ...]]]:
+    return [
+        (
+            item.url,
+            item.id,
+            tuple((source.source.value, source.fields) for source in item.sources),
+        )
+        for item in result.report.extras_listed_by_catalog
+    ]
+
+
+def test_an_extra_a_catalog_lists_is_recorded_with_its_differing_fields() -> None:
+    extra = app(
+        "org.pkg",
+        "extras",
+        url=LISTED_URL,
+        name="Extra",
+        additional_settings={"apkFilterRegEx": "arm64"},
+    )
+    quiver = app(
+        "org.pkg",
+        "quiver",
+        url=LISTED_URL.lower() + "/",
+        name="Quiver",
+        additional_settings={"apkFilterRegEx": "x86"},
+    )
+    result = compose([quiver, extra], [], [])
+    alone = compose([extra], [], [])
+    for variant in Variant:
+        assert published(result, variant) == published(alone, variant)
+    assert listed(result) == [
+        (
+            "github.com/owner/listed",
+            "org.pkg",
+            (("quiver", ("additionalSettings.apkFilterRegEx", "name")),),
+        )
+    ]
+
+
+@pytest.mark.parametrize("difference", ["allowIdChange", "author"])
+def test_differences_rendering_erases_leave_no_differing_field(
+    difference: str,
+) -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Same")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Same")
+    if difference == "allowIdChange":
+        quiver = replace(quiver, raw={"allowIdChange": False})
+    else:
+        extra = replace(extra, raw={"author": ""})
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+
+
+def test_categories_and_url_spelling_are_not_differing_fields() -> None:
+    extra = app(
+        "org.pkg",
+        "extras",
+        url=LISTED_URL,
+        name="Same",
+        additional_settings={"k": 1},
+        categories=("Emulator",),
+    )
+    quiver = app(
+        "org.pkg",
+        "quiver",
+        url=LISTED_URL.lower() + ".git",
+        name="Same",
+        additional_settings={"k": 2},
+        categories=("Dual Screen",),
+    )
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.pkg", (("quiver", ("additionalSettings.k",)),))
+    ]
+
+
+def test_a_dual_only_extra_over_a_both_pack_candidate_differs_in_variants() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, eligibility=DUAL_ONLY, name="S")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="S")
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.pkg", (("quiver", ("variants",)),))
+    ]
+
+
+def test_an_extra_replacing_another_project_in_its_family_is_not_listed() -> None:
+    extra = app("a", "extras", family="app:x", url="https://github.com/Owner/A")
+    quiver = app("b", "quiver", family="app:x", url="https://github.com/Owner/B")
+    result = compose([quiver, extra], [], [])
+    assert ids(result, Variant.SINGLE) == {"a"}
+    assert listed(result) == []
+
+
+def test_a_split_project_url_shipping_both_builds_lists_no_extra() -> None:
+    extra = app("a", "extras", family="app:a", url=LISTED_URL)
+    quiver = app("b", "quiver", family="app:b", url=LISTED_URL)
+    result = compose([quiver, extra], [], [])
+    assert ids(result, Variant.SINGLE) == {"a", "b"}
+    assert listed(result) == []
+
+
+def test_two_extras_at_one_url_in_separate_families_are_two_records() -> None:
+    first = app("a", "extras", family="app:a", url=LISTED_URL)
+    first_catalog = app("a.catalog", "quiver", family="app:a", url=LISTED_URL)
+    second = app("b", "extras", family="app:b", url=LISTED_URL)
+    second_catalog = app("b.catalog", "rjny", family="app:b", url=LISTED_URL)
+    result = compose([second_catalog, first, second, first_catalog], [], [])
+    assert ids(result, Variant.SINGLE) == {"a", "b"}
+    assert listed(result) == [
+        ("github.com/owner/listed", "a", (("quiver", ("id", "name")),)),
+        ("github.com/owner/listed", "b", (("rjny", ("id", "name")),)),
+    ]
+
+
+def test_a_denied_project_url_lists_no_extra() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Quiver")
+    result = compose([quiver, extra], deny(LISTED_URL), [])
+    assert ids(result, Variant.SINGLE) == set()
+    assert listed(result) == []
+
+
+def test_a_candidate_identical_after_the_overlay_has_no_differing_field() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Quiver")
+    result = compose([quiver, extra], [], overlays((LISTED_URL, {"name": "Patched"})))
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+    assert redundant_keys(result) == []
+
+
+def test_two_same_source_candidates_at_one_url_keep_both_sets_of_fields() -> None:
+    extra = app(
+        "org.pkg",
+        "extras",
+        url=LISTED_URL,
+        name="Extra",
+        additional_settings={"apkFilterRegEx": "arm64"},
+    )
+    by_name = app(
+        "org.pkg.one",
+        "quiver",
+        url=LISTED_URL,
+        name="Other",
+        additional_settings={"apkFilterRegEx": "arm64"},
+    )
+    by_filter = app(
+        "org.pkg.two",
+        "quiver",
+        url=LISTED_URL,
+        name="Extra",
+        additional_settings={"apkFilterRegEx": "x86"},
+    )
+    result = compose([by_filter, extra, by_name], [], [])
+    assert listed(result) == [
+        (
+            "github.com/owner/listed",
+            "org.pkg",
+            (("quiver", ("additionalSettings.apkFilterRegEx", "id", "name")),),
+        )
+    ]
+
+
+def test_a_pinned_extra_a_catalog_lists_is_recorded() -> None:
+    extra = app("org.pkg", "extras", family="app:x", url=LISTED_URL, name="Same")
+    quiver = app("org.pkg", "quiver", family="app:x", url=LISTED_URL, name="Same")
+    policy = pin_policy(extra, "app:x", Variant.SINGLE, quiver)
+    result = compose([quiver, extra], [], [], policy=policy)
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+
+
+def test_a_listed_extra_is_keyed_by_its_patched_id() -> None:
+    extra = app("org.wrong", "extras", url=LISTED_URL, name="Same")
+    quiver = app("org.wrong", "quiver", url=LISTED_URL, name="Same")
+    result = compose([quiver, extra], [], overlays((LISTED_URL, {"id": "org.right"})))
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.right", (("quiver", ()),))
+    ]
+
+
+def test_an_extra_that_cannot_render_records_no_fields_and_fails_rendering() -> None:
+    extra = replace(
+        app("org.pkg", "extras", url=LISTED_URL, name="Extra"), raw={"author": None}
+    )
+    quiver = app("org.pkg", "quiver", url=LISTED_URL, name="Quiver")
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [("github.com/owner/listed", "org.pkg", (("quiver", ()),))]
+    with pytest.raises(RenderError):
+        render_pack(result.apps[Variant.SINGLE])
+
+
+def test_a_listing_candidate_that_cannot_render_is_unpublishable() -> None:
+    extra = app("org.pkg", "extras", url=LISTED_URL, name="Extra")
+    quiver = replace(
+        app("org.pkg", "quiver", url=LISTED_URL, name="Quiver"), raw={"author": None}
+    )
+    result = compose([quiver, extra], [], [])
+    assert listed(result) == [
+        ("github.com/owner/listed", "org.pkg", (("quiver", ("unpublishable",)),))
+    ]
