@@ -308,6 +308,22 @@
     "additionalSettings": {}
   },
   {
+    "id": "com.ast.cubeevil4",
+    "url": "https://github.com/Andiweli/CubeEvil4-Android",
+    "name": "Resident Evil 4 Prototype (CubeEvil4)",
+    "author": "Andiweli",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.hybridheaven.recomp",
+    "url": "https://github.com/ogdanimal/HybridHeaven-Recomp",
+    "name": "Hybrid Heaven: Recompiled",
+    "author": "ogdanimal",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",

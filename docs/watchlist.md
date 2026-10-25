@@ -70,24 +70,16 @@ they are not re-proposed unless something material changes.
   without disqualifying it. Promote, dual-screen only, by removing the denial
   once a later release installs over the first.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
-  A gbarecomp-based recomp with APK releases from a brand-new account, with
-  drifting asset names and a package id set by the external engine's build
-  rather than the repository. Promote when the account has a sustained history,
-  asset names are stable and the shipped package id is confirmed.
-- **Resident Evil 4 Prototype (CubeEvil4)** - https://github.com/Andiweli/CubeEvil4-Android.
-  A native port of the RE4 GameCube debug-build decompilation by the author of
-  the pack's OpenMW build, with one APK per release and minimal permissions.
-  Its package id has changed between flavors and releases, and which flavor
-  ships is unconfirmed. Promote when the package id holds across several
-  releases; the legal exposure of the reconstructed Capcom code is the owner's
-  call.
+  A gbarecomp-based recomp with one APK per release under a stable asset name,
+  from a brand-new account with many quick recomps. The repository sets a
+  development-suffixed package id and signs releases with a debug certificate.
+  Promote when the account has a sustained history and the package id is final.
 - **Super Mario Sunshine (Mareshine)** - https://github.com/TheM3dium/mareshine.
-  A fork of jbcgames/sms-android on the Sunshine decompilation, from a brand-new
-  single-repository account with a burst of commits and releases. It requests
-  all-files storage, and its install permission serves a self-updater that
-  verifies its own signature. Upstream states no license.
-  Promote when it has a sustained history and outside use and the upstream
-  license is settled.
+  A Sunshine port now built on chasem-dev's MIT-licensed PC port (earlier
+  versions forked jbcgames/sms-android), from a brand-new single-repository
+  account with a burst of commits and releases. It requests all-files storage,
+  and its install permission serves a self-updater that verifies its own
+  signature. Promote when it has a sustained history and outside use.
 - **Grand Theft Auto IV (LibertyRecompAndroid)** - https://github.com/vaduur/LibertyRecompAndroid.
   An Android fork of the established LibertyRecomp Xbox 360 recomp with high
   reach, but the Android work comes from a single-repository account that calls
@@ -107,6 +99,51 @@ they are not re-proposed unless something material changes.
   Promote when new APK releases show sustained maintenance and the project gains
   outside use.
 
+- **Skies of Arcadia Legends: Recompiled** - https://github.com/ogdanimal/SkiesOfArcadiaLegends-Recomp.
+  A GPL GameCube static recomp on a patched Dolphin Android app, by the author
+  of the Goemon and Hybrid Heaven recomps, with one APK per release and a pinned
+  signing key. Every release is a beta prerelease, some carry no APK, and it
+  requests all-files storage for an optional data folder.
+  Promote when a release that is not a prerelease carries an Android APK.
+- **Need for Speed Underground 2 (nfsu2-recompiled)** - https://github.com/codepdbh/nfsu2-recompiled.
+  A static recomp of the PC game with arm64 and armeabi-v7a APKs per release
+  and wide outside use, from a recently created account with a rapid stream of
+  AI-assisted ports that says it replaces a compromised earlier account. It
+  requests all-files storage for its game folder. The same author's
+  nfsmw-android and nfsu1-recompiled ports wait on the same terms, the latter
+  until its Android build is playable.
+  Promote when the account has kept up Android releases that install over one
+  another for about a month.
+- **Link's Awakening (LASRecomp Android Plus)** - https://github.com/Nycolazs/LASRecomp-Android-Plus.
+  An almost entirely AI-written Android fork of the LASRecomp Switch recomp,
+  with one APK per Android release beside upstream test tags. The game is
+  recompiled on the device from the user's dump and keys, and its signing key
+  has changed between releases.
+  Promote when several releases have installed over one another with no further
+  key change.
+- **Final Fantasy Tactics Advance Recomp** - https://github.com/james2doyle/ffta-recomp.
+  A gbarecomp-based recomp under a noncommercial license from an established
+  account, with one APK per release, but a short, heavily agent-driven history
+  and debug-signed APKs built locally.
+  Promote when releases have kept installing over one another for about a month.
+- **Retro Launcher** - https://github.com/RetroPortingToolKit/Retro-Launcher.
+  An MIT frontend for static recomps with one APK per release, all-files storage
+  and a self-updater limited to its own package. Its own documentation calls
+  Android support initial and unvalidated on devices.
+  Promote when the documentation no longer describes Android as initial or
+  unvalidated.
+- **Sonic R (sonic-r-android)** - https://github.com/ZinexDa/sonic-r-android.
+  An Android port of the Sonic R PC decompilation under that project's
+  noncommercial license, from a small single-author account, with drifting asset
+  names and debug-signed local builds.
+  Promote when asset names are stable and the history is sustained.
+- **God of War III (gow3_android)** - https://github.com/zFitness/gow3_android.
+  A GPL fork of gow3_pc on FEXCore and the shadPS4 renderer with several
+  contributors and wide outside use, but its package id and signing key have
+  both changed between releases.
+  Promote when the package id and signing key have held across several
+  releases; Sony trademark and takedown exposure is the owner's call.
+
 ## Declined
 
 - **Jet Force Gemini recomp** - https://github.com/TK22-26/JetForceGemini-Recomp.
@@ -118,6 +155,10 @@ they are not re-proposed unless something material changes.
 - **Zelda: A Link to the Past (moonpearl)** - https://github.com/DoutorRaposo/moonpearl.
   Duplicates the zelda3 port already in both packs, from a single burst of
   commits and releases.
-- **Vita3K-Plus** - https://github.com/nckstwrt/Vita3K-Plus. Declares the same
-  package id as the official Vita3K entry, so both cannot be in a pack, and it
-  does not follow upstream.
+- **Vita3K-Plus** - https://github.com/nckstwrt/Vita3K-Plus. A single-author
+  fork that does not follow upstream Vita3K. Its releases now ship their own
+  package id, so it could sit beside the official entry; whether it should is
+  the owner's call.
+- **Super Mario Strikers (Strikers-Android-Port)** - https://github.com/luisxl15/Strikers-Android-Port.
+  A one-off Android build of the strikers port whose release republishes a
+  committed debug-signed APK.
