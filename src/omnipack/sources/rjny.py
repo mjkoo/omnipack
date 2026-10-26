@@ -2,8 +2,9 @@
 
 RJNY entries carry `meta` flags (`includeInStandard`, `includeInDualScreen`,
 `excludeFromExport`, `nameOverride`, `urlOverride`). The export flags decide
-whether an entry is kept and its build kind, never which packs it reaches; `additionalSettings` is an object on this source (a JSON string
-in the rendered Obtainium export).
+whether an entry is kept and its build kind, never which packs it reaches.
+`additionalSettings` is an object on this source (a JSON string in the
+rendered Obtainium export).
 """
 
 from __future__ import annotations

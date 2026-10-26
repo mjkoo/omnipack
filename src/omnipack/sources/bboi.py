@@ -2,7 +2,8 @@
 
 Records of the single-screen asset (`Decomp-Recomp.V<x>.json`) are baseline
 builds and records of the dual-screen asset
-(`Dual-Screen-Decomp-Recomp.V<x>.json`) dual-screen builds. `additionalSettings` is already a JSON string on this source.
+(`Dual-Screen-Decomp-Recomp.V<x>.json`) dual-screen builds.
+`additionalSettings` is already a JSON string on this source.
 """
 
 from __future__ import annotations
