@@ -739,17 +739,16 @@ def test_single_scoped_and_dual_scoped_denials_at_one_url_remove_it_entirely() -
         compose([denied], denials, [], policy=policy_of([], [pinned]))
 
 
-@pytest.mark.parametrize("reasons", [("first", "second"), ("second", "first")])
+@pytest.mark.parametrize("scoped_first", [False, True])
 def test_a_pin_error_names_the_first_denial_covering_the_pin_s_pack(
-    reasons: tuple[str, str],
+    scoped_first: bool,
 ) -> None:
     denied = app("denied", "codm", dual_screen=True)
     pinned = pin(denied, url_family(denied), Variant.DUAL)
-    earlier, later = reasons
-    denials = [
-        *deny(denied.url, reason=earlier),
-        *deny(denied.url, reason=later, packs=["dual"]),
-    ]
+    unscoped = deny(denied.url, reason="unscoped")
+    scoped = deny(denied.url, reason="scoped", packs=["dual"])
+    denials = [*scoped, *unscoped] if scoped_first else [*unscoped, *scoped]
+    earlier = denials[0]["reason"]
     with pytest.raises(CompositionError, match=rf"pin.*is denied at .*: {earlier}$"):
         compose([denied], denials, [], policy=policy_of([], [pinned]))
 

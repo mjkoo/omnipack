@@ -86,6 +86,7 @@ candidates, so verification cannot reconstruct provenance, candidate presence,
 preference or source ranking, or prove that a patch produced the rendered
 values. Fixture-driven composition and rendering tests protect maintained IDs,
 URLs, variant membership and override values across refreshes.
+
 Catalog verification compares the generated marker interior against the captured
 packs and policy. Missing, unreadable, malformed or stale catalogs fail. Handwritten
 content is excluded from catalog comparison but included in the README fingerprint.
