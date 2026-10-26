@@ -1037,6 +1037,7 @@ def _build_report(status: str = "success", **lists: list) -> dict:
         "staleCategoryAssignments": [],
         "redundantOverlayKeys": [],
         "extrasListedByCatalog": [],
+        "repeatedIds": [],
         **lists,
     }
 
@@ -1156,6 +1157,60 @@ def test_two_listed_extras_at_one_url_are_one_finding_naming_both(
         "Package: org.b",
         "codm: additionalSettings.about",
     )
+
+
+REPEATED = "build/repeated-id/"
+
+
+def _repeated(variant: str, package_id: str, *entries: tuple[str, str]) -> dict:
+    return {
+        "variant": variant,
+        "id": package_id,
+        "entries": [{"family": family, "url": url} for family, url in entries],
+    }
+
+
+def test_a_repeated_package_id_raises_one_finding_per_pack(tmp_path: Path) -> None:
+    entries = (("example.org/a", "example.org/a"), ("app:b", "example.org/b"))
+    report = _build_report(
+        repeatedIds=[
+            _repeated("single", "p", *entries),
+            _repeated("dual", "p", *entries),
+        ]
+    )
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [REPEATED + "single/p", REPEATED + "dual/p"]
+    assert file.findings[0].title == "Package id repeated in the single pack: p"
+    assert file.findings[0].details == (
+        "Variant: single",
+        "Package id: p",
+        "Entry: example.org/a at example.org/a",
+        "Entry: app:b at example.org/b",
+    )
+
+
+def test_a_repeated_package_id_with_an_unknown_pack_raises_nothing(
+    tmp_path: Path,
+) -> None:
+    report = _build_report(repeatedIds=[_repeated("both", "p")])
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert not any(key.startswith(REPEATED) for key in _keys(file))
 
 
 def test_dead_key_subjects_are_percent_encoded(tmp_path: Path) -> None:
