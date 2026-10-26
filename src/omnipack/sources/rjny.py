@@ -1,8 +1,8 @@
 """Fetch RJNY's `src/applications.json` from its main branch.
 
 RJNY entries carry `meta` flags (`includeInStandard`, `includeInDualScreen`,
-`excludeFromExport`, `nameOverride`, `urlOverride`) that map to variant
-membership; `additionalSettings` is an object on this source (a JSON string
+`excludeFromExport`, `nameOverride`, `urlOverride`). The export flags decide
+whether an entry is kept and its build kind, never which packs it reaches; `additionalSettings` is an object on this source (a JSON string
 in the rendered Obtainium export).
 """
 
@@ -10,12 +10,17 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 
-from omnipack.model import App, Source, Variant
+from omnipack.model import App, Source
 from omnipack.sources.common import HttpGetter, SourceError, normalize_record
 
 
 def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
-    """Return RJNY's applications, normalized, honoring `excludeFromExport`."""
+    """Return RJNY's applications, normalized.
+
+    An entry excluded from export, or marked out of both exports, is dropped.
+    One in the dual-screen export alone is a dual-screen build; every other
+    kept entry is a baseline build.
+    """
     try:
         repo, branch, path = (config.get(key) for key in ("repo", "branch", "path"))
         if not all(
@@ -34,21 +39,15 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
             meta = record.get("meta", {})
             if not isinstance(meta, dict):
                 raise TypeError("entry meta must be an object")
-            if meta.get("excludeFromExport") is True:
+            standard = meta.get("includeInStandard") is not False
+            dual = meta.get("includeInDualScreen") is not False
+            if meta.get("excludeFromExport") is True or not (standard or dual):
                 continue
-            eligibility = frozenset(
-                variant
-                for variant, included in (
-                    (Variant.SINGLE, meta.get("includeInStandard")),
-                    (Variant.DUAL, meta.get("includeInDualScreen")),
-                )
-                if included is not False
-            )
             result.append(
                 normalize_record(
                     record,
                     source=Source.RJNY,
-                    eligibility=eligibility,
+                    dual_screen=not standard,
                     origin="rjny-catalog",
                 )
             )

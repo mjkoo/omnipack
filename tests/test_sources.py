@@ -51,16 +51,16 @@ def test_rjny_applies_export_flags_and_ignores_presentation_overrides() -> None:
         },
     )
     cemu = [app for app in apps if app.id == "info.cemu.cemu"]
-    assert {(app.eligibility, app.url) for app in cemu} == {
-        (frozenset({Variant.SINGLE}), "https://github.com/SSimco/Cemu"),
-        (frozenset({Variant.DUAL}), "https://github.com/sapphirerhodonite/cemu"),
+    assert {(app.dual_screen, app.url) for app in cemu} == {
+        (False, "https://github.com/SSimco/Cemu"),
+        (True, "https://github.com/sapphirerhodonite/cemu"),
     }
     assert all(app.name == "Citra" for app in apps if app.id == "org.citra.emu")
     assert not any("Dev build" in app.name for app in apps)
     assert all(isinstance(app.additional_settings, dict) for app in apps)
 
 
-def test_rjny_cemu_builds_at_two_urls_form_two_url_families() -> None:
+def test_rjny_cemu_builds_at_two_urls_form_two_url_families_in_both_packs() -> None:
     url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     apps = rjny.fetch(
         FakeHttp({url: fixture("rjny-applications.json")}),
@@ -79,26 +79,22 @@ def test_rjny_cemu_builds_at_two_urls_form_two_url_families() -> None:
             {"schemaVersion": 1, "candidates": [], "pins": []}
         ),
     )
-    selections = {item.variant: item for item in result.report.selections}
+    # A shared package id joins nothing, so both builds reach both packs and
+    # the id is recorded as repeated until a family rule joins the URLs.
     assert {
-        variant: (item.family, item.url, item.reason)
-        for variant, item in selections.items()
+        (item.variant, item.family, item.reason) for item in result.report.selections
     } == {
-        Variant.SINGLE: (
-            "github.com/ssimco/cemu",
-            "https://github.com/SSimco/Cemu",
-            "source",
-        ),
-        Variant.DUAL: (
-            "github.com/sapphirerhodonite/cemu",
-            "https://github.com/sapphirerhodonite/cemu",
-            "dual-preferred",
-        ),
+        (Variant.SINGLE, "github.com/ssimco/cemu", "source"),
+        (Variant.DUAL, "github.com/ssimco/cemu", "ordinary-fallback"),
+        (Variant.SINGLE, "github.com/sapphirerhodonite/cemu", "source"),
+        (Variant.DUAL, "github.com/sapphirerhodonite/cemu", "dual-preferred"),
     }
-    assert selections[Variant.DUAL].considered == ()
+    assert {(item.variant, item.id) for item in result.report.repeated_ids} == {
+        (variant, "info.cemu.cemu") for variant in Variant
+    }
 
 
-def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_build() -> None:
+def test_rjny_standard_only_and_dual_only_builds_at_one_url_split_by_kind() -> None:
     url = "https://raw.githubusercontent.com/fixture/rjny/main/apps.json"
     project = "https://github.com/example/app"
 
@@ -123,9 +119,9 @@ def test_rjny_build_kept_out_of_dual_leaves_dual_to_its_family_s_dual_build() ->
         FakeHttp({url: json.dumps(catalog)}),
         {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
     )
-    assert {(app.id, app.eligibility) for app in apps} == {
-        ("org.example.app", frozenset({Variant.SINGLE})),
-        ("org.example.app.dual", frozenset({Variant.DUAL})),
+    assert {(app.id, app.dual_screen) for app in apps} == {
+        ("org.example.app", False),
+        ("org.example.app.dual", True),
     }
     result = compose(
         apps,
@@ -153,16 +149,15 @@ def test_rjny_matches_both_upstream_exports() -> None:
             "path": "src/applications.json",
         },
     )
-    for variant, export_name in (
-        (Variant.SINGLE, "rjny-single.json"),
-        (Variant.DUAL, "rjny-dual.json"),
-    ):
-        expected = json.loads(fixture(export_name))["apps"]
-        eligible = [app for app in apps if variant in app.eligibility]
-        assert len(eligible) == len(expected)
-        assert {(app.id, app.url) for app in eligible} == {
-            (entry["id"], entry["url"]) for entry in expected
-        }
+    single, dual = (
+        {(entry["id"], entry["url"]) for entry in json.loads(fixture(name))["apps"]}
+        for name in ("rjny-single.json", "rjny-dual.json")
+    )
+    # Every entry of either export is kept, and those of the dual-screen export
+    # alone are dual-screen builds.
+    assert len(apps) == len(single | dual)
+    assert {(app.id, app.url) for app in apps} == single | dual
+    assert {(app.id, app.url) for app in apps if app.dual_screen} == dual - single
 
 
 def test_rjny_rejects_empty_location_and_malformed_source_type() -> None:
@@ -225,7 +220,7 @@ def test_declared_gitlab_extra_keeps_any_url_as_written(url: str) -> None:
     assert (app.url, app.source_type) == (url, SourceType.GITLAB)
 
 
-def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
+def test_rjny_entry_out_of_both_exports_is_dropped() -> None:
     url = "https://raw.githubusercontent.com/r/main/p"
     records = [
         {
@@ -247,18 +242,7 @@ def test_rjny_entry_out_of_both_exports_contributes_to_neither_pack() -> None:
         FakeHttp({url: json.dumps({"apps": records})}),
         {"repo": "r", "branch": "main", "path": "p"},
     )
-    assert [(app.id, app.eligibility) for app in apps] == [
-        ("app.disabled", frozenset())
-    ]
-    result = compose(
-        apps,
-        [],
-        [],
-        policy=parse_composition_policy(
-            {"schemaVersion": 1, "candidates": [], "pins": []}
-        ),
-    )
-    assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
+    assert apps == []
 
 
 def _record_with(field: str, value: object) -> dict[str, object]:
@@ -371,18 +355,70 @@ def test_rjny_entry_excluded_from_export_is_dropped_whatever_its_other_flags(
     assert [app.id for app in _fetch_rjny([excluded, kept])] == ["app.kept"]
 
 
-def test_rjny_excluded_record_is_not_guarded_but_neither_pack_record_is() -> None:
+@pytest.mark.parametrize(
+    ("meta", "kind"),
+    [
+        (None, False),
+        ({}, False),
+        ({"includeInStandard": True, "includeInDualScreen": True}, False),
+        ({"includeInDualScreen": False}, False),
+        ({"includeInStandard": False}, True),
+        ({"includeInStandard": False, "includeInDualScreen": False}, None),
+        ({"excludeFromExport": True}, None),
+        ({"excludeFromExport": True, "includeInStandard": False}, None),
+    ],
+    ids=[
+        "no-meta",
+        "empty-meta",
+        "both-exports",
+        "standard-only",
+        "dual-only",
+        "neither-export",
+        "excluded",
+        "excluded-dual-only",
+    ],
+)
+def test_rjny_export_flags_decide_whether_an_entry_is_kept_and_its_kind(
+    meta: dict[str, object] | None, kind: bool | None
+) -> None:
+    record = _record_with("name", "Entry")
+    if meta is not None:
+        record["meta"] = meta
+    apps = _fetch_rjny([record])
+    assert [app.dual_screen for app in apps] == ([] if kind is None else [kind])
+
+
+def test_a_bboi_dual_asset_with_no_standard_counterpart_reaches_both_packs() -> None:
+    record = _record_with("name", "Dual")
+    apps = _fetch_bboi([], [record])
+    assert [(app.origin, app.dual_screen) for app in apps] == [
+        ("bboi-dual-asset", True)
+    ]
+    result = compose(
+        apps,
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
+    )
+    assert {
+        (item.variant, item.id, item.reason) for item in result.report.selections
+    } == {
+        (Variant.SINGLE, "app.entry", "source"),
+        (Variant.DUAL, "app.entry", "dual-preferred"),
+    }
+
+
+def test_rjny_dropped_records_are_not_guarded() -> None:
     excluded = _record_with("family", None)
     excluded["meta"] = {"excludeFromExport": True}
-    assert _fetch_rjny([excluded]) == []
-
     neither_pack = _record_with("family", None)
     neither_pack["meta"] = {
         "includeInStandard": False,
         "includeInDualScreen": False,
     }
-    with pytest.raises(SourceError, match="^rjny: entry 'Entry' field 'family' "):
-        _fetch_rjny([neither_pack])
+    assert _fetch_rjny([excluded, neither_pack]) == []
 
 
 def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
@@ -405,8 +441,7 @@ def test_unmodeled_fields_pass_through_upstream_and_extras() -> None:
         "dualScreen": {"unknown": True},
     }
     assert extra_app.raw == {"origin": "extra-value"}
-    assert extra_app.eligibility == frozenset({Variant.DUAL})
-    assert extra_app.dual_preferred
+    assert extra_app.dual_screen
     rendered = {
         entry["id"]: entry
         for entry in json.loads(
@@ -596,19 +631,9 @@ def test_bboi_latest_release_retains_both_asset_origins() -> None:
         "com.samyost1.zelda3android",
         "com.samyost1.tmcandroid",
     }
-    for origin, asset, eligibility, preferred in (
-        (
-            "bboi-standard-asset",
-            "bboi-single.json",
-            frozenset(Variant),
-            False,
-        ),
-        (
-            "bboi-dual-asset",
-            "bboi-dual.json",
-            frozenset({Variant.DUAL}),
-            True,
-        ),
+    for origin, asset, dual_screen in (
+        ("bboi-standard-asset", "bboi-single.json", False),
+        ("bboi-dual-asset", "bboi-dual.json", True),
     ):
         expected = {entry["id"]: entry for entry in json.loads(fixture(asset))["apps"]}
         actual = {app.id: app for app in apps if app.origin == origin}
@@ -620,8 +645,7 @@ def test_bboi_latest_release_retains_both_asset_origins() -> None:
             assert app.categories == tuple(entry["categories"])
             assert app.source_type == entry["overrideSource"]
             assert app.additional_settings == json.loads(entry["additionalSettings"])
-            assert app.eligibility == eligibility
-            assert app.dual_preferred is preferred
+            assert app.dual_screen is dual_screen
 
 
 def test_bboi_rejects_malformed_settings() -> None:
@@ -683,10 +707,7 @@ def test_codm_loads_every_committed_entry_and_reports_admission(
     assert "https://github.com/igawa6/dusklight" in urls
     assert "https://github.com/Josh-Daniels/OpenMW-DS" in urls
     assert all(
-        app.eligibility == frozenset({Variant.DUAL})
-        and app.dual_preferred
-        and app.origin == "codm-generated"
-        and not app.categories
+        app.dual_screen and app.origin == "codm-generated" and not app.categories
         for app in apps
     )
     assert all(app.source_type == SourceType.GITHUB for app in apps)
@@ -769,11 +790,14 @@ def test_build_keeps_tracking_resource_beside_the_app_it_extends(
         }
         for variant in Variant
     }
-    assert set(rendered[Variant.SINGLE]) == {"app.host"}
-    assert set(rendered[Variant.DUAL]) == {
-        "app.host",
-        "resource.release-feed",
-    }
+    assert (
+        set(rendered[Variant.SINGLE])
+        == set(rendered[Variant.DUAL])
+        == {
+            "app.host",
+            "resource.release-feed",
+        }
+    )
     resource_settings = json.loads(
         rendered[Variant.DUAL]["resource.release-feed"]["additionalSettings"]
     )
@@ -799,7 +823,7 @@ def test_codm_rejects_duplicate_ids(tmp_path: Path) -> None:
 PROJECT = "https://github.com/owner/project"
 
 
-def rjny_candidate(eligibility: frozenset[Variant]) -> App:
+def rjny_candidate() -> App:
     return App(
         "app.standard",
         "https://www.github.com/owner/project.git/",
@@ -807,7 +831,7 @@ def rjny_candidate(eligibility: frozenset[Variant]) -> App:
         SourceType.GITHUB,
         (),
         Provenance(Source.RJNY, "catalog"),
-        eligibility=eligibility,
+        dual_screen=False,
         origin="rjny-catalog",
     )
 
@@ -845,9 +869,7 @@ def test_codm_url_overlap_keeps_both_candidates_and_composition_selects(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    candidates = ingest_over_codm_entry(
-        tmp_path, monkeypatch, [rjny_candidate(frozenset(Variant))]
-    )
+    candidates = ingest_over_codm_entry(tmp_path, monkeypatch, [rjny_candidate()])
     assert [app.id for app in candidates] == ["app.generated", "app.standard"]
     result = compose(
         candidates,
@@ -880,7 +902,7 @@ def test_extras_entry_missing_every_name_source_is_identified_by_index() -> None
         extras.fetch([{}])
 
 
-def test_extras_dual_screen_flag_decides_eligibility_and_preference() -> None:
+def test_extras_dual_screen_flag_decides_build_kind() -> None:
     apps = extras.fetch(
         [
             {"id": "a", "url": "https://github.com/o/r", "name": "GitHub"},
@@ -898,12 +920,10 @@ def test_extras_dual_screen_flag_decides_eligibility_and_preference() -> None:
             },
         ]
     )
-    assert {
-        (app.id, app.eligibility, app.dual_preferred, app.source_type) for app in apps
-    } == {
-        ("a", frozenset(Variant), False, SourceType.GITHUB),
-        ("b", frozenset({Variant.DUAL}), True, None),
-        ("c", frozenset(Variant), False, None),
+    assert {(app.id, app.dual_screen, app.source_type) for app in apps} == {
+        ("a", False, SourceType.GITHUB),
+        ("b", True, None),
+        ("c", False, None),
     }
 
 
@@ -1072,7 +1092,7 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
         SourceType.GITHUB,
         (),
         Provenance(Source.BBOI, "asset"),
-        frozenset({Variant.DUAL}),
+        dual_screen=True,
         origin="bboi-dual-asset",
     )
     rules = [
@@ -1090,13 +1110,12 @@ def test_dual_screen_extra_wins_dual_over_a_lower_source_dual_screen_build() -> 
         {"schemaVersion": 1, "candidates": rules, "pins": []}
     )
     result = compose([extra, fork], [], [], policy=policy)
-    assert result.apps[Variant.SINGLE] == []
-    [selection] = result.report.selections
-    assert (selection.variant, selection.id, selection.reason) == (
-        Variant.DUAL,
-        "com.example.companion",
-        "dual-preferred",
-    )
+    assert {
+        (item.variant, item.id, item.reason) for item in result.report.selections
+    } == {
+        (Variant.SINGLE, "com.example.companion", "source"),
+        (Variant.DUAL, "com.example.companion", "dual-preferred"),
+    }
 
 
 @pytest.mark.parametrize("pattern", ["single*.json", "dual*.json"])

@@ -18,6 +18,8 @@ from omnipack.overlay import ComposedApp
 from omnipack.report_model import BuildStage
 from omnipack.sources import IngestionReport
 
+BOTH = (Variant.SINGLE, Variant.DUAL)
+
 
 def app(package_id: str) -> ComposedApp:
     return ComposedApp(
@@ -37,7 +39,9 @@ def composition(*ids: str) -> CompositionResult:
         {variant: [app(package_id) for package_id in ids] for variant in Variant},
         CompositionReport(
             removals=[
-                Removal("example.test/denied", "curated", ("example.test/denied",))
+                Removal(
+                    "example.test/denied", "curated", BOTH, ("example.test/denied",)
+                )
             ],
             stale_exclusions=[StaleExclusion("example.test/stale", "gone")],
         ),
@@ -98,6 +102,7 @@ def test_report_compares_with_previous_output_and_keeps_source_details(
         {
             "url": "example.test/denied",
             "reason": "curated",
+            "variants": ["single", "dual"],
             "families": ["example.test/denied"],
         }
     ]
@@ -166,7 +171,7 @@ def test_family_switch_reports_package_diff_and_new_winner(
         SourceType.HTML,
         (),
         Provenance(Source.EXTRAS, current_url),
-        eligibility=frozenset(Variant),
+        dual_screen=False,
     )
     rules = [
         {
@@ -217,7 +222,6 @@ BUILD_REPORT_FIELDS = {
     "staleExclusions",
     "selections",
     "repeatedIds",
-    "singleOnlyFamilies",
     "sameRankTies",
     "uncategorizedFamilies",
     "staleCategoryAssignments",
@@ -239,7 +243,7 @@ def test_build_report_writes_exactly_its_schema_fields(tmp_path: Path) -> None:
         build_module.previous_entries(tmp_path),
     )
     report = json.loads((tmp_path / ".build/report.json").read_text())
-    assert report["schemaVersion"] == 6
+    assert report["schemaVersion"] == 7
     assert set(report) == BUILD_REPORT_FIELDS
     write_report(
         tmp_path,

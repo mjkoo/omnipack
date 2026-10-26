@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import urlsplit
 
-from omnipack.model import SourceType
+from omnipack.model import SourceType, Variant
 from omnipack.report_model import FindingRecord, Severity
 from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
@@ -437,7 +437,6 @@ def _validate_composition(
         RenderedKey,
         check_overlay_id_patches,
         load_composition_policy,
-        pair_entries,
         rendered_key,
         repeated_ids,
         repeated_labels,
@@ -520,6 +519,8 @@ def _validate_composition(
 
     for exclusion in exclusions:
         for variant, variant_keys in keys.items():
+            if Variant(variant) not in exclusion.variants:
+                continue
             for package_id, url in sorted(variant_keys):
                 if url == exclusion.url:
                     findings.append(
@@ -541,21 +542,6 @@ def _validate_composition(
                     "composition",
                     "stale_overlay",
                     f"overlay has no target for {patch.url!r}",
-                )
-            )
-
-    for pair in pair_entries(policy, keys["single"], keys["dual"]):
-        if pair.single is not None and pair.dual is None:
-            package_id, url = pair.single
-            findings.append(
-                Finding(
-                    "composition",
-                    "single_only_coverage",
-                    f"family label {pair.label!r} ({package_id!r} at {url!r}) has "
-                    "no dual-screen entry",
-                    "single",
-                    package_id,
-                    severity=Severity.NONFATAL,
                 )
             )
 

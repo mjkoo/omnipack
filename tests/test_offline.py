@@ -286,10 +286,7 @@ def test_raw_ids_survive_other_entry_errors(field: str) -> None:
         ("single", "denied_output_present"),
         ("dual", "denied_output_present"),
     } <= {(finding.variant, finding.code) for finding in findings}
-    assert not {"stale_overlay", "single_only_coverage"} & codes(findings)
-
-    missing_dual = validate_offline(inputs([malformed], []))
-    assert "single_only_coverage" in codes(missing_dual)
+    assert "stale_overlay" not in codes(findings)
 
 
 def test_entry_lacking_a_default_key_passes_when_every_other_check_passes() -> None:
@@ -371,7 +368,7 @@ def test_unknown_denial_field_is_reported() -> None:
     assert "invalid_composition_config" in codes(validate_offline(inputs(deny=[entry])))
 
 
-def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_finding() -> None:
+def test_stale_denial_is_allowed_and_a_family_missing_from_dual_is_no_finding() -> None:
     stale = [{"url": "https://example.com/stale", "reason": "gone"}]
     assert validate_offline(inputs(deny=stale)) == ()
     findings = validate_offline(
@@ -381,9 +378,7 @@ def test_stale_denial_is_allowed_and_a_denied_dual_build_leaves_a_finding() -> N
             deny=[{"url": "https://example.com/dual", "reason": "excluded"}],
         )
     )
-    assert [(item.code, item.severity) for item in findings] == [
-        ("single_only_coverage", Severity.NONFATAL)
-    ]
+    assert findings == ()
 
 
 def rule(entry: dict[str, Any], family: str) -> dict[str, Any]:
@@ -432,7 +427,6 @@ def test_family_projection_and_pin_are_distinct() -> None:
     wrong = deepcopy(dual)
     wrong["url"] = "https://example.com/other"
     result = validate_offline(inputs([single], [wrong], composition=policy))
-    assert "single_only_coverage" in codes(result)
     assert "pin_mismatch" in codes(result)
 
 
@@ -499,17 +493,36 @@ def test_an_id_patch_at_a_split_url_fails_while_loading_configuration() -> None:
     assert named == ()
 
 
-def test_denial_neither_exempts_coverage_nor_remains_selected() -> None:
-    denial = [{"url": "https://example.com/one", "reason": "unsupported"}]
-    single_only = validate_offline(inputs([at("one")], [], deny=denial))
-    assert {
-        ("single", "denied_output_present"),
-        ("single", "single_only_coverage"),
-    } <= {(finding.variant, finding.code) for finding in single_only}
-    both = validate_offline(inputs([at("one")], [at("one")], deny=denial))
-    assert {
-        finding.variant for finding in both if finding.code == "denied_output_present"
-    } == {"single", "dual"}
+@pytest.mark.parametrize(
+    ("packs", "flagged"),
+    [
+        (None, {"single", "dual"}),
+        (["single", "dual"], {"single", "dual"}),
+        (["single"], {"single"}),
+        (["dual"], {"dual"}),
+    ],
+)
+def test_a_denied_entry_is_flagged_only_in_the_packs_its_denial_names(
+    packs: list[str] | None, flagged: set[str]
+) -> None:
+    denial: dict[str, object] = {"url": "https://example.com/one", "reason": "no"}
+    if packs is not None:
+        denial["packs"] = packs
+    findings = validate_offline(inputs([at("one")], [at("one")], deny=[denial]))
+    assert {(item.variant, item.code) for item in findings} == {
+        (variant, "denied_output_present") for variant in flagged
+    }
+    assert {item.entry_id for item in findings} == {"one"}
+    assert all("'example.com/one'" in item.message for item in findings)
+
+
+@pytest.mark.parametrize("packs", [[], "single", ["single", "single"], ["both"]])
+def test_an_invalid_denial_pack_list_fails_offline_verification(
+    packs: object,
+) -> None:
+    denial = {"url": "https://example.com/one", "reason": "no", "packs": packs}
+    findings = validate_offline(inputs(deny=[denial]))
+    assert [item.code for item in findings] == ["invalid_composition_config"]
 
 
 def test_committed_pair_passes_without_network_or_rewriting(monkeypatch) -> None:
@@ -632,7 +645,7 @@ def test_a_label_repeated_within_a_variant_is_rejected() -> None:
 
 @pytest.mark.parametrize("repeated_in", ["single", "dual"])
 @pytest.mark.parametrize("reverse", [False, True])
-def test_repeated_label_leaves_both_variants_out_of_coverage(
+def test_repeated_label_leaves_both_variants_out_of_pairing(
     repeated_in: str, reverse: bool
 ) -> None:
     a, b, c = at("a"), at("b"), at("c")
@@ -648,19 +661,11 @@ def test_repeated_label_leaves_both_variants_out_of_coverage(
     ]
 
 
-def test_same_id_entries_of_different_explicit_families_leave_a_coverage_finding() -> (
-    None
-):
+def test_unpaired_entries_of_different_explicit_families_record_no_finding() -> None:
     single, dual = at("a", "one"), at("a", "two")
     policy = projecting("app:x", single)
     policy["candidates"] += projecting("app:y", dual)["candidates"]
-    findings = validate_offline(inputs([single], [dual], composition=policy))
-    assert [
-        (item.variant, item.entry_id, item.code, item.severity) for item in findings
-    ] == [("single", "a", "single_only_coverage", Severity.NONFATAL)]
-    assert findings[0].message == (
-        "family label 'app:x' ('a' at 'example.com/one') has no dual-screen entry"
-    )
+    assert validate_offline(inputs([single], [dual], composition=policy)) == ()
 
 
 @pytest.mark.parametrize("repeated_in", ["single", "dual"])
@@ -678,27 +683,14 @@ def test_repeated_package_id_is_nonfatal_and_each_entry_pairs_by_its_label(
     )
     findings = validate_offline(inputs(single, dual))
     assert errors(findings) == ()
-    expected = [(repeated_in, "a", "repeated_package_id")]
-    if repeated_in == "single":
-        # The entry at the other URL has no dual entry carrying its label, even
-        # though a dual entry carries its package id.
-        expected.append(("single", "a", "single_only_coverage"))
-    assert sorted((item.variant, item.entry_id, item.code) for item in findings) == (
-        sorted(expected)
-    )
+    assert [(item.variant, item.entry_id, item.code) for item in findings] == [
+        (repeated_in, "a", "repeated_package_id")
+    ]
     assert {item.severity for item in findings} == {Severity.NONFATAL}
     [repeat] = [item for item in findings if item.code == "repeated_package_id"]
     assert repeat.message == (
         "package id 'a' is carried by more than one entry: "
         "'example.com/one' at 'example.com/one', 'example.com/two' at 'example.com/two'"
-    )
-    coverage = [item for item in findings if item.code == "single_only_coverage"]
-    message = (
-        "family label 'example.com/two' ('a' at 'example.com/two') has no "
-        "dual-screen entry"
-    )
-    assert [item.message for item in coverage] == (
-        [message] if repeated_in == "single" else []
     )
 
 

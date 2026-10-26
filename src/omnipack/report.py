@@ -29,7 +29,7 @@ from omnipack.report_model import (
 )
 from omnipack.sources import IngestionReport
 
-BUILD_SCHEMA_VERSION = 6
+BUILD_SCHEMA_VERSION = 7
 _VARIANT_VALUES = frozenset(variant.value for variant in Variant)
 _SELECTION_REASONS = frozenset(reason.value for reason in SelectionReason)
 
@@ -76,7 +76,6 @@ def write_report(
         "staleExclusions": [_record(item) for item in records.stale_exclusions],
         "selections": [_record(item) for item in records.selections],
         "repeatedIds": [_record(item) for item in records.repeated_ids],
-        "singleOnlyFamilies": [_record(item) for item in records.single_only_families],
         "sameRankTies": [_record(item) for item in records.same_rank_ties],
         "uncategorizedFamilies": [
             _record(item) for item in records.uncategorized_families
@@ -148,11 +147,16 @@ def format_reports(root: Path) -> str:
                     )
         for item in build["denylistRemovals"]:
             families = item.get("families") if isinstance(item, dict) else None
-            if not _strings(item, ("url", "reason")) or not _string_list(families):
+            variants = item.get("variants") if isinstance(item, dict) else None
+            if (
+                not _strings(item, ("url", "reason"))
+                or not _string_list(families)
+                or not _variant_list(variants)
+            ):
                 raise ReportFormatError("malformed build denylist exclusion")
             lines.append(
-                f"Exclusion: {item['url']}; families: {', '.join(families)}; "
-                f"reason: {item['reason']}"
+                f"Exclusion: {item['url']}; variants: {', '.join(variants)}; "
+                f"families: {', '.join(families)}; reason: {item['reason']}"
             )
         for item in build["staleExclusions"]:
             if not _strings(item, ("url", "reason")):
@@ -170,13 +174,6 @@ def format_reports(root: Path) -> str:
                 f"Repeated package id: {item['variant']} {item['id']}; entries: "
                 + "; ".join(f"{entry['family']} at {entry['url']}" for entry in entries)
             )
-        for item in build["singleOnlyFamilies"]:
-            if not _strings(item, ("family", "id", "url")):
-                raise ReportFormatError("malformed build single-only family")
-            lines.append(
-                f"Single-only family: {item['family']}; id: {item['id']}; "
-                f"URL: {item['url']}"
-            )
         for item in build["sameRankTies"]:
             tied = item.get("tied") if isinstance(item, dict) else None
             if (
@@ -192,14 +189,7 @@ def format_reports(root: Path) -> str:
             )
         for item in build["uncategorizedFamilies"]:
             variants = item.get("variants")
-            if not _strings(item, ("family",)) or not (
-                isinstance(variants, list)
-                and variants
-                and all(
-                    isinstance(variant, str) and variant in _VARIANT_VALUES
-                    for variant in variants
-                )
-            ):
+            if not _strings(item, ("family",)) or not _variant_list(variants):
                 raise ReportFormatError("malformed build uncategorized family")
             lines.append(
                 f"Uncategorized: {item['family']}; variants: {', '.join(variants)}"
@@ -273,6 +263,10 @@ def _string_list(value: object) -> TypeIs[list[str]]:
         and bool(value)
         and all(isinstance(item, str) for item in value)
     )
+
+
+def _variant_list(value: object) -> TypeIs[list[str]]:
+    return _string_list(value) and all(item in _VARIANT_VALUES for item in value)
 
 
 def _format_winner(item: dict[str, Any]) -> str:
@@ -367,7 +361,6 @@ _BUILD_FIELDS = frozenset(
         "staleExclusions",
         "selections",
         "repeatedIds",
-        "singleOnlyFamilies",
         "sameRankTies",
         "uncategorizedFamilies",
         "staleCategoryAssignments",
@@ -383,7 +376,6 @@ _BUILD_RECORD_FIELDS = (
     "staleExclusions",
     "selections",
     "repeatedIds",
-    "singleOnlyFamilies",
     "sameRankTies",
     "uncategorizedFamilies",
     "redundantOverlayKeys",

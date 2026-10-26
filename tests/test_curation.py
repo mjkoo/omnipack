@@ -80,29 +80,28 @@ def test_every_committed_denial_excludes_its_project_when_present(
 ) -> None:
     # A denial can match nothing because a source dropped the project. The
     # build reports such a denial as stale rather than failing, so check that
-    # every stale report has no candidate at all at its URL, that every denial
-    # of an eligible candidate is reported as a removal, and that no denied
-    # project reaches either pack.
-    denied = {
-        normalize_project_url(entry["url"]) for entry in read(ROOT / "config/deny.json")
-    }
+    # every stale report has no candidate at all at its URL, that every other
+    # denial is reported as a removal, and that no denied project reaches a
+    # pack its denial names.
+    entries = read(ROOT / "config/deny.json")
+    denied = {normalize_project_url(entry["url"]) for entry in entries}
     present = {
         normalize_project_url(app.url) for app in current_configuration.candidates
     }
-    eligible = {
-        normalize_project_url(app.url)
-        for app in current_configuration.candidates
-        if app.eligibility
-    }
     report = current_configuration.result.report
     assert {item.url for item in report.stale_exclusions} == denied - present
-    assert {item.url for item in report.removals} == denied & eligible
+    assert {item.url for item in report.removals} == denied & present
     for variant in Variant:
         selected = {
             normalize_project_url(app.url)
             for app in current_configuration.result.apps[variant]
         }
-        assert not (selected & denied)
+        denied_here = {
+            normalize_project_url(entry["url"])
+            for entry in entries
+            if variant.value in entry.get("packs", [item.value for item in Variant])
+        }
+        assert not (selected & denied_here)
 
 
 def corrected_id(record, overlay):
@@ -414,7 +413,7 @@ def test_catalog_only_addition_of_an_uncategorized_family_is_reported(
         None,
         (),
         Provenance(Source.QUIVER, url),
-        frozenset(Variant),
+        False,
         origin="quiver-generated",
     )
     current = _with_quiver_catalog(monkeypatch, lambda apps: [*apps, added])

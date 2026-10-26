@@ -150,11 +150,7 @@ def test_build_verify_and_report_sequence_records_no_findings(
         "nonfatalFindings": [],
     }
     for variant in Variant:
-        expected_ids = (
-            ["app.fixture"]
-            if variant is Variant.SINGLE
-            else ["app.fixture", "app.generated", "app.second"]
-        )
+        expected_ids = ["app.fixture", "app.generated", "app.second"]
         rendered = json.loads(
             (tmp_path / "dist" / f"{variant.value}-screen.json").read_text()
         )
@@ -227,14 +223,12 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         from omnipack import build as build_module
 
         real_render = build_module.render_pack
+        # The build renders each variant once, in variant order.
+        rendering = iter(Variant)
 
         def invalid_render(apps: list[ComposedApp]) -> str:
             rendered = json.loads(real_render(apps))
-            variant = (
-                "dual"
-                if any(app["id"] == "app.generated" for app in rendered["apps"])
-                else "single"
-            )
+            variant = next(rendering).value
             if variant == invalid_variant:
                 if variant == "dual":
                     return "not json"
@@ -281,7 +275,7 @@ def test_build_runs_the_real_pipeline_with_transport_only_fixtures(
         "app.second",
     }
     assert report["changes"]["single"] == {
-        "added": changed("app.fixture"),
+        "added": changed("app.fixture", "app.generated", "app.second"),
         "removed": [],
     }
     assert report["changes"]["dual"] == {
@@ -362,7 +356,7 @@ def test_failed_build_reports_exact_stage_and_preserves_outputs(
         SourceType.HTML,
         (),
         Provenance(Source.EXTRAS, "fixture"),
-        eligibility=frozenset(Variant),
+        dual_screen=False,
     )
     before = json.dumps(
         {
@@ -456,7 +450,7 @@ def test_failed_rollback_reports_changes_against_the_output_before_the_build(
         SourceType.HTML,
         (),
         Provenance(Source.EXTRAS, "fixture"),
-        eligibility=frozenset(Variant),
+        dual_screen=False,
     )
     before = json.dumps(
         {"apps": [{"id": "before.id", "url": "https://example.test/old"}]}
@@ -537,7 +531,7 @@ def test_composition_failure_preserves_collected_diagnostics(
             SourceType.HTML,
             (),
             Provenance(Source(source), "https://example.test/catalog"),
-            eligibility=frozenset(Variant),
+            dual_screen=False,
         )
         for package_id, source, url in (
             ("collision.app", "rjny", "https://example.test/app"),
@@ -580,6 +574,7 @@ def test_composition_failure_preserves_collected_diagnostics(
         {
             "url": "example.test/removed",
             "reason": "excluded",
+            "variants": ["single", "dual"],
             "families": ["example.test/removed"],
         }
     ]
@@ -588,10 +583,9 @@ def test_composition_failure_preserves_collected_diagnostics(
     ]
     # The overlay failed before category assignment ran, so neither category
     # list holds anything, although assignment would have filled both, and the
-    # later coverage and repeated-id checks did not run either.
+    # later repeated-id check did not run either.
     assert report["uncategorizedFamilies"] == []
     assert report["staleCategoryAssignments"] == []
-    assert report["singleOnlyFamilies"] == []
     assert report["repeatedIds"] == []
     assert report["changes"] is None
     assert not (tmp_path / "dist").exists()
@@ -608,7 +602,10 @@ def test_composition_failure_preserves_collected_diagnostics(
             id="excluded",
         ),
         pytest.param(
-            "single", "example.test/single", "is ineligible", id="target-ineligible"
+            "single",
+            "example.test/single",
+            "is denied at 'example.test/single': no dual",
+            id="denied-in-target",
         ),
         pytest.param(
             "kept",
@@ -639,6 +636,11 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
             [
                 {"url": "https://example.test/removed", "reason": "excluded"},
                 {"url": "https://example.test/stale", "reason": "obsolete"},
+                {
+                    "url": "https://example.test/single",
+                    "reason": "no dual",
+                    "packs": ["dual"],
+                },
             ],
         ),
         (
@@ -664,13 +666,13 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
             SourceType.HTML,
             (),
             Provenance(Source.RJNY, "https://example.test/catalog"),
-            eligibility=eligibility,
+            dual_screen=False,
             origin="rjny-catalog",
         )
-        for package_id, url, eligibility in (
-            ("kept.app", "https://example.test/kept", frozenset(Variant)),
-            ("removed.app", "https://example.test/removed", frozenset(Variant)),
-            ("single.app", "https://example.test/single", frozenset({Variant.SINGLE})),
+        for package_id, url in (
+            ("kept.app", "https://example.test/kept"),
+            ("removed.app", "https://example.test/removed"),
+            ("single.app", "https://example.test/single"),
         )
     ]
     monkeypatch.setattr(cli, "_ingest_for_build", lambda root, inputs, report: apps)
@@ -686,8 +688,15 @@ def test_pin_conflict_fails_the_build_and_keeps_exclusion_diagnostics(
         {
             "url": "example.test/removed",
             "reason": "excluded",
+            "variants": ["single", "dual"],
             "families": ["example.test/removed"],
-        }
+        },
+        {
+            "url": "example.test/single",
+            "reason": "no dual",
+            "variants": ["dual"],
+            "families": ["example.test/single"],
+        },
     ]
     assert report["staleExclusions"] == [
         {"url": "example.test/stale", "reason": "obsolete"}
@@ -774,7 +783,7 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
         encoding="utf-8",
     )
 
-    def candidate(package_id: str, url: str, variants: set[Variant]) -> App:
+    def candidate(package_id: str, url: str, dual_screen: bool) -> App:
         return App(
             package_id,
             url,
@@ -782,18 +791,16 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
             SourceType.HTML,
             ("Dual Screen",),
             Provenance(Source.RJNY, "https://example.test/catalog"),
-            eligibility=frozenset(variants),
+            dual_screen=dual_screen,
         )
 
-    single_only = candidate(
-        "single.app", "https://example.test/single", {Variant.SINGLE}
-    )
-    first = candidate("shared.app", "https://example.test/first", {Variant.DUAL})
-    second = candidate("shared.app", "https://example.test/second", {Variant.DUAL})
+    baseline = candidate("single.app", "https://example.test/single", False)
+    first = candidate("shared.app", "https://example.test/first", True)
+    second = candidate("shared.app", "https://example.test/second", True)
     monkeypatch.setattr(
         cli,
         "_ingest_for_build",
-        lambda root, inputs, report: [single_only, first, second],
+        lambda root, inputs, report: [baseline, first, second],
     )
     monkeypatch.chdir(tmp_path)
     readme_before = (tmp_path / "README.md").read_bytes()
@@ -801,29 +808,23 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
     assert main(["build"]) == 0
     report = json.loads((tmp_path / ".build/report.json").read_text())
     assert report["status"] == "success"
-    assert report["singleOnlyFamilies"] == [
-        {
-            "family": "example.test/single",
-            "id": "single.app",
-            "url": "example.test/single",
-        }
-    ]
     assert report["repeatedIds"] == [
         {
-            "variant": "dual",
+            "variant": variant,
             "id": "shared.app",
             "entries": [
                 {"family": "example.test/first", "url": "example.test/first"},
                 {"family": "example.test/second", "url": "example.test/second"},
             ],
         }
+        for variant in ("single", "dual")
     ]
     assert report["uncategorizedFamilies"] == [
-        {"family": family, "variants": [variant]}
-        for family, variant in (
-            ("example.test/first", "dual"),
-            ("example.test/second", "dual"),
-            ("example.test/single", "single"),
+        {"family": family, "variants": ["single", "dual"]}
+        for family in (
+            "example.test/first",
+            "example.test/second",
+            "example.test/single",
         )
     ]
     assert report["staleCategoryAssignments"] == ["app:absent"]
@@ -835,7 +836,7 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
     ]
     assert nonfatal == [
         (
-            "dual",
+            variant,
             "repeated_package_id",
             "shared.app",
             (
@@ -843,16 +844,8 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
                 "'example.test/first' at 'example.test/first', "
                 "'example.test/second' at 'example.test/second'"
             ),
-        ),
-        (
-            "single",
-            "single_only_coverage",
-            "single.app",
-            (
-                "family label 'example.test/single' ('single.app' at "
-                "'example.test/single') has no dual-screen entry"
-            ),
-        ),
+        )
+        for variant in ("single", "dual")
     ]
     readme = (tmp_path / "README.md").read_bytes()
     assert readme != readme_before and b"single.app" in readme
@@ -865,11 +858,8 @@ def test_nonfatal_findings_publish_and_are_recorded_and_displayed(
     capsys.readouterr()
     assert main(["report"]) == 0
     output = capsys.readouterr().out
-    assert (
-        "Single-only family: example.test/single; id: single.app; "
-        "URL: example.test/single\n"
-    ) in output
-    assert "Repeated package id: dual shared.app; entries: " in output
+    for variant in ("single", "dual"):
+        assert f"Repeated package id: {variant} shared.app; entries: " in output
     for item in offline["nonfatalFindings"]:
         line = (
             f"Nonfatal finding: [{item['variant']} / {item['entry_id']}] "
@@ -892,7 +882,7 @@ def test_a_pin_on_a_project_whose_id_an_overlay_patches_builds_and_verifies(
             SourceType.HTML,
             (),
             Provenance(Source(source), "https://example.test/catalog"),
-            eligibility=frozenset(Variant),
+            dual_screen=False,
             origin=origin,
         )
 
@@ -950,7 +940,7 @@ def test_a_build_reports_a_dead_overlay_key_and_a_listed_extra(
             SourceType.HTML,
             (),
             Provenance(source, "https://example.test/catalog"),
-            eligibility=frozenset(Variant),
+            dual_screen=False,
             additional_settings=settings,
         )
 
@@ -1005,7 +995,7 @@ def test_an_id_patch_at_a_url_split_between_families_fails_on_load(
             SourceType.HTML,
             (),
             Provenance(Source.RJNY, "https://example.test/catalog"),
-            eligibility=frozenset(Variant),
+            dual_screen=False,
             origin="rjny-catalog",
         )
         for package_id in ("a.pkg", "b.pkg")
@@ -1068,7 +1058,7 @@ def test_winning_tie_publishes_one_build_and_reports_the_tie(
             SourceType.HTML,
             (),
             Provenance(Source.BBOI, "fixture"),
-            eligibility=frozenset(Variant),
+            dual_screen=False,
             origin="bboi-standard-asset",
         )
         for package_id in ("same.stable", "same.nightly")
@@ -1477,7 +1467,8 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
         "Change: dual added: app.generated; URL: github.com/fixture/generated" in output
     )
     assert (
-        "Exclusion: example.test/app; families: example.test/app; "
+        "Exclusion: example.test/app; variants: single, dual; "
+        "families: example.test/app; "
         "reason: excluded fixture\n"
     ) in output
     assert "Stale exclusion: example.test/absent; reason: unmatched denial" in output

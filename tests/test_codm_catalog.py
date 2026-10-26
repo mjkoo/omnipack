@@ -37,7 +37,7 @@ def test_committed_catalog_is_valid_canonical_and_composable(
     assert current_configuration.result.apps[Variant.DUAL]
 
 
-def test_catalog_addition_and_removal_leave_single_screen_selection_unchanged(
+def test_catalog_addition_and_removal_change_only_their_own_family(
     tmp_path: Path,
 ) -> None:
     higher = fetch_extras(
@@ -69,16 +69,15 @@ def test_catalog_addition_and_removal_leave_single_screen_selection_unchanged(
             )
         )
     before, after = results
-    assert [app.id for app in before.apps[Variant.SINGLE]] == ["com.example.base"]
-    assert before.apps[Variant.SINGLE] == after.apps[Variant.SINGLE]
-    assert {app.id for app in before.apps[Variant.DUAL]} == {
-        "com.example.base",
-        "com.example.removed",
-    }
-    assert {app.id for app in after.apps[Variant.DUAL]} == {
-        "com.example.base",
-        "com.example.added",
-    }
+    for variant in Variant:
+        assert {app.id for app in before.apps[variant]} == {
+            "com.example.base",
+            "com.example.removed",
+        }
+        assert {app.id for app in after.apps[variant]} == {
+            "com.example.base",
+            "com.example.added",
+        }
 
 
 def _codm_entry(
@@ -158,8 +157,12 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     # The tracked host's selections are unchanged in both packs.
     assert {key: after[key] for key in before} == before
     assert set(after) - set(before) == {
-        ("github.com/example/prerelease-app", Variant.DUAL),
-        ("github.com/example/fixture-mod", Variant.DUAL),
+        (family, variant)
+        for family in (
+            "github.com/example/prerelease-app",
+            "github.com/example/fixture-mod",
+        )
+        for variant in Variant
     }
 
     prerelease = after[("github.com/example/prerelease-app", Variant.DUAL)]
@@ -170,14 +173,14 @@ def test_codm_catalog_entries_keep_their_source_semantics_in_composition(
     )
     admitted = settings[("com.example.prerelease", Variant.DUAL)]
     assert {key: admitted[key] for key in prerelease_settings} == prerelease_settings
-    assert ("com.example.prerelease", Variant.SINGLE) not in settings
+    assert settings[("com.example.prerelease", Variant.SINGLE)] == admitted
 
     tracker = after[("github.com/example/fixture-mod", Variant.DUAL)]
     assert (tracker.source, tracker.id) == ("codm", "1234567890")
     tracked = settings[("1234567890", Variant.DUAL)]
     assert tracked["trackOnly"] is True
     assert tracked["about"] == tracker_about
-    assert ("1234567890", Variant.SINGLE) not in settings
+    assert settings[("1234567890", Variant.SINGLE)] == tracked
 
 
 def test_committed_entry_off_a_forge_ingests_with_no_source_type(

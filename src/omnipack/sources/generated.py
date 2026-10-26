@@ -24,7 +24,7 @@ def fetch_generated(
     report: IngestionReport | None = None,
 ) -> list[App]:
     """Normalize every entry of a source's committed catalog, with the origin
-    and pack eligibility the registry gives that source.
+    and build kind the registry gives that source.
 
     A missing, unreadable or malformed catalog fails, and so does one that
     repeats an entry id or holds two entries at one normalized URL.
@@ -40,7 +40,7 @@ def fetch_generated(
         normalize_record(
             record,
             source=source,
-            eligibility=catalog.eligibility,
+            dual_screen=catalog.dual_screen,
             origin=catalog.origin,
         )
         for record in document["apps"]

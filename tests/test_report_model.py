@@ -84,7 +84,7 @@ def test_override_records_round_trip_through_the_build_report(tmp_path: Path) ->
     )
     write_report(tmp_path, {}, None, IngestionReport(), composition_report=records)
     document = json.loads((tmp_path / ".build/report.json").read_text())
-    assert document["schemaVersion"] == BUILD_SCHEMA_VERSION == 6
+    assert document["schemaVersion"] == BUILD_SCHEMA_VERSION == 7
     assert document["redundantOverlayKeys"] == [
         {"url": "github.com/o/a", "keys": ["additionalSettings.about", "name"]},
         {"url": "github.com/o/z", "keys": ["name"]},

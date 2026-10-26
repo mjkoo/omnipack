@@ -50,9 +50,7 @@ def other(package: str, repo: str, source: str, origin: str) -> App:
         SourceType.GITHUB,
         (),
         Provenance(Source(source), "fixture"),
-        eligibility=frozenset({Variant.DUAL})
-        if source == "codm"
-        else frozenset(Variant),
+        dual_screen=source == "codm",
         origin=origin,
     )
 
@@ -71,7 +69,7 @@ def test_committed_quiver_ingests_every_entry_without_network(tmp_path: Path) ->
     report = IngestionReport()
     apps = fetch_generated(Source.QUIVER, tmp_path, {"catalog": "quiver.json"}, report)
     assert [app.id for app in apps] == ["org.example.one", "org.example.two"]
-    assert all(app.eligibility == frozenset(Variant) for app in apps)
+    assert not any(app.dual_screen for app in apps)
     assert all(
         app.origin == "quiver-generated" and app.source_type == SourceType.GITHUB
         for app in apps
