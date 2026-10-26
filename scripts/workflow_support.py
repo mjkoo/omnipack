@@ -233,6 +233,11 @@ STEP_OUTCOMES: frozenset[StepOutcome] = frozenset(get_args(StepOutcome))
 ReportStatus = Literal["success", "failed"]
 REPORT_STATUSES: frozenset[ReportStatus] = frozenset(get_args(ReportStatus))
 
+# The packs a build report names. It mirrors the project's pack variants, which
+# this module cannot import.
+PackVariant = Literal["single", "dual"]
+PACK_VARIANTS: frozenset[PackVariant] = frozenset(get_args(PackVariant))
+
 # The reviewed sources, each generated, checked and published by its own jobs.
 SourceName = Literal["codm", "quiver"]
 SOURCE_NAMES: tuple[SourceName, ...] = get_args(SourceName)

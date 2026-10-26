@@ -28,13 +28,13 @@ Development, build, verification, and detailed publishing guidance SHALL be avai
 
 ### Requirement: Catalog rows pair final variant configurations by family label
 
-The catalog SHALL contain one row per pair that offline verification's pairing
-produces across both exports, plus one row per entry that pairing leaves
-unpaired. Entries of different family labels SHALL never share a row, even
+The catalog SHALL pair a single-screen entry with the dual-screen entry
+carrying the same family label, the label offline verification assigns, and
+SHALL contain one row per such pair across both exports, plus one row per
+entry left unpaired. Entries of different family labels SHALL never share a row, even
 when they share a package id or name. Track-only entries SHALL be labelled and
-paired by the same projections as installable entries, and a single entry with
-no dual pair, which verification reports as a nonfatal single-only coverage
-finding, SHALL still get its own row. Generation SHALL fail, naming the
+paired by the same projections as installable entries, and an entry with no
+pair in the other variant SHALL still get its own row. Generation SHALL fail, naming the
 variant and the family, when one variant holds more than one entry of a family
 label. Columns SHALL be Program, Single-screen and Dual-screen. Each available
 variant SHALL include its own source URL and Add to Obtainium link; an
@@ -58,7 +58,8 @@ structure or create HTML elements.
 
 #### Scenario: Single-only family
 
-- **WHEN** a single entry has no dual entry carrying its family label
+- **WHEN** a single entry has no dual entry carrying its family label, because
+  a denial removes the family's builds from dual
 - **THEN** its row appears with its single-screen configuration and a hyphen
   in the dual-screen column, and generation succeeds
 

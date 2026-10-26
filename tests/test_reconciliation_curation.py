@@ -191,13 +191,21 @@ def test_captured_candidates_form_the_recorded_families(
         parse_composition_policy(current_configuration.policy),
         current_configuration.candidates,
     )
+    # A candidate forms a family unless the denials at its URL name every pack.
+    denied_packs: dict[str, set[str]] = {}
+    for item in read(ROOT / "config/deny.json"):
+        denied_packs.setdefault(normalize_project_url(item["url"]), set()).update(
+            item.get("packs", [variant.value for variant in Variant])
+        )
     denied = {
-        normalize_project_url(item["url"]) for item in read(ROOT / "config/deny.json")
+        url
+        for url, packs in denied_packs.items()
+        if packs == {variant.value for variant in Variant}
     }
     surviving = {
         candidate_selector(app).key
         for app in applied
-        if app.eligibility and normalize_project_url(app.url) not in denied
+        if normalize_project_url(app.url) not in denied
     }
     assert set(actual_family) == surviving
 

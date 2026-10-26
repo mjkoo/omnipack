@@ -81,7 +81,7 @@ configuration files, or overwrite the build report.
 - **WHEN** verification cannot write its report
 - **THEN** it exits nonzero with a concise diagnostic
 
-### Requirement: The report command displays structural evidence and its freshness
+### Requirement: The report command displays recorded evidence and its freshness
 
 The system SHALL implement `pack report` to display the available build and
 verification reports as separate human-readable sections without network access
@@ -111,9 +111,10 @@ pack-verification states.
 
 Build reports SHALL also display family selections with their reasons, and every
 non-blocking outcome the build report records: the apps added and removed since
-the previous output, the denylist entries that excluded a candidate, the
+the previous output, the denylist entries that excluded a candidate with the
+variants each applies to, the
 denylist entries that matched no candidate, the package ids repeated within a
-variant, the single-only coverage findings, the same-rank tie findings, the admitted generated candidates
+variant, the same-rank tie findings, the admitted generated candidates
 with their committed ids and project URLs, the families with a selected entry left
 without a category together with the variants concerned, and the stale
 category assignments, the overlay records with patch keys that change nothing
@@ -141,7 +142,7 @@ removed since the previous output.
 #### Scenario: Verification recorded nonfatal findings
 
 - **WHEN** a valid verification report or a build report's offline verdict
-  records success with a single-only coverage finding and a repeated package id
+  records success with a repeated package id
 - **THEN** `pack report` displays the successful status and each nonfatal
   finding with the variant, label, package id and project URL it records, and
   exits zero
@@ -166,11 +167,10 @@ removed since the previous output.
 
 - **WHEN** a valid build report records apps added or removed, a denial that
   excluded a candidate, a denial that matched no candidate, a package id
-  repeated within a variant, a single-only coverage finding, a same-rank tie
-  finding, an admitted generated candidate, an uncategorized family, a stale
+  repeated within a variant, a same-rank tie finding, an admitted generated candidate, an uncategorized family, a stale
   category assignment, an overlay key that changes nothing, or an extra a
   catalog lists
-- **THEN** `pack report` displays each of them with the variant, package id,
+- **THEN** `pack report` displays each of them with the variants, package id,
   families, reason, source, project URLs, tied selectors, chosen winner,
   committed id, patch keys, listing sources or differing fields the report
   holds for it, displays the candidate
@@ -180,8 +180,8 @@ removed since the previous output.
 #### Scenario: A build recorded no non-blocking diagnostics
 
 - **WHEN** a valid build report records no candidate change, exclusion, stale
-  exclusion, repeated package id, single-only coverage finding, same-rank tie
-  finding, admission, uncategorized family, stale category assignment, overlay
+  exclusion, repeated package id, same-rank tie finding, admission,
+  uncategorized family, stale category assignment, overlay
   key that changes nothing or extra a catalog lists
 - **THEN** `pack report` displays the build section without diagnostic output
   and exits zero
@@ -190,8 +190,8 @@ removed since the previous output.
 
 - **WHEN** a valid build report records an uncategorized family or a stale
   category assignment and records no candidate change, exclusion, stale
-  exclusion, repeated package id, single-only coverage finding, same-rank tie
-  finding, admission, overlay key that changes nothing or extra a catalog
+  exclusion, repeated package id, same-rank tie finding, admission, overlay
+  key that changes nothing or extra a catalog
   lists
 - **THEN** `pack report` displays each uncategorized family with its variants
   and each stale category map key, and exits zero
@@ -202,13 +202,6 @@ removed since the previous output.
   and no other non-blocking outcome
 - **THEN** `pack report` displays the variant, the package id, and each
   entry's family and project URL, and exits zero
-
-#### Scenario: A single-only coverage finding is the only recorded diagnostic
-
-- **WHEN** a valid build report records a family selected in single without a
-  dual build and no other non-blocking outcome
-- **THEN** `pack report` displays the family with its single selection's
-  package id and project URL, and exits zero
 
 #### Scenario: A same-rank tie is the only recorded diagnostic
 
@@ -297,13 +290,10 @@ the build. The system SHALL write a build report recording:
   URL, source and origin, the other candidates considered
   and the selection reason;
 - the candidate exclusions, each denial's under its denied project URL with
-  the families it removed, and the denylist entries that matched no candidate
+  the variants it applies to and the families it removed, and the denylist entries that matched no candidate
   and are therefore stale exclusions, each identified by its project URL;
 - for each variant, every package id more than one selected entry carries,
   with those entries' families and project URLs;
-- the single-only coverage findings: each family selected in single with no
-  selected build in dual, with its single selection's package id and project
-  URL;
 - the same-rank tie findings: each family and variant whose winner was chosen
   among different candidates tied at the winning rank, with the tied
   candidates' selectors and the chosen winner;
@@ -335,7 +325,7 @@ before a later failure, and the same-rank tie findings recorded during
 selection. When composition fails before category assignment
 runs, only the uncategorized families and stale category assignments, the
 overlay keys that change nothing and the extras a catalog lists, and the
-later single-only coverage findings and repeated package ids, SHALL be
+later repeated package ids, SHALL be
 recorded empty, because those checks have not run, while stale exclusions and
 other diagnostics collected before the failure SHALL remain preserved, and the
 recorded failure and stage SHALL tell the reader that the check did not
@@ -437,19 +427,10 @@ change.
 
 #### Scenario: Family conflict stops composition
 
-- **WHEN** composition fails on a pin that is missing, excluded,
-  wrong-family, target-ineligible or one of several pins for one family and
-  target
+- **WHEN** composition fails on a pin that is missing, excluded from its
+  target, wrong-family or one of several pins for one family and target
 - **THEN** the report identifies the pin by its family and target
 - **AND** the report preserves prior diagnostics
-
-#### Scenario: A single-screen family has no dual build
-
-- **WHEN** a build selects a family in single and no build of that family in
-  dual
-- **THEN** the build succeeds and the report lists that family as a
-  single-only coverage finding with its single selection's package id and
-  project URL
 
 #### Scenario: A pack repeats a package id
 
@@ -464,6 +445,19 @@ change.
 - **THEN** the build succeeds and the report lists the record's URL with that
   key, and the extra with its URL, package id, the catalog's source and the
   fields that differ
+
+#### Scenario: A single-screen family has no dual build
+
+- **WHEN** a build selects a family in single and no build of that family in
+  dual, because a denial removes the family's builds from dual
+- **THEN** the build succeeds and the report records no finding for that
+  family beyond the denial's exclusion
+
+#### Scenario: A denial names one pack
+
+- **WHEN** a build applies a denial naming only the single-screen pack
+- **THEN** the report records the exclusion under its project URL with the
+  single-screen variant and the families it removed
 
 ### Requirement: The generate-source command writes a candidate catalog and its report
 

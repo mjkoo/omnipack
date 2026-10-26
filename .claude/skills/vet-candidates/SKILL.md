@@ -97,7 +97,8 @@ inferring it. Each candidate needs:
    coexist, and a fork reusing upstream's id cannot be offered beside it.
 5. **Provenance and blast radius** (the bar, below).
 6. **Fit**: required user-supplied data, dual-screen support (decides the
-   dual-screen-only `dualScreen: true` flag versus both packs).
+   `dualScreen: true` flag, and whether a single-scoped denial keeps the build
+   out of the single-screen pack).
 
 ### The bar
 
@@ -132,7 +133,9 @@ Additions are entries in `config/extras.json`, inserted before the omnipack
 tracking entry. Follow the existing entries:
 
 - `id` (confirmed package id), `url`, `name`, `author`, `categories`, and
-  `dualScreen: true` only for dual-screen-only builds.
+  `dualScreen: true` only for dual-screen builds. A dual-screen extra still
+  reaches the single-screen pack when its family has no baseline build, unless
+  a single-scoped denial keeps it out.
 - **Names** follow the pack style: the game first, the project in parentheses
   when the project name differs (`Halo: Combat Evolved (OpenCE)`).
 - **Categories** use the approved taxonomy with upstream spellings: Emulator,
@@ -147,7 +150,10 @@ tracking entry. Follow the existing entries:
   changes what a user sees; never restate upstream requirements.
 - Rejections need a `config/deny.json` denial only when a catalog actually
   brings the app in. Denials apply to every source; never write a rule scoped to
-  one source.
+  one source. A denial without `packs` removes the app from both packs;
+  `"packs": ["single"]` (or `["dual"]`) removes it from that pack only, for an
+  app that belongs in one pack and not the other. The reason says why it does
+  not belong there.
 
 Then run `uv run pack build` (regenerates `dist/` and `README.md`),
 `uv run pack verify` and `uv run pytest`, and check that each new id appears in
@@ -203,11 +209,23 @@ added an app that nobody has reviewed. The family is a normalized project URL
 3. If it clears, add a category for the family to the `categories` map in
    `config/composition.json`, keyed as the alert names it, using the taxonomy in
    section 3.
-4. If it fails the bar, add a `config/deny.json` record with a reason instead.
+4. If its only builds are dual-screen builds (every codm arrival, for one), it
+   reaches the single-screen pack too, so decide whether it belongs there. A
+   build's kind shows in the family's `selections` in `.build/report.json` (an
+   origin of `codm-generated`, or a dual winner with reason `dual-preferred`),
+   or in its entry in `config/catalogs/codm.json` or `"dualScreen": true` in
+   `config/extras.json`. When it is pointless or broken on one display (a
+   second-screen panel, a companion that does not run the game, a mod that only
+   draws on the second screen) or duplicates an app single already carries, add
+   a single-scoped denial, `"packs": ["single"]`, with a reason, beside the
+   category. Read its README or code for a single-screen layout or fallback
+   before deciding it runs on one display. Denials are owner decisions: say so
+   prominently in the PR body so the owner reviews it before merging.
+5. If it fails the bar, add a `config/deny.json` record with a reason instead.
    Denials are owner decisions: say so prominently in the PR body so the owner
    reviews it before merging.
-5. Build, verify and test as in section 3, then open a PR whose body links the
-   issue. The PR carries only the category or denial; the nightly rebuilds the
+6. Build, verify and test as in section 3, then open a PR whose body links the
+   issue. The PR carries only the category and any denial; the nightly rebuilds the
    packs and README. Do not close the issue: the next nightly build closes it when the
    warning stops.
 

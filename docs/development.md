@@ -24,9 +24,10 @@ for generation, acceptance and output review.
   the first category of its presenting entry, the single-screen one when the
   app has one, or under `Other` when that entry has none; see
   [categories](composition.md#categories). Ordinary extras are baseline
-  candidates for both packs; optional `"dualScreen": true` makes one dual-only.
-  Selection compares eligible builds, so an extra does not always win. See
-  [build eligibility and precedence](composition.md#baseline-and-dual-screen-builds)
+  builds; optional `"dualScreen": true` makes one a dual-screen build. Either
+  kind is a candidate for both packs, and each pack prefers its own kind, so an
+  extra does not always win. See
+  [build kinds and precedence](composition.md#baseline-and-dual-screen-builds)
   and add an [app note](app-notes.md) when its configuration changes what users
   see; see [port setup](curation.md#port-setup).
 - **Refresh a generated source:** the codm and Quiver catalogs come from
@@ -67,12 +68,12 @@ for generation, acceptance and output review.
   so joining two repositories takes one rule at each; giving two builds at one
   URL different families splits that URL by package id. Follow the
   [complete policy example](composition.md#candidate-policy). The build
-  report's `repeatedIds`, `singleOnlyFamilies` and `sameRankTies` name the
-  families that usually need such a rule.
+  report's `repeatedIds` and `sameRankTies` name the families that usually
+  need such a rule.
 - **Pin a winner:** add a pin with `family`, `variant` (`single` or `dual`),
   original candidate `match` and `rationale` in `config/composition.json`.
-  The [candidate must be eligible](composition.md#candidate-policy) and survive
-  denials. A dual pin can keep a baseline build over a dual-screen build.
+  The [candidate must not be denied](composition.md#candidate-policy) in the
+  pin's pack. A dual pin can keep a baseline build over a dual-screen build.
   A pin selects a winner; it is not a per-build denial.
 
 ## Manual review and PR contents
@@ -156,14 +157,13 @@ release APKs. Keep exactly one standalone pair of catalog markers in README; the
 build preserves all bytes outside them. The build and source generation fetch
 public inputs without credentials.
 
-The JSON diagnostics are in `.build/report.json`, including each
-family's selection with the candidates it was chosen over and the selection
-reason, denylist removals and stale exclusions, uncategorized families and stale
-category assignments, repeated package ids, single-only families, same-rank
-ties, admitted committed candidates with their identities, and the entries
-(package id and project URL) added and removed since the previous output. A
-failed build returns a nonzero status and preserves the previous packs and
-README.
+The JSON diagnostics are in `.build/report.json`, including each family's
+selection with the candidates it was chosen over and the selection reason,
+denylist removals and stale exclusions, uncategorized families and stale
+category assignments, repeated package ids, same-rank ties, admitted committed
+candidates with their identities, and the entries (package id and project URL)
+added and removed since the previous output. A failed build returns a nonzero
+status and preserves the previous packs and README.
 
 ## Verify and inspect
 

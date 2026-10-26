@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Literal, NamedTuple, get_args
 
 from scripts.workflow_support import (
+    PACK_VARIANTS,
     REPORT_STATUSES,
     SOURCE_NAMES,
     STAGE_SEPARATOR,
@@ -625,6 +626,7 @@ BUILD_STALE_DENIAL = _BUILD_PREFIX + "stale-denial/"
 BUILD_STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
 BUILD_REDUNDANT_PATCH = _BUILD_PREFIX + "redundant-patch/"
 BUILD_LISTED_EXTRA = _BUILD_PREFIX + "listed-extra/"
+BUILD_REPEATED_ID = _BUILD_PREFIX + "repeated-id/"
 _LIVE_PREFIX = LIVE_CHECK.prefixes[0]
 LIVE_READ = _LIVE_PREFIX + "read"
 LIVE_GONE = _LIVE_PREFIX + "gone/"
@@ -835,6 +837,24 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
                 details,
             )
         )
+    # One finding per pack and package id: importing that pack keeps only one
+    # of the entries carrying the id.
+    for item in _objects(report.get("repeatedIds")):
+        variant = parse_literal(item.get("variant"), PACK_VARIANTS)
+        package_id = item.get("id")
+        if variant is not None and isinstance(package_id, str):
+            details = [f"Variant: {variant}", f"Package id: {package_id}"]
+            for entry in _objects(item.get("entries")):
+                family, url = entry.get("family"), entry.get("url")
+                if isinstance(family, str) and isinstance(url, str):
+                    details.append(f"Entry: {family} at {url}")
+            findings.append(
+                _finding(
+                    subject_key(BUILD_REPEATED_ID, f"{variant}/{package_id}"),
+                    f"Package id repeated in the {variant} pack: {package_id}",
+                    details,
+                )
+            )
     return findings
 
 

@@ -22,4 +22,5 @@ rules; package ids and titles alone never determine a family.
 
 For existing fork and signer details, see [source reconciliation](source-reconciliation.md).
 For discovery, screening and maintenance, see [source generation](source-generation.md).
-A project denial excludes an unwanted project across every source and both packs.
+A project denial without `packs` excludes an unwanted project across every
+source and both packs.

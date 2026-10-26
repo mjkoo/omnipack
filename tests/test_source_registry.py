@@ -16,6 +16,13 @@ def test_generated_sources_have_their_catalog_origin() -> None:
         assert ORIGINS[source] == {catalog.origin}
 
 
+def test_codm_lists_dual_screen_builds_and_quiver_baseline_builds() -> None:
+    assert {source: catalog.dual_screen for source, catalog in GENERATED.items()} == {
+        Source.CODM: True,
+        Source.QUIVER: False,
+    }
+
+
 @pytest.mark.parametrize("source", list(GENERATED))
 def test_every_generated_source_has_discovery(source: GeneratedSource) -> None:
     # A source without discovery would fail the lookup before reading its

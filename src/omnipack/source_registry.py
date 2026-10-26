@@ -1,4 +1,4 @@
-"""Every pack source's origins, precedence and generated-catalog eligibility."""
+"""Every pack source's origins, precedence and generated-catalog build kinds."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Literal
 
-from omnipack.model import Source, Variant
+from omnipack.model import Source
 
 type GeneratedSource = Literal[Source.CODM, Source.QUIVER]
 """The sources whose committed catalogs are generated from an upstream list."""
@@ -17,13 +17,13 @@ class GeneratedCatalog:
     """How a generated source's committed entries enter composition."""
 
     origin: str
-    eligibility: frozenset[Variant]
+    dual_screen: bool
 
 
 GENERATED: Mapping[GeneratedSource, GeneratedCatalog] = {
     # codm lists dual-screen builds only.
-    Source.CODM: GeneratedCatalog("codm-generated", frozenset({Variant.DUAL})),
-    Source.QUIVER: GeneratedCatalog("quiver-generated", frozenset(Variant)),
+    Source.CODM: GeneratedCatalog("codm-generated", dual_screen=True),
+    Source.QUIVER: GeneratedCatalog("quiver-generated", dual_screen=False),
 }
 
 ORIGINS: Mapping[Source, frozenset[str]] = {

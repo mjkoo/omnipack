@@ -35,7 +35,7 @@ observation. Runtime behavior does not pin these dated hashes.
 
 `formed-families.json` records the families the current composition forms from
 these inputs, by the original selectors of their members, where more than one
-surviving candidate eligible for some variant and not from a committed generated
+candidate that no denial removes from every pack, and not from a committed generated
 catalog joins the family. Generated catalogs change only through reviewed
 catalog updates, so their membership is not frozen here. The test requires the
 recorded members to stay partitioned exactly as recorded, so merging two of

@@ -119,11 +119,11 @@ because it depends on how the pipeline combines reviewed configuration with
 upstream records and no other check fails when it breaks.
 
 A curated extra is designated to win the single-screen pack by source
-precedence when its entry in `config/extras.json` is eligible for single,
-meaning it is not a dual-screen build, and its family has no committed single
-pin. A single pin is an explicit reviewed selection for its family, and
-composition already fails when a pinned candidate is missing or ineligible, so
-designation steps aside for a pinned family. Each designated curated extra
+precedence when its entry in `config/extras.json` is a baseline build, meaning
+it is not a dual-screen build, and its family has no committed single pin. A
+single pin is an explicit reviewed selection for its family, and composition
+already fails when a pinned candidate is missing or excluded from its target,
+so designation steps aside for a pinned family. Each designated curated extra
 SHALL be guarded by a check that fails and identifies its family when it stops
 being that family's single-screen winner, because no build or verification
 check fails when single stops serving it. That coverage SHALL follow from the
@@ -164,7 +164,7 @@ list, as for any source.
 
 #### Scenario: A designated curated extra stops winning single
 
-- **WHEN** a curated extra's entry in `config/extras.json` is eligible for single and its family has no committed single pin, and a configuration change that composition accepts, such as a denial of that extra's project URL when no pin names it, leaves it without its family's single-screen selection
+- **WHEN** a curated extra's entry in `config/extras.json` is a baseline build and its family has no committed single pin, and a configuration change that composition accepts, such as a denial of that extra's project URL when no pin names it, leaves it without its family's single-screen selection
 - **THEN** a regression check fails and identifies that family
 
 #### Scenario: A source proposal adds, removes or re-resolves projects

@@ -50,5 +50,80 @@
   {
     "url": "https://github.com/Maddex712/WiiDS",
     "reason": "Held while it has a single release, so whether a later release installs over it is unproven, and its Super Mario Galaxy integration has been validated only in emulation; remove this denial once a later release installs over the first. It also ships Nintendo menu music, HUD art and cover scans in the APK, which raises takedown risk."
+  },
+  {
+    "url": "https://github.com/mastercook777/Heimdall-AYN-Thor-Assistant",
+    "reason": "An AYN Thor second-screen tool with no use on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/stormpanda/megingiard",
+    "reason": "An AYN Thor second-screen tool; its README says single-screen devices are permanently unsupported.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/Thor-Wayfinder/thor-wayfinder",
+    "reason": "An AYN Thor second-screen tool with no use on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/Space001000/ZomboidDS",
+    "reason": "A second-screen companion that does not run the game, so it has no use on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/exojosh/AynThorSecondScreen",
+    "reason": "A second-screen companion that does not run the game; on one screen its APK shows only a status page.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/hung-eggie-do-covergo/stardew-thor-dual-screen",
+    "reason": "A mod that only draws on the second screen.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/igawa6/eden-duo-companions",
+    "reason": "A tracked mod that only draws on the second screen.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/igawa6/eden-duo",
+    "reason": "Its only addition over Eden, which the single-screen pack already carries, is the second-screen layer.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/kalenjohnson/chrono-duo",
+    "reason": "Always hides the battle Tech and Item lists from the top screen, so battles are broken on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/castdrian/showdown-ds",
+    "reason": "Accepts only a 1240x1080 secondary display and builds move selection only there.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/Raekwon1603/RetroArch",
+    "reason": "MetroidArch exists for its second-screen panel; on one screen it is a stripped RetroArch, which the single-screen pack already carries.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/aabrole/HuntersRecomp",
+    "reason": "Whether the DS touch screen reaches the main display without a second one is unestablished (closed native code), and melonDS in the single-screen pack already plays the game on one screen.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/ChimeraGaming/PixelNavigator",
+    "reason": "On one screen only its ROM library and launcher remain, which the single-screen pack's frontends already cover.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/khumam/gba-duo",
+    "reason": "On one screen it is a controller-only mGBA shell whose releases follow its companion; a standalone GBA emulator for single would be vetted on its own merits.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/kyannon/gba-ds",
+    "reason": "On one screen it is a controller-only mGBA shell whose releases follow its companion; a standalone GBA emulator for single would be vetted on its own merits.",
+    "packs": ["single"]
   }
 ]

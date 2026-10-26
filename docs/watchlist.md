@@ -67,8 +67,9 @@ they are not re-proposed unless something material changes.
   Mario Galaxy integration has been validated only in emulation, not on an AYN
   Thor. It ships Nintendo's own menu music, HUD art and cover scans in the APK
   rather than taking them from the user's disc, which raises takedown risk
-  without disqualifying it. Promote, dual-screen only, by removing the denial
-  once a later release installs over the first.
+  without disqualifying it. Promote by removing the denial once a later release
+  installs over the first; triage then decides single as for any codm arrival,
+  with a `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
   A gbarecomp-based recomp with one APK per release under a stable asset name,
   from a brand-new account with many quick recomps. The repository sets a

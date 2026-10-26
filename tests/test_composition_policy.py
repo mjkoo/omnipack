@@ -26,7 +26,7 @@ def candidate(**changes: object) -> App:
         SourceType.GITHUB,
         (),
         Provenance(Source.RJNY, "catalog"),
-        eligibility=frozenset(Variant),
+        dual_screen=False,
         origin="rjny-catalog",
     )
     return replace(base, **changes)
@@ -85,8 +85,7 @@ def test_family_rule_keeps_the_source_identity_and_internal_fields() -> None:
 
     assert result.id == "org.example.old"
     assert result.family == "app:example"
-    assert result.eligibility == frozenset(Variant)
-    assert result.dual_preferred is False
+    assert result.dual_screen is False
     assert result.raw == {"futureField": {"retained": True}}
 
     rendered = json.loads(
@@ -192,10 +191,10 @@ def test_policy_application_leaves_pins_to_composition() -> None:
             ]
         )
     )
-    single_only = candidate(eligibility=frozenset({Variant.SINGLE}))
+    dual_screen = candidate(dual_screen=True)
     assert apply_composition_policy(parsed, []) == ()
-    assert apply_composition_policy(parsed, [single_only]) == (
-        replace(single_only, family=URL),
+    assert apply_composition_policy(parsed, [dual_screen]) == (
+        replace(dual_screen, family=URL),
     )
 
 

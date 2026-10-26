@@ -42,7 +42,7 @@ class SelectionReason(StrEnum):
 
     PIN = "pin"
     DUAL_PREFERRED = "dual-preferred"
-    # Dual with no available dual-preferred build.
+    # Dual with no available dual-screen build.
     ORDINARY_FALLBACK = "ordinary-fallback"
     # Source precedence alone.
     SOURCE = "source"

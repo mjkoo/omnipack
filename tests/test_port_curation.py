@@ -43,11 +43,8 @@ def extras():
     return fetch(read(ROOT / "config/extras.json"))
 
 
-@pytest.mark.parametrize("variant", list(Variant))
-def test_curated_ports_are_present_once_with_maintained_policy(variant):
-    selected = [
-        app for app in extras() if variant in app.eligibility and app.id in PORT_IDS
-    ]
+def test_curated_ports_are_present_once_with_maintained_policy():
+    selected = [app for app in extras() if app.id in PORT_IDS]
     assert {app.id for app in selected} == PORT_IDS
     assert len(selected) == len(PORT_IDS)
     for app in selected:
@@ -96,7 +93,7 @@ def test_composition_pins_keep_extras_when_dual_preferred_duplicates_appear():
             app.source_type,
             app.categories,
             Provenance(Source.BBOI, app.url),
-            frozenset({Variant.DUAL}),
+            True,
             {"apkFilterRegEx": "wrong.apk", "versionDetection": True},
             origin="bboi-dual-asset",
         )
@@ -265,7 +262,7 @@ def test_single_pin_exempts_an_extra_at_the_pinned_family_s_url() -> None:
         SourceType.HTML,
         (),
         Provenance(Source.RJNY, "catalog"),
-        eligibility=frozenset(Variant),
+        dual_screen=False,
         origin="rjny-catalog",
     )
     extra = replace(
@@ -293,18 +290,24 @@ def test_single_pin_exempts_an_extra_at_the_pinned_family_s_url() -> None:
     }
 
 
-def test_hollow_knight_source_composition_preserves_dual_only_catalog(
+def test_hollow_knight_codm_builds_reach_both_packs_with_their_curation(
     current_configuration: CurrentConfiguration,
 ):
     ids = {"igawa6.dualsouls", "com.jakobkhansen.silksong"}
     candidates = [app for app in current_configuration.candidates if app.id in ids]
     assert {app.id for app in candidates} == ids
-    assert all(app.eligibility == frozenset({Variant.DUAL}) for app in candidates)
+    assert all(app.dual_screen for app in candidates)
     result = current_configuration.result
-    selected = [app for app in result.apps[Variant.DUAL] if app.data["id"] in ids]
-    assert len(selected) == 2
-    assert {app.data["id"] for app in selected} == ids
-    assert not any(app.data["id"] in ids for app in result.apps[Variant.SINGLE])
+    placed = [
+        (variant, app)
+        for variant in Variant
+        for app in result.apps[variant]
+        if app.data["id"] in ids
+    ]
+    assert sorted((variant, app.data["id"]) for variant, app in placed) == sorted(
+        (variant, package_id) for variant in Variant for package_id in ids
+    )
+    selected = [app for _, app in placed]
     expected = {
         "igawa6.dualsouls": (
             "https://github.com/igawa6/dualsouls",
@@ -341,5 +344,6 @@ def test_hollow_knight_source_composition_preserves_dual_only_catalog(
     for _, name in expected.values():
         rows = [line for line in catalog.splitlines() if name in line]
         assert len(rows) == 1
-        assert rows[0].startswith(f"| {name} | - | <a href=")
+        assert rows[0].startswith(f"| {name} | <a href=")
+        assert " | - |" not in rows[0]
         assert rows[0] in ports_section

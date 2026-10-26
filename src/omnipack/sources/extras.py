@@ -4,17 +4,16 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 
-from omnipack.model import App, Source, Variant
+from omnipack.model import App, Source
 from omnipack.sources.common import SourceError, normalize_record
 
 
 def fetch(entries: Sequence[object]) -> list[App]:
     """Return the hand-added entries, normalized.
 
-    An entry is a baseline build, a candidate for both packs, unless it sets
-    `dualScreen` to true. That makes it a dual-screen build: a candidate for
-    the dual-screen pack only, and preferred there, as every other source marks
-    its dual-only builds.
+    An entry is a baseline build unless it sets `dualScreen` to true, which
+    makes it a dual-screen build, preferred in the dual-screen pack. Either
+    kind is a candidate for both packs.
     """
     result: list[App] = []
     for index, entry in enumerate(entries, 1):
@@ -29,9 +28,7 @@ def fetch(entries: Sequence[object]) -> list[App]:
             normalize_record(
                 record,
                 source=Source.EXTRAS,
-                eligibility=(
-                    frozenset({Variant.DUAL}) if dual_screen else frozenset(Variant)
-                ),
+                dual_screen=dual_screen,
                 origin="extras",
                 default_label=label,
             )

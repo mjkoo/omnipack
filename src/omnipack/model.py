@@ -83,8 +83,10 @@ class App:
     `source_type` is the declared or derived Obtainium source type, or None
     when Obtainium detects it from the URL.
     `raw` carries any Obtainium fields not otherwise modeled, keyed by
-    their Obtainium field name. `eligibility` holds the packs the build's
-    source offers it to. An unset `origin` defaults to the source.
+    their Obtainium field name. `dual_screen` is the build's kind, which its
+    source decides: a dual-screen build is preferred in the dual-screen pack
+    and a baseline build in the single-screen pack, and either kind is a
+    candidate for both. An unset `origin` defaults to the source.
     """
 
     id: str
@@ -93,7 +95,7 @@ class App:
     source_type: str | None
     categories: tuple[str, ...]
     provenance: Provenance
-    eligibility: frozenset[Variant]
+    dual_screen: bool
     additional_settings: dict[str, Any] = field(default_factory=dict)
     raw: dict[str, Any] = field(default_factory=dict)
     origin: str = ""
@@ -102,8 +104,3 @@ class App:
     def __post_init__(self) -> None:
         if not self.origin:
             object.__setattr__(self, "origin", self.provenance.source)
-
-    @property
-    def dual_preferred(self) -> bool:
-        """A dual-screen build: eligible for dual only, and preferred there."""
-        return self.eligibility == frozenset({Variant.DUAL})

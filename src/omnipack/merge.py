@@ -43,10 +43,13 @@ class CompositionError(ValueError):
 
 @dataclass(frozen=True, slots=True)
 class Removal:
-    """A denial that removed candidates, with the families they belonged to."""
+    """A denial that removed candidates from `variants`, with the families
+    they belonged to.
+    """
 
     url: str
     reason: str
+    variants: tuple[Variant, ...]
     families: tuple[str, ...]
 
 
@@ -70,8 +73,8 @@ class ConsideredCandidate:
 class FamilySelection:
     """One family's winner for one variant, why it won and what it beat.
 
-    `considered` holds the family's other candidates that were eligible for
-    the variant and not denied; denied ones appear among the removals.
+    `considered` holds the family's other candidates not denied in the
+    variant; denied ones appear among the removals.
     """
 
     family: str
@@ -96,17 +99,6 @@ class SameRankTie:
     variant: Variant
     tied: tuple[CandidateSelector, ...]
     winner: CandidateSelector
-
-
-@dataclass(frozen=True, slots=True)
-class SingleOnlyFamily:
-    """A family published in single with no selected build in dual, with its
-    single entry's package id and normalized project URL.
-    """
-
-    family: str
-    id: str
-    url: str
 
 
 @dataclass(frozen=True, slots=True)
@@ -155,8 +147,8 @@ class ListingSource:
     values differ between the extra and that source's candidates there.
 
     A settings field is named `additionalSettings.<key>`; `variants` names a
-    difference in the packs the two are offered to, and `unpublishable` a
-    candidate that rendering rejects.
+    difference in build kind, which decides the pack each is preferred in, and
+    `unpublishable` a candidate that rendering rejects.
     """
 
     source: Source
@@ -183,7 +175,6 @@ class CompositionReport:
     uncategorized_families: list[UncategorizedFamily] = field(default_factory=list)
     # Category map keys that set no selected entry's category.
     stale_category_assignments: list[str] = field(default_factory=list)
-    single_only_families: list[SingleOnlyFamily] = field(default_factory=list)
     repeated_ids: list[RepeatedId] = field(default_factory=list)
     # Overlay records with patch keys that change no published entry.
     redundant_overlay_keys: list[RedundantOverlayKeys] = field(default_factory=list)
@@ -198,15 +189,18 @@ class CompositionResult:
 
 @dataclass(frozen=True, slots=True)
 class Exclusion:
-    """A project denial: every candidate at `url`, a normalized URL, is removed."""
+    """A project denial: every candidate at `url`, a normalized URL, is
+    removed from each of `variants`.
+    """
 
     url: str
     reason: str
+    variants: frozenset[Variant]
 
 
 def compose(
     candidates: list[App],
-    denylist: list[dict[str, str]],
+    denylist: list[dict[str, Any]],
     overlay: object,
     *,
     policy: CompositionPolicy,
@@ -220,10 +214,10 @@ def compose(
         raise CompositionError(str(error)) from error
     denied = _exclude(candidates, exclusions, report)
     formed = tuple(
-        item for item in candidates if item.eligibility and id(item) not in denied
+        item for item in candidates if len(denied.get(id(item), {})) < len(Variant)
     )
     pinned = _resolve_pins(candidates, formed, policy.pins, denied)
-    selected = _select(_families(formed), pinned, report)
+    selected = _select(_families(formed), pinned, denied, report)
     try:
         patches = parse_overlay(overlay, "overlay")
         check_overlay_id_patches(policy, patches)
@@ -243,19 +237,18 @@ def compose(
     applied = _assign_categories(selected, policy)
     report.uncategorized_families.extend(_uncategorized_families(selected))
     report.stale_category_assignments.extend(sorted(set(policy.categories) - applied))
-    report.single_only_families.extend(_single_only_families(selected))
     report.repeated_ids.extend(_repeated_ids(selected))
     return CompositionResult(selected, report)
 
 
 def parse_exclusions(entries: list[Any]) -> tuple[Exclusion, ...]:
-    """Parse project denials, each of which applies to both variants."""
+    """Parse project denials; one without `packs` applies to both variants."""
     result: list[Exclusion] = []
     for index, entry in enumerate(entries):
         label = f"denylist[{index}]"
         if not isinstance(entry, dict):
             raise CompositionError(f"{label} must be an object")
-        unknown = set(entry) - {"url", "reason"}
+        unknown = set(entry) - {"url", "reason", "packs"}
         if unknown:
             raise CompositionError(f"{label} has unknown field {min(unknown)!r}")
         url, reason = entry.get("url"), entry.get("reason")
@@ -269,8 +262,26 @@ def parse_exclusions(entries: list[Any]) -> tuple[Exclusion, ...]:
             raise CompositionError(
                 f"{label}.url is not a project URL: {url!r}"
             ) from error
-        result.append(Exclusion(normalized, reason))
+        result.append(Exclusion(normalized, reason, _denied_packs(entry, label)))
     return tuple(result)
+
+
+def _denied_packs(entry: dict[str, Any], label: str) -> frozenset[Variant]:
+    if "packs" not in entry:
+        return frozenset(Variant)
+    packs = entry["packs"]
+    names = {variant.value for variant in Variant}
+    if (
+        not isinstance(packs, list)
+        or not packs
+        or not all(isinstance(item, str) and item in names for item in packs)
+        or len(set(packs)) != len(packs)
+    ):
+        raise CompositionError(
+            f"{label}.packs must be a nonempty list of distinct pack names "
+            f"from {sorted(names)!r}"
+        )
+    return frozenset(Variant(item) for item in packs)
 
 
 def _families(candidates: tuple[App, ...]) -> dict[str, list[App]]:
@@ -284,15 +295,14 @@ def _exclude(
     candidates: list[App],
     exclusions: tuple[Exclusion, ...],
     report: CompositionReport,
-) -> dict[int, str]:
-    """Record each candidate a denial removes, keyed by candidate.
+) -> dict[int, dict[Variant, str]]:
+    """Record, per candidate, each variant a denial removes it from and why.
 
-    A denial is reported once, under its URL, with every family whose
-    candidates it removed. It is stale only when no candidate is at its URL;
-    one whose candidates are eligible for neither pack removes nothing but
-    still applies.
+    A denial is reported once, under its URL, with its variants and every
+    family whose candidates it removed. It is stale only when no candidate is
+    at its URL.
     """
-    denied: dict[int, str] = {}
+    denied: dict[int, dict[Variant, str]] = {}
     by_url: dict[str, list[App]] = {}
     for candidate in candidates:
         by_url.setdefault(normalize_project_url(candidate.url), []).append(candidate)
@@ -302,16 +312,18 @@ def _exclude(
             report.stale_exclusions.append(StaleExclusion(rule.url, rule.reason))
             continue
         for candidate in matched:
-            denied[id(candidate)] = rule.reason
-        families = sorted(
-            {
-                assigned_family(candidate)
-                for candidate in matched
-                if candidate.eligibility
-            }
+            for variant in rule.variants:
+                # The first denial covering a variant keeps its reason, so a
+                # pin error follows denylist order.
+                denied.setdefault(id(candidate), {}).setdefault(variant, rule.reason)
+        report.removals.append(
+            Removal(
+                rule.url,
+                rule.reason,
+                tuple(variant for variant in Variant if variant in rule.variants),
+                tuple(sorted({assigned_family(candidate) for candidate in matched})),
+            )
         )
-        if families:
-            report.removals.append(Removal(rule.url, rule.reason, tuple(families)))
     return denied
 
 
@@ -319,13 +331,13 @@ def _resolve_pins(
     candidates: list[App],
     formed: tuple[App, ...],
     pins: tuple[Pin, ...],
-    denied: dict[int, str],
+    denied: dict[int, dict[Variant, str]],
 ) -> dict[PinKey, App]:
     """Validate every pin against the admitted candidates before any selection.
 
-    A candidate eligible for no variant, or a denied one, forms no family, so
-    its pin fails on that exclusion before the family comparison. Ineligibility
-    is checked first, since a denial of such a candidate removes nothing.
+    A pin fails when a denial removes its candidate from the pin's variant.
+    A candidate denied in every variant forms no family, so its pin fails on
+    that denial before the family comparison.
     """
     by_selector = {candidate_selector(item).key: item for item in formed}
     resolved: dict[PinKey, App] = {}
@@ -341,9 +353,7 @@ def _resolve_pins(
         )
         if candidate is None:
             raise CompositionError(f"{label} is missing")
-        if not candidate.eligibility:
-            raise CompositionError(f"{label} is ineligible for every variant")
-        denied_reason = denied.get(id(candidate))
+        denied_reason = denied.get(id(candidate), {}).get(pin.variant)
         if denied_reason is not None:
             denied_url = normalize_project_url(candidate.url)
             raise CompositionError(
@@ -354,8 +364,6 @@ def _resolve_pins(
             raise CompositionError(
                 f"{label} names a candidate of family {winner.family!r}"
             )
-        if pin.variant not in winner.eligibility:
-            raise CompositionError(f"{label} is ineligible")
         resolved[(pin.family, pin.variant)] = winner
     return resolved
 
@@ -363,26 +371,36 @@ def _resolve_pins(
 def _select(
     families: dict[str, list[App]],
     pinned: dict[PinKey, App],
+    denied: dict[int, dict[Variant, str]],
     report: CompositionReport,
 ) -> dict[Variant, list[ComposedApp]]:
+    """Select each family's winner per variant.
+
+    Each variant prefers its own build kind, dual-screen builds in dual and
+    baseline builds in single, and falls back to the other kind when the
+    family has none of its own left after denials.
+    """
     result = {variant: [] for variant in Variant}
     for family in sorted(families):
         family_candidates = families[family]
         for variant in Variant:
             available = [
-                item for item in family_candidates if variant in item.eligibility
+                item
+                for item in family_candidates
+                if variant not in denied.get(id(item), {})
             ]
             pinned_winner = pinned.get((family, variant))
             if pinned_winner is not None:
                 winner, reason = pinned_winner, SelectionReason.PIN
             elif available:
-                tier, reason = available, SelectionReason.SOURCE
-                if variant is Variant.DUAL and any(
-                    item.dual_preferred for item in available
-                ):
-                    tier = [item for item in available if item.dual_preferred]
+                dual = variant is Variant.DUAL
+                preferred = [item for item in available if item.dual_screen == dual]
+                tier = preferred or available
+                if not dual:
+                    reason = SelectionReason.SOURCE
+                elif preferred:
                     reason = SelectionReason.DUAL_PREFERRED
-                elif variant is Variant.DUAL:
+                else:
                     reason = SelectionReason.ORDINARY_FALLBACK
                 rank = max(_PRECEDENCE[item.provenance.source] for item in tier)
                 winners = sorted(
@@ -493,21 +511,6 @@ def _uncategorized_families(
     ]
 
 
-def _single_only_families(
-    apps: dict[Variant, list[ComposedApp]],
-) -> list[SingleOnlyFamily]:
-    """Families selected in single that dual does not select at all.
-
-    Such a family still ships in single; nothing ineligible is copied into dual.
-    """
-    dual_families = {app.family for app in apps[Variant.DUAL]}
-    return [
-        SingleOnlyFamily(app.family, app.id, normalize_project_url(app.url))
-        for app in apps[Variant.SINGLE]
-        if app.family not in dual_families
-    ]
-
-
 def _repeated_ids(apps: dict[Variant, list[ComposedApp]]) -> list[RepeatedId]:
     """Package ids, after overlays, that several entries of one variant carry."""
     result: list[RepeatedId] = []
@@ -573,7 +576,7 @@ def _listed_extras(
             ]
             fields = sources.setdefault(listing.source, set())
             fields.update(_differing_fields(extra, candidate, overlay.get(url)))
-            if candidate.eligibility != winner.eligibility:
+            if candidate.dual_screen != winner.dual_screen:
                 fields.add("variants")
     return [
         ListedExtra(

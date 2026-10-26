@@ -9,7 +9,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 
 | Owner (job that produces findings) | Raises |
 | --- | --- |
-| `nightly-prepare` (**Nightly publishing**, `prepare`) | A failed preparation stage; build warnings from `.build/report.json`: a family with no category, a denial matching nothing, a category assignment matching nothing, an overlay patch key that changes nothing, a project URL where a catalog lists an extra |
+| `nightly-prepare` (**Nightly publishing**, `prepare`) | A failed preparation stage; build warnings from `.build/report.json`: a family with no category, a denial matching nothing, a category assignment matching nothing, an overlay patch key that changes nothing, a project URL where a catalog lists an extra, a package id repeated within a pack |
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
@@ -44,7 +44,7 @@ owner's prefix, the stage or kind, and a subject where there is one:
 | Prefix | Keys |
 | --- | --- |
 | `nightly/prepare/` | `<stage>`: `checkout`, `build`, `allowlist`, `readme-boundary`, `commit`, `verify`, `drift-after-verify`, `bundle` |
-| `build/` | `uncategorized/<family>`, `stale-denial/<url>`, `stale-category/<key>`, `redundant-patch/<url>/<dotted key>`, `listed-extra/<url>` |
+| `build/` | `uncategorized/<family>`, `stale-denial/<url>`, `stale-category/<key>`, `redundant-patch/<url>/<dotted key>`, `listed-extra/<url>`, `repeated-id/<variant>/<package id>` |
 | `nightly/publish/` | `push`, `release` |
 | `<source>/check/` | `generation`, `stage`, `tests`, `build`, `verify`, `guard` |
 | `<source>/publish/` | `proposal` |
@@ -138,6 +138,16 @@ issue covers every extra at that URL, including one a catalog starts listing
 later, until the URL stops being reported. The first run after these findings
 arrive is expected to open one issue per dead key and one per listed extra's
 URL; each is ordinary curation triage.
+
+### Repeated package ids
+
+Each package id the build report lists as repeated within a pack raises one
+finding per pack, keyed `build/repeated-id/<variant>/<package id>` and titled
+"Package id repeated in the <variant> pack: <package id>", whose details name
+the pack, the package id and each entry's family and project URL. Obtainium
+stores imported apps by package id, so a user importing that pack keeps only
+one of the entries. [Composition](composition.md#denials-and-patches) says how
+to resolve it, usually with a family rule joining the two URLs.
 
 ## Muting an issue
 

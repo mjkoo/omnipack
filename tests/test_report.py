@@ -66,10 +66,15 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
     "document",
     [
         {"status": "success"},
-        {"schemaVersion": 4, "status": "success", "denylistRemovals": []},
         {"schemaVersion": 5, "status": "success", "denylistRemovals": []},
+        {
+            "schemaVersion": 6,
+            "status": "success",
+            "denylistRemovals": [],
+            "singleOnlyFamilies": [],
+        },
     ],
-    ids=["schemaless", "schema-4", "schema-5"],
+    ids=["schemaless", "schema-5", "schema-6"],
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,
@@ -162,11 +167,13 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     copy_inputs(tmp_path)
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
-    # Verification no longer limits source types, which changed its findings,
-    # so evidence from an earlier verifier must read as stale.
-    assert VERIFIER_VERSION == "4.0.0"
+    assert "Evidence: current" in format_reports(tmp_path)
+    # Denials now apply only to the packs they name and an unpaired entry is
+    # no longer a finding, so evidence from the preceding verifier must read
+    # as stale over unchanged inputs.
+    assert VERIFIER_VERSION == "5.0.0"
     assert report["schemaVersion"] == 5
-    report["verifier"]["version"] = "different-test-verifier"
+    report["verifier"]["version"] = "4.0.0"
     (tmp_path / ".build/verify.json").write_text(json.dumps(report))
     assert "Evidence: stale" in format_reports(tmp_path)
 
@@ -319,7 +326,6 @@ def test_malformed_build_report_is_concise_cli_failure(
         "staleExclusions",
         "selections",
         "repeatedIds",
-        "singleOnlyFamilies",
         "sameRankTies",
         "uncategorizedFamilies",
         "staleCategoryAssignments",
@@ -468,7 +474,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
 ) -> None:
     # The writer's document shape, built literally so the lists can be long.
     document = {
-        "schemaVersion": 6,
+        "schemaVersion": 7,
         "status": "failed" if failed else "success",
         "changes": {
             variant: {
@@ -487,6 +493,7 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             {
                 "url": f"example.test/denied/{i}",
                 "reason": f"excluded {i}",
+                "variants": ["single"] if i % 2 else ["single", "dual"],
                 "families": [f"app:a{i}", f"example.test/denied/{i}"],
             }
             for i in range(40)
@@ -513,10 +520,6 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
                     {"family": "example.test/s", "url": "https://example.test/s"},
                 ],
             }
-            for i in range(40)
-        ],
-        "singleOnlyFamilies": [
-            {"family": f"app:s{i}", "id": f"single.{i}", "url": f"https://x.test/{i}"}
             for i in range(40)
         ],
         "sameRankTies": [
@@ -577,7 +580,8 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
                 ) in output
     for i in range(40):
         assert (
-            f"Exclusion: example.test/denied/{i}; families: app:a{i}, "
+            f"Exclusion: example.test/denied/{i}; variants: "
+            f"{'single' if i % 2 else 'single, dual'}; families: app:a{i}, "
             f"example.test/denied/{i}; reason: excluded {i}\n"
         ) in output
         assert (
@@ -588,10 +592,6 @@ def test_recorded_build_diagnostics_are_displayed_in_full(
             f"Repeated package id: single repeated.{i}; entries: app:r{i} at "
             f"https://example.test/r{i}; example.test/s at https://example.test/s\n"
         ) in output
-        assert (
-            f"Single-only family: app:s{i}; id: single.{i}; URL: https://x.test/{i}\n"
-            in output
-        )
         assert (
             f"Same-rank tie: dual example.test/tie/{i}; tied: "
             f"rjny/rjny-catalog tied.{i} at example.test/tied/{i} | "
@@ -674,7 +674,7 @@ def test_a_repeated_package_id_alone_is_displayed(
     )
 
 
-def test_a_single_only_family_alone_is_displayed(
+def test_a_single_scoped_denial_alone_is_displayed_with_its_pack(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -683,13 +683,19 @@ def test_a_single_only_family_alone_is_displayed(
         tmp_path,
         monkeypatch,
         capsys,
-        singleOnlyFamilies=[
-            {"family": "app:x", "id": "x.pkg", "url": "https://github.com/o/x"}
+        denylistRemovals=[
+            {
+                "url": "github.com/o/x",
+                "reason": "second screen only",
+                "variants": ["single"],
+                "families": ["github.com/o/x"],
+            }
         ],
     )
     assert output.startswith(
         "Build report\nStatus: success\n"
-        "Single-only family: app:x; id: x.pkg; URL: https://github.com/o/x\n"
+        "Exclusion: github.com/o/x; variants: single; families: github.com/o/x; "
+        "reason: second screen only\n"
         "Offline verification: not-run\n"
     )
 
@@ -758,8 +764,8 @@ def test_nonfatal_findings_are_displayed_from_both_reports(
 
     finding = {
         "stage": "composition",
-        "code": "single_only_coverage",
-        "message": "family label 'app:x' ('x' at 'github.com/o/x') has no dual",
+        "code": "repeated_package_id",
+        "message": "package id 'x' is carried by more than one entry",
         "variant": "single",
         "entry_id": "x",
     }
@@ -839,7 +845,14 @@ SOURCE_FIELDS = {"source": "quiver", "fields": ["name"]}
                 "entries": [{"family": "app:x", "url": "x.test/a"}],
             },
         ),
-        ("singleOnlyFamilies", {"family": "app:x", "id": "x"}),
+        (
+            "denylistRemovals",
+            {"url": "x.test/a", "reason": "r", "families": ["a"], "variants": []},
+        ),
+        (
+            "denylistRemovals",
+            {"url": "x.test/a", "reason": "r", "families": ["a"], "variants": ["x"]},
+        ),
         (
             "selections",
             {

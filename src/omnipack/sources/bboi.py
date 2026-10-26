@@ -1,8 +1,9 @@
 """Fetch BBoi34's latest Codeberg release assets.
 
-The single-screen asset (`Decomp-Recomp.V<x>.json`) maps to both variants;
-the dual-screen asset (`Dual-Screen-Decomp-Recomp.V<x>.json`) maps to dual
-only. `additionalSettings` is already a JSON string on this source.
+Records of the single-screen asset (`Decomp-Recomp.V<x>.json`) are baseline
+builds and records of the dual-screen asset
+(`Dual-Screen-Decomp-Recomp.V<x>.json`) dual-screen builds.
+`additionalSettings` is already a JSON string on this source.
 """
 
 from __future__ import annotations
@@ -10,7 +11,7 @@ from __future__ import annotations
 import fnmatch
 from collections.abc import Mapping
 
-from omnipack.model import App, Source, Variant
+from omnipack.model import App, Source
 from omnipack.sources.common import HttpGetter, SourceError, normalize_record
 
 
@@ -49,7 +50,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
             normalize_record(
                 record,
                 source=Source.BBOI,
-                eligibility=frozenset(Variant),
+                dual_screen=False,
                 origin="bboi-standard-asset",
             )
             for record in single
@@ -58,7 +59,7 @@ def fetch(http: HttpGetter, config: Mapping[str, object]) -> list[App]:
             normalize_record(
                 record,
                 source=Source.BBOI,
-                eligibility=frozenset({Variant.DUAL}),
+                dual_screen=True,
                 origin="bboi-dual-asset",
             )
             for record in dual
