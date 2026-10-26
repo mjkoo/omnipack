@@ -10,14 +10,13 @@ explicit family of the policy projection covering the entry's package id and
 normalized project URL, as "App families form by project URL under the composition policy" in pack-composition defines, and otherwise the entry's normalized project
 URL. A track-only entry SHALL be labelled by the same projections as an
 installable entry, so its label always names the family composition placed it
-in. It SHALL pair a single-screen entry with the dual-screen entry carrying
-the same label. When a label repeats within either variant, the entries
-carrying that label in both variants SHALL be left out of pairing, while the
-denial, pin,
-overlay-target and structural checks SHALL still consider them, so no finding
-or row depends on entry order. README catalog generation SHALL fail on any such
-repeat instead of pairing. These labels serve verification messages and README
-ordering only. Projections SHALL carry the family only; offline verification
+in. Offline verification SHALL NOT pair entries across variants; README
+catalog generation pairs a single-screen entry with the dual-screen entry
+carrying the same label. When a label repeats within a variant, the denial,
+pin, overlay-target and structural checks SHALL still consider the entries
+carrying it, so no finding depends on entry order. README catalog generation
+SHALL fail on any such repeat instead of pairing. These labels serve
+verification messages, README pairing and README ordering only. Projections SHALL carry the family only; offline verification
 SHALL NOT check a build's kind, which no candidate rule declares and which
 rendered entries cannot reveal. Ambiguous projections, invalid configuration
 and forbidden overlay fields SHALL fail.
@@ -25,13 +24,13 @@ and forbidden overlay fields SHALL fail.
 It SHALL reject a label repeated within a variant with those entries
 identified, an entry at a project URL a denial names in a variant that denial
 applies to, violations of candidate pins, and overlay records whose URL matches
-no entry in either variant. An entry with no pair in the other variant SHALL
-NOT be a finding. A pin SHALL be checked by the presence of its id and normalized
+no entry in either variant. A label present in one variant and absent from the
+other SHALL NOT be a finding. A pin SHALL be checked by the presence of its id and normalized
 project URL in its variant, which needs no family name; when an overlay record
 at the pin's URL patches `id`, the pin SHALL be checked against the patched id,
 since rendered entries carry it. A package id carried by more than one entry
 within a variant SHALL be reported as a nonfatal finding naming the variant,
-the package id and the entries, and SHALL NOT affect pairing.
+the package id and the entries, and SHALL NOT affect the entries' labels.
 A denial matching no rendered entry SHALL NOT be a finding.
 
 Each offline finding SHALL be either an error or a nonfatal finding. The
@@ -53,7 +52,7 @@ on the id.
 These checks SHALL NOT claim to verify source provenance, optimal winner ranking,
 rule presence in unfetched catalogs or actual patch values. Those candidate-level
 checks remain build responsibilities. Offline verification SHALL NOT rewrite
-outputs or require previous build reports to interpret family pairing.
+outputs or require previous build reports to interpret family labels.
 
 #### Scenario: Overlay has no target
 
@@ -69,13 +68,13 @@ outputs or require previous build reports to interpret family pairing.
 
 - **WHEN** policy projects single and dual output entries at different URLs
   onto one explicit family
-- **THEN** the entries pair under that family's label
+- **THEN** both entries get that family's label
 
 #### Scenario: One repository's entries pair by URL
 
 - **WHEN** single and dual entries share a normalized project URL, carry
   different package ids, and no projection covers either
-- **THEN** they pair under that URL's label
+- **THEN** both entries get that URL's label
 
 #### Scenario: Only nonfatal findings are recorded
 
@@ -103,8 +102,8 @@ outputs or require previous build reports to interpret family pairing.
   one explicit family or through one URL no projection covers
 - **THEN** offline verification fails with the label and both entries
   identified
-- **AND** no entry carrying that label in either variant pairs or is reported
-  as a coverage gap, in either entry order, and README catalog generation fails
+- **AND** the result is the same in either entry order, and README catalog
+  generation fails
 
 #### Scenario: A package id repeats within a variant
 
@@ -112,7 +111,7 @@ outputs or require previous build reports to interpret family pairing.
   different labels
 - **THEN** offline verification succeeds and reports the repeated package id
   as a nonfatal finding naming both entries
-- **AND** each entry pairs and is checked for coverage under its own label
+- **AND** each entry keeps its own label
 
 #### Scenario: A tracker sits at a ruled URL
 

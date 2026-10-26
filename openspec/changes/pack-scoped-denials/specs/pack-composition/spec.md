@@ -606,6 +606,87 @@ defines. Exclusions and stale exclusions SHALL also be reported.
 - **THEN** the single selection's reason is source precedence and the dual
   selection's reason is dual preference
 
+### Requirement: Extras a catalog lists are reported
+
+The system SHALL record each extra its family's selection chose in a variant
+over a considered candidate of another source at its normalized URL, once per
+URL and published package id across variants. Per source it SHALL list the
+union over its candidates of fields whose published forms differ from the
+extra's under the same overlay, or `unpublishable` for a candidate that alone
+fails to render, plus `variants` when the two are builds of different kinds. Recording SHALL NOT
+change selection or output or fail the build.
+
+#### Scenario: A catalog lists an extra's project
+
+- **WHEN** an extra is selected over a Quiver candidate at the same project URL
+  whose name and APK filter differ from the extra's
+- **THEN** the build succeeds, the extra is still published, and the extra is
+  recorded with its URL, package id, Quiver as a source, and the name and the
+  APK filter setting as differing fields
+
+#### Scenario: Differences rendering erases
+
+- **WHEN** an extra is selected over a catalog candidate at the same project
+  URL that differs only in carrying `allowIdChange: false` or in omitting
+  `author`
+- **THEN** the extra is recorded with that catalog as a source and no
+  differing fields
+
+#### Scenario: A dual-screen extra over a both-pack candidate
+
+- **WHEN** an extra that is a dual-screen build is selected over a catalog
+  candidate at the same project URL that is a baseline build and has equal
+  settings
+- **THEN** the extra is recorded with `variants` as a differing field
+
+#### Scenario: An extra replaces another project in its family
+
+- **WHEN** an extra is selected over a catalog candidate at a different project
+  URL that a family rule puts in the same family
+- **THEN** no listed extra is recorded
+
+#### Scenario: Family rules split a project URL
+
+- **WHEN** family rules at one project URL put an extra and a Quiver build in
+  different families, so both are published
+- **THEN** no listed extra is recorded
+
+#### Scenario: Two extras at one project URL
+
+- **WHEN** family rules at one project URL put two extras in separate
+  families, and each is selected over a catalog candidate at that URL in its
+  own family
+- **THEN** two listed extras are recorded at that URL, each with its own
+  package id, listing sources and differing fields
+
+#### Scenario: Fields a listed extra is compared on
+
+- **WHEN** an extra is selected over a catalog candidate at the same project
+  URL that differs from it only in its categories, in the spelling of its
+  project URL, and in one `additionalSettings` key `k`
+- **THEN** the extra is recorded with `additionalSettings.k` as its only
+  differing field: fields are compared as top-level keys and as keys under
+  `additionalSettings`, categories are not compared because the category map
+  assigns them, and the project URL is not compared because the two match on
+  it by construction
+
+#### Scenario: Two candidates from one source at one project URL
+
+- **WHEN** an extra is selected over two Quiver candidates at its project URL,
+  one differing from it in `name` and the other in an `additionalSettings` key
+- **THEN** the extra is recorded with Quiver once as a source, its differing
+  fields the union of both candidates' differences
+
+#### Scenario: A listing candidate that cannot be published
+
+- **WHEN** an extra is selected over a Quiver candidate at its project URL
+  whose import data, with the same overlay applied, pack rendering rejects,
+  while the extra renders
+- **THEN** the build succeeds and the extra is recorded with Quiver as a
+  source and `unpublishable` as its field, not with no differing fields
+- **AND** when the extra itself also fails to render, that source records no
+  differing fields, and the build fails at rendering
+
 ## REMOVED Requirements
 
 ### Requirement: Pins select an eligible candidate of their family
@@ -624,7 +705,7 @@ defines. Exclusions and stale exclusions SHALL also be reported.
 
 **Reason**: Replaced by "App families form by project URL under the composition policy", which forms families over candidates a denial leaves in at least one variant instead of over candidates eligible for at least one variant.
 
-**Migration**: No configuration change; family rules and projections are unchanged.
+**Migration**: No configuration change; family rules and projections are unchanged. A rule or pin naming an RJNY entry marked out of both exports now fails as unmatched, since such entries are dropped at ingestion; the current catalog has none.
 
 ### Requirement: A single-screen family without a dual build is published and reported
 
