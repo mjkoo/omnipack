@@ -66,10 +66,15 @@ def test_build_only_failure_is_displayable(tmp_path: Path) -> None:
     "document",
     [
         {"status": "success"},
-        {"schemaVersion": 4, "status": "success", "denylistRemovals": []},
         {"schemaVersion": 5, "status": "success", "denylistRemovals": []},
+        {
+            "schemaVersion": 6,
+            "status": "success",
+            "denylistRemovals": [],
+            "singleOnlyFamilies": [],
+        },
     ],
-    ids=["schemaless", "schema-4", "schema-5"],
+    ids=["schemaless", "schema-5", "schema-6"],
 )
 def test_older_build_reports_require_regeneration(
     tmp_path: Path,

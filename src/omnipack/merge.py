@@ -313,7 +313,9 @@ def _exclude(
             continue
         for candidate in matched:
             for variant in rule.variants:
-                denied.setdefault(id(candidate), {})[variant] = rule.reason
+                # The first denial covering a variant keeps its reason, so a
+                # pin error follows denylist order.
+                denied.setdefault(id(candidate), {}).setdefault(variant, rule.reason)
         report.removals.append(
             Removal(
                 rule.url,

@@ -1195,6 +1195,41 @@ def test_a_repeated_package_id_raises_one_finding_per_pack(tmp_path: Path) -> No
         "Entry: example.org/a at example.org/a",
         "Entry: app:b at example.org/b",
     )
+    assert file.findings[1].title == "Package id repeated in the dual pack: p"
+    assert file.findings[1].details == (
+        "Variant: dual",
+        "Package id: p",
+        "Entry: example.org/a at example.org/a",
+        "Entry: app:b at example.org/b",
+    )
+
+
+@pytest.mark.parametrize(
+    "malformed",
+    [{"family": 1, "url": "example.org/c"}, {"family": "app:c", "url": None}],
+    ids=["family", "url"],
+)
+def test_a_repeated_id_entry_without_a_string_family_and_url_is_left_out(
+    tmp_path: Path, malformed: dict[str, object]
+) -> None:
+    item = _repeated("single", "p", ("app:b", "example.org/b"))
+    item["entries"].append(malformed)
+    report = _build_report(repeatedIds=[item])
+
+    file = _emit(
+        NIGHTLY_PREPARE,
+        report=report,
+        tmp_path=tmp_path,
+        PREPARE_STAGE="complete",
+        PREPARE_STAGES=STAGES,
+    )
+
+    assert _keys(file) == [REPEATED + "single/p"]
+    assert file.findings[0].details == (
+        "Variant: single",
+        "Package id: p",
+        "Entry: app:b at example.org/b",
+    )
 
 
 def test_a_repeated_package_id_with_an_unknown_pack_raises_nothing(

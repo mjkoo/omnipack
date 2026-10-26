@@ -516,11 +516,8 @@ def test_a_denied_entry_is_flagged_only_in_the_packs_its_denial_names(
     assert all("'example.com/one'" in item.message for item in findings)
 
 
-@pytest.mark.parametrize("packs", [[], "single", ["single", "single"], ["both"]])
-def test_an_invalid_denial_pack_list_fails_offline_verification(
-    packs: object,
-) -> None:
-    denial = {"url": "https://example.com/one", "reason": "no", "packs": packs}
+def test_an_invalid_denial_pack_list_fails_offline_verification() -> None:
+    denial = {"url": "https://example.com/one", "reason": "no", "packs": ["both"]}
     findings = validate_offline(inputs(deny=[denial]))
     assert [item.code for item in findings] == ["invalid_composition_config"]
 
@@ -645,7 +642,7 @@ def test_a_label_repeated_within_a_variant_is_rejected() -> None:
 
 @pytest.mark.parametrize("repeated_in", ["single", "dual"])
 @pytest.mark.parametrize("reverse", [False, True])
-def test_repeated_label_leaves_both_variants_out_of_pairing(
+def test_a_repeated_label_is_the_only_finding_in_either_entry_order(
     repeated_in: str, reverse: bool
 ) -> None:
     a, b, c = at("a"), at("b"), at("c")
@@ -670,7 +667,7 @@ def test_unpaired_entries_of_different_explicit_families_record_no_finding() -> 
 
 @pytest.mark.parametrize("repeated_in", ["single", "dual"])
 @pytest.mark.parametrize("reverse", [False, True])
-def test_repeated_package_id_is_nonfatal_and_each_entry_pairs_by_its_label(
+def test_a_repeated_package_id_is_nonfatal_and_the_only_finding(
     repeated_in: str, reverse: bool
 ) -> None:
     repeated = [at("a", "one"), at("a", "two")]

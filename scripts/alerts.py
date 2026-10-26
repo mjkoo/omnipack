@@ -24,6 +24,7 @@ from pathlib import Path
 from typing import Literal, NamedTuple, get_args
 
 from scripts.workflow_support import (
+    PACK_VARIANTS,
     REPORT_STATUSES,
     SOURCE_NAMES,
     STAGE_SEPARATOR,
@@ -626,10 +627,6 @@ BUILD_STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
 BUILD_REDUNDANT_PATCH = _BUILD_PREFIX + "redundant-patch/"
 BUILD_LISTED_EXTRA = _BUILD_PREFIX + "listed-extra/"
 BUILD_REPEATED_ID = _BUILD_PREFIX + "repeated-id/"
-# The packs a build report names. It mirrors the project's pack variants, which
-# this module cannot import.
-PackVariant = Literal["single", "dual"]
-PACK_VARIANTS: frozenset[PackVariant] = frozenset(get_args(PackVariant))
 _LIVE_PREFIX = LIVE_CHECK.prefixes[0]
 LIVE_READ = _LIVE_PREFIX + "read"
 LIVE_GONE = _LIVE_PREFIX + "gone/"

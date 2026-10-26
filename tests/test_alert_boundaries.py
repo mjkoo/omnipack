@@ -35,7 +35,12 @@ from scripts.alerts import (
     parse_findings,
     reconcile,
 )
-from scripts.workflow_support import SOURCE_NAMES, ReportStatus, StepOutcome
+from scripts.workflow_support import (
+    PACK_VARIANTS,
+    SOURCE_NAMES,
+    ReportStatus,
+    StepOutcome,
+)
 from tests.publication_support import (
     REPOSITORY,
     RUN_2,
@@ -263,6 +268,10 @@ def test_live_check_report_from_the_real_writer_raises_gone_and_status_findings(
 
 def test_alert_report_status_mirrors_the_report_status() -> None:
     assert set(get_args(ReportStatus)) == {status.value for status in Status}
+
+
+def test_alert_pack_variants_mirror_the_pack_variants() -> None:
+    assert PACK_VARIANTS == {variant.value for variant in Variant}
 
 
 def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> None:

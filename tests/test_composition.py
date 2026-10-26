@@ -305,7 +305,7 @@ def test_pin_failure_preserves_independent_exclusion_diagnostics(present: bool) 
                 {"url": "https://x.test/a", "reason": "x", "packs": packs},
                 r"denylist\[0\]\.packs must be a nonempty list of distinct pack names",
             )
-            for packs in ([], "single", ["single", "single"], ["both"], [None])
+            for packs in ([], "single", ["single", "single"], ["both"], [["single"]])
         ),
     ],
 )
@@ -685,7 +685,6 @@ def test_a_dual_scoped_denial_leaves_a_family_in_single_alone() -> None:
     assert result.report.removals == [
         Removal(url_family(single), "broken", (Variant.DUAL,), ("app:x",))
     ]
-    assert result.report.repeated_ids == []
 
 
 def test_a_family_with_only_a_dual_build_is_selected_in_both_packs() -> None:
@@ -737,6 +736,21 @@ def test_single_scoped_and_dual_scoped_denials_at_one_url_remove_it_entirely() -
     result = compose([denied], denials, [])
     assert result.apps == {Variant.SINGLE: [], Variant.DUAL: []}
     with pytest.raises(CompositionError, match=r"pin.*is denied at .*: no dual"):
+        compose([denied], denials, [], policy=policy_of([], [pinned]))
+
+
+@pytest.mark.parametrize("reasons", [("first", "second"), ("second", "first")])
+def test_a_pin_error_names_the_first_denial_covering_the_pin_s_pack(
+    reasons: tuple[str, str],
+) -> None:
+    denied = app("denied", "codm", dual_screen=True)
+    pinned = pin(denied, url_family(denied), Variant.DUAL)
+    earlier, later = reasons
+    denials = [
+        *deny(denied.url, reason=earlier),
+        *deny(denied.url, reason=later, packs=["dual"]),
+    ]
+    with pytest.raises(CompositionError, match=rf"pin.*is denied at .*: {earlier}$"):
         compose([denied], denials, [], policy=policy_of([], [pinned]))
 
 

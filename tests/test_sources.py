@@ -220,31 +220,6 @@ def test_declared_gitlab_extra_keeps_any_url_as_written(url: str) -> None:
     assert (app.url, app.source_type) == (url, SourceType.GITLAB)
 
 
-def test_rjny_entry_out_of_both_exports_is_dropped() -> None:
-    url = "https://raw.githubusercontent.com/r/main/p"
-    records = [
-        {
-            "id": "app.disabled",
-            "name": "Disabled",
-            "url": "https://github.com/owner/disabled",
-            "overrideSource": "GitHub",
-            "meta": {"includeInStandard": False, "includeInDualScreen": False},
-        },
-        {
-            "id": "app.excluded",
-            "name": "Excluded",
-            "url": "https://github.com/owner/excluded",
-            "overrideSource": "GitHub",
-            "meta": {"excludeFromExport": True},
-        },
-    ]
-    apps = rjny.fetch(
-        FakeHttp({url: json.dumps({"apps": records})}),
-        {"repo": "r", "branch": "main", "path": "p"},
-    )
-    assert apps == []
-
-
 def _record_with(field: str, value: object) -> dict[str, object]:
     return {
         "id": "app.entry",
@@ -364,8 +339,6 @@ def test_rjny_entry_excluded_from_export_is_dropped_whatever_its_other_flags(
         ({"includeInDualScreen": False}, False),
         ({"includeInStandard": False}, True),
         ({"includeInStandard": False, "includeInDualScreen": False}, None),
-        ({"excludeFromExport": True}, None),
-        ({"excludeFromExport": True, "includeInStandard": False}, None),
     ],
     ids=[
         "no-meta",
@@ -374,8 +347,6 @@ def test_rjny_entry_excluded_from_export_is_dropped_whatever_its_other_flags(
         "standard-only",
         "dual-only",
         "neither-export",
-        "excluded",
-        "excluded-dual-only",
     ],
 )
 def test_rjny_export_flags_decide_whether_an_entry_is_kept_and_its_kind(
