@@ -38,7 +38,6 @@
       "additionalSettings": {
         "trackOnly": true,
         "versionDetection": false,
-        "includeZips": false,
         "autoApkFilterByArch": false,
         "about": "Kanto Gear is a Gen1Recomp Lua mod distributed as a ZIP, not an Android application. Install or update through official Gen1Recomp at https://github.com/bryanthaboi/gen1recomp using its Mod Index or ZIP import. Obtainium only tracks release notifications; acknowledgement does not install the resource or detect its installed version."
       }
@@ -88,12 +87,6 @@
     }
   },
   {
-    "url": "https://github.com/ChimeraGaming/FanmakePokemonMaps_Android",
-    "patch": {
-      "name": "Fanmake Pokémon Maps"
-    }
-  },
-  {
     "url": "https://github.com/chrissotraidis/kartpad",
     "patch": {
       "name": "Mario Kart Wii (KartPad)"
@@ -117,12 +110,6 @@
     }
   },
   {
-    "url": "https://github.com/Darkaxt/DualScreenDex",
-    "patch": {
-      "name": "DualDex"
-    }
-  },
-  {
     "url": "https://github.com/Goldoire/pokeemerald-dualscreen",
     "patch": {
       "name": "Pokémon Emerald Dual Screen"
@@ -135,7 +122,6 @@
       "additionalSettings": {
         "trackOnly": true,
         "versionDetection": false,
-        "includeZips": false,
         "autoApkFilterByArch": false,
         "about": "Thor Dual Screen is a SMAPI mod for Stardew Valley running in Cinderbox, distributed as a ZIP, not an Android application. Install or update it by following https://github.com/hung-eggie-do-covergo/stardew-thor-dual-screen. Obtainium only tracks release notifications; acknowledgement does not install the mod or detect its installed version."
       }
@@ -172,7 +158,6 @@
       "additionalSettings": {
         "trackOnly": true,
         "versionDetection": false,
-        "includeZips": false,
         "autoApkFilterByArch": false,
         "about": "Second-screen companion packages for Eden Duo, one .dsmod.zip per game, not an Android application. Install or update a game's companion from that game's Add-ons menu in Eden Duo. Each release is one game's package, so a notification may concern a game you do not play. Obtainium only tracks release notifications; acknowledgement does not install a package or detect its installed version."
       }
@@ -241,12 +226,6 @@
     }
   },
   {
-    "url": "https://github.com/kalenjohnson/chrono-duo",
-    "patch": {
-      "name": "ChronoDuo"
-    }
-  },
-  {
     "url": "https://github.com/linkzenic/2ship2harkinian-Android",
     "patch": {
       "id": "com.twoshipfork.mm"
@@ -255,7 +234,6 @@
   {
     "url": "https://github.com/mastercook777/Heimdall-AYN-Thor-Assistant",
     "patch": {
-      "name": "Heimdall",
       "additionalSettings": {
         "includePrereleases": true,
         "filterReleaseTitlesByRegEx": "^Heimdall v[0-9]+\\.[0-9]+\\.[0-9]+(?:-(?:alpha|beta)\\.[0-9]+)?$",
@@ -295,12 +273,6 @@
       "additionalSettings": {
         "versionDetection": false
       }
-    }
-  },
-  {
-    "url": "https://github.com/rosbean/balatro-dualscreen",
-    "patch": {
-      "name": "Balatro Dual Screen"
     }
   },
   {
@@ -385,12 +357,6 @@
       "additionalSettings": {
         "includePrereleases": true
       }
-    }
-  },
-  {
-    "url": "https://github.com/stormpanda/megingiard",
-    "patch": {
-      "name": "Megingiard"
     }
   },
   {
