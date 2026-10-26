@@ -37,6 +37,8 @@ finding for each of these problems, and for no other outcome:
   the same record raises its own finding;
 - each project URL at which the build report lists one or more extras as
   listed by a catalog, one finding per URL covering every such extra there;
+- each package id the build report lists as repeated within a variant, one
+  finding per variant and package id;
 - a producing job whose findings do not reach the alert job intact, that
   fails for a reason none of its other findings reports, or that is cancelled,
   one finding per job, so a job stopped by its time limit raises this finding
@@ -58,7 +60,9 @@ say that no release qualified. A finding for a patch key
 that changes nothing SHALL name the project URL and that key, and a finding
 for the extras a catalog lists at a project URL SHALL name the project URL
 and, for each such extra, its package id, each listing source and that
-source's differing fields. A stale or archived finding SHALL NOT be
+source's differing fields. A finding for a repeated package id SHALL name the
+variant, the package id and each entry's family and project URL. A stale or
+archived finding SHALL NOT be
 accounted as the live-check job's failure. Each finding SHALL have a key that
 stays the same while the same problem persists, independent of the problem's
 error text, and each key SHALL belong to exactly one producing job, so the
@@ -172,6 +176,14 @@ uploading them fails.
   project URL, each with its own package id
 - **THEN** one finding is raised for that URL, naming both package ids, each
   extra's listing sources and their differing fields
+
+#### Scenario: A pack repeats a package id
+
+- **WHEN** a nightly build report lists package id `p` as repeated in single and
+  in dual
+- **THEN** two findings are raised, one per variant, each naming `p` and the
+  entries' families and project URLs, and the nightly run's verdict is
+  unchanged
 
 ### Requirement: Each finding has one issue that follows its latest re-check
 

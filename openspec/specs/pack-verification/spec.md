@@ -8,44 +8,39 @@ to exact input bytes. Verification makes no upstream or device-behavior guarante
 
 ## Requirements
 
-### Requirement: Offline verification labels and pairs rendered entries by family
+### Requirement: Offline verification labels rendered entries by family
 
 The system SHALL validate the composition policy, denylist and overlay without
 fetching source catalogs. It SHALL give each rendered entry a family label: the
 explicit family of the policy projection covering the entry's package id and
-normalized project URL, as "Composition policy assigns app families by project
-URL" in pack-composition defines, and otherwise the entry's normalized project
+normalized project URL, as "App families form by project URL under the composition policy" in pack-composition defines, and otherwise the entry's normalized project
 URL. A track-only entry SHALL be labelled by the same projections as an
 installable entry, so its label always names the family composition placed it
-in. It SHALL pair a single-screen entry with the dual-screen entry carrying
-the same label. When a label repeats within either variant, the entries
-carrying that label in both variants SHALL be left out of pairing and coverage
-and SHALL receive no pairing or coverage finding, while the denial, pin,
-overlay-target and structural checks SHALL still consider them, so no finding
-or row depends on entry order. README catalog generation SHALL fail on any such
-repeat instead of pairing. These labels serve verification messages and README
-ordering only. Projections SHALL carry the family only; offline verification
-SHALL NOT check eligibility, which no candidate rule declares and which
+in. Offline verification SHALL NOT pair entries across variants; README
+catalog generation pairs a single-screen entry with the dual-screen entry
+carrying the same label. When a label repeats within a variant, the denial,
+pin, overlay-target and structural checks SHALL still consider the entries
+carrying it, so no finding depends on entry order. README catalog generation
+SHALL fail on any such repeat instead of pairing. These labels serve
+verification messages, README pairing and README ordering only. Projections SHALL carry the family only; offline verification
+SHALL NOT check a build's kind, which no candidate rule declares and which
 rendered entries cannot reveal. Ambiguous projections, invalid configuration
 and forbidden overlay fields SHALL fail.
 
 It SHALL reject a label repeated within a variant with those entries
-identified, an entry at a denied project URL in either variant, violations of
-candidate pins, and overlay records whose URL matches no entry in either
-variant. A single entry with no dual pair SHALL be reported as a nonfatal
-single-only coverage finding naming its label, package id and project URL, and
-SHALL NOT fail verification, matching the build's single-only coverage
-finding. A pin SHALL be checked by the presence of its id and normalized
+identified, an entry at a project URL a denial names in a variant that denial
+applies to, violations of candidate pins, and overlay records whose URL matches
+no entry in either variant. A label present in one variant and absent from the
+other SHALL NOT be a finding. A pin SHALL be checked by the presence of its id and normalized
 project URL in its variant, which needs no family name; when an overlay record
 at the pin's URL patches `id`, the pin SHALL be checked against the patched id,
 since rendered entries carry it. A package id carried by more than one entry
 within a variant SHALL be reported as a nonfatal finding naming the variant,
-the package id and the entries, and SHALL NOT affect pairing or coverage.
+the package id and the entries, and SHALL NOT affect the entries' labels.
 A denial matching no rendered entry SHALL NOT be a finding.
 
 Each offline finding SHALL be either an error or a nonfatal finding. The
-single-only coverage and repeated package id findings are nonfatal; every other
-finding is an error. Only errors SHALL fail `pack verify` and the build's
+repeated package id finding is nonfatal; every other finding is an error. Only errors SHALL fail `pack verify` and the build's
 offline gate, and only errors SHALL withhold publication of the packs and the
 regenerated README. A build whose offline verification records only nonfatal
 findings SHALL publish the packs and the regenerated README, and its build
@@ -63,7 +58,7 @@ on the id.
 These checks SHALL NOT claim to verify source provenance, optimal winner ranking,
 rule presence in unfetched catalogs or actual patch values. Those candidate-level
 checks remain build responsibilities. Offline verification SHALL NOT rewrite
-outputs or require previous build reports to interpret family coverage.
+outputs or require previous build reports to interpret family labels.
 
 #### Scenario: Overlay has no target
 
@@ -73,29 +68,28 @@ outputs or require previous build reports to interpret family coverage.
 #### Scenario: Single family is missing from dual
 
 - **WHEN** a family present in single has no dual output
-- **THEN** verification succeeds and reports a nonfatal single-only coverage
-  finding naming that family's label, package id and project URL
+- **THEN** verification succeeds and records no finding for that family
 
 #### Scenario: Different-repository family replacement is present
 
 - **WHEN** policy projects single and dual output entries at different URLs
   onto one explicit family
-- **THEN** offline coverage passes without requiring the single entry in dual
+- **THEN** both entries get that family's label
 
 #### Scenario: One repository's entries pair by URL
 
 - **WHEN** single and dual entries share a normalized project URL, carry
   different package ids, and no projection covers either
-- **THEN** they pair under that URL's label
+- **THEN** both entries get that URL's label
 
 #### Scenario: Only nonfatal findings are recorded
 
-- **WHEN** the rendered pair holds one single entry without a dual pair and one
-  package id repeated within a variant, and nothing else is wrong
-- **THEN** `pack verify` exits zero with status success and lists both
-  findings as nonfatal findings in `.build/verify.json`
+- **WHEN** the rendered pair holds one package id repeated within a variant, and
+  nothing else is wrong
+- **THEN** `pack verify` exits zero with status success and lists the finding
+  as a nonfatal finding in `.build/verify.json`
 - **AND** `pack build` publishes both packs and the regenerated README, and its
-  report's offline verdict passes and lists both nonfatal findings
+  report's offline verdict passes and lists the nonfatal finding
 
 #### Scenario: Pinned output is another repository
 
@@ -114,8 +108,8 @@ outputs or require previous build reports to interpret family coverage.
   one explicit family or through one URL no projection covers
 - **THEN** offline verification fails with the label and both entries
   identified
-- **AND** no entry carrying that label in either variant pairs or is reported
-  as a coverage gap, in either entry order, and README catalog generation fails
+- **AND** the result is the same in either entry order, and README catalog
+  generation fails
 
 #### Scenario: A package id repeats within a variant
 
@@ -123,7 +117,7 @@ outputs or require previous build reports to interpret family coverage.
   different labels
 - **THEN** offline verification succeeds and reports the repeated package id
   as a nonfatal finding naming both entries
-- **AND** each entry pairs and is checked for coverage under its own label
+- **AND** each entry keeps its own label
 
 #### Scenario: A tracker sits at a ruled URL
 
@@ -151,10 +145,16 @@ outputs or require previous build reports to interpret family coverage.
 
 #### Scenario: An entry at a denied URL is published
 
-- **WHEN** either variant holds an entry whose normalized project URL a denial
-  names
+- **WHEN** a variant holds an entry whose normalized project URL a denial
+  applying to that variant names
 - **THEN** offline verification fails with the variant, entry and denial
   identified
+
+#### Scenario: An entry in a variant its URL's denial does not name
+
+- **WHEN** dual holds an entry whose normalized project URL a denial naming
+  only the single-screen pack names
+- **THEN** offline verification records no finding for that entry
 
 ### Requirement: Offline verification checks the generated catalog
 
@@ -264,7 +264,7 @@ The system SHALL validate both rendered import documents without fetching,
 hydrating, repairing or rewriting them. It SHALL reject missing or unreadable
 files, invalid JSON including non-finite numbers, non-object roots, non-list
 `apps`, non-object `settings` and malformed app records. A package id repeated within a variant SHALL be reported as a nonfatal
-finding, as "Offline verification labels and pairs rendered entries by family"
+finding, as "Offline verification labels rendered entries by family"
 defines, not rejected as malformed. Each app SHALL have nonempty string `id`,
 `name` and absolute HTTP(S) `url`, string `author`, string-list `categories`,
 `overrideSource`, when present, a string, `allowIdChange` equal to

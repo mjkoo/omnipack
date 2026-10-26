@@ -11,84 +11,92 @@ overlays and selection reporting.
 
 ### Requirement: Builds are baseline or dual-screen and each pack selects its kind
 
-Every candidate build SHALL be either a baseline build or a dual-screen build.
-A build SHALL be a dual-screen build exactly when it is eligible for dual only,
-and dual preference SHALL be derived from that alone, with no separate
-preference setting. A build's kind and eligibility SHALL come only from its
-source, as source ingestion defines for each source. No candidate rule or other
-composition setting SHALL change a build's eligibility or dual preference.
+Every candidate build SHALL be either a baseline build or a dual-screen build,
+and its kind SHALL come only from its source, as source ingestion defines for
+each source. A build's kind SHALL be a selection preference only: every
+candidate SHALL be selectable in both packs, and only a project denial SHALL
+remove a build from a pack. No candidate rule or other composition setting
+SHALL change a build's kind.
 
-The single-screen pack SHALL select among a family's baseline builds. A valid
-pin comes first, as "Pins select an eligible candidate of their family"
-defines. Absent a pin, a family's available
-dual-screen build SHALL replace its baseline build in the dual-screen pack, a
-family with no available dual-screen build SHALL use its dual-eligible baseline
-build, and source precedence SHALL decide among builds of one kind. A family
-whose only builds are dual-screen builds SHALL appear only in the dual-screen
-pack. Nothing other than a pin naming a specific candidate SHALL make the
-dual-screen pack select a baseline build over an available dual-screen build.
+The single-screen pack SHALL prefer a family's baseline builds and the
+dual-screen pack its dual-screen builds. A valid pin comes first, as "Pins
+select a candidate of their family" defines. Absent a pin, each pack SHALL
+select among the family's available builds of its preferred kind, a family with
+none available SHALL use its available builds of the other kind, and source
+precedence SHALL decide among builds of one kind. Nothing other than a pin
+naming a specific candidate SHALL make a pack select a build of the other kind
+over an available build of its preferred kind.
 
-A project denial removes builds, not families, as "Project denials exclude
-candidates from both variants" defines, including where a family's baseline and
-dual-screen builds share the denied project URL.
+A project denial removes builds, not families, from the packs it names, as
+"Project denials exclude candidates from the packs they name" defines,
+including where a family's baseline and dual-screen builds share the denied
+project URL.
 
 #### Scenario: A dual-screen build replaces the baseline in dual
 
-- **WHEN** a family has a baseline build eligible for both packs and a
-  dual-screen build, and no pin applies
+- **WHEN** a family has a baseline build and a dual-screen build, and no pin
+  applies
 - **THEN** single selects the baseline build and dual selects the dual-screen
   build, even when the baseline build comes from a higher-precedence source
 
 #### Scenario: A family has no dual-screen build
 
-- **WHEN** a family's builds are all baseline builds eligible for both packs,
-  and no pin applies
+- **WHEN** a family's builds are all baseline builds, and no pin applies
 - **THEN** both packs select among those baseline builds by source precedence
 
 #### Scenario: A family has only a dual-screen build
 
-- **WHEN** a family's only build is a dual-screen build
-- **THEN** it is selected in the dual-screen pack and the single-screen pack
-  has no entry for that family
+- **WHEN** a family's only build is a dual-screen build, and no denial or pin
+  applies
+- **THEN** both packs select it
+
+#### Scenario: Single prefers a lower-precedence baseline build
+
+- **WHEN** a family has an extras dual-screen build and a BBoi34 baseline
+  build, and no pin applies
+- **THEN** single selects the BBoi34 baseline build and dual selects the extras
+  dual-screen build
+
+#### Scenario: A single-scoped denial keeps a dual-only family out of single
+
+- **WHEN** a family's only build is a dual-screen build and a denial naming only
+  the single-screen pack names its project URL
+- **THEN** dual selects the build and single has no entry for that family
 
 #### Scenario: A denied URL shared by both builds leaves other projects selectable
 
 - **WHEN** a denial names a project URL carrying both a family's baseline
   build and its dual-screen build, and an explicit family also holds a
-  baseline build at another URL that is eligible for both packs
+  baseline build at another URL
 - **THEN** neither denied build is selected in either pack, and the
   other-URL baseline build is selected in both
 
 #### Scenario: A dual pin keeps a baseline build that shares its project
 
-- **WHEN** a family's baseline build eligible for both packs and its
-  dual-screen build share a project URL, and a valid dual pin names the
-  baseline build
+- **WHEN** a family's baseline build and its dual-screen build share a project
+  URL, and a valid dual pin names the baseline build
 - **THEN** both packs select the baseline build, the dual-screen build is
   selected in neither, and the dual selection's reason is the pin
 
-### Requirement: Pins select an eligible candidate of their family
+### Requirement: Pins select a candidate of their family
 
 Policy SHALL permit one candidate pin per family and variant. A pin SHALL name
 an original candidate selector and a rationale, and SHALL select that candidate
-ahead of dual preference or source ranking. A dual pin MAY therefore name a
-dual-eligible baseline build even when the family has an available dual-screen
-build, and SHALL keep that baseline build in the dual-screen pack in place of
-the family's dual-screen build whether or not the two builds share a project
-URL. A missing, excluded, wrong-family or target-ineligible pinned candidate
-SHALL fail the build. A pin cannot match more than one candidate, because
-different records sharing one original identity fail before any pin is read.
-A pin SHALL NOT implicitly override an exclusion or eligibility restriction.
-Multiple pins for one family and target SHALL fail. A pin whose candidate is
-eligible for no variant or was removed by a denial belongs to no formed family,
-so it SHALL fail as a conflict with that exclusion before the build-time
-formed-family comparison. The failure SHALL identify the pin and the
-ineligibility when the candidate is eligible for no variant, even when its URL
-is also denied, since a denial of such a candidate removes nothing; otherwise
-it SHALL identify the pin and the denial.
+ahead of kind preference or source ranking. A dual pin MAY therefore name a
+baseline build even when the family has an available dual-screen build, and
+SHALL keep that baseline build in the dual-screen pack in place of the family's
+dual-screen build whether or not the two builds share a project URL; a single
+pin MAY likewise name a dual-screen build. A missing or wrong-family pinned
+candidate SHALL fail the build. A pin cannot match more than one candidate,
+because different records sharing one original identity fail before any pin is
+read. A pin SHALL NOT implicitly override an exclusion. Multiple pins for one
+family and target SHALL fail. A pin whose candidate a denial removes from the
+pin's variant SHALL fail, identifying the pin and the denial. A candidate a
+denial removes from every variant belongs to no formed family, so its pin SHALL
+fail this way before the build-time formed-family comparison. A denial that
+removes the candidate from the other variant only SHALL NOT affect the pin.
 
-A pin SHALL name the family its candidate belongs to, as "Composition policy
-assigns app families by project URL" defines: its explicit `app:` family, or
+A pin SHALL name the family its candidate belongs to, as "App families form by project URL under the composition policy" defines: its explicit `app:` family, or
 otherwise the normalized project URL of its candidate. A pin whose selector has
 an explicit `app:` projection naming a different family SHALL fail when the
 policy loads, identifying the pin and the projected family, whatever the
@@ -97,8 +105,8 @@ formed family.
 
 #### Scenario: A dual pin selects a baseline build over a dual-screen build
 
-- **WHEN** a valid dual pin names a baseline build eligible for dual and the
-  family has an available dual-screen build
+- **WHEN** a valid dual pin names a baseline build and the family has an
+  available dual-screen build
 - **THEN** the pinned build wins and the report identifies the explicit selection
 
 #### Scenario: Pinned build disappears
@@ -108,8 +116,16 @@ formed family.
 
 #### Scenario: Pin conflicts with a denial
 
-- **WHEN** a pin names a candidate whose project URL is denied
+- **WHEN** a pin names a candidate whose project URL a denial removes from the
+  pin's variant
 - **THEN** the build fails with the conflicting pin and denial identified
+
+#### Scenario: A denial of the other pack leaves a pin valid
+
+- **WHEN** a single pin names a candidate whose project URL a denial naming
+  only the dual-screen pack names
+- **THEN** single selects the pinned candidate, dual does not select it, and
+  the build succeeds
 
 #### Scenario: A pin names another family for a denied projected candidate
 
@@ -120,16 +136,9 @@ formed family.
 #### Scenario: A pin names a candidate removed before families form
 
 - **WHEN** a pin names the URL family of a rule-less candidate that a denial
-  removes or its source makes eligible for no variant
-- **THEN** the build fails with the pin and the denial or the ineligibility
-  identified rather than as wrong-family
-
-#### Scenario: A pin names a denied candidate eligible for no variant
-
-- **WHEN** a pin names a candidate eligible for no variant whose project URL is
-  also denied
-- **THEN** the build fails with the pin and the ineligibility identified, and
-  the denial removes nothing
+  removes from every variant
+- **THEN** the build fails with the pin and the denial identified rather than
+  as wrong-family
 
 #### Scenario: A pin selects a rule-less candidate projected into an explicit family
 
@@ -139,7 +148,7 @@ formed family.
 - **AND** a pin naming the candidate's normalized project URL fails policy
   loading, naming the projected family `app:x`
 
-### Requirement: Composition policy assigns app families by project URL
+### Requirement: App families form by project URL under the composition policy
 
 The system SHALL load a versioned committed composition policy. A candidate
 SHALL retain original source, source origin, package id and normalized project
@@ -161,14 +170,16 @@ in every command that loads the policy, rather than one occurrence silently
 taking effect.
 
 Families SHALL form once family rules and exclusions apply, over the
-candidates that survive exclusions and are eligible for at least one variant.
-Such a candidate SHALL belong to the explicit family of the family-rule
-projection that covers it, whether or not the candidate a rule's selector
-matches itself survives exclusions and eligibility filtering. Every other such
+candidates that no denial removes from every variant. Such a candidate SHALL
+belong to the explicit family of the family-rule projection that covers it,
+whether or not the candidate a rule's selector matches itself survives
+exclusions. Every other such
 candidate SHALL belong to its default family, named by its normalized project
 URL as "URLs are compared in a normalized form" in source-ingestion defines. A
-shared package id SHALL NOT join candidates at different URLs. Excluded candidates and candidates eligible
-for no variant SHALL neither join a family nor name a family. Explicit family
+shared package id SHALL NOT join candidates at different URLs. A candidate a
+denial removes from every variant SHALL neither join a family nor name a
+family. A candidate a denial removes from one variant only SHALL keep its
+family, and that variant's selection SHALL pass over it. Explicit family
 names SHALL use the `app:` namespace and SHALL NOT be inferred from names,
 categories or repository ancestry.
 
@@ -194,9 +205,9 @@ that carry that id, and a candidate at that URL whose id no rule names belongs
 to the URL's default family. Two family rules projecting onto one package id
 and URL SHALL agree on family, failing with both rules identified otherwise,
 so rendered-family interpretation is unambiguous. Projections SHALL
-impose no offline eligibility restriction, because source-derived eligibility
+impose no offline kind restriction, because a build's source-derived kind
 cannot be reconstructed from rendered entries. Composition SHALL NOT serialize
-the family, original identity, eligibility or selection reason it computes into
+the family, original identity, kind or selection reason it computes into
 Obtainium app records.
 
 #### Scenario: One project from several sources forms one family
@@ -245,14 +256,6 @@ Obtainium app records.
 - **WHEN** two source-specific rules project to one id and URL but assign
   different families
 - **THEN** configuration fails instead of making offline interpretation ambiguous
-
-#### Scenario: A family rule sits on a candidate eligible for no variant
-
-- **WHEN** a rule assigns `app:x` to an RJNY candidate eligible for no variant, a
-  rule-less BBoi candidate is at the same project URL, and another eligible
-  candidate is ruled into `app:x`
-- **THEN** the BBoi candidate and the other candidate form `app:x`, and a pin
-  naming `app:x` loads and selects within it
 
 #### Scenario: A rule carries an unknown field
 
@@ -303,13 +306,12 @@ Obtainium app records.
   URLs together: the remaining candidates form the families their own rules and
   URLs give them, and its denial is reported under the explicit family
 
-#### Scenario: A candidate eligible for no variant shares an explicit family
+#### Scenario: A candidate denied in one pack keeps its family
 
-- **WHEN** a candidate its source makes eligible for neither variant shares an
-  explicit family with candidates from other sources
-- **THEN** it names no family of its own and does not hold candidates at other
-  URLs together: the remaining candidates form the families their own rules and
-  URLs give them
+- **WHEN** rules assign builds at project URLs X and Y to `app:x`, and a denial
+  naming only the single-screen pack names X
+- **THEN** both builds belong to `app:x`, dual selects within both, and single
+  selects only the build at Y
 
 #### Scenario: A key outside the category map is repeated
 
@@ -321,16 +323,15 @@ Obtainium app records.
 ### Requirement: Composition stages run in a fixed order
 
 The system SHALL normalize candidates, apply family rules, remove
-excluded candidates, form families over the surviving candidates eligible for
-at least one variant, validate explicit selections, select by family and
-target, validate overlay
-targets, apply overlays, assign categories, check family coverage and record
-package ids repeated within a variant. Exclusions SHALL observe normalized
+excluded candidates from the variants their denials name, form families over
+the candidates left in at least one variant, validate explicit selections,
+select by family and target, validate overlay targets, apply overlays, assign
+categories and record package ids repeated within a variant. Exclusions SHALL observe normalized
 project URLs before selection and SHALL NOT be re-applied after overlays.
 Each denial's exclusions SHALL be reported under the denied normalized project
-URL, listing the families whose candidates it removed as the family rules
-project them, so one denial is reported under one label however many families
-it touches. Overlays SHALL NOT assign or delete `url`,
+URL, listing the variants it names and the families whose candidates it
+removed as the family rules project them, so one denial is reported under one
+label however many families it touches. Overlays SHALL NOT assign or delete `url`,
 `overrideSource`, `family`, `variant` or `categories`, including by null
 deletion. An overlay MAY assign `id`; because family formation, exclusions,
 explicit selections, selection and overlay matching all run before overlays
@@ -361,24 +362,24 @@ preserve the previous output pair and diagnostics already collected.
 - **WHEN** rules at URL X assign id `a` to `app:a` and id `b` to `app:b`, a
   third build at X carries id `c` and no rule, and a denial at X removes all
   three
-- **THEN** the exclusions are reported once under X, listing the families
-  `app:a`, `app:b` and X
+- **THEN** the exclusions are reported once under X, listing both variants and
+  the families `app:a`, `app:b` and X
 
 ### Requirement: One candidate per family and variant is selected by fixed precedence
 
-The system SHALL select within the families that "Composition policy assigns
-app families by project URL" defines. It SHALL select at most one candidate
+The system SHALL select within the families that "App families form by project URL under the composition policy" defines. It SHALL select at most one candidate
 per family per variant, honoring a valid explicit pin first, as "Pins select
-an eligible candidate of their family" defines. Otherwise single
-SHALL consider single-eligible candidates; dual SHALL consider dual-preferred
-eligible candidates when any exist, or all dual-eligible candidates otherwise.
+a candidate of their family" defines. Otherwise each variant SHALL consider
+the family's candidates that no denial removes from it, and among them the
+builds of its preferred kind, baseline builds for single and dual-screen builds
+for dual, when any exist, or all of them otherwise.
 Within that tier, precedence SHALL be extras, RJNY, Quiver, BBoi34, then codm.
 The winning candidate SHALL be retained whole, not merged with losing entries.
 
-A family having no dual-preferred candidate left after successful ingestion and
-deliberate exclusions SHALL be an ordinary outcome: dual SHALL select among that
-family's remaining dual-eligible candidates and the build SHALL NOT fail for the
-absence, unless a pin names a candidate that is absent. A source that cannot be
+A family having no candidate of a variant's preferred kind left after
+successful ingestion and deliberate exclusions SHALL be an ordinary outcome:
+that variant SHALL select among the family's remaining candidates and the build
+SHALL NOT fail for the absence, unless a pin names a candidate that is absent. A source that cannot be
 fetched SHALL abort the build instead, as "A failed fetch aborts the build" in
 source-ingestion defines, so a missing preferred candidate and a missing source
 are never confused.
@@ -406,7 +407,7 @@ each selected entry SHALL be recoverable from its package id and normalized
 project URL alone. This holds for rendered entries carrying an overlay `id`
 patch too, since such a patch is accepted only at a URL whose candidates form
 one family, where the family does not depend on the id. Offline verification and the README catalog
-rely on this, as "Offline verification labels and pairs rendered
+rely on this, as "Offline verification labels rendered
 entries by family" in pack-verification defines, and composition needs no separate
 pairing check. Composition, offline verification and the README catalog SHALL
 apply the same projections to track-only entries as to installable ones, so a
@@ -421,17 +422,17 @@ track-only entry's family and its rendered label never disagree.
 #### Scenario: Dual suitability outranks source precedence
 
 - **WHEN** ordinary RJNY and dual-preferred BBoi builds compete for the same dual family
-- **THEN** BBoi wins dual selection while the eligible ordinary build remains available to single
+- **THEN** BBoi wins dual selection while single selects the ordinary RJNY build
 
 #### Scenario: Standard extra does not suppress a dual fork
 
 - **WHEN** an ordinary extra and a dual-preferred generated build compete without a pin
-- **THEN** dual selects the preferred build and single selects the extra if eligible
+- **THEN** dual selects the preferred build and single selects the extra
 
 #### Scenario: Preferred build is absent from a valid source snapshot
 
 - **WHEN** all source acquisition succeeds, no preferred candidate exists, and no pin requires one
-- **THEN** dual selection uses an eligible ordinary candidate if available
+- **THEN** dual selection uses an ordinary candidate if available
 
 #### Scenario: One source contributes one project with different content
 
@@ -477,21 +478,22 @@ track-only entry's family and its rendered label never disagree.
   supplies a dual-screen build at the same project URL
 - **THEN** single selects Quiver and dual selects codm
 
-### Requirement: Project denials exclude candidates from both variants
+### Requirement: Project denials exclude candidates from the packs they name
 
-A denylist entry SHALL contain exactly a nonempty project `url` and a nonempty
-`reason`, and its `url` SHALL be one the pipeline can normalize for
-comparison, failing with the entry and the offending value identified
-otherwise. The system SHALL exclude every candidate whose normalized project
-URL equals the entry's from both variants before selection and report the
-exclusion. A denial SHALL NOT remove candidates at other URLs merely because
-they share a family or a package id, so a family SHALL be absent from a variant
-after denials only when none of its remaining candidates is eligible there. An
-entry matching no candidate SHALL be reported as a stale exclusion and SHALL NOT
-fail the build. An entry whose only matching candidates are eligible for
-neither variant SHALL count as matched: it removes nothing, reports no
-exclusion and SHALL NOT be reported stale. Any other field SHALL fail
-explicitly with the entry identified.
+A denylist entry SHALL contain a nonempty project `url` and a nonempty
+`reason`, and MAY contain `packs`, a nonempty list of distinct variant names
+(`single`, `dual`); an entry without `packs` SHALL apply to both variants. Its
+`url` SHALL be one the pipeline can normalize for comparison, failing with the
+entry and the offending value identified otherwise, and any other `packs` value
+SHALL fail with the entry identified. The system SHALL exclude every candidate
+whose normalized project URL equals the entry's from each variant the entry
+applies to, before selection, and report the exclusion with those variants. A
+denial SHALL NOT remove candidates at other URLs merely because they share a
+family or a package id, and SHALL NOT remove candidates from a variant it does
+not apply to, so a family SHALL be absent from a variant after denials only
+when none of its candidates remains there. An entry matching no candidate SHALL
+be reported as a stale exclusion and SHALL NOT fail the build. Any other field
+SHALL fail explicitly with the entry identified.
 
 #### Scenario: Denied by project URL
 
@@ -502,7 +504,7 @@ explicitly with the entry identified.
 #### Scenario: A denial permits an alternative
 
 - **WHEN** a preferred dual build's URL is denied and its explicit family has
-  another eligible build at another URL
+  another build at another URL
 - **THEN** dual can select that alternative unless a conflicting pin fails validation
 
 #### Scenario: A denial keeps another repository with the same package id
@@ -518,15 +520,22 @@ explicitly with the entry identified.
 
 #### Scenario: Denylist entry carries an unknown field
 
-- **WHEN** a denylist entry carries a field other than `url` and `reason`
+- **WHEN** a denylist entry carries a field other than `url`, `reason` and
+  `packs`
 - **THEN** the build fails with the entry and the unknown field identified
 
-#### Scenario: A denial matches only candidates eligible for neither variant
+#### Scenario: A denial names one pack
 
-- **WHEN** a denial names a URL carried only by candidates that are eligible
-  for neither variant
-- **THEN** nothing is removed, no exclusion is reported, and the denial is not
-  reported stale
+- **WHEN** a denial whose `packs` is `["single"]` names project URL X
+- **THEN** no candidate at X is selected in single, X's candidates remain
+  selectable in dual, and the exclusion is reported under X with the
+  single-screen variant
+
+#### Scenario: A denial's pack list is invalid
+
+- **WHEN** a denylist entry's `packs` is empty, is not a list, repeats a name,
+  or holds a value other than `single` and `dual`
+- **THEN** the build fails with the entry identified
 
 ### Requirement: Overlay records patch selected entries by project URL
 
@@ -714,60 +723,6 @@ where matched. Losing or excluded candidates SHALL NOT satisfy overlay targets.
 - **WHEN** a record's URL matches no selected entry in either variant
 - **THEN** the build fails with the stale record identified
 
-### Requirement: A single-screen family without a dual build is published and reported
-
-Every family selected in single is expected to have a selected build in dual.
-After selection, the system SHALL check family coverage and SHALL record, as a
-single-only coverage finding, every family selected in single that has no
-selected build in dual, naming the family, its single selection's package id
-after overlays and its project URL. Such a family SHALL still be published in
-single, and the finding SHALL NOT fail the build, so one family's gap never
-blocks the rest of the run. The system SHALL NOT copy a build ineligible for
-dual into dual to close the gap. Upstream eligibility restrictions, unresolved
-generated links, denials of other projects in the family and verification
-failures SHALL NOT suppress the finding.
-
-A shared package id no longer joins candidates at different URLs, so an
-upstream pattern of a single-only build at one URL and a dual-only fork at
-another URL sharing its package id forms two families and produces this
-finding for the single-only one. The maintainer resolves it with a family rule
-joining the URLs into one explicit family. An app is kept out of both packs by
-denying every project URL its family's builds carry, since a denial removes
-builds, not families, as "Project denials exclude candidates from both
-variants" defines. Different-repository replacements in one declared family
-SHALL satisfy coverage. Dual-only additions SHALL NOT require a single
-counterpart.
-
-#### Scenario: Different-repository dual replacement
-
-- **WHEN** single and dual select builds from different project URLs in the
-  same declared family
-- **THEN** family coverage passes without requiring the single build in dual
-
-#### Scenario: An app is missing from the dual-screen variant
-
-- **WHEN** single selects a family with no dual-eligible candidate
-- **THEN** the build succeeds, single publishes that family's entry, no
-  ineligible build is copied into dual, and the family is recorded as a
-  single-only coverage finding with its single selection's package id and
-  project URL
-
-#### Scenario: The only dual build is denied
-
-- **WHEN** the only dual-eligible candidate of a single-selected family is at a
-  denied project URL
-- **THEN** the build succeeds and the family is recorded as a single-only
-  coverage finding
-
-#### Scenario: A single-only original and a dual-only fork share a package id
-
-- **WHEN** an upstream supplies a single-only build at URL A and a dual-only
-  build at URL B carrying the same package id, and no rule joins them
-- **THEN** single selects A's URL family, dual selects B's URL family, and A's
-  family is recorded as a single-only coverage finding
-- **AND** when a rule assigns both builds `app:x`, single selects A and dual
-  selects B within `app:x` and no finding is recorded
-
 ### Requirement: A package id repeated within a pack is reported
 
 Obtainium stores imported apps by package id, so two entries of one pack that
@@ -797,6 +752,15 @@ patch that produced it.
 - **WHEN** single and dual each select one entry carrying package id `p`
 - **THEN** no repeated package id is recorded
 
+#### Scenario: A baseline original and a dual-screen fork share a package id
+
+- **WHEN** an upstream supplies a baseline build at URL A and a dual-screen
+  build at URL B carrying package id `p`, and no rule joins their URLs
+- **THEN** both URL families are selected in both packs and `p` is recorded as
+  repeated in single and in dual
+- **AND** when a rule assigns both builds `app:x`, single selects A and dual
+  selects B within `app:x` and no repeated package id is recorded
+
 ### Requirement: Family selections are reported with their reasons
 
 The system SHALL report every selected family and variant with the winning
@@ -804,7 +768,8 @@ candidate's package id, project URL, source and origin, the other candidates of
 that family it was chosen over, and one selection reason: pin, dual
 preference, ordinary fallback or source precedence. The reason SHALL be the
 pin whenever a pin selected the winner. Otherwise single SHALL report source
-precedence, and dual SHALL report dual preference when the winner is a
+precedence, whether its winner is a baseline build or, for a family with no
+available baseline build, a dual-screen build, and dual SHALL report dual preference when the winner is a
 dual-screen build and ordinary fallback when the family had no available
 dual-screen build, including when source precedence chose among several
 baseline builds. A selection decided by a same-rank tie SHALL keep the reason
@@ -821,9 +786,16 @@ defines. Exclusions and stale exclusions SHALL also be reported.
 #### Scenario: Dual falls back among several baseline builds
 
 - **WHEN** a family has no available dual-screen build and source precedence
-  chooses among its dual-eligible baseline builds
+  chooses among its baseline builds
 - **THEN** the dual selection's reason is ordinary fallback and the single
   selection's reason is source precedence
+
+#### Scenario: Single falls back to a dual-screen build
+
+- **WHEN** a family's only available build is a dual-screen build and no pin
+  applies
+- **THEN** the single selection's reason is source precedence and the dual
+  selection's reason is dual preference
 
 ### Requirement: Each variant is composed independently
 
@@ -1029,7 +1001,7 @@ over a considered candidate of another source at its normalized URL, once per
 URL and published package id across variants. Per source it SHALL list the
 union over its candidates of fields whose published forms differ from the
 extra's under the same overlay, or `unpublishable` for a candidate that alone
-fails to render, plus `variants` when packs differ. Recording SHALL NOT
+fails to render, plus `variants` when the two are builds of different kinds. Recording SHALL NOT
 change selection or output or fail the build.
 
 #### Scenario: A catalog lists an extra's project
@@ -1050,8 +1022,9 @@ change selection or output or fail the build.
 
 #### Scenario: A dual-screen extra over a both-pack candidate
 
-- **WHEN** an extra offered only to dual is selected over a catalog candidate
-  at the same project URL that is offered to both packs and has equal settings
+- **WHEN** an extra that is a dual-screen build is selected over a catalog
+  candidate at the same project URL that is a baseline build and has equal
+  settings
 - **THEN** the extra is recorded with `variants` as a differing field
 
 #### Scenario: An extra replaces another project in its family
