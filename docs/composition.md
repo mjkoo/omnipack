@@ -2,12 +2,12 @@
 
 Each output contains at most one selected build per logical app family. Families
 form after family rules and denials, over the candidates that remain in at least
-one pack after denials. A candidate's family is keyed by its project URL,
-in a normalized host-and-path form such as `github.com/owner/repo`: every candidate at one URL that
-no rule places elsewhere belongs to the family named by that URL, whichever
-source lists it and whatever package id it carries. A shared package id joins
-nothing, so two repositories that reuse one package id stay separate families
-unless a rule joins them.
+one pack after denials. A candidate's family is keyed by its project URL, in a
+normalized host-and-path form such as `github.com/owner/repo`: every candidate
+at one URL that no rule places elsewhere belongs to the family named by that
+URL, whichever source lists it and whatever package id it carries. A shared
+package id joins nothing, so two repositories that reuse one package id stay
+separate families unless a rule joins them.
 
 Maintained rules assign explicit families named `app:<name>`. A family rule
 claims its selector's whole URL: when every family rule at a URL names one
@@ -55,17 +55,16 @@ policy does not repair an invalid source record.
 
 Ingestion keeps any `overrideSource` string an entry declares; a non-string
 fails with the source and entry identified, and an empty or whitespace-only
-string counts as no declaration. An entry that declares none is
-GitHub for a github.com repository and GitLab for a gitlab.com project, and
-otherwise has no source type, leaving detection to Obtainium. A URL declared
-GitLab is kept as written, self-hosted instances included. Rendering fills
-default settings only for GitHub, GitLab and HTML entries; an entry of any
-other type, or of none, keeps exactly its own settings. The README catalog
-labels an entry without a source type by its URL host.
-RJNY entries it drops are dropped before normalization, so they are not
-validated. Other unmodeled fields pass through unchanged. The extras adapter
-consumes `dualScreen` to set the build's kind, so it never reaches that extra's
-rendered record; on upstream records it is an ordinary unmodeled field.
+string counts as no declaration. An entry that declares none is GitHub for a
+github.com repository and GitLab for a gitlab.com project, and otherwise has no
+source type, leaving detection to Obtainium. A URL declared GitLab is kept as
+written, self-hosted instances included. Rendering fills default settings only
+for GitHub, GitLab and HTML entries; an entry of any other type, or of none,
+keeps exactly its own settings. The README catalog labels an entry without a
+source type by its URL host. Dropped RJNY entries are not normalized, so they
+are not validated. Other unmodeled fields pass through unchanged. The extras
+adapter consumes `dualScreen` to set the build's kind, so it never reaches that
+extra's rendered record; on upstream records it is an ordinary unmodeled field.
 
 A valid pin comes first: it selects the one candidate it names ahead of kind
 preference and source precedence. Nothing else makes a pack select a build of
@@ -83,11 +82,11 @@ To keep a family's baseline build in dual in place of its dual-screen build, pin
 the baseline build for dual. This works even when the two share a project URL,
 as the BBoi Zelda 3 and Harvest Moon 64 builds do, where a denial could not
 remove one without the other. A denial removes every build at its project URL
-from the packs it names and leaves the family's builds at other URLs
-selectable, so an app is absent from a pack only when no selectable build of its
-family remains there. Minish Cap's family joins Picori's baseline extra with the BBoi builds at
-another repository; the extra wins single by source precedence while the BBoi
-dual build wins dual.
+from the packs it names and leaves the family's builds at other URLs selectable,
+so an app is absent from a pack only when no selectable build of its family
+remains there. Minish Cap's family joins Picori's baseline extra with the BBoi
+builds at another repository; the extra wins single by source precedence while
+the BBoi dual build wins dual.
 
 Every entry in a committed generated catalog joins the candidate set and
 competes with the other builds of its family through the rules above.
@@ -101,12 +100,12 @@ repeated anywhere in the file, which `pack build`, `pack verify` and the offline
 gate all reject naming the key rather than letting one occurrence win. Candidate
 rules require `match` and a nonempty rationale, and may carry `family`; any
 other field fails as unknown. A rule never changes a package id or a build's
-kind, which come only from the build's source. A rule
-with only a rationale records why a candidate matters and changes nothing.
-Track-only entries are ordinary candidates: a rule may give one a family, and
-split rules separate a tracker from an app sharing its URL. Without them, a
-tracker a dual-screen source supplies at an app's URL joins the app's family
-and, being a dual-screen build, replaces the app in dual.
+kind, which come only from the build's source. A rule with only a rationale
+records why a candidate matters and changes nothing. Track-only entries are
+ordinary candidates: a rule may give one a family, and split rules separate a
+tracker from an app sharing its URL. Without them, a dual-screen tracker build
+at an app's URL joins the app's family and, being a dual-screen build, replaces
+the app in dual.
 
 A match names original `source`, `origin`, `id`, and project `url`. Sources are
 `rjny`, `bboi`, `extras`, `codm` and `quiver`. Their origins are
@@ -307,27 +306,26 @@ delete the key; delete the whole record when none of its keys is live.
 
 An extra is listed by a catalog when its family's selection chose it over a
 candidate from another source at the same normalized project URL. The build
-records each such extra once, with its URL and published package id, every
-other source listing it and, per source, the fields whose published values
-differ between the extra and that source's candidate with the same overlay
-record applied: top-level fields and settings as `additionalSettings.<key>`,
-and `variants` when the two are builds of different kinds, which decides the
-pack each is preferred in. A candidate that
-rendering rejects shows `unpublishable` in place of its fields: retiring the
-extra would make the build publish that candidate and fail. Categories are
-not compared, since the category map assigns them. A candidate at another URL
-in the same family does not list the extra (replacing another project's build
-is what such an extra is for), and neither does a build that rules split into
-another family, which ships beside it. To retire a listed extra, move the
-differing fields the pack still wants into an overlay record for the URL,
-delete the extra from `config/extras.json`, and re-point every composition
-candidate rule and pin that names the extra's selector to the catalog
-candidate's selector, which keeps any family join the URL needs, or remove the
-rule or pin when it no longer serves a purpose; a rule or pin matching no
-candidate fails the build. A differing `overrideSource` or `variants` cannot be
-moved into an overlay: `overrideSource` is a protected field, and a build's kind
-is its source's decision, so retiring the extra accepts the catalog's value for
-them.
+records each such extra once, with its URL and published package id, every other
+source listing it and, per source, the fields whose published values differ
+between the extra and that source's candidate with the same overlay record
+applied: top-level fields and settings as `additionalSettings.<key>`, and
+`variants` when the two are builds of different kinds, which decides the pack
+each is preferred in. A candidate that rendering rejects shows `unpublishable`
+in place of its fields: retiring the extra would make the build publish that
+candidate and fail. Categories are not compared, since the category map assigns
+them. A candidate at another URL in the same family does not list the extra
+(replacing another project's build is what such an extra is for), and neither
+does a build that rules split into another family, which ships beside it. To
+retire a listed extra, move the differing fields the pack still wants into an
+overlay record for the URL, delete the extra from `config/extras.json`, and
+re-point every composition candidate rule and pin that names the extra's
+selector to the catalog candidate's selector, which keeps any family join the
+URL needs, or remove the rule or pin when it no longer serves a purpose; a rule
+or pin matching no candidate fails the build. A differing `overrideSource` or
+`variants` cannot be moved into an overlay: `overrideSource` is a protected
+field, and a build's kind is its source's decision, so retiring the extra
+accepts the catalog's value for them.
 
 ## Build report
 
@@ -341,18 +339,19 @@ dual-screen build), or `source` (single-screen precedence, whichever kind the
 winner is). `denylistRemovals` lists each denial that removed candidates, once
 under its URL with the packs it names and the families it removed, and
 `staleExclusions` each denial that matched nothing. `repeatedIds` and
-`sameRankTies` hold the nonfatal outcomes described above. `sourceAdmissions` lists each committed codm and
-Quiver entry the build admitted, with its source, URL and committed id.
-`uncategorizedFamilies` and `staleCategoryAssignments` are the
-[category outcomes](#categories). `redundantOverlayKeys` lists each overlay
+`sameRankTies` hold the nonfatal outcomes described above. `sourceAdmissions`
+lists each committed codm and Quiver entry the build admitted, with its source,
+URL and committed id. `uncategorizedFamilies` and `staleCategoryAssignments` are
+the [category outcomes](#categories). `redundantOverlayKeys` lists each overlay
 record with keys that change nothing, with its normalized URL and those dotted
 keys, and `extrasListedByCatalog` each extra a catalog lists, with its URL,
 published package id and, per listing source, the differing fields, as
 [denials and patches](#denials-and-patches) describes; both are sorted by URL,
 the extras then by package id. A build that fails before categories are
-assigned records all four empty, along with the repeated-id list, while its stage and error say the checks did not run.
-`offlineVerification` holds the offline gate's status, its errors in `findings`,
-and its nonfatal findings in `nonfatalFindings`. For example:
+assigned records all four empty, along with the repeated-id list, while its
+stage and error say the checks did not run. `offlineVerification` holds the
+offline gate's status, its errors in `findings`, and its nonfatal findings in
+`nonfatalFindings`. For example:
 
 ```json
 {
@@ -382,15 +381,15 @@ within a pack is an error, and those entries are left out of pairing. A package
 id repeated within a pack is a nonfatal finding, and an entry with no pair in
 the other pack is no finding. It also checks pins, against the overlay-patched
 id at the pin's URL, entries at URLs a denial names in their pack, overlay
-targets, and that every entry carries `allowIdChange: true`. It does not check
-a build's kind, which rendered entries cannot reveal, and it cannot prove source provenance, ranking, presence
-of losing upstream candidates, or that patch values were applied. It checks only
-that each entry's categories are a list of strings, not that they come from the
-[category set](#categories) or that Track Only matches `trackOnly`; composition
-enforces both. Composition policy bytes participate in input fingerprints;
-changed inputs or a different supported verifier identity make evidence stale.
-A verification report with any schema other than the current one requires
-regeneration with `pack verify`.
+targets, and that every entry carries `allowIdChange: true`. It does not check a
+build's kind, which rendered entries cannot reveal, and it cannot prove source
+provenance, ranking, presence of losing upstream candidates, or that patch
+values were applied. It checks only that each entry's categories are a list of
+strings, not that they come from the [category set](#categories) or that Track
+Only matches `trackOnly`; composition enforces both. Composition policy bytes
+participate in input fingerprints; changed inputs or a different supported
+verifier identity make evidence stale. A verification report with any schema
+other than the current one requires regeneration with `pack verify`.
 
 The README catalog pairs the rendered packs the same way and writes one row per
 pair or unpaired entry. Rows sharing a label are never merged. Catalog

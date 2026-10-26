@@ -157,13 +157,13 @@ release APKs. Keep exactly one standalone pair of catalog markers in README; the
 build preserves all bytes outside them. The build and source generation fetch
 public inputs without credentials.
 
-The JSON diagnostics are in `.build/report.json`, including each
-family's selection with the candidates it was chosen over and the selection
-reason, denylist removals and stale exclusions, uncategorized families and stale
-category assignments, repeated package ids, same-rank ties, admitted committed candidates with their identities, and the entries
-(package id and project URL) added and removed since the previous output. A
-failed build returns a nonzero status and preserves the previous packs and
-README.
+The JSON diagnostics are in `.build/report.json`, including each family's
+selection with the candidates it was chosen over and the selection reason,
+denylist removals and stale exclusions, uncategorized families and stale
+category assignments, repeated package ids, same-rank ties, admitted committed
+candidates with their identities, and the entries (package id and project URL)
+added and removed since the previous output. A failed build returns a nonzero
+status and preserves the previous packs and README.
 
 ## Verify and inspect
 

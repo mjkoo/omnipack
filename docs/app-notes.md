@@ -18,10 +18,10 @@ in [MetroidArch setup](metroidarch.md#separate-the-writable-directories).
 
 ## Kanto Gear (mod updates)
 
-Dual-screen pack only, and track-only: Obtainium reports Kanto Gear's releases
-but cannot install the Lua mod or detect its installed version. Install or
-update it through [Gen1Recomp](https://github.com/bryanthaboi/gen1recomp)
-using its Mod Index or ZIP import.
+Track-only: Obtainium reports Kanto Gear's releases but cannot install the Lua
+mod or detect its installed version. Install or update it through
+[Gen1Recomp](https://github.com/bryanthaboi/gen1recomp) using its Mod Index or
+ZIP import.
 
 ## Stardew-Thor-DS and Eden Duo Companions (mod updates)
 
@@ -38,8 +38,8 @@ The pack opts into prereleases, so Obtainium offers beta builds.
 
 ## PT-PC
 
-Dual-screen pack only. The project publishes every Android build as a
-prerelease, so the pack opts into prereleases.
+The project publishes every Android build as a prerelease, so the pack opts
+into prereleases.
 
 ## Silent Hill Decomp
 

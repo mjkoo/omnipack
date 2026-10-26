@@ -75,19 +75,17 @@ Composition checks label each entry with the explicit family the rules project
 onto its package id and URL, or otherwise its normalized project URL, and pair
 single-screen and dual-screen entries with equal labels. A label repeated within
 a pack, a pin whose id (after any overlay `id` patch at its URL) is absent, an
-entry at a denied URL and an overlay record matching no entry are errors. A
-package id repeated within a pack and a single-screen entry without a dual pair
-are nonfatal findings: `pack verify` and the build's offline gate still pass,
-and `.build/verify.json` and the build report's offline verdict list them under
+entry at a URL a denial names, in a pack that denial applies to, and an overlay
+record matching no entry are errors. A package id repeated within a pack is the
+only nonfatal finding: `pack verify` and the build's offline gate still pass,
+and `.build/verify.json` and the build report's offline verdict list it under
 `nonfatalFindings`, which `pack report` displays. Every entry must carry
-`allowIdChange: true`. They do not check a
-build's kind, which no candidate rule declares and rendered entries cannot reveal.
-Rendered output omits losing candidates, so verification cannot reconstruct
-provenance, candidate presence, preference or source ranking, or prove that a
-patch produced the rendered values. Fixture-driven composition and rendering
-tests protect maintained IDs, URLs, variant membership and override values
-across refreshes.
-
+`allowIdChange: true`. They do not check a build's kind, which no candidate rule
+declares and rendered entries cannot reveal. Rendered output omits losing
+candidates, so verification cannot reconstruct provenance, candidate presence,
+preference or source ranking, or prove that a patch produced the rendered
+values. Fixture-driven composition and rendering tests protect maintained IDs,
+URLs, variant membership and override values across refreshes.
 Catalog verification compares the generated marker interior against the captured
 packs and policy. Missing, unreadable, malformed or stale catalogs fail. Handwritten
 content is excluded from catalog comparison but included in the README fingerprint.
