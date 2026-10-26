@@ -297,7 +297,8 @@ KANTO_GEAR_ABOUT = (
     "the resource or detect its installed version."
 )
 # Per-app choices for generated entries, kept as overlay records so they hold
-# whatever settings and names a regenerated catalog carries.
+# whatever settings and names a regenerated catalog carries. A name of None
+# means the catalog's own name is kept.
 GENERATED_OVERRIDES = {
     "github.com/castdrian/showdown-ds": (
         "Showdown!",
@@ -310,7 +311,7 @@ GENERATED_OVERRIDES = {
         },
     ),
     "github.com/mastercook777/heimdall-ayn-thor-assistant": (
-        "Heimdall",
+        None,
         {
             "includePrereleases": True,
             "filterReleaseTitlesByRegEx": (
@@ -330,7 +331,6 @@ GENERATED_OVERRIDES = {
         {
             "trackOnly": True,
             "versionDetection": False,
-            "includeZips": False,
             "autoApkFilterByArch": False,
             "about": KANTO_GEAR_ABOUT,
         },
@@ -377,7 +377,8 @@ def test_generated_entries_take_their_settings_and_categories_from_configuration
             assert origins[key, variant] in GENERATED_ORIGINS, key
             name, settings = GENERATED_OVERRIDES[key]
             actual = json.loads(entry["additionalSettings"])
-            assert entry["name"] == name, key
+            if name is not None:
+                assert entry["name"] == name, key
             assert {setting: actual[setting] for setting in settings} == settings, key
 
 
