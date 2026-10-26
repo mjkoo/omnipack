@@ -379,15 +379,16 @@ rules project onto its package id and URL, or otherwise its normalized URL. A
 label repeated within a pack is an error. A package id repeated within a pack is
 a nonfatal finding, and a family present in only one pack is no finding. It also
 checks pins, against the overlay-patched id at the pin's URL, entries at URLs a
-denial names in their pack, overlay targets, and that every entry carries `allowIdChange: true`. It does not check a
-build's kind, which rendered entries cannot reveal, and it cannot prove source
-provenance, ranking, presence of losing upstream candidates, or that patch
-values were applied. It checks only that each entry's categories are a list of
-strings, not that they come from the [category set](#categories) or that Track
-Only matches `trackOnly`; composition enforces both. Composition policy bytes
-participate in input fingerprints; changed inputs or a different supported
-verifier identity make evidence stale. A verification report with any schema
-other than the current one requires regeneration with `pack verify`.
+denial names in their pack, overlay targets, and that every entry carries
+`allowIdChange: true`. It does not check a build's kind, which rendered entries
+cannot reveal, and it cannot prove source provenance, ranking, presence of
+losing upstream candidates, or that patch values were applied. It checks only
+that each entry's categories are a list of strings, not that they come from the
+[category set](#categories) or that Track Only matches `trackOnly`; composition
+enforces both. Composition policy bytes participate in input fingerprints;
+changed inputs or a different supported verifier identity make evidence stale. A
+verification report with any schema other than the current one requires
+regeneration with `pack verify`.
 
 The README catalog labels the rendered packs the same way, pairs single and dual
 entries with equal labels and writes one row per pair or unpaired entry. Rows
