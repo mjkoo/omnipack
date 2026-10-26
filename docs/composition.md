@@ -375,13 +375,11 @@ losing candidate's settings with the winner's by reading the source catalogs.
 must be regenerated with `pack build`.
 
 Offline verification labels each rendered entry with the explicit family the
-rules project onto its package id and URL, or otherwise its normalized URL, and
-pairs single and dual entries with equal labels in one pass. A label repeated
-within a pack is an error, and those entries are left out of pairing. A package
-id repeated within a pack is a nonfatal finding, and an entry with no pair in
-the other pack is no finding. It also checks pins, against the overlay-patched
-id at the pin's URL, entries at URLs a denial names in their pack, overlay
-targets, and that every entry carries `allowIdChange: true`. It does not check a
+rules project onto its package id and URL, or otherwise its normalized URL. A
+label repeated within a pack is an error. A package id repeated within a pack is
+a nonfatal finding, and a family present in only one pack is no finding. It also
+checks pins, against the overlay-patched id at the pin's URL, entries at URLs a
+denial names in their pack, overlay targets, and that every entry carries `allowIdChange: true`. It does not check a
 build's kind, which rendered entries cannot reveal, and it cannot prove source
 provenance, ranking, presence of losing upstream candidates, or that patch
 values were applied. It checks only that each entry's categories are a list of
@@ -391,9 +389,10 @@ participate in input fingerprints; changed inputs or a different supported
 verifier identity make evidence stale. A verification report with any schema
 other than the current one requires regeneration with `pack verify`.
 
-The README catalog pairs the rendered packs the same way and writes one row per
-pair or unpaired entry. Rows sharing a label are never merged. Catalog
-generation fails when a label repeats within a pack.
+The README catalog labels the rendered packs the same way, pairs single and dual
+entries with equal labels and writes one row per pair or unpaired entry. Rows
+sharing a label are never merged. Catalog generation fails when a label repeats
+within a pack.
 
 Selected-project metadata failure prevents publication. It never switches to a
 family alternative. Existing configured fallback among releases of the selected

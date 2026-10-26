@@ -72,11 +72,11 @@ composition, not verification, keeps them inside the
 track-only entries.
 
 Composition checks label each entry with the explicit family the rules project
-onto its package id and URL, or otherwise its normalized project URL, and pair
-single-screen and dual-screen entries with equal labels. A label repeated within
-a pack, a pin whose id (after any overlay `id` patch at its URL) is absent, an
-entry at a URL a denial names, in a pack that denial applies to, and an overlay
-record matching no entry are errors. A package id repeated within a pack is the
+onto its package id and URL, or otherwise its normalized project URL; the README
+catalog pairs single-screen and dual-screen entries with equal labels. A label
+repeated within a pack, a pin whose id (after any overlay `id` patch at its URL)
+is absent, an entry at a URL a denial names, in a pack that denial applies to,
+and an overlay record matching no entry are errors. A package id repeated within a pack is the
 only nonfatal finding: `pack verify` and the build's offline gate still pass,
 and `.build/verify.json` and the build report's offline verdict list it under
 `nonfatalFindings`, which `pack report` displays. Every entry must carry
