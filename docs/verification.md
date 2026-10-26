@@ -80,8 +80,8 @@ package id repeated within a pack and a single-screen entry without a dual pair
 are nonfatal findings: `pack verify` and the build's offline gate still pass,
 and `.build/verify.json` and the build report's offline verdict list them under
 `nonfatalFindings`, which `pack report` displays. Every entry must carry
-`allowIdChange: true`. They do not check
-eligibility, which no candidate rule declares and rendered entries cannot reveal.
+`allowIdChange: true`. They do not check a
+build's kind, which no candidate rule declares and rendered entries cannot reveal.
 Rendered output omits losing candidates, so verification cannot reconstruct
 provenance, candidate presence, preference or source ranking, or prove that a
 patch produced the rendered values. Fixture-driven composition and rendering

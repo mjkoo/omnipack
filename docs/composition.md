@@ -1,8 +1,8 @@
 # Pack composition
 
 Each output contains at most one selected build per logical app family. Families
-form after family rules and denials, over the candidates that survive and are
-eligible for at least one pack. A candidate's family is keyed by its project URL,
+form after family rules and denials, over the candidates that remain in at least
+one pack after denials. A candidate's family is keyed by its project URL,
 in a normalized host-and-path form such as `github.com/owner/repo`: every candidate at one URL that
 no rule places elsewhere belongs to the family named by that URL, whichever
 source lists it and whatever package id it carries. A shared package id joins
@@ -23,28 +23,29 @@ internal.
 
 ## Baseline and dual-screen builds
 
-Every build is either a baseline build or a dual-screen build. An app's baseline
-build, when it has one, is what the single-screen pack uses. Absent a pin, a
-family's dual-screen build, when one exists, replaces its baseline build in the
-dual-screen pack; a family with no dual-screen build uses its baseline build
-there. An app may instead have only a dual-screen build, which appears only in
-the dual-screen pack, as an app only codm supplies does.
+Every build is either a baseline build or a dual-screen build, and every build
+is a candidate for both packs: a build's kind is a preference, never an
+exclusion. Absent a pin, the single-screen pack prefers a family's baseline
+builds and the dual-screen pack its dual-screen builds, and each pack falls back
+to the other kind when the family has none of its own. So a family's
+dual-screen build replaces its baseline build in dual, a family with only
+baseline builds uses one in both packs, and a family with only a dual-screen
+build, as an app only codm supplies has, ships it in both. Only the owner's
+[denials](#denials-and-patches) keep a build out of a pack.
 
 Each source alone decides which kind a build is:
 
-- BBoi by asset: standard-asset records are baseline builds for both packs, and
-  dual-asset records are dual-screen builds;
+- BBoi by asset: standard-asset records are baseline builds, and dual-asset
+  records are dual-screen builds;
 - codm entries are always dual-screen builds;
-- Quiver entries are always baseline builds for both packs;
-- RJNY by its export flags: an entry in both exports is a baseline build for both
-  packs, an entry only in the dual-screen export is a dual-screen build, and an
-  entry only in the standard export is a baseline build that upstream keeps out
-  of dual;
+- Quiver entries are always baseline builds;
+- RJNY by its export flags: an entry only in the dual-screen export is a
+  dual-screen build, any other entry it keeps is a baseline build, and an entry
+  excluded from export or marked out of both exports is dropped;
 - extras by `"dualScreen": true`, which makes the extra a dual-screen build;
-  without it, an extra is a baseline build for both packs.
+  without it, an extra is a baseline build.
 
-No candidate rule or other composition setting changes a build's kind or which
-packs it can appear in.
+No candidate rule or other composition setting changes a build's kind.
 
 Source records from every catalog and extras must not carry top-level `family`
 or `variant`, even with null values. Ingestion rejects those fields with the
@@ -61,16 +62,15 @@ GitLab is kept as written, self-hosted instances included. Rendering fills
 default settings only for GitHub, GitLab and HTML entries; an entry of any
 other type, or of none, keeps exactly its own settings. The README catalog
 labels an entry without a source type by its URL host.
-RJNY entries excluded from export are dropped before normalization, so they are
-not validated. Other unmodeled fields pass through unchanged. The extras adapter
-consumes `dualScreen` to set eligibility, so it never reaches that extra's
+RJNY entries it drops are dropped before normalization, so they are not
+validated. Other unmodeled fields pass through unchanged. The extras adapter
+consumes `dualScreen` to set the build's kind, so it never reaches that extra's
 rendered record; on upstream records it is an ordinary unmodeled field.
 
-A valid pin comes first: it selects the one candidate it names ahead of
-dual-screen replacement and source precedence. Nothing else makes the dual pack
-select a baseline build over an available dual-screen build. Among builds of one
-kind, source precedence is extras, RJNY, Quiver, BBoi, then codm-generated
-entries.
+A valid pin comes first: it selects the one candidate it names ahead of kind
+preference and source precedence. Nothing else makes a pack select a build of
+the other kind over an available build of its own. Among builds of one kind,
+source precedence is extras, RJNY, Quiver, BBoi, then codm-generated entries.
 
 Different candidates of one family can tie at the winning rank, typically two
 builds one source lists at one repository that no rule separates. The build does
@@ -83,9 +83,9 @@ To keep a family's baseline build in dual in place of its dual-screen build, pin
 the baseline build for dual. This works even when the two share a project URL,
 as the BBoi Zelda 3 and Harvest Moon 64 builds do, where a denial could not
 remove one without the other. A denial removes every build at its project URL
-from both packs and leaves the family's builds at other URLs selectable, so an
-app is absent from a pack only when no selectable build of its family remains
-there. Minish Cap's family joins Picori's baseline extra with the BBoi builds at
+from the packs it names and leaves the family's builds at other URLs
+selectable, so an app is absent from a pack only when no selectable build of its
+family remains there. Minish Cap's family joins Picori's baseline extra with the BBoi builds at
 another repository; the extra wins single by source precedence while the BBoi
 dual build wins dual.
 
@@ -101,12 +101,12 @@ repeated anywhere in the file, which `pack build`, `pack verify` and the offline
 gate all reject naming the key rather than letting one occurrence win. Candidate
 rules require `match` and a nonempty rationale, and may carry `family`; any
 other field fails as unknown. A rule never changes a package id or a build's
-eligibility or dual preference, which come only from the build's source. A rule
+kind, which come only from the build's source. A rule
 with only a rationale records why a candidate matters and changes nothing.
 Track-only entries are ordinary candidates: a rule may give one a family, and
 split rules separate a tracker from an app sharing its URL. Without them, a
-dual-only tracker at an app's URL joins the app's family and, being a
-dual-screen build, replaces the app in dual.
+tracker a dual-screen source supplies at an app's URL joins the app's family
+and, being a dual-screen build, replaces the app in dual.
 
 A match names original `source`, `origin`, `id`, and project `url`. Sources are
 `rjny`, `bboi`, `extras`, `codm` and `quiver`. Their origins are
@@ -142,10 +142,10 @@ shape:
 
 A pin names `family`, `variant`, `match`, and `rationale`. Its family is the
 `app:` family its candidate belongs to, or otherwise its candidate's normalized
-project URL. The referenced candidate must exist, belong to the family, be
-eligible for that pack, and survive denials. A denial does not disable a
-contradictory pin silently; the build fails. A pin on a denied candidate, or on
-one its source makes eligible for no pack, fails on that removal, since the
+project URL. The referenced candidate must exist, belong to the family, and
+not be denied in the pin's pack; a denial naming only the other pack leaves the
+pin valid. A denial does not disable a contradictory pin silently; the build
+fails. A pin on a candidate denied in every pack fails on that denial, since the
 candidate belongs to no family. When the rules at the pinned candidate's URL
 place it in an `app:` family, a pin naming a different family fails when the
 policy loads; any other pin names the family its candidate forms, which the
@@ -209,11 +209,15 @@ Neither outcome below fails the build; the build report lists both, and
 
 ## Denials and patches
 
-Each denylist record contains exactly a project `url` and a `reason`, and
-applies to both packs. It removes every candidate at that normalized project URL
-before selection, whichever source supplied it and whatever package id it
-carries, and leaves candidates at other URLs selectable even when they share a
-family or a package id. Any other field fails with the record identified. An
+Each denylist record contains a project `url` and a `reason`, and may contain
+`packs`, a nonempty list of distinct pack names, `single` and `dual`; a record
+without `packs` applies to both packs. It removes every candidate at that
+normalized project URL from each pack it names before selection, whichever
+source supplied it and whatever package id it carries, and leaves candidates at
+other URLs selectable even when they share a family or a package id. A
+candidate denied in one pack keeps its family and stays selectable in the
+other; one the denials at its URL remove from every pack forms no family. Any
+other field, or any other `packs` value, fails with the record identified. An
 unmatched denial is reported as stale but does not fail the build. A repository
 rename escapes a denial of its old URL; deny the new URL too.
 
@@ -256,28 +260,34 @@ record and the families.
 Valid denylist and overlay records are arrays keyed by project URL:
 
 ```json
-[{"url": "https://github.com/example/retired", "reason": "No supported build"}]
+[
+  {"url": "https://github.com/example/retired", "reason": "No supported build"},
+  {"url": "https://github.com/example/companion", "reason": "Second-screen panel only", "packs": ["single"]}
+]
 ```
+
+A family whose only builds are dual-screen builds reaches the single-screen pack
+too. When such an app is pointless or broken on one display, or duplicates an
+app single already carries, a single-scoped denial keeps it out, with the reason
+recorded in `config/deny.json`. A dual-scoped denial likewise keeps a baseline
+build out of dual.
 
 ```json
 [{"url": "https://github.com/example/app", "patch": {"id": "org.example.app", "additionalSettings": {"versionDetection": false}}}]
 ```
 
-Every family selected in single is expected to have a dual winner. When it has
-none, the family still ships in single and the build records a single-only
-coverage finding with its single selection's package id and normalized URL.
-This is the usual result of an upstream single-only build and a dual-only fork
-at another repository that share a package id: they no longer pair, and a
-family rule joining the two URLs fixes it. A
-different-repository replacement in one family satisfies coverage, and an app
-with only a dual-screen build needs no single counterpart. To keep an app out
-of both packs, deny every project URL its family's builds sit at.
+To keep an app out of a pack, deny every project URL its family's builds sit at
+in that pack, or in both.
 
 After overlays apply, the build also records each package id that more than one
 selected entry of one pack carries, with those entries' families and normalized
 URLs. Obtainium stores imported apps by package id and would keep only one of
-them. The fix is a family rule putting the entries in one family, or correcting
-the overlay `id` patch that produced the repeat.
+them. The usual cause is a baseline original and a dual-screen fork at another
+repository that share a package id: with no rule joining their URLs, both
+families reach both packs. The fix is a family rule putting the entries in one
+family, so each pack selects its preferred build, or correcting the overlay `id`
+patch that produced the repeat. Each repeat raises a
+[maintenance alert](alerts.md).
 
 Two more records report owner overrides that no longer change what a catalog
 would publish. Neither changes selection or output, and neither fails the
@@ -301,7 +311,8 @@ records each such extra once, with its URL and published package id, every
 other source listing it and, per source, the fields whose published values
 differ between the extra and that source's candidate with the same overlay
 record applied: top-level fields and settings as `additionalSettings.<key>`,
-and `variants` when the two are offered to different packs. A candidate that
+and `variants` when the two are builds of different kinds, which decides the
+pack each is preferred in. A candidate that
 rendering rejects shows `unpublishable` in place of its fields: retiring the
 extra would make the build publish that candidate and fail. Categories are
 not compared, since the category map assigns them. A candidate at another URL
@@ -314,9 +325,9 @@ candidate rule and pin that names the extra's selector to the catalog
 candidate's selector, which keeps any family join the URL needs, or remove the
 rule or pin when it no longer serves a purpose; a rule or pin matching no
 candidate fails the build. A differing `overrideSource` or `variants` cannot be
-moved into an overlay: `overrideSource` is a protected field, and the packs a
-build is offered to are its source's decision, so retiring the extra accepts
-the catalog's value for them.
+moved into an overlay: `overrideSource` is a protected field, and a build's kind
+is its source's decision, so retiring the extra accepts the catalog's value for
+them.
 
 ## Build report
 
@@ -326,11 +337,11 @@ another repository with the same id shows as one removed and one added entry.
 `selections` records every family's winner in each pack with its package id,
 URL, source and origin, the other available candidates it was chosen over, and
 one reason: `pin`, `dual-preferred`, `ordinary-fallback` (dual with no available
-dual-screen build), or `source` (single-screen precedence). `denylistRemovals`
-lists each denial that removed candidates, once under its URL with the families
-it removed, and `staleExclusions` each denial that matched nothing.
-`repeatedIds`, `singleOnlyFamilies` and `sameRankTies` hold the nonfatal
-outcomes described above. `sourceAdmissions` lists each committed codm and
+dual-screen build), or `source` (single-screen precedence, whichever kind the
+winner is). `denylistRemovals` lists each denial that removed candidates, once
+under its URL with the packs it names and the families it removed, and
+`staleExclusions` each denial that matched nothing. `repeatedIds` and
+`sameRankTies` hold the nonfatal outcomes described above. `sourceAdmissions` lists each committed codm and
 Quiver entry the build admitted, with its source, URL and committed id.
 `uncategorizedFamilies` and `staleCategoryAssignments` are the
 [category outcomes](#categories). `redundantOverlayKeys` lists each overlay
@@ -339,14 +350,13 @@ keys, and `extrasListedByCatalog` each extra a catalog lists, with its URL,
 published package id and, per listing source, the differing fields, as
 [denials and patches](#denials-and-patches) describes; both are sorted by URL,
 the extras then by package id. A build that fails before categories are
-assigned records all four empty, along with the single-only and repeated-id
-lists, while its stage and error say the checks did not run.
+assigned records all four empty, along with the repeated-id list, while its stage and error say the checks did not run.
 `offlineVerification` holds the offline gate's status, its errors in `findings`,
 and its nonfatal findings in `nonfatalFindings`. For example:
 
 ```json
 {
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "status": "success",
   "changes": {"single": {"added": [{"id": "org.example.app", "url": "github.com/example/app"}], "removed": []}, "dual": {"added": [], "removed": []}},
   "selections": [{
@@ -355,7 +365,7 @@ and its nonfatal findings in `nonfatalFindings`. For example:
     "origin": "bboi-standard-asset", "reason": "pin",
     "considered": [{"source": "codm", "origin": "codm-generated", "id": "org.example.app.ds", "url": "https://github.com/fork/app-ds"}]
   }],
-  "denylistRemovals": [{"url": "github.com/example/retired", "reason": "No supported build", "families": ["github.com/example/retired"]}]
+  "denylistRemovals": [{"url": "github.com/example/retired", "reason": "No supported build", "variants": ["single", "dual"], "families": ["github.com/example/retired"]}]
 }
 ```
 
@@ -368,12 +378,12 @@ must be regenerated with `pack build`.
 Offline verification labels each rendered entry with the explicit family the
 rules project onto its package id and URL, or otherwise its normalized URL, and
 pairs single and dual entries with equal labels in one pass. A label repeated
-within a pack is an error, and those entries are left out of pairing and
-coverage. A package id repeated within a pack and a single entry without a dual
-pair are nonfatal findings. It also checks pins, against the overlay-patched id
-at the pin's URL, entries at denied URLs, overlay targets, and that every entry
-carries `allowIdChange: true`. It does not check eligibility, which rendered
-entries cannot reveal, and it cannot prove source provenance, ranking, presence
+within a pack is an error, and those entries are left out of pairing. A package
+id repeated within a pack is a nonfatal finding, and an entry with no pair in
+the other pack is no finding. It also checks pins, against the overlay-patched
+id at the pin's URL, entries at URLs a denial names in their pack, overlay
+targets, and that every entry carries `allowIdChange: true`. It does not check
+a build's kind, which rendered entries cannot reveal, and it cannot prove source provenance, ranking, presence
 of losing upstream candidates, or that patch values were applied. It checks only
 that each entry's categories are a list of strings, not that they come from the
 [category set](#categories) or that Track Only matches `trackOnly`; composition

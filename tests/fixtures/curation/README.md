@@ -27,5 +27,5 @@ URL; Simon CTR has none, because the Quiver entry the packs select already lists
 
 Silksong setup wording was checked against the upstream README at commit
 [9dc2cf03590a4211b16ba7da3c0eebfc808c9031](https://github.com/jakobkhansen/SilksongAndroid/blob/9dc2cf03590a4211b16ba7da3c0eebfc808c9031/README.md).
-It specifies Android 13 only and explicitly excludes Android 15. Its retained
-dual-only pack eligibility is a separate curation decision.
+It specifies Android 13 only and explicitly excludes Android 15. Whether it
+stays in the single-screen pack is a separate curation decision.
