@@ -461,7 +461,7 @@ each selected entry SHALL be recoverable from its package id and normalized
 project URL alone. This holds for rendered entries carrying an overlay `id`
 patch too, since such a patch is accepted only at a URL whose candidates form
 one family, where the family does not depend on the id. Offline verification and the README catalog
-rely on this, as "Offline verification labels and pairs rendered
+rely on this, as "Offline verification labels rendered
 entries by family" in pack-verification defines, and composition needs no separate
 pairing check. Composition, offline verification and the README catalog SHALL
 apply the same projections to track-only entries as to installable ones, so a
