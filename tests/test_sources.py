@@ -139,6 +139,39 @@ def test_rjny_standard_only_and_dual_only_builds_at_one_url_split_by_kind() -> N
     }
 
 
+def test_rjny_standard_only_build_reaches_dual_when_its_family_has_no_dual_build() -> (
+    None
+):
+    url = "https://raw.githubusercontent.com/fixture/rjny/main/apps.json"
+    record = {
+        "id": "org.example.app",
+        "url": "https://github.com/example/app",
+        "name": "App",
+        "overrideSource": "GitHub",
+        "categories": ["Emulator"],
+        "additionalSettings": {},
+        "meta": {"includeInDualScreen": False},
+    }
+    apps = rjny.fetch(
+        FakeHttp({url: json.dumps({"apps": [record]})}),
+        {"repo": "fixture/rjny", "branch": "main", "path": "apps.json"},
+    )
+    result = compose(
+        apps,
+        [],
+        [],
+        policy=parse_composition_policy(
+            {"schemaVersion": 1, "candidates": [], "pins": []}
+        ),
+    )
+    assert [
+        (item.variant, item.id, item.reason) for item in result.report.selections
+    ] == [
+        (Variant.SINGLE, "org.example.app", "source"),
+        (Variant.DUAL, "org.example.app", "ordinary-fallback"),
+    ]
+
+
 def test_rjny_matches_both_upstream_exports() -> None:
     catalog_url = "https://raw.githubusercontent.com/RJNY/Obtainium-Emulation-Pack/main/src/applications.json"
     apps = rjny.fetch(

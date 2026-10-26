@@ -413,6 +413,19 @@ def test_dual_pin_keeps_a_standard_build_over_its_shared_package_dual_build() ->
     ]
 
 
+def test_dual_pin_keeps_a_baseline_over_a_dual_screen_build_at_another_url() -> None:
+    standard = app("standard", "rjny", family="app:x")
+    dual = app("dual", "bboi", family="app:x", dual_screen=True)
+    policy = pin_policy(standard, "app:x", Variant.DUAL, dual)
+    result = compose([standard, dual], [], [], policy=policy)
+    assert [
+        (item.variant, item.id, item.reason) for item in result.report.selections
+    ] == [
+        (Variant.SINGLE, "standard", "source"),
+        (Variant.DUAL, "standard", "pin"),
+    ]
+
+
 def test_shared_package_builds_split_by_kind_without_a_pin() -> None:
     standard, dual = shared_package_builds()
     selections = compose([standard, dual], [], []).report.selections
@@ -685,6 +698,9 @@ def test_a_dual_scoped_denial_leaves_a_family_in_single_alone() -> None:
     assert result.report.removals == [
         Removal(url_family(single), "broken", (Variant.DUAL,), ("app:x",))
     ]
+    assert result.report.stale_exclusions == []
+    assert result.report.repeated_ids == []
+    assert result.report.same_rank_ties == []
 
 
 def test_a_family_with_only_a_dual_build_is_selected_in_both_packs() -> None:
