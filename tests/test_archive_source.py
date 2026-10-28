@@ -59,7 +59,7 @@ def test_capture_yields_a_bundle_that_clones_with_every_ref(
 
     restored = tmp_path / "restored"
     subprocess.run(
-        ["git", "clone", "--quiet", "--mirror", str(destination), str(restored)],
+        ["git", "clone", "--quiet", str(destination), str(restored)],
         check=True,
     )
     refs = subprocess.run(
@@ -69,7 +69,11 @@ def test_capture_yields_a_bundle_that_clones_with_every_ref(
         capture_output=True,
         text=True,
     ).stdout.split()
-    assert {"refs/heads/main", "refs/heads/feature", "refs/tags/v1"} <= set(refs)
+    assert {
+        "refs/remotes/origin/main",
+        "refs/remotes/origin/feature",
+        "refs/tags/v1",
+    } <= set(refs)
 
 
 def test_work_directory_holds_only_the_output_afterwards(

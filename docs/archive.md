@@ -127,7 +127,9 @@ With `ARCHIVE_S3_PREFIX` set, the path is
 
 The assets are ready to install under `restore/assets/`; compare them with
 the SHA-256 values in `restore/manifest.json`. The source is the app's single
-bundle, which `sourceHistory` in the manifest names; fetch it and clone it
+bundle at `apps/<source-key>/source/repo.bundle` (under `<prefix>/` when
+`ARCHIVE_S3_PREFIX` is set); it stays in place even when a version's
+`sourceHistory` records only why that capture failed. Fetch it and clone it
 directly:
 
 ```

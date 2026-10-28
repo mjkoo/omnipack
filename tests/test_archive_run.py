@@ -38,8 +38,9 @@ class FakeBucket:
     def __init__(self, fail: Exception | None = None) -> None:
         self.objects: dict[str, bytes] = {}
         self.writes: list[str] = []
-        self.deletes: list[str] = []
+        self.deletes: list[list[str]] = []
         self.stored_at: dict[str, datetime] = {}
+        self.skew = timedelta()
         self.fail = fail
 
     def exists(self, key: str) -> bool:
@@ -57,8 +58,10 @@ class FakeBucket:
         self.writes.append(key)
         self.objects[key] = data
         # Every write is a minute later than the one before it.
-        self.stored_at[key] = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(
-            minutes=len(self.writes)
+        self.stored_at[key] = (
+            datetime(2026, 1, 1, tzinfo=UTC)
+            + timedelta(minutes=len(self.writes))
+            + self.skew
         )
 
     def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
@@ -69,8 +72,9 @@ class FakeBucket:
         ]
 
     def delete(self, keys: Iterable[str]) -> None:
-        for key in keys:
-            self.deletes.append(key)
+        batch = list(keys)
+        self.deletes.append(batch)
+        for key in batch:
             del self.objects[key]
             del self.stored_at[key]
 
@@ -221,7 +225,7 @@ def test_a_new_version_is_stored_beside_the_old_one_and_a_return_touches_nothing
 ):
     world = World([release_v1()])
     world.process()
-    first = dict(world.bucket.objects)
+    first = {key: data for key, data in world.bucket.objects.items() if key != BUNDLE}
 
     world.api.answers[RELEASES] = [gh_release("v2", "2024-02-01T00:00:00Z", "app.apk")]
     world.downloads.files[
@@ -313,10 +317,12 @@ def test_a_fourth_version_prunes_the_oldest_manifest_first() -> None:
     archive_versions(world, "v4")
 
     oldest = f"{APP}/{slug('v1')}/"
-    assert world.bucket.deletes[0] == f"{oldest}manifest.json"
-    assert sorted(world.bucket.deletes[1:]) == [
-        f"{oldest}assets/app.apk",
-        f"{oldest}release.json",
+    assert world.bucket.deletes[0] == [f"{oldest}manifest.json"]
+    assert [sorted(batch) for batch in world.bucket.deletes[1:]] == [
+        [
+            f"{oldest}assets/app.apk",
+            f"{oldest}release.json",
+        ]
     ]
     assert not [k for k in world.bucket.objects if k.startswith(oldest)]
     for kept in ("v2", "v3", "v4"):
@@ -334,7 +340,19 @@ def test_an_incomplete_prefix_is_not_pruned(tmp_path: Path) -> None:
 
     assert orphan in world.bucket.objects
     assert world.bucket.deletes
-    assert orphan not in world.bucket.deletes
+    assert all(orphan not in batch for batch in world.bucket.deletes)
+
+
+def test_the_version_just_archived_is_never_pruned() -> None:
+    world = World([release_v1()])
+    archive_versions(world, "v1", "v2", "v3")
+    # The bucket's clock jumps back, so the new manifest ranks as the oldest.
+    world.bucket.skew = timedelta(days=-1)
+
+    archive_versions(world, "v4")
+
+    assert f"{APP}/{slug('v4')}/manifest.json" in world.bucket.objects
+    assert world.bucket.deletes == []
 
 
 def test_a_pruned_version_selected_again_is_archived_again() -> None:

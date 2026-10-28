@@ -1,8 +1,9 @@
 """The S3-compatible bucket the archive writes to.
 
 The store covers what the per-target flow needs: whether a key exists, a JSON
-document put, a file upload, listing the keys under a prefix and deleting keys. Any failure to configure, authenticate to or
-reach the bucket, and any failure of a later request, is a `StoreError`, which
+document put, a file upload, listing the keys under a prefix and deleting keys.
+Any failure to configure, authenticate to or reach the bucket, and any failure
+of a later request, is a `StoreError`, which
 ends the whole run. Its message can name the endpoint, the bucket or a key, so
 only its fixed `failure` description belongs in a published report.
 """
@@ -117,7 +118,7 @@ class ArchiveStore:
     def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
         """Every key under `prefix` with its last-modified time. Keys are
         relative to the store's own prefix, like the arguments."""
-        strip = len(self._key("")) if self._prefix else 0
+        strip = len(self._key(""))
         found: list[tuple[str, datetime]] = []
         with _translated():
             pages = self._client.get_paginator("list_objects_v2").paginate(

@@ -266,14 +266,15 @@ class Archiver:
             # Past the last upload the manifest goes in even at the deadline:
             # it is one small write that keeps the whole version.
             bucket.put_json(manifest_key, manifest)
-        self._prune(f"apps/{target.key}/releases/")
+        self._prune(f"apps/{target.key}/releases/", version_slug(release.version))
         return Outcome.ARCHIVED
 
-    def _prune(self, releases: str) -> None:
+    def _prune(self, releases: str, archived: str) -> None:
         """Keep the `KEEP_VERSIONS` most recently archived versions under
         `releases` (ranked by when their manifests were stored) and delete the
-        rest, each manifest before its other objects. A prefix without a
-        manifest is an unfinished attempt and is left alone."""
+        rest, each manifest before its other objects. The version just
+        `archived` is always kept, and a prefix without a manifest is an
+        unfinished attempt and is left alone."""
         assert self.bucket is not None
         versions: dict[str, list[str]] = {}
         stored: dict[str, datetime] = {}
@@ -284,6 +285,8 @@ class Archiver:
                 stored[version] = modified
         newest_first = sorted(stored, key=stored.__getitem__, reverse=True)
         for version in newest_first[KEEP_VERSIONS:]:
+            if version == archived:
+                continue
             manifest = f"{releases}{version}/manifest.json"
             self.bucket.delete([manifest])
             self.bucket.delete([key for key in versions[version] if key != manifest])
