@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import contextlib
 import os
 import shutil
 import signal
@@ -62,6 +63,8 @@ def capture_source(
             result = _run(step, command, cwd, deadline, clock)
             if result is not None:
                 return result
+        # The bundle holds every ref, so the mirror is not needed to compress.
+        shutil.rmtree(mirror, ignore_errors=True)
         try:
             with (
                 bundle.open("rb") as source,
@@ -130,7 +133,10 @@ def _run_process(
         try:
             stdout, stderr = process.communicate(timeout=timeout)
         except subprocess.TimeoutExpired:
-            os.killpg(process.pid, signal.SIGKILL)
+            # The group can already be gone; macOS refuses a signal to a group
+            # whose leader has exited.
+            with contextlib.suppress(ProcessLookupError, PermissionError):
+                os.killpg(process.pid, signal.SIGKILL)
             process.communicate()
             raise
     return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)

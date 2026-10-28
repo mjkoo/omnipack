@@ -5,6 +5,7 @@ import subprocess
 import time
 from compression import zstd
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -157,3 +158,33 @@ def test_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
             return
         time.sleep(0.1)
     pytest.fail("the grandchild outlived the timeout")
+
+
+def test_a_process_group_already_gone_still_times_out(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def refuse(pid: int, signal: int) -> None:
+        raise PermissionError("group leader has exited")
+
+    monkeypatch.setattr(source.os, "killpg", refuse)
+    with pytest.raises(subprocess.TimeoutExpired):
+        source._run_process(["sh", "-c", "sleep 0.5"], None, 0.1)
+
+
+def test_the_mirror_is_gone_before_compression(
+    repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    mirrors: list[list[Path]] = []
+    open_zstd = zstd.open
+
+    def recording_open(*args: Any, **kwargs: Any) -> Any:
+        mirrors.append(list(work.glob("*/mirror.git")))
+        return open_zstd(*args, **kwargs)
+
+    monkeypatch.setattr(source.zstd, "open", recording_open)
+    result = capture_source(str(repo), work / "out.zst", work)
+
+    assert result.outcome is CaptureOutcome.CAPTURED
+    assert mirrors == [[]]
