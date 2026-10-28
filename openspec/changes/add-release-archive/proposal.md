@@ -21,11 +21,14 @@ recover any packed app independently of its upstream.
 - Archive each new version under its own prefix. The archive holds:
   - every release asset;
   - the release description;
-  - for forge-hosted projects, the forge's release record and a full-history git
-    bundle compressed with zstd;
+  - for forge-hosted projects, the forge's release record;
   - for HTML sources, the resolved APK.
 
-  Earlier versions are kept, with no retention policy.
+  Source history is one uncompressed git bundle of every ref per target, kept
+  outside the version prefixes and replaced only by a successful fresh capture
+  made when a new version is archived. After a new version is archived, the
+  target keeps its three most recently archived versions and older ones are
+  deleted.
 - A version counts as archived only once its manifest is stored, after every other
   one of its objects. An interrupted or failed archive is therefore retried on the next run.
 - Report each app's outcome: archived, unchanged, unreachable, no release,
@@ -73,7 +76,7 @@ The estimated size is:
 
 - New code:
   - the `src/omnipack/archive/` package (targets, resolvers, store, source
-    bundling, orchestration);
+    bundling, retention, orchestration);
   - the `archive` subcommand in `src/omnipack/cli.py`;
   - a streaming download in `src/omnipack/http.py`;
   - shared settings filtering in `src/omnipack/forge_health.py`.
@@ -81,9 +84,8 @@ The estimated size is:
   `release-archive` environment holding the `ARCHIVE_S3_*` secrets, and has its
   own concurrency group.
 - `scripts/alerts.py` gains a `release-archive` producer.
-- Dependencies: a new uv dependency group `archive` with boto3. Python 3.14's
-  stdlib `compression.zstd` handles compression.
-- Docs: a new `docs/archive.md` (layout, secrets setup, restoring from a bundle)
+- Dependencies: a new uv dependency group `archive` with boto3.
+- Docs: a new `docs/archive.md` (layout, retention, secrets setup, restoring from a bundle)
   and a pointer from `docs/publishing.md`.
 - Nightly publishing is unchanged. It holds no bucket credential, and an archive
   failure cannot affect publication.

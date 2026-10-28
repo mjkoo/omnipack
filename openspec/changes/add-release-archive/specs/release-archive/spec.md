@@ -116,21 +116,43 @@ nothing downloaded.
 Each archived version SHALL be stored under a prefix keyed by the target's
 normalized project URL and that version, so that no two versions share a prefix,
 together with a manifest naming every stored object with its size and SHA-256 and
-recording the entry, the resolved version, the tag and the dates. Earlier
-versions SHALL be kept.
+recording the entry, the resolved version, the tag and the dates.
 
 #### Scenario: Two versions of one app
 
 - **WHEN** a target is archived at one version and later at a newer one
 - **THEN** both versions' objects and manifests remain in the bucket under distinct prefixes
 
+### Requirement: Retention keeps each target's three most recent versions
+
+After a new version's manifest is stored, the target SHALL keep its three most
+recently archived versions, ranked by when their manifests were stored, and SHALL
+delete older ones. Each pruned version's manifest SHALL be deleted before its
+other objects, so a partly pruned version never reads as archived. Prefixes
+without a manifest SHALL NOT be pruned. A pruned version that is selected again
+SHALL be archived again.
+
+#### Scenario: A fourth version prunes the oldest
+
+- **WHEN** a target holding three archived versions has a fourth archived
+- **THEN** the oldest version's manifest is deleted first and then its other objects, and the three most recent versions remain
+
+#### Scenario: An incomplete prefix is not pruned
+
+- **WHEN** a target has a prefix without a manifest and a new version is archived
+- **THEN** that prefix is left untouched
+
+#### Scenario: A pruned version is selected again
+
+- **WHEN** a later run resolves a version whose objects were pruned
+- **THEN** it has no manifest and is archived again
+
 ### Requirement: A forge release stores its assets, description and history
 
 For a GitHub or GitLab target, an archived version SHALL store every asset on the
 selected release and every installable file Obtainium's resolution selects for it,
 including files linked only from the release description, each stored once and
-listed in the manifest, the release notes and the forge's release record, and a
-zstd-compressed git bundle of every ref.
+listed in the manifest, the release notes and the forge's release record.
 
 #### Scenario: A GitHub release with desktop and Android builds
 
@@ -142,10 +164,18 @@ zstd-compressed git bundle of every ref.
 - **WHEN** a GitLab release has no asset links and its description links the APK Obtainium would install
 - **THEN** that APK is stored and listed in the manifest, and the version counts as archived only once it is stored
 
+### Requirement: Source history is one bundle per target
+
+The source history SHALL be one uncompressed git bundle of every ref at
+`apps/<source-key>/source/repo.bundle`, outside the version prefixes, replaced
+only by a successful fresh capture made when a new version is archived. The
+version's manifest SHALL record the bundle it captured (key, size and SHA-256)
+or why none was captured.
+
 #### Scenario: Restoring source history
 
-- **WHEN** a stored git bundle is decompressed and cloned
-- **THEN** it yields every branch and tag the repository had when that version was archived
+- **WHEN** the stored git bundle is cloned directly
+- **THEN** it yields every branch and tag the repository had at the latest capture
 
 ### Requirement: An HTML release stores its resolved file
 
@@ -195,13 +225,14 @@ reached within the run's time budget SHALL be reported not checked.
 ### Requirement: Missing source history does not fail a release
 
 When a forge target's source history cannot be obtained, the version SHALL be
-archived without a bundle, its manifest SHALL record why, and the target SHALL
-NOT be reported failed for that reason alone.
+archived without a fresh bundle, its manifest SHALL record why, the earlier
+bundle SHALL remain in place, and the target SHALL NOT be reported failed for
+that reason alone.
 
 #### Scenario: The source clone fails
 
 - **WHEN** a new release's assets download but cloning its repository fails
-- **THEN** the version is archived with its assets and description, and its manifest records the clone failure
+- **THEN** the version is archived with its assets and description, its manifest records the clone failure, and the earlier bundle is left in place
 
 ### Requirement: The archive command supports a dry run
 

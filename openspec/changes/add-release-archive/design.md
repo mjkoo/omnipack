@@ -29,7 +29,7 @@ See proposal.md (Why). The current state that shapes this design:
   `permissions: {}` at the top level. The nightly publisher's credential isolation
   is a spec guarantee.
 - **Dependencies:** the core package has no runtime dependencies. The runtime is
-  Python 3.14, whose stdlib includes `compression.zstd`.
+  Python 3.14.
 
 ## Goals / Non-Goals
 
@@ -41,7 +41,6 @@ See proposal.md (Why). The current state that shapes this design:
   cached in Actions.
 
 **Non-Goals:**
-- Retention or pruning.
 - Incremental or delta git bundles.
 - Deduplicating identical assets across versions.
 - Archiving track-only or unsupported sources.
@@ -109,10 +108,11 @@ scheme stripped and HTML sources prefixed `html/`. The layout:
 
 ```
 <prefix>/apps/<source-key>/releases/<version-slug>/{assets/*, release.json, release.md,
-                                                    source/repo.bundle.zst, manifest.json}
+                                                    manifest.json}
+<prefix>/apps/<source-key>/source/repo.bundle
 ```
 
-The bucket holds only `apps/...`. `version-slug` is the version sanitized to
+The bucket holds only `apps/...`. The bundle sits outside the version prefixes. `version-slug` is the version sanitized to
 `[A-Za-z0-9._-]` and truncated, then a `-` and the first 8 hex digits of the
 SHA-256 of the raw version.
 
@@ -132,6 +132,17 @@ A target's last outcome and error live only in the run report.
 Keeping state in a committed file was rejected for three reasons: PRs carry
 sources only, the nightly publisher is the only writer, and a committed file
 cannot record a half-finished upload.
+
+### Retention keeps three versions per target
+
+Every asset is still stored with each version, so a target's volume is bounded by
+retention. After a new version's manifest is stored, the target keeps its three
+most recently archived versions, ranked by when their manifests were stored, and
+deletes older ones. Each pruned version's manifest is deleted before its other
+objects, so a partly pruned version never reads as archived. Prefixes without a
+manifest (incomplete attempts) are not pruned. A pruned version that is selected
+again has no manifest, so it is archived again. The bucket key therefore needs
+list, read, write and delete permission.
 
 ### Storage through boto3, in an `archive` dependency group
 
@@ -153,8 +164,12 @@ The run's resource limits:
   capped by the remaining budget, then retries once.
 - **Serial processing:** targets are processed one at a time. Each target deletes
   its temporary directory before the next starts.
-- **Source:** `git clone --mirror --quiet`, then `git bundle create --all`, then
-  zstd streaming compression at level 10 into the upload file.
+- **Source:** `git clone --mirror --quiet`, then `git bundle create --all` into
+  the upload file, uncompressed because git pack data is already compressed. The
+  upload replaces the target's single bundle key only when the capture succeeds,
+  and the version's manifest records the bundle it captured (key, size, sha256)
+  or why none was captured. A failed capture leaves the earlier bundle in place
+  and does not fail the version.
 - **Time budget:** the remaining time to the job's limit minus 15 minutes. The
   run stops starting new targets when the budget is reached, and passes the
   deadline to the in-flight target's downloads and clone, so that target is
@@ -189,9 +204,10 @@ errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
 - **The port drifts from Obtainium behavior over time.** Mitigation: pin and cite
   the upstream commit, keep the dry-run output easy to compare by hand, and
   re-sync on demand.
-- **Full bundles of large repositories, re-stored at every release, cost
-  storage.** Mitigation: this was accepted by the owner, and retention is
-  explicitly deferred. The manifest records sizes, so the cost is visible.
+- **Assets and source history of large repositories cost storage.** Mitigation:
+  source history is one bundle per target, replaced rather than accumulated, and
+  retention bounds the versions kept. The manifest records sizes, so the cost is
+  visible.
 - **A first backfill exceeds one job.** Mitigation: the budget and `NOT_CHECKED`
   let consecutive nights resume, and the work is idempotent.
 - **A huge clone exhausts runner disk.** Mitigation: a clone failure falls back to
