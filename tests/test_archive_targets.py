@@ -84,18 +84,11 @@ def test_an_unsupported_source_is_skipped(tmp_path: Path) -> None:
     assert target.source is None
 
 
-def test_html_keys_are_prefixed(tmp_path: Path) -> None:
-    write_packs(
-        tmp_path,
-        [
-            entry("https://www.ppsspp.org/download", source="HTML"),
-            entry("https://gitlab.com/group/project", source="GitLab"),
-        ],
-    )
+def test_forge_keys_are_not_prefixed(tmp_path: Path) -> None:
+    write_packs(tmp_path, [entry("https://gitlab.com/group/project", source="GitLab")])
 
     keys = by_key(select_targets(tmp_path))
 
-    assert keys["html/ppsspp.org/download"].source is SourceType.HTML
     assert keys["gitlab.com/group/project"].source is SourceType.GITLAB
 
 

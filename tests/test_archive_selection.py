@@ -16,6 +16,7 @@ from omnipack.archive.selection import (
     VersionError,
     compare_alphanumeric,
     extract_version,
+    is_installable,
     release_version,
     select_release,
 )
@@ -23,10 +24,8 @@ from omnipack.archive.selection import (
 BASE = datetime(2026, 1, 1, tzinfo=UTC)
 
 
-def asset(name: str, days: float = 0, *, zips: bool = False) -> ReleaseAsset:
-    installable = name.lower().endswith((".apk", ".xapk", ".apkm", ".apks"))
-    installable = installable or (zips and name.endswith(".zip"))
-    return ReleaseAsset(name, installable, BASE + timedelta(days=days))
+def asset(name: str, days: float = 0) -> ReleaseAsset:
+    return ReleaseAsset(name, is_installable(name), BASE + timedelta(days=days))
 
 
 def release(
@@ -59,18 +58,17 @@ def chosen(candidates: list[Candidate], configured: ReleaseSettings, **kw: Any) 
     return None if selected is None else selected.candidate.tag
 
 
-def test_a_release_is_a_draft_or_prerelease_unless_the_entry_allows() -> None:
+def test_drafts_and_excluded_prereleases_are_passed_over_even_without_fallback() -> (
+    None
+):
     releases = [
         release("v3", 3, draft=True),
         release("v2", 2, prerelease=True),
         release("v1", 1),
     ]
 
-    assert chosen(releases, settings(fallback_to_older=True)) == "v1"
-    assert (
-        chosen(releases, settings(include_prereleases=True, fallback_to_older=True))
-        == "v2"
-    )
+    assert chosen(releases, settings()) == "v1"
+    assert chosen(releases, settings(include_prereleases=True)) == "v2"
 
 
 def test_without_fallback_only_the_first_unexcluded_release_is_tried() -> None:

@@ -105,6 +105,17 @@ def test_prereleases_are_excluded_unless_the_entry_includes_them() -> None:
     assert (stable.version, including.version) == ("v1", "v2-rc")
 
 
+def test_a_zip_only_release_qualifies_where_the_entry_includes_zips() -> None:
+    releases = [gh_release("v1", "2026-01-01T00:00:00Z", "app.zip")]
+
+    release, _ = resolve({RELEASES: releases}, entry(includeZips=True))
+
+    assert release.version == "v1"
+    assert [a.name for a in release.assets] == ["app.zip"]
+    with pytest.raises(NoReleaseError):
+        resolve({RELEASES: releases}, entry())
+
+
 def test_fallback_selects_an_older_release_with_a_matching_asset() -> None:
     releases = [
         gh_release("v2", "2026-03-01T00:00:00Z", "app-x86.apk"),
