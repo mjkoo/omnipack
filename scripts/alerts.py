@@ -96,6 +96,8 @@ TESTS_RESULT, BUILD_RESULT, VERIFY_RESULT and GUARD_RESULT, each step's
 SOURCE-publish: PUBLISH_OUTCOME, the publish step's `outcome` output.
 live-check: CHECK_RESULT, the `pack check-live` step's `outcome`, and its
 report at --report (default .build/live-check/report.json).
+release-archive: ARCHIVE_RESULT, the `pack archive` step's `outcome`, and its
+report at --report (default .build/archive/report.json).
 """
 
 RECONCILE_HELP = """Open, update, reopen and close the labelled alert issues.
@@ -108,9 +110,11 @@ GH_TOKEN, GITHUB_REPOSITORY, GITHUB_SERVER_URL and GITHUB_RUN_ID.
 """
 
 
-# The producing jobs: the nightly prepare and publish jobs and the live check,
-# which belong to no source, and each source's check and publish jobs.
-UnsourcedJob = Literal["nightly-prepare", "nightly-publish", "live-check"]
+# The producing jobs: the nightly prepare and publish jobs, the live check and
+# the release archive, which belong to no source, and each source's check and publish jobs.
+UnsourcedJob = Literal[
+    "nightly-prepare", "nightly-publish", "live-check", "release-archive"
+]
 SourceJob = Literal["check", "publish"]
 _UNSOURCED_JOBS: frozenset[UnsourcedJob] = frozenset(get_args(UnsourcedJob))
 _SOURCE_JOBS: tuple[SourceJob, ...] = get_args(SourceJob)
@@ -118,6 +122,7 @@ _UNSOURCED_PREFIXES: Mapping[UnsourcedJob, tuple[str, ...]] = {
     "nightly-prepare": ("nightly/prepare/", "build/"),
     "nightly-publish": ("nightly/publish/",),
     "live-check": ("live-check/",),
+    "release-archive": ("release-archive/",),
 }
 
 
@@ -152,11 +157,13 @@ class Owner:
 NIGHTLY_PREPARE = Owner("nightly-prepare")
 NIGHTLY_PUBLISH = Owner("nightly-publish")
 LIVE_CHECK = Owner("live-check")
+RELEASE_ARCHIVE = Owner("release-archive")
 OWNERS: tuple[Owner, ...] = (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
     *(Owner(job, source) for source in SOURCE_NAMES for job in _SOURCE_JOBS),
     LIVE_CHECK,
+    RELEASE_ARCHIVE,
 )
 
 
@@ -605,6 +612,7 @@ def reconcile(
 DEFAULT_OUTPUT = Path(".build/alerts/findings.json")
 BUILD_REPORT = Path(".build/report.json")
 LIVE_CHECK_REPORT = Path(".build/live-check/report.json")
+ARCHIVE_REPORT = Path(".build/archive/report.json")
 # The prepare stage names `scripts.nightly` reports, mapped to the slug each
 # one has in a key. A test outside the 3.12 run keeps these keys equal to that
 # script's stage names other than `complete`.
@@ -633,6 +641,7 @@ LIVE_GONE = _LIVE_PREFIX + "gone/"
 LIVE_STATUS = _LIVE_PREFIX + "status/"
 LIVE_STALE = _LIVE_PREFIX + "stale/"
 LIVE_ARCHIVED = _LIVE_PREFIX + "archived/"
+ARCHIVE_READ = RELEASE_ARCHIVE.prefixes[0] + "read"
 # Each source check step's key slug and the name its finding gives it, in the
 # order the steps run.
 CHECK_STEPS: Mapping[ValidationStep, tuple[str, str]] = {
@@ -1037,6 +1046,41 @@ def emit_live_check(
     )
 
 
+def emit_release_archive(
+    environ: Mapping[str, str], report_path: Path = ARCHIVE_REPORT
+) -> FindingsFile:
+    """The run-level finding from the archive's report, read only when the step ran.
+
+    No target outcome raises a finding; those stay in the run report. Any
+    readable report puts the run-level key in scope, so a later healthy run
+    closes its issue.
+    """
+    ran = _result(environ, "ARCHIVE_RESULT") in ("success", "failure")
+    report = _read_object(report_path) if ran else None
+    report_status: ReportStatus | None = None
+    if report is not None:
+        report_status = parse_literal(report.get("status"), REPORT_STATUSES)
+    findings: list[Finding] = []
+    scope: list[str] = []
+    if report_status is not None:
+        scope.append(ARCHIVE_READ)
+        if report_status == "failed":
+            findings.append(
+                _finding(
+                    ARCHIVE_READ,
+                    "Release archive could not read the packs or reach its bucket",
+                    [
+                        (
+                            "The committed packs could not be read or the bucket"
+                            " could not be reached; the run stopped."
+                        ),
+                        _SEE_RUN,
+                    ],
+                )
+            )
+    return _finish(RELEASE_ARCHIVE, environ, findings, scope, accounted=bool(findings))
+
+
 def _live_health_findings(report: Mapping[str, object]) -> list[Finding]:
     """The stale and archived findings of a successful live-check report."""
     findings: list[Finding] = []
@@ -1088,6 +1132,8 @@ def emit(
             return emit_nightly_publish(environ)
         case "live-check", None:
             return emit_live_check(environ, report_path or LIVE_CHECK_REPORT)
+        case "release-archive", None:
+            return emit_release_archive(environ, report_path or ARCHIVE_REPORT)
         case "check", str(source):
             return emit_source_check(environ, source)
         case "publish", str(source):
