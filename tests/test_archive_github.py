@@ -237,3 +237,13 @@ def test_an_unusable_entry_fails_without_a_request(bad: dict[str, Any]) -> None:
         resolve_github(bad, http)
 
     assert transport.requests == []
+
+
+def test_an_asset_without_a_browser_download_url_fails_the_resolution() -> None:
+    release = gh_release("v1", "2026-01-01T00:00:00Z", "app.apk")
+    asset = release["assets"][0]
+    del asset["browser_download_url"]
+    asset["url"] = f"{REPO}/releases/assets/1"
+
+    with pytest.raises(ResponseError, match="download URL"):
+        resolve({RELEASES: [release]}, entry())

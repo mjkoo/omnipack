@@ -89,7 +89,8 @@ def resolve_github(
 
 def _asset(record: dict[str, Any]) -> Asset:
     name = record.get("name")
-    url = record.get("browser_download_url") or record.get("url")
+    # The API `url` would answer with JSON metadata, not the file.
+    url = record.get("browser_download_url")
     if not isinstance(name, str) or not isinstance(url, str):
         raise ResponseError("release asset lacks a name or download URL")
     return Asset(name, url)
