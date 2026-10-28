@@ -53,7 +53,7 @@ def resolve_html(
     deadline: float | None = None,
 ) -> ResolvedRelease:
     """The link Obtainium offers for an HTML pack entry, as a release whose
-    only asset is that file and whose record lists the pages fetched.
+    only asset is that file and whose `fetched_urls` are the pages fetched.
 
     `deadline` is a reading of `http`'s clock that bounds every request.
     Raises `UnreachableError` for a page that answers 404 or 410 and

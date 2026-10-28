@@ -3,7 +3,9 @@
 The build and source generation fetch public catalogs and lists, so
 `HttpClient` sends no credentials unless a caller passes one, and follows
 redirects with urllib's defaults. A credential a caller passes is never
-forwarded to a redirect target.
+forwarded to a redirect target. `download` streams a body to a file for the
+release archive, bounded by a caller's deadline, and waits out a short rate
+limit once.
 """
 
 from __future__ import annotations

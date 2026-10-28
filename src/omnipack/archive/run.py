@@ -16,7 +16,7 @@ import re
 import sys
 import tempfile
 from collections import Counter
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Mapping
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NotRequired, Protocol, TypedDict
@@ -32,7 +32,7 @@ from omnipack.archive.targets import (
     escape_segment,
     select_targets,
 )
-from omnipack.http import HttpClient, failure_reason
+from omnipack.http import DOWNLOAD_CHUNK, HttpClient, failure_reason
 from omnipack.live_check import PackReadError, request_headers
 from omnipack.model import SourceType
 from omnipack.report_model import Status
@@ -44,7 +44,6 @@ SUMMARY = OUTPUT / "summary.md"
 
 SLUG_LENGTH = 80
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
-HASH_CHUNK = 1024 * 1024
 KEEP_VERSIONS = 3
 
 
@@ -53,7 +52,7 @@ class Bucket(Protocol):
 
     def exists(self, key: str) -> bool: ...
 
-    def put_json(self, key: str, document: Any) -> None: ...
+    def put_json(self, key: str, document: Mapping[str, Any]) -> None: ...
 
     def upload_file(self, path: Path, key: str) -> None: ...
 
@@ -80,9 +79,7 @@ class Capture(Protocol):
 class Store(Protocol):
     """Uploads one file under the version's prefix and records it."""
 
-    def __call__(
-        self, path: Path, key: str, url: str | None = None
-    ) -> ObjectRecord: ...
+    def __call__(self, path: Path, key: str, url: str | None = None) -> None: ...
 
 
 class BudgetSpent(Exception):
@@ -154,7 +151,7 @@ def version_slug(version: str) -> str:
 def _describe(path: Path) -> tuple[int, str]:
     digest = hashlib.sha256()
     with path.open("rb") as file:
-        while chunk := file.read(HASH_CHUNK):
+        while chunk := file.read(DOWNLOAD_CHUNK):
             digest.update(chunk)
     return path.stat().st_size, digest.hexdigest()
 
@@ -236,7 +233,7 @@ class Archiver:
         with tempfile.TemporaryDirectory(prefix="archive-") as scratch:
             work = Path(scratch)
 
-            def store(path: Path, key: str, url: str | None = None) -> ObjectRecord:
+            def store(path: Path, key: str, url: str | None = None) -> None:
                 self._check_time()
                 size, sha256 = _describe(path)
                 bucket.upload_file(path, f"{prefix}/{key}")
@@ -245,7 +242,6 @@ class Archiver:
                     record["url"] = url
                 objects.append(record)
                 path.unlink()
-                return record
 
             self._store_assets(target, release, work, store)
             manifest = Manifest(
