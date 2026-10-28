@@ -747,11 +747,11 @@ def test_release_archive_step_gets_the_token_secrets_and_a_budget_inside_the_lim
         "GITHUB_TOKEN": "${{ github.token }}",
         **{name: "${{ secrets." + name + " }}" for name in sorted(ARCHIVE_SECRETS)},
     }
-    # The budget leaves the job limit's margin for setup, the target in flight
-    # at the deadline and the reporting steps.
+    # The budget leaves a 30-minute margin of the job limit for setup, the
+    # target in flight at the deadline and the reporting steps.
     flag = command(archive).index("--budget-minutes")
     budget = int(command(archive)[flag + 1])
-    assert budget + 15 <= job["timeout-minutes"]
+    assert budget + 30 <= job["timeout-minutes"]
     # Only the archive step holds the token or any secret.
     assert [s for s in job["steps"] if "env" in s and s is not archive] == [
         emit_step(job["steps"])

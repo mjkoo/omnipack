@@ -1604,3 +1604,34 @@ def test_archive_prints_a_failed_targets_error_even_with_a_version(
 
     output = capsys.readouterr().out
     assert "failed: https://github.com/owner/app: HTTP 404 for app.apk" in output
+
+
+def test_archive_exits_nonzero_when_the_report_cannot_be_written(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "dist").mkdir()
+    pack = {
+        "settings": {},
+        "apps": [
+            {
+                "id": "y",
+                "name": "Y",
+                "url": "https://example.test/y",
+                "overrideSource": "Other",
+                "additionalSettings": "{}",
+            }
+        ],
+    }
+    for name in ("single-screen.json", "dual-screen.json"):
+        (tmp_path / "dist" / name).write_text(json.dumps(pack))
+    (tmp_path / ".build").mkdir()
+    (tmp_path / ".build/archive").write_text("not a directory")
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive", "--dry-run"]) == 1
+
+    captured = capsys.readouterr()
+    assert "skipped: https://example.test/y" in captured.out
+    assert "cannot write report" in captured.err

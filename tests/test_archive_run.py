@@ -83,7 +83,7 @@ class FakeBucket:
 
 
 class Body:
-    def __init__(self, data: bytes | int) -> None:
+    def __init__(self, data: bytes) -> None:
         self.data = data
         self.url = "https://example.test/file"
         self.status = 200
@@ -97,7 +97,6 @@ class Body:
 
     def read1(self, size: int = -1) -> bytes:
         data, self.data = self.data, b""
-        assert isinstance(data, bytes)
         return data
 
 
@@ -148,6 +147,10 @@ def capture_fails(url: str, destination: Path, work: Path, **_: Any) -> CaptureR
     return CaptureResult(CaptureOutcome.FAILED, "git clone failed: gone")
 
 
+def capture_forbidden(*args: Any, **kwargs: Any) -> CaptureResult:
+    raise AssertionError("source capture must not run")
+
+
 class World:
     def __init__(
         self,
@@ -184,10 +187,6 @@ def release_v1() -> dict[str, Any]:
     return gh_release("v1", "2024-01-01T00:00:00Z", "app.apk", body="notes")
 
 
-def slug(version: str) -> str:
-    return version_slug(version)
-
-
 def test_version_slug_is_sanitized_truncated_and_tagged_with_a_digest() -> None:
     assert version_slug("1.0") != version_slug("1_0")
     assert version_slug("a/b c").startswith("a_b_c-")
@@ -201,7 +200,7 @@ def test_a_new_version_stores_every_object_and_the_manifest_last() -> None:
     report = world.process()
 
     assert report["outcome"] == Outcome.ARCHIVED
-    prefix = f"{APP}/{slug('v1')}"
+    prefix = f"{APP}/{version_slug('v1')}"
     assert world.bucket.writes[-1] == f"{prefix}/manifest.json"
     assert set(world.bucket.objects) == {
         f"{prefix}/assets/app.apk",
@@ -240,6 +239,7 @@ def test_a_new_version_is_stored_beside_the_old_one_and_a_return_touches_nothing
     world.api.answers[RELEASES] = [release_v1()]
     world.bucket.writes.clear()
     world.downloads.urls.clear()
+    world.capture = capture_forbidden
     assert world.process()["outcome"] == Outcome.UNCHANGED
     assert world.bucket.writes == [] and world.downloads.urls == []
     assert first.items() <= world.bucket.objects.items()
@@ -255,12 +255,40 @@ def test_an_asset_404_leaves_no_manifest_and_fails_the_target() -> None:
     assert not any(key.endswith("manifest.json") for key in world.bucket.objects)
 
 
+def test_a_version_that_failed_partway_is_archived_in_full_by_the_next_run() -> None:
+    notes = "https://github.com/owner/app/releases/download/v1/notes.txt"
+    world = World(
+        [gh_release("v1", "2024-01-01T00:00:00Z", "app.apk", "notes.txt")],
+        {APK_URL: b"apk", notes: 404},
+    )
+    assert world.process()["outcome"] == Outcome.FAILED
+    prefix = f"{APP}/{version_slug('v1')}"
+    assert f"{prefix}/assets/app.apk" in world.bucket.objects
+
+    world.downloads.files[notes] = b"notes"
+    world.bucket.writes.clear()
+    assert world.process()["outcome"] == Outcome.ARCHIVED
+
+    assert world.bucket.writes[-1] == f"{prefix}/manifest.json"
+    assert {f"{prefix}/assets/app.apk", f"{prefix}/assets/notes.txt"} <= set(
+        world.bucket.writes
+    )
+    manifest = json.loads(world.bucket.objects[f"{prefix}/manifest.json"])
+    assert {o["key"] for o in manifest["objects"]} == {
+        "assets/app.apk",
+        "assets/notes.txt",
+        "release.json",
+    }
+
+
 def test_a_clone_failure_archives_without_a_bundle_and_records_why() -> None:
     world = World([release_v1()], capture=capture_fails)
 
     assert world.process()["outcome"] == Outcome.ARCHIVED
 
-    manifest = json.loads(world.bucket.objects[f"{APP}/{slug('v1')}/manifest.json"])
+    manifest = json.loads(
+        world.bucket.objects[f"{APP}/{version_slug('v1')}/manifest.json"]
+    )
     assert manifest["sourceHistory"] == {"reason": "git clone failed: gone"}
     assert BUNDLE not in world.bucket.objects
 
@@ -278,7 +306,9 @@ def test_a_failed_capture_leaves_the_previous_bundle_and_records_why() -> None:
     assert world.process()["outcome"] == Outcome.ARCHIVED
 
     assert world.bucket.objects[BUNDLE] == previous
-    manifest = json.loads(world.bucket.objects[f"{APP}/{slug('v2')}/manifest.json"])
+    manifest = json.loads(
+        world.bucket.objects[f"{APP}/{version_slug('v2')}/manifest.json"]
+    )
     assert manifest["sourceHistory"] == {"reason": "git clone failed: gone"}
 
 
@@ -319,7 +349,7 @@ def test_a_fourth_version_prunes_the_oldest_manifest_first() -> None:
 
     archive_versions(world, "v4")
 
-    oldest = f"{APP}/{slug('v1')}/"
+    oldest = f"{APP}/{version_slug('v1')}/"
     assert world.bucket.deletes[0] == [f"{oldest}manifest.json"]
     assert [sorted(batch) for batch in world.bucket.deletes[1:]] == [
         [
@@ -329,13 +359,13 @@ def test_a_fourth_version_prunes_the_oldest_manifest_first() -> None:
     ]
     assert not [k for k in world.bucket.objects if k.startswith(oldest)]
     for kept in ("v2", "v3", "v4"):
-        assert f"{APP}/{slug(kept)}/manifest.json" in world.bucket.objects
+        assert f"{APP}/{version_slug(kept)}/manifest.json" in world.bucket.objects
     assert BUNDLE in world.bucket.objects
 
 
 def test_an_incomplete_prefix_is_not_pruned(tmp_path: Path) -> None:
     world = World([release_v1()])
-    orphan = f"{APP}/{slug('half')}/assets/app.apk"
+    orphan = f"{APP}/{version_slug('half')}/assets/app.apk"
     (tmp_path / "half").write_bytes(b"half")
     world.bucket.upload_file(tmp_path / "half", orphan)
 
@@ -354,24 +384,23 @@ def test_the_version_just_archived_is_never_pruned() -> None:
 
     archive_versions(world, "v4")
 
-    assert f"{APP}/{slug('v4')}/manifest.json" in world.bucket.objects
+    assert f"{APP}/{version_slug('v4')}/manifest.json" in world.bucket.objects
     assert world.bucket.deletes == []
 
 
 def test_a_pruned_version_selected_again_is_archived_again() -> None:
     world = World([release_v1()])
     archive_versions(world, "v1", "v2", "v3", "v4")
-    assert f"{APP}/{slug('v1')}/manifest.json" not in world.bucket.objects
+    assert f"{APP}/{version_slug('v1')}/manifest.json" not in world.bucket.objects
 
     archive_versions(world, "v1")
 
-    assert f"{APP}/{slug('v1')}/manifest.json" in world.bucket.objects
+    assert f"{APP}/{version_slug('v1')}/manifest.json" in world.bucket.objects
 
 
 def test_a_capture_cut_short_by_the_deadline_abandons_the_target() -> None:
-    now = [0.0]
     world = World([release_v1()])
-    world.http.clock = lambda: now[0]
+    world.http.clock = lambda: 0.0
 
     def late(url: str, destination: Path, work: Path, **_: Any) -> CaptureResult:
         return CaptureResult(CaptureOutcome.EXPIRED, "timed out at the run deadline")
@@ -384,28 +413,37 @@ def test_a_capture_cut_short_by_the_deadline_abandons_the_target() -> None:
     assert not any(key.endswith("manifest.json") for key in world.bucket.objects)
 
 
-def test_an_html_target_stores_the_file_and_the_fetched_urls() -> None:
+def test_an_html_target_through_an_intermediate_page_stores_only_its_file() -> None:
     page = "https://example.test/dl"
-    apk = "https://example.test/app-1.2.apk"
+    mirror = "https://example.test/mirror/"
+    apk = "https://example.test/mirror/app-1.2.apk"
     html_entry = entry(
         page,
         overrideSource="HTML",
-        additionalSettings=json.dumps({"versionExtractionRegEx": r"[0-9.]+(?=\.apk)"}),
+        additionalSettings=json.dumps(
+            {
+                "intermediateLink": [{"customLinkFilterRegex": "/mirror/$"}],
+                "versionExtractionRegEx": r"[0-9.]+(?=\.apk)",
+            }
+        ),
     )
-    transport = RoutedTransport({page: f'<a href="{apk}">get</a>'})
+    transport = RoutedTransport(
+        {page: f'<a href="{mirror}">mirror</a>', mirror: f'<a href="{apk}">get</a>'}
+    )
     downloads = Downloads({apk: b"apk"})
     bucket = FakeBucket()
     http = HttpClient(transport=transport, stream_transport=downloads)
     [target] = select_targets_for(html_entry)
 
-    report = Archiver(bucket, http, capture=capture_fails).process(target)
+    report = Archiver(bucket, http, capture=capture_forbidden).process(target)
 
     assert report["outcome"] == Outcome.ARCHIVED
     (manifest_key,) = [k for k in bucket.objects if k.endswith("manifest.json")]
     manifest = json.loads(bucket.objects[manifest_key])
-    assert manifest["fetchedUrls"] == [page]
+    assert manifest["fetchedUrls"] == [page, mirror]
     assert "sourceHistory" not in manifest
     assert [o["key"] for o in manifest["objects"]] == ["assets/app-1.2.apk"]
+    assert not any(key.endswith("repo.bundle") for key in bucket.objects)
 
 
 def test_an_html_targets_request_headers_reach_its_pages_and_its_download() -> None:
@@ -489,6 +527,19 @@ def test_a_dry_run_resolves_with_no_download_clone_or_write() -> None:
     assert world.downloads.urls == [] and calls == []
 
 
+def test_a_track_only_target_is_skipped_without_a_request() -> None:
+    world = World([release_v1()], capture=capture_forbidden)
+    [target] = select_targets_for(
+        entry(additionalSettings=json.dumps({"trackOnly": True}))
+    )
+
+    report = world.archiver().process(target)
+
+    assert report["outcome"] == Outcome.SKIPPED
+    assert world.api.requests == [] and world.downloads.urls == []
+    assert world.bucket.writes == []
+
+
 def test_outcomes_map_for_no_release_and_skipped(tmp_path: Path) -> None:
     world = World([])
     write_packs(
@@ -508,6 +559,14 @@ def test_outcomes_map_for_no_release_and_skipped(tmp_path: Path) -> None:
 def test_a_deleted_repository_does_not_stop_healthy_targets(tmp_path: Path) -> None:
     gone = "https://api.github.com/repos/owner/gone/releases?per_page=100"
     world = World([release_v1()])
+    old_apk = "https://github.com/owner/gone/releases/download/v0/gone.apk"
+    old = gh_release("v0", "2023-01-01T00:00:00Z", "gone.apk")
+    old["assets"][0]["browser_download_url"] = old_apk
+    world.api.answers[gone] = [old]
+    world.downloads.files[old_apk] = b"old"
+    [gone_target] = select_targets_for(entry("https://github.com/owner/gone"))
+    assert world.archiver().process(gone_target)["outcome"] == Outcome.ARCHIVED
+    earlier = dict(world.bucket.objects)
     world.api.answers[gone] = 404
     write_packs(tmp_path, [entry("https://github.com/owner/gone"), entry()])
 
@@ -517,6 +576,7 @@ def test_a_deleted_repository_does_not_stop_healthy_targets(tmp_path: Path) -> N
         Outcome.UNREACHABLE,
         Outcome.ARCHIVED,
     ]
+    assert earlier.items() <= world.bucket.objects.items()
 
 
 def test_an_exhausted_budget_leaves_the_rest_not_checked(tmp_path: Path) -> None:
@@ -590,7 +650,7 @@ def test_the_report_so_far_is_handed_over_after_each_target(tmp_path: Path) -> N
     ]
 
 
-def test_a_spent_deadline_stops_the_release_request(tmp_path: Path) -> None:
+def test_a_spent_deadline_stops_the_release_request() -> None:
     world = World([release_v1()])
     world.http.clock = lambda: 100.0
     [target] = select_targets_for(entry())
@@ -677,3 +737,23 @@ def test_a_failed_target_with_a_version_shows_its_error_in_the_summary() -> None
     )
 
     assert f"failed: {SOURCE_URL} (App): HTTP 404 for app.apk" in render_summary(report)
+
+
+def test_the_summary_escapes_markup_in_a_targets_text() -> None:
+    report = ArchiveReport(
+        status=Status.SUCCESS,
+        dryRun=False,
+        targets=[
+            TargetReport(
+                name="<b>App</b>",
+                url="https://example.test/<x>",
+                outcome=Outcome.FAILED,
+                error="bad <script>",
+            )
+        ],
+    )
+
+    summary = render_summary(report)
+
+    assert "<b>" not in summary and "<script>" not in summary
+    assert "&lt;b&gt;App&lt;/b&gt;" in summary and "bad &lt;script&gt;" in summary
