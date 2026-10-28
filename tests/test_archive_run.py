@@ -61,7 +61,7 @@ class Body:
     def __exit__(self, *exc: object) -> None:
         return None
 
-    def read(self, size: int = -1) -> bytes:
+    def read1(self, size: int = -1) -> bytes:
         data, self.data = self.data, b""
         assert isinstance(data, bytes)
         return data
