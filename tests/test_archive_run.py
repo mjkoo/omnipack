@@ -279,6 +279,22 @@ def test_an_html_target_stores_the_file_and_the_fetched_urls() -> None:
     assert [o["key"] for o in manifest["objects"]] == ["assets/app-1.2.apk"]
 
 
+def test_repeated_asset_names_never_collide_with_a_prefixed_name() -> None:
+    names = ["2-x.apk", "x.apk", "x.apk"]
+    base = "https://github.com/owner/app/releases/download/v1"
+    world = World(
+        [gh_release("v1", "2024-01-01T00:00:00Z", *names)],
+        files={f"{base}/{name}": b"data" for name in names},
+    )
+
+    assert world.process()["outcome"] == Outcome.ARCHIVED
+
+    [manifest_key] = [k for k in world.bucket.objects if k.endswith("manifest.json")]
+    manifest = json.loads(world.bucket.objects[manifest_key])
+    keys = [o["key"] for o in manifest["objects"] if o["key"].startswith("assets/")]
+    assert len(keys) == len(set(keys)) == 3
+
+
 def test_a_dry_run_resolves_with_no_download_clone_or_write() -> None:
     world = World([release_v1()])
     calls: list[str] = []

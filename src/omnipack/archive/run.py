@@ -196,6 +196,8 @@ class Archiver:
     def _archive(self, target: ArchiveTarget, release: ResolvedRelease) -> Outcome:
         bucket = self.bucket
         assert bucket is not None
+        if target.source is None:
+            raise ValueError(f"target {target.key} has no source type")
         prefix = f"apps/{target.key}/releases/{version_slug(release.version)}"
         manifest_key = f"{prefix}/manifest.json"
         if bucket.exists(manifest_key):
@@ -219,7 +221,7 @@ class Archiver:
             self._store_assets(target, release, work, store)
             manifest = Manifest(
                 entry=target.entry,
-                sourceType=target.source or SourceType.HTML,
+                sourceType=target.source,
                 version=release.version,
                 tag=release.tag,
                 releaseDate=release.date.isoformat() if release.date else None,
@@ -253,6 +255,8 @@ class Archiver:
             name = escape_segment(asset.name)
             if name in used:
                 name = f"{number}-{name}"
+                while name in used:
+                    name = f"{number}-{name}"
             used.add(name)
             path = work / "asset"
             self.http.download(asset.url, path, headers, deadline=self.deadline)

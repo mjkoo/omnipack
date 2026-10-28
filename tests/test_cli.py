@@ -7,12 +7,15 @@ from urllib.request import Request
 import pytest
 
 from omnipack import cli
+from omnipack.archive import run as archive_run
+from omnipack.archive.store import ArchiveStore
 from omnipack.build import BuildInputs
 from omnipack.cli import main
 from omnipack.http import HttpClient, HttpResponse, HttpStatusError
 from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.overlay import ComposedApp
 from omnipack.sources import IngestionReport
+from tests.http_support import RoutedTransport
 from tests.test_build import write_config
 from tests.test_composition_policy import candidate as policy_candidate
 from tests.test_composition_policy import policy, rule
@@ -1479,7 +1482,7 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
     assert path.read_bytes() == before
 
 
-def test_archive_dry_run_needs_no_bucket_and_writes_only_the_report(
+def test_archive_dry_run_resolves_a_release_and_touches_nothing_else(
     tmp_path: Path,
     monkeypatch: pytest.MonkeyPatch,
     capsys: pytest.CaptureFixture[str],
@@ -1491,21 +1494,61 @@ def test_archive_dry_run_needs_no_bucket_and_writes_only_the_report(
             {
                 "id": "x",
                 "name": "X",
-                "url": "https://example.test/x",
+                "url": "https://github.com/owner/app",
+                "overrideSource": "GitHub",
+                "additionalSettings": "{}",
+            },
+            {
+                "id": "y",
+                "name": "Y",
+                "url": "https://example.test/y",
                 "overrideSource": "Other",
                 "additionalSettings": "{}",
-            }
+            },
         ],
     }
     for name in ("single-screen.json", "dual-screen.json"):
         (tmp_path / "dist" / name).write_text(json.dumps(pack))
-    for name in ("ARCHIVE_S3_ENDPOINT", "ARCHIVE_S3_BUCKET"):
-        monkeypatch.delenv(name, raising=False)
+    release = {
+        "tag_name": "v1",
+        "name": None,
+        "body": "",
+        "draft": False,
+        "prerelease": False,
+        "published_at": "2024-01-01T00:00:00Z",
+        "assets": [
+            {
+                "name": "app.apk",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "browser_download_url": "https://github.com/owner/app/releases/download/v1/app.apk",
+            }
+        ],
+    }
+    api = RoutedTransport(
+        {"https://api.github.com/repos/owner/app/releases?per_page=100": [release]}
+    )
+    forbidden: list[str] = []
+
+    def forbid(name: str) -> Callable[..., object]:
+        def call(*args: object, **kwargs: object) -> object:
+            forbidden.append(name)
+            raise AssertionError(f"{name} must not run in a dry run")
+
+        return call
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", staticmethod(api))
+    monkeypatch.setattr(HttpClient, "_urllib_stream_transport", forbid("download"))
+    monkeypatch.setattr(ArchiveStore, "from_environment", forbid("store"))
+    monkeypatch.setattr(archive_run, "capture_source", forbid("capture"))
     monkeypatch.chdir(tmp_path)
 
     assert cli.main(["archive", "--dry-run"]) == 0
 
-    assert "skipped: https://example.test/x" in capsys.readouterr().out
+    output = capsys.readouterr().out
+    assert "resolved: https://github.com/owner/app: v1" in output
+    assert "skipped: https://example.test/y" in output
+    assert forbidden == []
+    assert len(api.requests) == 1
     assert (tmp_path / ".build/archive/report.json").exists()
 
 

@@ -56,7 +56,7 @@ environment secrets, not repository secrets:
 | `ARCHIVE_S3_SECRET_ACCESS_KEY` | Secret access key |
 | `ARCHIVE_S3_PREFIX` | Optional key prefix |
 
-The key needs read and write on the bucket. After the first manual dispatch
+The key needs list, read and write on the bucket. After the first manual dispatch
 archives everything, a second should report every target unchanged. The first
 run may take several nights if it exceeds the job's time budget; the targets
 it did not reach are reported not checked and the next run continues.
@@ -100,8 +100,11 @@ Fetch the objects with any S3 client, for example the AWS CLI:
 
 ```
 aws s3 sync --endpoint-url "$ENDPOINT" \
-  "s3://$BUCKET/<prefix>/apps/<source-key>/releases/<version-slug>/" restore/
+  "s3://$BUCKET/apps/<source-key>/releases/<version-slug>/" restore/
 ```
+
+With `ARCHIVE_S3_PREFIX` set, the path is
+`s3://$BUCKET/<prefix>/apps/<source-key>/releases/<version-slug>/`.
 
 The assets are ready to install under `restore/assets/`; compare them with
 the SHA-256 values in `restore/manifest.json`. To recover the source,
