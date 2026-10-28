@@ -2,7 +2,8 @@
 
 The store covers what the per-target flow needs: whether a key exists, a JSON
 document put and a file upload. Any failure to configure, authenticate to or
-reach the bucket is a `StoreError`, which ends the whole run.
+reach the bucket, and any failure of a later request, is a `StoreError`, which
+ends the whole run.
 """
 
 from __future__ import annotations
@@ -23,8 +24,8 @@ DENIED_STATUSES = frozenset({401, 403})
 
 
 class StoreError(Exception):
-    """The bucket is not configured, refuses the credentials or cannot be
-    reached."""
+    """The bucket is not configured, does not exist, refuses the credentials or
+    cannot be reached, or a request to it failed."""
 
 
 class ArchiveStore:
@@ -38,7 +39,9 @@ class ArchiveStore:
     @classmethod
     def from_environment(cls, environment: Mapping[str, str]) -> ArchiveStore:
         """Build a store from the `ARCHIVE_S3_*` variables. boto3 belongs to
-        the optional `archive` dependency group, so it is imported only here."""
+        the optional `archive` dependency group, so it is imported only here.
+        The bucket is probed once, so a bad endpoint, credential or bucket name
+        fails here rather than on the first target."""
         values = {name: environment.get(name, "").strip() for name in REQUIRED}
         missing = [name for name, value in values.items() if not value]
         if missing:
@@ -60,22 +63,25 @@ class ArchiveStore:
                 read_timeout=60,
             ),
         )
+        with _translated():
+            client.head_bucket(Bucket=values[BUCKET])
         return cls(client, values[BUCKET], environment.get(PREFIX, ""))
 
     def _key(self, key: str) -> str:
         return f"{self._prefix}/{key}" if self._prefix else key
 
     def exists(self, key: str) -> bool:
-        """Whether an object is stored at `key`, by a HEAD request."""
+        """Whether an object is stored at `key`, by a HEAD request. Any failure
+        other than not-found raises `StoreError`, as do the methods below."""
         from botocore.exceptions import ClientError
 
-        try:
-            with _translated():
+        with _translated():
+            try:
                 self._client.head_object(Bucket=self._bucket, Key=self._key(key))
-        except ClientError as error:
-            if _status(error) == 404:
-                return False
-            raise
+            except ClientError as error:
+                if _status(error) == 404:
+                    return False
+                raise
         return True
 
     def put_json(self, key: str, document: Mapping[str, Any]) -> None:
@@ -100,8 +106,8 @@ def _status(error: Any) -> int | None:
 
 @contextmanager
 def _translated() -> Generator[None]:
-    """Turn credential and connectivity failures into `StoreError`; other
-    client errors propagate (a 404 is the caller's to read)."""
+    """Turn every boto failure into `StoreError`."""
+    from boto3.exceptions import Boto3Error
     from botocore.exceptions import BotoCoreError, ClientError
 
     try:
@@ -109,6 +115,8 @@ def _translated() -> Generator[None]:
     except ClientError as error:
         if _status(error) in DENIED_STATUSES:
             raise StoreError(f"archive bucket denied access: {error}") from error
-        raise
+        raise StoreError(f"archive bucket request failed: {error}") from error
     except BotoCoreError as error:
         raise StoreError(f"cannot reach the archive bucket: {error}") from error
+    except Boto3Error as error:
+        raise StoreError(f"archive bucket request failed: {error}") from error
