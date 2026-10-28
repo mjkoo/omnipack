@@ -2488,38 +2488,3 @@ def test_archive_cancelled_job_keeps_only_the_early_failure_finding(
 
     assert _keys(file) == _early(RELEASE_ARCHIVE)
     assert file.scope == ()
-
-
-def _reconcile_archive(
-    tmp_path: Path, report: dict, issues: list[dict], status: str = "success"
-) -> FakeGh:
-    file = _emit(
-        RELEASE_ARCHIVE,
-        status,
-        report=report,
-        tmp_path=tmp_path,
-        ARCHIVE_RESULT="failure" if status == "failure" else "success",
-    )
-    path = tmp_path / "archive.json"
-    path.write_text(file.to_json())
-    gh = alert_gh(issues)
-    _run(gh, Producer(RELEASE_ARCHIVE, path, "success"))
-    return gh
-
-
-def test_healthy_archive_run_closes_an_open_run_level_issue(tmp_path: Path) -> None:
-    gh = _reconcile_archive(
-        tmp_path,
-        _archive_report(),
-        [alert_issue(1, "release-archive/read")],
-    )
-
-    assert issue_writes(gh) == [("close", "1")]
-
-
-def test_failed_archive_run_opens_the_run_level_issue(tmp_path: Path) -> None:
-    gh = _reconcile_archive(tmp_path, _archive_report("failed"), [], status="failure")
-
-    assert issue_writes(gh) == [
-        ("create", "Release archive could not read the packs or reach its bucket")
-    ]

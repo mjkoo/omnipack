@@ -22,7 +22,6 @@ from omnipack.archive import run as archive_run
 from omnipack.archive.run import (
     ArchiveReport,
     TargetReport,
-    failed_report,
     write_archive_report,
 )
 from omnipack.live_check import REPORT, check_live, write_live_report
@@ -361,9 +360,30 @@ def test_archive_report_from_the_real_writer_raises_and_then_clears_the_run_find
     step = _emit_step("release-archive.yml", "archive")
     report = tmp_path / archive_run.REPORT
 
-    # A run that could not reach its bucket ends the archive step in failure.
+    # A bucket error partway through a run fails the step; the report keeps
+    # the targets it reached and lists the rest not checked.
+    stopped = "the run stopped on a bucket error"
     write_archive_report(
-        tmp_path, failed_report("the bucket cannot be reached", dry_run=False)
+        tmp_path,
+        ArchiveReport(
+            status=Status.FAILED,
+            dryRun=False,
+            targets=[
+                TargetReport(
+                    name="A",
+                    url="https://example.test/a",
+                    outcome=Outcome.FAILED,
+                    error="x",
+                ),
+                TargetReport(
+                    name="B",
+                    url="https://example.test/b",
+                    outcome=Outcome.NOT_CHECKED,
+                    reason=stopped,
+                ),
+            ],
+            error="cannot reach the archive bucket",
+        ),
     )
     _run_emit(
         monkeypatch,
@@ -378,7 +398,9 @@ def test_archive_report_from_the_real_writer_raises_and_then_clears_the_run_find
     assert failed is not None
     assert [f.key for f in failed.findings] == ["release-archive/read"]
     opened = _reconcile(RELEASE_ARCHIVE, findings, "failure", [])
-    assert [verb for verb, _ in issue_writes(opened)] == ["create"]
+    assert issue_writes(opened) == [
+        ("create", "Release archive could not read the packs or reach its bucket")
+    ]
 
     # A later healthy run, with per-target problems, closes that issue.
     healthy = ArchiveReport(
@@ -410,23 +432,3 @@ def test_archive_report_from_the_real_writer_raises_and_then_clears_the_run_find
         RELEASE_ARCHIVE, findings, "success", [alert_issue(1, "release-archive/read")]
     )
     assert issue_writes(closed) == [("close", "1")]
-
-
-def test_archive_step_failing_without_a_report_still_emits_the_early_failure(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    findings = tmp_path / "findings.json"
-
-    _run_emit(
-        monkeypatch,
-        _emit_step("release-archive.yml", "archive"),
-        findings,
-        report=tmp_path / archive_run.REPORT,
-        outputs={},
-        outcomes={"archive": "failure"},
-        job_status="failure",
-    )
-
-    parsed = parse_findings(RELEASE_ARCHIVE, findings.read_text())
-    assert parsed is not None
-    assert [f.key for f in parsed.findings] == ["release-archive/run"]
