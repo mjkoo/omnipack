@@ -7,6 +7,7 @@ from urllib.request import Request
 import pytest
 
 from omnipack import cli
+from omnipack.archive import Outcome
 from omnipack.archive import run as archive_run
 from omnipack.archive.store import ArchiveStore
 from omnipack.build import BuildInputs
@@ -14,6 +15,7 @@ from omnipack.cli import main
 from omnipack.http import HttpClient, HttpResponse, HttpStatusError
 from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.overlay import ComposedApp
+from omnipack.report_model import Status
 from omnipack.sources import IngestionReport
 from tests.http_support import RoutedTransport
 from tests.test_build import write_config
@@ -1573,3 +1575,32 @@ def test_archive_budget_must_be_a_positive_finite_number_of_minutes(
 
     assert caught.value.code == 2
     assert "positive number of minutes" in capsys.readouterr().err
+
+
+def test_archive_prints_a_failed_targets_error_even_with_a_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def failed_run(*args: object, **kwargs: object) -> archive_run.ArchiveReport:
+        return archive_run.ArchiveReport(
+            status=Status.SUCCESS,
+            dryRun=True,
+            targets=[
+                archive_run.TargetReport(
+                    name="X",
+                    url="https://github.com/owner/app",
+                    outcome=Outcome.FAILED,
+                    version="v1",
+                    error="HTTP 404 for app.apk",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(cli, "run_archive", failed_run)
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive", "--dry-run"]) == 0
+
+    output = capsys.readouterr().out
+    assert "failed: https://github.com/owner/app: HTTP 404 for app.apk" in output

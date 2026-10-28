@@ -431,6 +431,12 @@ def failed_report(error: str, *, dry_run: bool) -> ArchiveReport:
     return ArchiveReport(status=Status.FAILED, dryRun=dry_run, targets=[], error=error)
 
 
+def target_detail(target: TargetReport) -> str | None:
+    """What a target's line shows: its error when there is one, otherwise its
+    version, otherwise the reason."""
+    return target.get("error") or target.get("version") or target.get("reason")
+
+
 def render_summary(report: ArchiveReport) -> str:
     """Render the report for a run summary, escaped inside a `<pre>` block."""
     title = "Release archive dry run" if report["dryRun"] else "Release archive"
@@ -448,10 +454,11 @@ def render_summary(report: ArchiveReport) -> str:
         outcome = target.get("outcome")
         if outcome in (Outcome.UNCHANGED, Outcome.NOT_CHECKED):
             continue
-        detail = target.get("version") or target.get("error") or target.get("reason")
         label = outcome or "resolved"
         lines.append(
-            html.escape(f"{label}: {target['url']} ({target['name']}): {detail}")
+            html.escape(
+                f"{label}: {target['url']} ({target['name']}): {target_detail(target)}"
+            )
         )
     return "\n".join([*lines, "</pre>"]) + "\n"
 

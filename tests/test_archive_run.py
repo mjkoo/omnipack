@@ -16,6 +16,9 @@ import pytest
 from omnipack.archive import Outcome
 from omnipack.archive.run import (
     Archiver,
+    ArchiveReport,
+    TargetReport,
+    render_summary,
     run_archive,
     version_slug,
     write_archive_report,
@@ -656,3 +659,21 @@ def test_the_report_and_summary_are_written(tmp_path: Path) -> None:
     written = json.loads((tmp_path / ".build/archive/report.json").read_text())
     assert written["status"] == "success" and written["dryRun"] is True
     assert "skipped" in (tmp_path / ".build/archive/summary.md").read_text()
+
+
+def test_a_failed_target_with_a_version_shows_its_error_in_the_summary() -> None:
+    report = ArchiveReport(
+        status=Status.SUCCESS,
+        dryRun=False,
+        targets=[
+            TargetReport(
+                name="App",
+                url=SOURCE_URL,
+                outcome=Outcome.FAILED,
+                version="v1",
+                error="HTTP 404 for app.apk",
+            )
+        ],
+    )
+
+    assert f"failed: {SOURCE_URL} (App): HTTP 404 for app.apk" in render_summary(report)
