@@ -1,4 +1,4 @@
-"""Capture a repository's full history as a zstd-compressed git bundle."""
+"""Capture a repository's full history as a git bundle."""
 
 from __future__ import annotations
 
@@ -10,17 +10,14 @@ import subprocess
 import tempfile
 import time
 from collections.abc import Callable
-from compression import zstd
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
-ZSTD_LEVEL = 10
-
 
 class CaptureOutcome(StrEnum):
     CAPTURED = "captured"
-    # Git or the compression failed: the target is archived without a bundle.
+    # Git failed: the target is archived without a bundle.
     FAILED = "failed"
     # The run deadline passed: the target is abandoned.
     EXPIRED = "expired"
@@ -40,22 +37,21 @@ def capture_source(
     deadline: float | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> CaptureResult:
-    """Write a compressed bundle of every ref of `url` to `destination`.
+    """Write a git bundle of every ref of `url` to `destination`.
 
-    The mirror clone and the intermediate bundle live under `work_dir` and are
-    removed before returning. `deadline` is a reading of `clock` that bounds
-    the clone, the bundling and the compression; a capture that outlasts it is
-    `EXPIRED` and leaves no output. It never raises for a failed capture.
+    The mirror clone lives under `work_dir` and is removed before returning.
+    `deadline` is a reading of `clock` that bounds the clone and the bundling;
+    a capture that outlasts it is `EXPIRED`. It never raises for a failed
+    capture.
     """
     scratch = Path(tempfile.mkdtemp(dir=work_dir, prefix="source-"))
     try:
         mirror = scratch / "mirror.git"
-        bundle = scratch / "repo.bundle"
         steps = (
             ("clone", ["git", "clone", "--mirror", "--quiet", url, str(mirror)], None),
             (
                 "bundle",
-                ["git", "bundle", "create", "--quiet", str(bundle), "--all"],
+                ["git", "bundle", "create", "--quiet", str(destination), "--all"],
                 mirror,
             ),
         )
@@ -63,24 +59,6 @@ def capture_source(
             result = _run(step, command, cwd, deadline, clock)
             if result is not None:
                 return result
-        # The bundle holds every ref, so the mirror is not needed to compress.
-        shutil.rmtree(mirror, ignore_errors=True)
-        try:
-            with (
-                bundle.open("rb") as source,
-                zstd.open(destination, "wb", level=ZSTD_LEVEL) as out,
-            ):
-                shutil.copyfileobj(source, out)
-        except OSError as error:
-            destination.unlink(missing_ok=True)
-            return CaptureResult(
-                CaptureOutcome.FAILED, f"compressing the bundle failed: {error}"
-            )
-        if deadline is not None and clock() >= deadline:
-            destination.unlink(missing_ok=True)
-            return CaptureResult(
-                CaptureOutcome.EXPIRED, "the run deadline passed while compressing"
-            )
         return CaptureResult(CaptureOutcome.CAPTURED)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
