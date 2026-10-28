@@ -2,16 +2,16 @@
 
 ## 1. Setup
 
-- [ ] 1.1 Add an `archive` dependency group with boto3 via `uv add --group archive boto3`; verify `uv lock --check` passes and the core `dependencies` list stays empty
-- [ ] 1.2 Create the `src/omnipack/archive/` package. Its outcome `StrEnum` names archived, unchanged, unreachable, no release, failed, skipped and not checked. Its `ResolvedRelease` model carries version, tag, date, notes, raw record, assets and pages. Verify `just typecheck` passes
+- [x] 1.1 Add an `archive` dependency group with boto3 via `uv add --group archive boto3`; verify `uv lock --check` passes and the core `dependencies` list stays empty
+- [x] 1.2 Create the `src/omnipack/archive/` package. Its outcome `StrEnum` names archived, unchanged, unreachable, no release, failed, skipped and not checked. Its `ResolvedRelease` model carries version, tag, date, notes, raw record, assets and pages. Verify `just typecheck` passes
 
 ## 2. HTTP streaming
 
-- [ ] 2.1 Add `HttpClient.download` to `src/omnipack/http.py`. It streams to a destination file, computes SHA-256, applies the existing retry policy and header-forwarding rules, and waits on rate-limit reset headers within a caller-supplied deadline. Verify with new tests in `tests/test_http.py` using an injected transport: chunked body, retry then success, 404, a 429 with reset, and no credential sent after a redirect
+- [x] 2.1 Add `HttpClient.download` to `src/omnipack/http.py`. It streams to a destination file, computes SHA-256, applies the existing retry policy and header-forwarding rules, and waits on rate-limit reset headers within a caller-supplied deadline. Verify with new tests in `tests/test_http.py` using an injected transport: chunked body, retry then success, 404, a 429 with reset, and no credential sent after a redirect
 
 ## 3. Targets
 
-- [ ] 3.1 Implement target selection on top of `live_check.read_targets`. It dedupes on the normalized URL with single-first precedence, skips track-only entries and sources other than GitHub, GitLab and HTML, and derives the source key. Verify with synthetic-pack tests: an app in both packs, a track-only entry, an unsupported source, and HTML key prefixing
+- [x] 3.1 Implement target selection on top of `live_check.read_targets`. It dedupes on the normalized URL with single-first precedence, skips track-only entries and sources other than GitHub, GitLab and HTML, and derives the source key. Verify with synthetic-pack tests: an app in both packs, a track-only entry, an unsupported source, and HTML key prefixing
 
 ## 4. Obtainium-equivalent resolution
 
