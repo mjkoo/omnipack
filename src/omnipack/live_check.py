@@ -18,10 +18,10 @@ import html
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from omnipack.build import OUTPUTS
 from omnipack.forge_health import (
@@ -99,11 +99,13 @@ class _BudgetSpent(Exception):
 @dataclass(frozen=True, slots=True)
 class Target:
     """A distinct pack URL with the name and `additionalSettings` of its first
-    entry, which supply its request headers and its health settings."""
+    entry, which supply its request headers and its health settings. `entry`
+    is that whole pack entry."""
 
     url: str
     name: str
     settings: object
+    entry: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
 
 
 def check_live(
@@ -245,7 +247,7 @@ def _pack_entries(path: Path, name: str) -> list[Target]:
             f"pack {name} is malformed: apps must be objects with a string url and name"
         )
     return [
-        Target(entry["url"], entry["name"], entry.get("additionalSettings"))
+        Target(entry["url"], entry["name"], entry.get("additionalSettings"), entry)
         for entry in apps
     ]
 
