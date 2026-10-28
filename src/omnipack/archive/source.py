@@ -1,4 +1,4 @@
-"""Capture a repository's full history as a git bundle."""
+"""Capture a repository's branches and tags as a git bundle."""
 
 from __future__ import annotations
 
@@ -16,14 +16,16 @@ from pathlib import Path
 
 
 class CaptureOutcome(StrEnum):
+    """How a capture ended. On `FAILED` git failed and the target is archived
+    without a bundle; on `EXPIRED` the run deadline passed and the target is
+    abandoned."""
+
     CAPTURED = "captured"
-    # Git failed: the target is archived without a bundle.
     FAILED = "failed"
-    # The run deadline passed: the target is abandoned.
     EXPIRED = "expired"
 
 
-@dataclass(frozen=True)
+@dataclass(frozen=True, slots=True)
 class CaptureResult:
     outcome: CaptureOutcome
     reason: str | None = None
@@ -37,22 +39,23 @@ def capture_source(
     deadline: float | None = None,
     clock: Callable[[], float] = time.monotonic,
 ) -> CaptureResult:
-    """Write a git bundle of every ref of `url` to `destination`.
+    """Write a git bundle of every branch and tag of `url` to `destination`.
 
-    The mirror clone lives under `work_dir` and is removed before returning.
+    The bare clone, which leaves out a forge's pull and merge request refs,
+    lives under `work_dir` and is removed before returning.
     `deadline` is a reading of `clock` that bounds the clone and the bundling;
     a capture that outlasts it is `EXPIRED`. It never raises for a failed
     capture.
     """
     scratch = Path(tempfile.mkdtemp(dir=work_dir, prefix="source-"))
     try:
-        mirror = scratch / "mirror.git"
+        clone = scratch / "repo.git"
         steps = (
-            ("clone", ["git", "clone", "--mirror", "--quiet", url, str(mirror)], None),
+            ("clone", ["git", "clone", "--bare", "--quiet", url, str(clone)], None),
             (
                 "bundle",
                 ["git", "bundle", "create", "--quiet", str(destination), "--all"],
-                mirror,
+                clone,
             ),
         )
         for step, command, cwd in steps:
@@ -98,13 +101,15 @@ def _run_process(
 ) -> subprocess.CompletedProcess[str]:
     """Run a command in its own process group; on timeout kill the whole group
     so transport helpers git spawns (git-remote-https, ssh) do not outlive it.
-    Raises `subprocess.TimeoutExpired` after the group is gone."""
+    Raises `subprocess.TimeoutExpired` after the group is gone. Only standard
+    error is kept, with bytes that are not UTF-8 replaced."""
     with subprocess.Popen(
         command,
         cwd=cwd,
-        stdout=subprocess.PIPE,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.PIPE,
         text=True,
+        errors="replace",
         env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
         start_new_session=True,
     ) as process:

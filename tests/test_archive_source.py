@@ -45,10 +45,12 @@ def repo(tmp_path: Path) -> Path:
     git(path, "add", "b.txt")
     git(path, "commit", "--quiet", "-m", "two")
     git(path, "checkout", "--quiet", "main")
+    # A forge's pull request ref, which is neither a branch nor a tag.
+    git(path, "update-ref", "refs/pull/1/head", "feature")
     return path
 
 
-def test_capture_yields_a_bundle_that_clones_with_every_ref(
+def test_capture_yields_a_bundle_that_clones_with_every_branch_and_tag(
     repo: Path, tmp_path: Path
 ) -> None:
     work = tmp_path / "work"
@@ -74,6 +76,14 @@ def test_capture_yields_a_bundle_that_clones_with_every_ref(
         "refs/remotes/origin/feature",
         "refs/tags/v1",
     } <= set(refs)
+    heads = subprocess.run(
+        ["git", "bundle", "list-heads", str(destination)],
+        check=True,
+        capture_output=True,
+        text=True,
+    ).stdout
+    assert "refs/heads/feature" in heads
+    assert "refs/pull/" not in heads
 
 
 def test_work_directory_holds_only_the_output_afterwards(
@@ -92,6 +102,14 @@ def test_missing_remote_returns_a_reason(tmp_path: Path) -> None:
     assert result.outcome is CaptureOutcome.FAILED
     assert result.reason is not None and "clone" in result.reason
     assert not (work / "out.bundle").exists()
+
+
+def test_git_output_that_is_not_utf8_does_not_raise() -> None:
+    completed = source._run_process(
+        ["sh", "-c", "printf 'bad \\377 byte' >&2; exit 1"], None, 5
+    )
+    assert completed.returncode == 1
+    assert "bad" in completed.stderr
 
 
 def test_empty_repository_returns_a_reason(tmp_path: Path) -> None:
