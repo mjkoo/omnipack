@@ -3,9 +3,11 @@
 Obtainium scrapes a page for download links, optionally following
 intermediate pages first, and versions the release from the chosen link or
 the page text. Its pseudo versions for a page with no version pattern hash
-the link (reproduced here as a link digest) or the start of the download or
-its ETag, which would need a download to compute and are not supported.
-Release dates scraped from a page are not read.
+the link, or the start of the download or its ETag; the latter two would need
+a download to compute and are not supported. `APKLinkHash` is stood in for by
+a digest of the link: it is stable, but it is not the value Obtainium
+displays. Release dates scraped from a page are not read, so an entry that
+versions by release date is not supported either.
 """
 
 from __future__ import annotations
@@ -26,6 +28,7 @@ from omnipack.archive.selection import (
     compare_alphanumeric,
     extract_version,
     is_installable,
+    passes,
     pattern,
 )
 from omnipack.forge_health import decode_settings
@@ -58,6 +61,8 @@ def resolve_html(
     failure.
     """
     options = decode_settings(entry.get("additionalSettings"))
+    if options.get("releaseDateAsVersion") is True:
+        raise SettingsError("releaseDateAsVersion needs a scraped release date")
     headers = request_headers(entry.get("additionalSettings"))
     fetched: list[str] = []
 
@@ -85,7 +90,7 @@ def resolve_html(
     apk_filter = pattern(options, "apkFilterRegEx")
     if apk_filter is not None:
         invert = options.get("invertAPKFilter") is True
-        links = [l for l in links if (apk_filter.search(l.url) is not None) != invert]
+        links = [l for l in links if passes(apk_filter, l.url, invert)]
     if not links:
         raise NoReleaseError(f"no link matches on {url}")
     link = links[-1].url

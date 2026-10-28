@@ -194,11 +194,11 @@ def select_release(
         name = (
             release.title if release.title and release.title.strip() else release.tag
         ) or ""
-        if settings.title_filter and not _passes(
+        if settings.title_filter and not passes(
             settings.title_filter, name.strip(), settings.invert_title_filter
         ):
             continue
-        if settings.notes_filter and not _passes(
+        if settings.notes_filter and not passes(
             settings.notes_filter, release.notes.strip(), settings.invert_notes_filter
         ):
             continue
@@ -207,7 +207,7 @@ def select_release(
             a
             for a in installable
             if settings.apk_filter is None
-            or _passes(settings.apk_filter, a.name, settings.invert_apk_filter)
+            or passes(settings.apk_filter, a.name, settings.invert_apk_filter)
         )
         if not passing and not settings.track_only:
             continue
@@ -312,7 +312,9 @@ def _key(release: Candidate) -> str | None:
     return release.tag if release.tag is not None else release.title
 
 
-def _passes(regex: re.Pattern[str], value: str, invert: bool) -> bool:
+def passes(regex: re.Pattern[str], value: str, invert: bool) -> bool:
+    """Whether `value` passes a filter: it matches `regex`, or with `invert`
+    it does not."""
     return (regex.search(value) is not None) != invert
 
 

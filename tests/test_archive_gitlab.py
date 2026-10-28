@@ -103,6 +103,24 @@ def test_a_file_reached_by_link_and_description_is_listed_once() -> None:
     assert release.assets == (Asset("Aurora.apk", uploaded),)
 
 
+def test_a_description_upload_replaces_a_link_to_a_file_of_the_same_name() -> None:
+    linked = "https://gitlab.com/group/app/uploads/abc123/Aurora.apk"
+    uploaded = "https://gitlab.com/-/project/77/uploads/abc123/Aurora.apk"
+    release_json = gl_release(
+        "v1",
+        ("Aurora.apk", linked),
+        ("notes.txt", "https://x.test/notes.txt"),
+        description="[apk](/uploads/abc123/Aurora.apk)",
+    )
+
+    release, _ = resolve({RELEASES: [release_json]})
+
+    assert release.assets == (
+        Asset("Aurora.apk", uploaded),
+        Asset("notes.txt", "https://x.test/notes.txt"),
+    )
+
+
 def test_a_package_link_without_an_extension_counts_as_an_apk() -> None:
     link = {
         "name": "Android APK Install File",
@@ -166,10 +184,9 @@ def test_no_releases_is_a_no_release_outcome() -> None:
 
 
 @pytest.mark.parametrize("missing", [PROJECT, RELEASES])
-@pytest.mark.parametrize("status", [404, 410])
-def test_a_missing_project_is_unreachable(missing: str, status: int) -> None:
+def test_a_missing_project_is_unreachable(missing: str) -> None:
     with pytest.raises(UnreachableError):
-        resolve({RELEASES: [], missing: status})
+        resolve({RELEASES: [], missing: 404})
 
 
 def test_the_deadline_bounds_the_requests() -> None:

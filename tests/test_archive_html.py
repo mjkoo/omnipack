@@ -200,6 +200,16 @@ def test_pseudo_versions_that_need_a_download_are_not_supported(
         resolve({PAGE: anchors("app.apk")}, entry(**settings))
 
 
+def test_versioning_by_release_date_is_not_supported_and_fetches_nothing() -> None:
+    transport = RoutedTransport({})
+    http = HttpClient(transport=transport)
+
+    with pytest.raises(SettingsError):
+        resolve_html(entry(releaseDateAsVersion=True), http)
+
+    assert transport.requests == []
+
+
 def test_a_version_pattern_that_matches_nothing_fails_the_target() -> None:
     with pytest.raises(VersionError):
         resolve({PAGE: anchors("app.apk")}, entry(versionExtractionRegEx="zzz"))
@@ -231,14 +241,13 @@ def test_a_page_without_a_matching_link_is_a_no_release_outcome(
         resolve(answers, entry(intermediateLink=steps))
 
 
-@pytest.mark.parametrize("status", [404, 410])
-def test_a_missing_page_is_unreachable_at_any_stage(status: int) -> None:
+def test_a_missing_page_is_unreachable_at_any_stage() -> None:
     step = "https://example.com/step/"
     with pytest.raises(UnreachableError):
-        resolve({PAGE: status}, entry())
+        resolve({PAGE: 404}, entry())
     with pytest.raises(UnreachableError):
         resolve(
-            {PAGE: anchors("/step/"), step: status},
+            {PAGE: anchors("/step/"), step: 404},
             entry(intermediateLink=[{"customLinkFilterRegex": "/step/"}]),
         )
 

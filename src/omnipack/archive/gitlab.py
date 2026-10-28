@@ -16,11 +16,13 @@ from urllib.parse import quote, unquote, urlsplit
 from omnipack.archive import Asset, NoReleaseError, ResolvedRelease
 from omnipack.archive.fetch import fetch
 from omnipack.archive.selection import (
+    APK_SUFFIXES,
     Candidate,
     ReleaseAsset,
     ReleaseSettings,
     SortMethod,
     is_installable,
+    passes,
     release_version,
     select_release,
 )
@@ -90,8 +92,7 @@ def resolve_gitlab(
         kept = [
             a
             for a in selected.installable
-            if (settings.apk_filter.search(a.name) is not None)
-            != settings.invert_apk_filter
+            if passes(settings.apk_filter, a.name, settings.invert_apk_filter)
         ]
         if not kept:
             raise NoReleaseError("no APK passes the entry's filter")
@@ -147,9 +148,9 @@ def _date(record: dict[str, Any]) -> datetime | None:
 def _assets(
     record: dict[str, Any], project_id: int, project_url: str
 ) -> list[tuple[Asset, bool]]:
-    """Every file the release offers, each once, with whether it is an APK:
-    its asset links, then the APKs its description links from the project's
-    uploads."""
+    """Every file the release offers, once per file name, with whether it is
+    an APK: its asset links, then the APKs its description links from the
+    project's uploads, which replace a link to a file of the same name."""
     found: dict[str, tuple[Asset, bool]] = {}
     job_artifact = re.compile(
         f"^{re.escape(project_url)}/-/jobs/[0-9]+/artifacts/file/[^/]+"
@@ -168,11 +169,11 @@ def _assets(
         if job_artifact.match(url):
             url = url.replace("/file/", "/raw/", 1)
         file_name = name or unquote(urlsplit(url).path.rsplit("/", 1)[-1]) or "unknown"
-        found.setdefault(url, (Asset(file_name, url), installable))
+        found.setdefault(file_name, (Asset(file_name, url), installable))
     for line in _description_uploads(record.get("description")):
         url = f"https://{HOST}/-/project/{project_id}{line}"
         file_name = unquote(urlsplit(url).path.rsplit("/", 1)[-1])
-        found[url] = (Asset(file_name, url), True)
+        found[file_name] = (Asset(file_name, url), True)
     return list(found.values())
 
 
@@ -190,7 +191,7 @@ def _description_uploads(description: object) -> list[str]:
     if not isinstance(description, str):
         return []
     text = description.replace("](", "\n")
-    for extension in (".apk", ".xapk", ".apkm", ".apks"):
+    for extension in APK_SUFFIXES:
         text = text.replace(f"{extension})", f"{extension}\n")
     return [
         line

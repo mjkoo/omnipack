@@ -112,6 +112,9 @@ def source_key(url: str, source: SourceType | None) -> str:
 
 
 def escape_segment(segment: str) -> str:
+    """One path segment percent-escaped to unreserved characters. An empty
+    segment or one of only dots is escaped too, so it cannot collapse or
+    climb a level."""
     if segment == "":
         return "%2F"
     if set(segment) == {"."}:
