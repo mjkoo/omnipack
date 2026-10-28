@@ -23,8 +23,8 @@
 
 ## 5. Storage and source history
 
-- [ ] 5.1 Implement the bucket store, configured from `ARCHIVE_S3_*` environment variables. It handles JSON get and put, existence checks and file upload, and raises a run-level error on configuration or auth failure. Verify with a dict-backed fake and `botocore` Stubber tests for missing configuration and access denied
-- [ ] 5.2 Implement source capture. It makes a mirror clone, builds a bundle of every ref, and compresses it to `.zst` with `compression.zstd`, reporting failure as a reason rather than raising. Verify against a local temporary git repo: the decompressed bundle clones with every branch and tag, and a missing remote returns a reason
+- [x] 5.1 Implement the bucket store, configured from `ARCHIVE_S3_*` environment variables. It handles JSON get and put, existence checks and file upload, and raises a run-level error on configuration or auth failure. Verify with a dict-backed fake and `botocore` Stubber tests for missing configuration and access denied
+- [x] 5.2 Implement source capture. It makes a mirror clone, builds a bundle of every ref, and compresses it to `.zst` with `compression.zstd`, reporting failure as a reason rather than raising. Verify against a local temporary git repo: the decompressed bundle clones with every branch and tag, and a missing remote returns a reason
 
 ## 6. Orchestration and command
 
