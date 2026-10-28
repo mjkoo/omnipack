@@ -247,7 +247,7 @@ def test_a_missing_page_is_unreachable_at_any_stage() -> None:
         resolve({PAGE: 404}, entry())
     with pytest.raises(UnreachableError):
         resolve(
-            {PAGE: anchors("/step/"), step: 404},
+            {PAGE: anchors("/step/"), step: 410},
             entry(intermediateLink=[{"customLinkFilterRegex": "/step/"}]),
         )
 

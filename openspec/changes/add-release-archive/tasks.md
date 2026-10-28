@@ -7,7 +7,7 @@
 
 ## 2. HTTP streaming
 
-- [x] 2.1 Add `HttpClient.download` to `src/omnipack/http.py`. It streams to a destination file, computes SHA-256, applies the existing retry policy and header-forwarding rules, and waits on rate-limit reset headers within a caller-supplied deadline. Verify with new tests in `tests/test_http.py` using an injected transport: chunked body, retry then success, 404, a 429 with reset, and no credential sent after a redirect
+- [x] 2.1 Add `HttpClient.download` to `src/omnipack/http.py`. It streams to a destination file, applies the existing retry policy and header-forwarding rules, and waits on rate-limit reset headers within a caller-supplied deadline; the archive hashes each stored file once, when it uploads it. Verify with new tests in `tests/test_http.py` using an injected transport: chunked body, retry then success, 404, a 429 with reset, and no credential sent after a redirect by a deadline-bounded request
 
 ## 3. Targets
 

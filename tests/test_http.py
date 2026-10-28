@@ -303,8 +303,9 @@ def test_a_credential_outside_printable_ascii_is_refused_without_echoing_it(
     assert transport.requests == []
 
 
+@pytest.mark.parametrize("deadline", [None, 60.0])
 def test_a_credential_is_not_forwarded_on_a_redirect(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, deadline: float | None
 ) -> None:
     requests: list[Request] = []
 
@@ -323,8 +324,8 @@ def test_a_credential_is_not_forwarded_on_a_redirect(
 
     monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
 
-    result = HttpClient(retries=0).get(
-        "https://api.example/old", credential="Bearer secret"
+    result = HttpClient(retries=0, clock=lambda: 0.0).get(
+        "https://api.example/old", credential="Bearer secret", deadline=deadline
     )
 
     assert result.body == b"payload"
