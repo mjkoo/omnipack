@@ -226,6 +226,37 @@ def test_a_new_version_stores_every_object_and_the_manifest_last() -> None:
     }
 
 
+def test_every_asset_of_a_release_is_stored_with_its_size_and_hash() -> None:
+    names = ("app.apk", "app-windows.zip", "SHA256SUMS")
+    bodies = {name: f"body of {name}".encode() for name in names}
+    release = gh_release("v1", "2024-01-01T00:00:00Z", *names)
+    world = World(
+        [release],
+        files={
+            f"https://github.com/owner/app/releases/download/v1/{name}": body
+            for name, body in bodies.items()
+        },
+    )
+
+    assert world.process()["outcome"] == Outcome.ARCHIVED
+
+    manifest = json.loads(
+        world.bucket.objects[f"{APP}/{version_slug('v1')}/manifest.json"]
+    )
+    assets = {
+        o["key"]: o for o in manifest["objects"] if o["key"].startswith("assets/")
+    }
+    assert assets == {
+        f"assets/{name}": {
+            "key": f"assets/{name}",
+            "size": len(body),
+            "sha256": hashlib.sha256(body).hexdigest(),
+            "url": f"https://github.com/owner/app/releases/download/v1/{name}",
+        }
+        for name, body in bodies.items()
+    }
+
+
 def test_a_new_version_is_stored_beside_the_old_one_and_a_return_touches_nothing() -> (
     None
 ):

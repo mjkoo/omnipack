@@ -2,6 +2,7 @@ import json
 from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
+from typing import Any
 from urllib.request import Request
 
 import pytest
@@ -1604,6 +1605,43 @@ def test_archive_prints_a_failed_targets_error_even_with_a_version(
 
     output = capsys.readouterr().out
     assert "failed: https://github.com/owner/app (X): HTTP 404 for app.apk" in output
+
+
+def test_a_killed_archive_run_leaves_the_report_so_far_on_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Killed(Exception):
+        pass
+
+    def killed_run(*args: object, **kwargs: Any) -> archive_run.ArchiveReport:
+        kwargs["checkpoint"](
+            archive_run.ArchiveReport(
+                status=Status.SUCCESS,
+                dryRun=True,
+                targets=[
+                    archive_run.TargetReport(
+                        name="X", url="https://github.com/owner/x", version="v1"
+                    ),
+                    archive_run.TargetReport(
+                        name="Y",
+                        url="https://github.com/owner/y",
+                        outcome=Outcome.NOT_CHECKED,
+                        reason="the run ended before reaching it",
+                    ),
+                ],
+            )
+        )
+        raise Killed
+
+    monkeypatch.setattr(cli, "run_archive", killed_run)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(Killed):
+        cli.main(["archive", "--dry-run"])
+
+    report = json.loads((tmp_path / archive_run.REPORT).read_text())
+    assert [t.get("outcome") for t in report["targets"]] == [None, "not checked"]
+    assert (tmp_path / archive_run.SUMMARY).exists()
 
 
 def test_archive_exits_nonzero_when_the_report_cannot_be_written(
