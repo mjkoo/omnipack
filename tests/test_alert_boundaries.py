@@ -17,6 +17,14 @@ from typing import get_args
 
 import pytest
 
+from omnipack.archive import Outcome
+from omnipack.archive import run as archive_run
+from omnipack.archive.run import (
+    ArchiveReport,
+    TargetReport,
+    failed_report,
+    write_archive_report,
+)
 from omnipack.live_check import REPORT, check_live, write_live_report
 from omnipack.merge import CompositionReport, StaleExclusion, UncategorizedFamily
 from omnipack.model import Variant
@@ -30,6 +38,7 @@ from scripts.alerts import (
     LIVE_CHECK,
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
+    RELEASE_ARCHIVE,
     Owner,
     Producer,
     parse_findings,
@@ -343,3 +352,81 @@ def test_alert_docs_name_the_label_keys_jobs_and_artifacts_the_code_uses() -> No
                 assert upload["with"]["name"] == artifact_pattern.replace(
                     "<owner>", owner.replace("$SOURCE", "${{ inputs.source }}")
                 ).replace("<run id>", "${{ github.run_id }}")
+
+
+def test_archive_report_from_the_real_writer_raises_and_then_clears_the_run_finding(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    findings = tmp_path / "findings.json"
+    step = _emit_step("release-archive.yml", "archive")
+    report = tmp_path / archive_run.REPORT
+
+    # A run that could not reach its bucket ends the archive step in failure.
+    write_archive_report(
+        tmp_path, failed_report("the bucket cannot be reached", dry_run=False)
+    )
+    _run_emit(
+        monkeypatch,
+        step,
+        findings,
+        report=report,
+        outputs={},
+        outcomes={"archive": "failure"},
+        job_status="failure",
+    )
+    failed = parse_findings(RELEASE_ARCHIVE, findings.read_text())
+    assert failed is not None
+    assert [f.key for f in failed.findings] == ["release-archive/read"]
+    opened = _reconcile(RELEASE_ARCHIVE, findings, "failure", [])
+    assert [verb for verb, _ in issue_writes(opened)] == ["create"]
+
+    # A later healthy run, with per-target problems, closes that issue.
+    healthy = ArchiveReport(
+        status=Status.SUCCESS,
+        dryRun=False,
+        targets=[
+            TargetReport(
+                name="A",
+                url="https://example.test/a",
+                outcome=Outcome.FAILED,
+                error="x",
+            ),
+            TargetReport(
+                name="B", url="https://example.test/b", outcome=Outcome.UNREACHABLE
+            ),
+        ],
+    )
+    write_archive_report(tmp_path, healthy)
+    _run_emit(
+        monkeypatch,
+        step,
+        findings,
+        report=report,
+        outputs={},
+        outcomes={"archive": "success"},
+        job_status="success",
+    )
+    closed = _reconcile(
+        RELEASE_ARCHIVE, findings, "success", [alert_issue(1, "release-archive/read")]
+    )
+    assert issue_writes(closed) == [("close", "1")]
+
+
+def test_archive_step_failing_without_a_report_still_emits_the_early_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    findings = tmp_path / "findings.json"
+
+    _run_emit(
+        monkeypatch,
+        _emit_step("release-archive.yml", "archive"),
+        findings,
+        report=tmp_path / archive_run.REPORT,
+        outputs={},
+        outcomes={"archive": "failure"},
+        job_status="failure",
+    )
+
+    parsed = parse_findings(RELEASE_ARCHIVE, findings.read_text())
+    assert parsed is not None
+    assert [f.key for f in parsed.findings] == ["release-archive/run"]

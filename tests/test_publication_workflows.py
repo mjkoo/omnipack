@@ -12,6 +12,7 @@ from pathlib import Path
 import pytest
 import yaml
 
+from omnipack.archive import run as archive_run
 from omnipack.live_check import REPORT, SUMMARY
 from omnipack.source_registry import GENERATED
 from scripts.alerts import parse_owner
@@ -438,6 +439,7 @@ def alert_cases():
             {"$SOURCE-check": "check", "$SOURCE-publish": "publish"},
         ),
         ("source-catalog.yml", "alert-live-check", {"live-check": "live-check"}),
+        ("release-archive.yml", "alert", {"release-archive": "archive"}),
     ]
 
 
@@ -457,10 +459,15 @@ def test_alert_job_holds_only_issue_access_and_reconciles_producer_findings(
         job["needs"] if isinstance(job["needs"], list) else [job["needs"]]
     ) == set(producers.values())
     assert "uses" not in job
-    # The caller's group serializes the source alert job; live-check has its own.
-    if file == "source-catalog.yml":
+    # The caller's group serializes the source alert job; the live check and
+    # the archive have their own.
+    own_groups = {
+        "source-catalog.yml": "omnipack-live-check-alerts",
+        "release-archive.yml": "omnipack-release-archive-alerts",
+    }
+    if file in own_groups:
         assert job["concurrency"] == {
-            "group": "omnipack-live-check-alerts",
+            "group": own_groups[file],
             "cancel-in-progress": False,
         }
     else:
@@ -574,6 +581,10 @@ EMIT_BINDINGS = {
         "live-check",
         {"CHECK_RESULT": "${{ steps.check.outcome }}"},
     ),
+    ("release-archive.yml", "archive"): (
+        "release-archive",
+        {"ARCHIVE_RESULT": "${{ steps.archive.outcome }}"},
+    ),
 }
 
 
@@ -611,6 +622,7 @@ def test_producing_jobs_emit_findings_last_and_tolerate_emit_failure(file, job_n
                 "publish": {"contents": "write", "pull-requests": "write"},
             },
             "source-catalog.yml": {"live-check": {"contents": "read"}},
+            "release-archive.yml": {"archive": {"contents": "read"}},
         }[file][job_name]
     )
 
@@ -654,10 +666,123 @@ def test_findings_uploads_are_unique_and_each_alert_downloads_its_producers():
     )
     assert download["with"]["name"] == live
 
+    archive = load("release-archive.yml")
+    archived = next(
+        s for s in archive["jobs"]["archive"]["steps"] if is_findings_upload(s)
+    )["with"]["name"]
+    assert archived == findings_name("release-archive")
+    (download,) = action_steps(archive["jobs"]["alert"], "actions/download-artifact")
+    assert download["with"]["name"] == archived
+
     # One run holds the codm, Quiver and live-check uploads: all distinct.
     run_names = [
         n.replace("${{ inputs.source }}", source_name)
         for source_name in GENERATED
         for n in uploads.values()
-    ] + [live, *names.values()]
+    ] + [live, archived, *names.values()]
     assert len(set(run_names)) == len(run_names)
+
+
+ARCHIVE_SECRETS = {
+    "ARCHIVE_S3_ENDPOINT",
+    "ARCHIVE_S3_BUCKET",
+    "ARCHIVE_S3_ACCESS_KEY_ID",
+    "ARCHIVE_S3_SECRET_ACCESS_KEY",
+    "ARCHIVE_S3_PREFIX",
+}
+
+
+def test_release_archive_runs_after_nightly_or_by_hand_and_holds_only_read_access():
+    workflow = load("release-archive.yml")
+    assert triggers(workflow) == {
+        "workflow_run": {"workflows": ["Nightly publishing"], "types": ["completed"]},
+        "workflow_dispatch": None,
+    }
+    assert workflow["permissions"] == {}
+    text = (WORKFLOWS / "release-archive.yml").read_text()
+    # The one dangerous trigger is ignored inline, with the reason above it.
+    [ignored] = [line for line in text.splitlines() if "zizmor: ignore" in line]
+    assert ignored.strip() == "workflow_run: # zizmor: ignore[dangerous-triggers]"
+
+    job = workflow["jobs"]["archive"]
+    assert set(workflow["jobs"]) == {"archive", "alert"}
+    assert job["if"] == GUARD
+    assert job["permissions"] == {"contents": "read"}
+    assert job["environment"] == "release-archive"
+    assert "environment" not in workflow["jobs"]["alert"]
+    assert job["concurrency"] == {
+        "group": "omnipack-release-archive",
+        "cancel-in-progress": False,
+    }
+    assert job["timeout-minutes"] == 330
+    assert "needs" not in job
+
+    (checkout,) = action_steps(job, "actions/checkout")
+    assert checkout["with"]["ref"] == "${{ github.sha }}"
+    assert checkout["with"]["persist-credentials"] is False
+    (setup_uv,) = action_steps(job, "astral-sh/setup-uv")
+    assert setup_uv["with"]["enable-cache"] is False
+    command_step(job, "uv", "sync", "--locked", "--group", "archive")
+    for step in job["steps"]:
+        if "uses" in step:
+            assert re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", step["uses"])
+            assert not step["uses"].startswith(("actions/cache", "actions/download"))
+
+
+def test_release_archive_step_gets_the_token_secrets_and_a_budget_inside_the_limit():
+    job = load("release-archive.yml")["jobs"]["archive"]
+    words = ["uv", "run", "--no-sync", "pack", "archive"]
+    [archive] = [s for s in job["steps"] if command(s)[:5] == words]
+    assert archive["id"] == "archive"
+    assert "if" not in archive
+    assert "continue-on-error" not in archive
+    assert archive["env"] == {
+        "GITHUB_TOKEN": "${{ github.token }}",
+        **{name: "${{ secrets." + name + " }}" for name in sorted(ARCHIVE_SECRETS)},
+    }
+    # The budget leaves the job limit's margin for setup, the target in flight
+    # at the deadline and the reporting steps.
+    flag = command(archive).index("--budget-minutes")
+    budget = int(command(archive)[flag + 1])
+    assert budget + 15 <= job["timeout-minutes"]
+    # Only the archive step holds the token or any secret.
+    assert [s for s in job["steps"] if "env" in s and s is not archive] == [
+        emit_step(job["steps"])
+    ]
+    assert "secrets." not in str([s for s in job["steps"] if s is not archive]) + str(
+        load("release-archive.yml")["jobs"]["alert"]
+    )
+
+
+def test_release_archive_reports_and_uploads_its_files_after_the_step():
+    job = load("release-archive.yml")["jobs"]["archive"]
+    steps = job["steps"]
+    [archive] = [s for s in steps if s.get("id") == "archive"]
+    summary = next(s for s in steps if "GITHUB_STEP_SUMMARY" in s.get("run", ""))
+    assert summary["if"] == "always()"
+    assert str(archive_run.SUMMARY) in summary["run"]
+    (upload,) = [
+        s
+        for s in action_steps(job, "actions/upload-artifact")
+        if not is_findings_upload(s)
+    ]
+    assert upload["if"] == "always()"
+    assert upload["with"]["path"].split() == [
+        str(archive_run.REPORT),
+        str(archive_run.SUMMARY),
+    ]
+    assert upload["with"]["if-no-files-found"] == "ignore"
+    assert steps.index(archive) < steps.index(summary) < steps.index(upload)
+
+
+def test_only_the_release_archive_job_references_the_bucket_secrets():
+    for path in sorted(WORKFLOWS.glob("*.yml")):
+        workflow = load(path.name)
+        for name, job in workflow["jobs"].items():
+            mentions = [secret for secret in ARCHIVE_SECRETS if secret in str(job)]
+            if (path.name, name) == ("release-archive.yml", "archive"):
+                assert set(mentions) == ARCHIVE_SECRETS
+            else:
+                assert mentions == [], (path.name, name)
+        if path.name != "release-archive.yml":
+            assert "ARCHIVE_S3" not in path.read_text()

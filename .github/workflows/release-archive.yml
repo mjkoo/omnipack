@@ -1,0 +1,128 @@
+name: Release archive
+
+on:
+  # The job checks out main, consumes no artifact from the triggering run and
+  # holds only `contents: read`, so the triggering run cannot influence it.
+  workflow_run: # zizmor: ignore[dangerous-triggers]
+    workflows: ["Nightly publishing"]
+    types: [completed]
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  archive:
+    name: Archive current releases
+    if: github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
+    # Holds the bucket secrets, which no other workflow or job can read.
+    environment: release-archive
+    permissions:
+      contents: read
+    concurrency:
+      group: omnipack-release-archive
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - uses: astral-sh/setup-uv@1c37ad07a6a961277cf70c0d37d6f313000f5884 # v10.3.0
+        with:
+          version: "0.12.5"
+          python-version: "3.14"
+          # A cache written here could be restored into a later run.
+          enable-cache: false
+
+      - name: Sync locked environment
+        run: uv sync --locked --group archive
+
+      - id: archive
+        name: Archive current releases
+        # The 300-minute budget stops new targets 30 minutes before the
+        # job limit, which covers setup, the target in flight at the deadline
+        # and the report, summary and artifact steps below.
+        run: uv run --no-sync pack archive --budget-minutes 300
+        env:
+          # Read-only, for the GitHub API release lookups only.
+          GITHUB_TOKEN: ${{ github.token }}
+          ARCHIVE_S3_ENDPOINT: ${{ secrets.ARCHIVE_S3_ENDPOINT }}
+          ARCHIVE_S3_BUCKET: ${{ secrets.ARCHIVE_S3_BUCKET }}
+          ARCHIVE_S3_ACCESS_KEY_ID: ${{ secrets.ARCHIVE_S3_ACCESS_KEY_ID }}
+          ARCHIVE_S3_SECRET_ACCESS_KEY: ${{ secrets.ARCHIVE_S3_SECRET_ACCESS_KEY }}
+          ARCHIVE_S3_PREFIX: ${{ secrets.ARCHIVE_S3_PREFIX }}
+
+      - name: Report the archive run
+        if: always()
+        run: |
+          if [ -f .build/archive/summary.md ]; then
+            cat .build/archive/summary.md >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Upload the archive report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.0
+        with:
+          name: release-archive-report-${{ github.run_id }}
+          path: |
+            .build/archive/report.json
+            .build/archive/summary.md
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+      - name: Write the alert findings
+        if: always()
+        continue-on-error: true
+        env:
+          JOB_STATUS: ${{ job.status }}
+          ARCHIVE_RESULT: ${{ steps.archive.outcome }}
+        run: python3 -m scripts.alerts emit release-archive
+
+      - name: Upload the alert findings
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.0
+        with:
+          name: alert-findings-release-archive-${{ github.run_id }}
+          path: .build/alerts/findings.json
+          if-no-files-found: ignore
+          retention-days: 14
+          overwrite: true
+
+  alert:
+    name: Raise and clear release-archive issues
+    needs: archive
+    if: always() && github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'
+    permissions:
+      issues: write # Required to open, update and close the alert issues.
+    concurrency:
+      group: omnipack-release-archive-alerts
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      # The job holds only `issues: write`, so this sparse checkout relies on
+      # the repository being public.
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          sparse-checkout: scripts
+          persist-credentials: false
+
+      - name: Download the release-archive findings
+        continue-on-error: true
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: alert-findings-release-archive-${{ github.run_id }}
+          path: ${{ runner.temp }}/alert-findings/release-archive
+
+      - name: Reconcile the alert issues
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARCHIVE_RESULT: ${{ needs.archive.result }}
+        run: |
+          python3 -m scripts.alerts reconcile \
+            --producer "release-archive=$ARCHIVE_RESULT:$RUNNER_TEMP/alert-findings/release-archive/findings.json"
