@@ -38,8 +38,8 @@ class RoutedTransport:
     request.
 
     An answer is a JSON-serializable value, text or bytes served with status
-    200, an int for an HTTP error status, or an exception to raise. A URL
-    without an answer fails the test that asked for it.
+    200, or an int for an HTTP error status. A URL without an answer fails the
+    test that asked for it.
     """
 
     def __init__(self, answers: dict[str, Any]) -> None:
@@ -49,8 +49,6 @@ class RoutedTransport:
     def __call__(self, request: urllib.request.Request, timeout: float) -> HttpResponse:
         self.requests.append(request)
         answer = self.answers[request.full_url]
-        if isinstance(answer, BaseException):
-            raise answer
         if isinstance(answer, int) and not isinstance(answer, bool):
             raise urllib.error.HTTPError(
                 request.full_url, answer, "fixture", Message(), None

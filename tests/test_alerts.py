@@ -2401,9 +2401,6 @@ def test_cli_emit_reads_a_report_from_the_given_path(
     assert [f.key for f in parsed.findings] == ["live-check/gone/https://a/b"]
 
 
-ARCHIVE_ENV = {"ARCHIVE_RESULT": "success"}
-
-
 def _archive_report(status: str = "success", **overrides: object) -> dict:
     report: dict = {"status": status, "dryRun": False, "targets": []}
     if status == "failed":
@@ -2428,7 +2425,7 @@ def test_archive_target_outcomes_raise_no_finding(tmp_path: Path) -> None:
         RELEASE_ARCHIVE,
         report=_archive_report(targets=targets),
         tmp_path=tmp_path,
-        **ARCHIVE_ENV,
+        ARCHIVE_RESULT="success",
     )
 
     assert file == FindingsFile(RELEASE_ARCHIVE, scope=("release-archive/read",))
