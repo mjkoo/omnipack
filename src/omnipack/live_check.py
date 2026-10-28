@@ -98,14 +98,13 @@ class _BudgetSpent(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """A distinct pack URL with the name and `additionalSettings` of its first
-    entry, which supply its request headers and its health settings. `entry`
-    is that whole pack entry."""
+    """A distinct pack URL with the name of its first entry. `entry` is that
+    whole pack entry, whose `additionalSettings` supply the request headers and
+    the health settings."""
 
     url: str
     name: str
-    settings: object
-    entry: dict[str, Any] = field(default_factory=dict, compare=False, repr=False)
+    entry: dict[str, Any] = field(compare=False, repr=False)
 
 
 def check_live(
@@ -161,7 +160,7 @@ def check_live(
             try:
                 result = check_health(
                     repository,
-                    target.settings,
+                    target.entry.get("additionalSettings"),
                     client,
                     token=github_token,
                     now=now,
@@ -179,7 +178,9 @@ def _check_reachability(
 ) -> bool:
     """Request one target and record its outcome; False when unreachable."""
     try:
-        client.get(target.url, headers=request_headers(target.settings))
+        client.get(
+            target.url, headers=request_headers(target.entry.get("additionalSettings"))
+        )
     except HttpStatusError as error:
         if error.status in UNREACHABLE_STATUSES:
             report["unreachable"].append({"url": target.url, "status": error.status})
@@ -246,10 +247,7 @@ def _pack_entries(path: Path, name: str) -> list[Target]:
         raise PackReadError(
             f"pack {name} is malformed: apps must be objects with a string url and name"
         )
-    return [
-        Target(entry["url"], entry["name"], entry.get("additionalSettings"), entry)
-        for entry in apps
-    ]
+    return [Target(entry["url"], entry["name"], entry) for entry in apps]
 
 
 def request_headers(settings: object) -> dict[str, str]:
