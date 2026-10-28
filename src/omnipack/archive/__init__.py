@@ -33,14 +33,6 @@ class Asset:
 
 
 @dataclass(frozen=True, slots=True)
-class Page:
-    """A page fetched while resolving a release, kept as received."""
-
-    url: str
-    body: bytes
-
-
-@dataclass(frozen=True, slots=True)
 class ResolvedRelease:
     """The release a resolver selected for one target.
 
@@ -54,4 +46,3 @@ class ResolvedRelease:
     notes: str | None = None
     raw_record: dict[str, Any] = field(default_factory=dict)
     assets: tuple[Asset, ...] = ()
-    pages: tuple[Page, ...] = ()
