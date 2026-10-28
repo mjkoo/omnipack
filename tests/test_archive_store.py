@@ -67,6 +67,23 @@ def test_configuration_probes_the_bucket_and_builds_a_store(
     assert isinstance(store, ArchiveStore)
 
 
+def test_the_key_prefix_is_trimmed_like_the_other_variables(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    client = make_client()
+    stubber = Stubber(client)
+    stubber.add_response("head_bucket", {}, {"Bucket": "bucket"})
+    stubber.add_response(
+        "head_object", {}, {"Bucket": "bucket", "Key": "pre/a/manifest.json"}
+    )
+    monkeypatch.setattr(boto3, "client", lambda *args, **kwargs: client)
+    with stubber:
+        store = ArchiveStore.from_environment(
+            {**ENVIRONMENT, "ARCHIVE_S3_PREFIX": " pre/\n"}
+        )
+        assert store.exists("a/manifest.json")
+
+
 def test_probe_failure_at_construction_is_a_run_level_error(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

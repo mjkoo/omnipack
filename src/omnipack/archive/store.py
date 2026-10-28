@@ -3,9 +3,9 @@
 The store covers what the per-target flow needs: whether a key exists, a JSON
 document put, a file upload, listing the keys under a prefix and deleting keys.
 Any failure to configure, authenticate to or reach the bucket, and any failure
-of a later request, is a `StoreError`, which
-ends the whole run. Its message can name the endpoint, the bucket or a key, so
-only its fixed `failure` description belongs in a published report.
+of a later request, is a `StoreError`, which ends the whole run. Its message
+can name the endpoint, the bucket or a key, so only its fixed `failure`
+description belongs in a published report.
 """
 
 from __future__ import annotations
@@ -81,7 +81,7 @@ class ArchiveStore:
         )
         with _translated():
             client.head_bucket(Bucket=values[BUCKET])
-        return cls(client, values[BUCKET], environment.get(PREFIX, ""))
+        return cls(client, values[BUCKET], environment.get(PREFIX, "").strip())
 
     def _key(self, key: str) -> str:
         return f"{self._prefix}/{key}" if self._prefix else key
