@@ -98,7 +98,8 @@ archived keys are re-checked by every successful report except for a URL whose
 health lookup did not finish (health inconclusive, such as a spent rate limit
 or the budget running out) or that is unreachable, which leave those issues
 as they were. The stale and archived issues of a URL no longer in the packs
-close too.
+close too. A release archive run re-checks its `read` key only when its
+archive step ran and wrote a readable report.
 
 ### Stale and archived projects
 

@@ -12,16 +12,22 @@ and other entries are reported skipped. The version it archives is the one
 Obtainium would show for the entry, so "unchanged" here means "no update in
 Obtainium".
 
+Some HTML versioning settings are exceptions. An HTML entry versioned by
+`partialAPKHash`, `ETag` or `releaseDateAsVersion` is reported failed and
+nothing is stored for it. One versioned by `APKLinkHash` gets a stable
+stand-in version derived from the resolved link, not the value Obtainium
+displays.
+
 ## Bucket layout
 
-The bucket holds only versions under `apps/`:
+The bucket holds only keys under `apps/`:
 
 ```
-<prefix>/apps/<source-key>/source/repo.bundle    every ref, as one git bundle
+<prefix>/apps/<source-key>/source/repo.bundle    every branch and tag, as one git bundle
 <prefix>/apps/<source-key>/releases/<version-slug>/
     assets/<file>            every asset of the release
     release.json             the forge's release record
-    release.md               the release notes
+    release.md               the release notes, when present
     manifest.json
 ```
 
@@ -39,7 +45,8 @@ The bucket holds only versions under `apps/`:
   SHA-256 of the bundle captured with that version, or `reason` when it could
   not be captured.
 - The bundle is a single uncompressed file per app, outside the version
-  prefixes. Each newly archived version replaces it with a fresh capture; a
+  prefixes. It is made from a bare clone, so it holds branches and tags but
+  not a forge's pull or merge request refs. Each newly archived version replaces it with a fresh capture; a
   failed capture leaves the earlier bundle in place. An HTML source has none.
 
 A version counts as archived exactly when its manifest exists. Every other
@@ -51,7 +58,8 @@ never written again.
 
 After a new version's manifest is stored, the app keeps its three most
 recently archived versions, ranked by when their manifests were stored, and
-deletes older ones. A pruned version's manifest is deleted first, so a partly
+deletes older ones. The version just archived is always kept. A pruned
+version's manifest is deleted first, so a partly
 pruned version never reads as archived. A prefix without a manifest is an
 unfinished attempt and is left alone. A pruned version that is selected again
 is archived again.
@@ -85,10 +93,11 @@ uv run pack archive [--budget-minutes N]
 uv run pack archive --dry-run
 ```
 
-`--budget-minutes` stops starting new targets after that long and abandons
-the target in flight without a manifest. `--dry-run` resolves every target
-and reports versions with no credentials, downloads, clones or bucket writes.
-`GITHUB_TOKEN`, when set, authenticates GitHub API requests.
+`--budget-minutes`, a positive number, stops starting new targets after that
+long and abandons the target in flight without a manifest; that target is
+reported failed. `--dry-run` resolves every target and reports versions with
+no credentials, downloads, clones or bucket writes. `GITHUB_TOKEN`, when set,
+authenticates GitHub API requests only and is never sent across a redirect.
 
 The report is `.build/archive/report.json` and `summary.md`, rewritten after
 each target so a run cut short keeps the outcomes it reached. The command
@@ -110,8 +119,9 @@ endpoint or bucket, goes only to the job log.
 | skipped | Track-only or an unsupported source |
 | not checked | The run stopped before reaching the target |
 
-Only the run-level failure raises a [maintenance alert](alerts.md). A target
-that fails stays in the report.
+Only the run-level failure raises a [maintenance alert](alerts.md), along
+with the job's early-failure alert (`release-archive/run`) when the archive
+job fails, is cancelled or times out. A target that fails stays in the report.
 
 ## Restoring an app
 
