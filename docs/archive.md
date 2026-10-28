@@ -26,7 +26,8 @@ The bucket holds only versions under `apps/`:
 ```
 
 - `<source-key>` is the project's normalized URL without its scheme, with each
-  path segment percent-escaped, prefixed `html/` for an HTML source.
+  path segment percent-escaped, prefixed `html/` for an HTML source. A key too
+  long for an object key is cut and ends in `-` and a digest of the full key.
 - `<version-slug>` is the version with characters outside `A-Za-z0-9._-`
   replaced, truncated, then `-` and the first 8 hex digits of the SHA-256 of
   the raw version.
@@ -45,8 +46,10 @@ never written again. Earlier versions are kept and nothing is pruned.
 ## Creating the environment
 
 The bucket credentials reach only the archive job, as secrets of a GitHub
-environment named `release-archive` (Settings, Environments). Add these as
-environment secrets, not repository secrets:
+environment named `release-archive` (Settings, Environments). Under the
+environment's deployment branches, allow only `main`, so a workflow on another
+branch cannot run a job in it. Add these as environment secrets, not
+repository secrets:
 
 | Secret | Meaning |
 | --- | --- |
@@ -74,10 +77,13 @@ the target in flight without a manifest. `--dry-run` resolves every target
 and reports versions with no credentials, downloads, clones or bucket writes.
 `GITHUB_TOKEN`, when set, authenticates GitHub API requests.
 
-The report is `.build/archive/report.json` and `summary.md`. The command exits
-non-zero only for a run-level error: unreadable packs, or a bucket that cannot
-be reached or authenticated to. The report's `status` is `failed` with an
-`error` in that case and `success` otherwise.
+The report is `.build/archive/report.json` and `summary.md`, rewritten after
+each target so a run cut short keeps the outcomes it reached. The command
+exits non-zero for a run-level error, unreadable packs or a bucket error, and
+when the report cannot be written. The report's `status` is `failed` with an
+`error` in the first case and `success` otherwise. A bucket error is
+reported by a fixed description; its full message, which can name the
+endpoint or bucket, goes only to the job log.
 
 ## Outcomes
 

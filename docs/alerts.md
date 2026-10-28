@@ -176,10 +176,11 @@ recurrence reopens the issue.
   more likely to be rate limited until its pack URL is updated.
 - **A flake opens an issue and the next clean run closes it.** This costs two
   notifications; it is accepted to keep the workflows stateless.
-- **A queued live check replaced by a newer one.** Its group does not cancel
-  a running check, but a pending run replaced by a newer one is reported as
-  cancelled, which raises a one-run early-failure issue (`live-check/run`)
-  that the next live check closes. Accepted rather than guarded.
+- **A queued live check or archive run replaced by a newer one.** Neither
+  group cancels a running job, but a pending run replaced by a newer one is
+  reported as cancelled, which raises a one-run early-failure issue
+  (`live-check/run` or `release-archive/run`) that the next run of that job
+  closes. Accepted rather than guarded.
 - **A manual re-run of an older alert job.** Re-running an older run's alert job
   after a newer run reconciled can close, reopen or clear the mute of an issue
   from stale findings. The next scheduled run corrects it, except that a
