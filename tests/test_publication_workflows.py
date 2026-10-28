@@ -695,7 +695,11 @@ ARCHIVE_SECRETS = {
 def test_release_archive_runs_after_nightly_or_by_hand_and_holds_only_read_access():
     workflow = load("release-archive.yml")
     assert triggers(workflow) == {
-        "workflow_run": {"workflows": ["Nightly publishing"], "types": ["completed"]},
+        "workflow_run": {
+            "workflows": ["Nightly publishing"],
+            "types": ["completed"],
+            "branches": ["main"],
+        },
         "workflow_dispatch": None,
     }
     assert workflow["permissions"] == {}
@@ -722,7 +726,10 @@ def test_release_archive_runs_after_nightly_or_by_hand_and_holds_only_read_acces
     assert checkout["with"]["persist-credentials"] is False
     (setup_uv,) = action_steps(job, "astral-sh/setup-uv")
     assert setup_uv["with"]["enable-cache"] is False
-    command_step(job, "uv", "sync", "--locked", "--group", "archive")
+    # The secret-holding job installs the archive group alone, not the dev tools.
+    command_step(
+        job, "uv", "sync", "--locked", "--no-default-groups", "--group", "archive"
+    )
     for step in job["steps"]:
         if "uses" in step:
             assert re.fullmatch(r"[^@\s]+@[0-9a-f]{40}", step["uses"])
@@ -749,9 +756,10 @@ def test_release_archive_step_gets_the_token_secrets_and_a_budget_inside_the_lim
     assert [s for s in job["steps"] if "env" in s and s is not archive] == [
         emit_step(job["steps"])
     ]
-    assert "secrets." not in str([s for s in job["steps"] if s is not archive]) + str(
+    others = str([s for s in job["steps"] if s is not archive]) + str(
         load("release-archive.yml")["jobs"]["alert"]
     )
+    assert re.search(r"\bsecrets\b", others) is None
 
 
 def test_release_archive_reports_and_uploads_its_files_after_the_step():
@@ -779,6 +787,11 @@ def test_only_the_release_archive_job_references_the_bucket_secrets():
     for path in sorted(WORKFLOWS.glob("*.yml")):
         workflow = load(path.name)
         for name, job in workflow["jobs"].items():
+            environment = job.get("environment")
+            if isinstance(environment, dict):
+                environment = environment.get("name")
+            if (path.name, name) != ("release-archive.yml", "archive"):
+                assert environment != "release-archive", (path.name, name)
             mentions = [secret for secret in ARCHIVE_SECRETS if secret in str(job)]
             if (path.name, name) == ("release-archive.yml", "archive"):
                 assert set(mentions) == ARCHIVE_SECRETS

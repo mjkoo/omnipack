@@ -6,6 +6,7 @@ on:
   workflow_run: # zizmor: ignore[dangerous-triggers]
     workflows: ["Nightly publishing"]
     types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 permissions: {}
@@ -37,7 +38,7 @@ jobs:
           enable-cache: false
 
       - name: Sync locked environment
-        run: uv sync --locked --group archive
+        run: uv sync --locked --no-default-groups --group archive
 
       - id: archive
         name: Archive current releases
