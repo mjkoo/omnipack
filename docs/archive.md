@@ -17,11 +17,11 @@ Obtainium".
 The bucket holds only versions under `apps/`:
 
 ```
+<prefix>/apps/<source-key>/source/repo.bundle    every ref, as one git bundle
 <prefix>/apps/<source-key>/releases/<version-slug>/
     assets/<file>            every asset of the release
     release.json             the forge's release record
     release.md               the release notes
-    source/repo.bundle.zst   every ref, as a zstd-compressed git bundle
     manifest.json
 ```
 
@@ -35,13 +35,26 @@ The bucket holds only versions under `apps/`:
   source stores just the resolved file, and its manifest lists the URLs
   fetched to find it (`fetchedUrls`).
 - `manifest.json` records the pack entry, version, tag, dates and every
-  object with its size and SHA-256. When the source history could not be
-  captured, `sourceHistory.reason` says why and there is no bundle.
+  object with its size and SHA-256. `sourceHistory` records the key, size and
+  SHA-256 of the bundle captured with that version, or `reason` when it could
+  not be captured.
+- The bundle is a single uncompressed file per app, outside the version
+  prefixes. Each newly archived version replaces it with a fresh capture; a
+  failed capture leaves the earlier bundle in place. An HTML source has none.
 
 A version counts as archived exactly when its manifest exists. Every other
 object is stored first and the manifest last, so an interrupted version has no
 manifest and is archived again by the next run. A prefix with a manifest is
-never written again. Earlier versions are kept and nothing is pruned.
+never written again.
+
+## Retention
+
+After a new version's manifest is stored, the app keeps its three most
+recently archived versions, ranked by when their manifests were stored, and
+deletes older ones. A pruned version's manifest is deleted first, so a partly
+pruned version never reads as archived. A prefix without a manifest is an
+unfinished attempt and is left alone. A pruned version that is selected again
+is archived again.
 
 ## Creating the environment
 
@@ -59,7 +72,7 @@ repository secrets:
 | `ARCHIVE_S3_SECRET_ACCESS_KEY` | Secret access key |
 | `ARCHIVE_S3_PREFIX` | Optional key prefix |
 
-The key needs list, read and write on the bucket. After the first manual dispatch
+The key needs list, read, write and delete on the bucket. After the first manual dispatch
 archives everything, a second should report every target unchanged. The first
 run may take several nights if it exceeds the job's time budget; the targets
 it did not reach are reported not checked and the next run continues.
@@ -113,14 +126,15 @@ With `ARCHIVE_S3_PREFIX` set, the path is
 `s3://$BUCKET/<prefix>/apps/<source-key>/releases/<version-slug>/`.
 
 The assets are ready to install under `restore/assets/`; compare them with
-the SHA-256 values in `restore/manifest.json`. To recover the source,
-decompress the bundle and clone it:
+the SHA-256 values in `restore/manifest.json`. The source is the app's single
+bundle, which `sourceHistory` in the manifest names; fetch it and clone it
+directly:
 
 ```
-zstd -d restore/source/repo.bundle.zst -o repo.bundle
+aws s3 cp --endpoint-url "$ENDPOINT" \
+  "s3://$BUCKET/apps/<source-key>/source/repo.bundle" repo.bundle
 git clone repo.bundle app
 ```
 
 The clone has every branch (as `origin/<branch>`) and tag the repository had
-when that version was archived. Without the `zstd` tool, Python 3.14 reads it
-with `compression.zstd`.
+when the latest version was archived.

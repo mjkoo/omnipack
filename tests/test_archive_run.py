@@ -610,7 +610,7 @@ def test_a_last_upload_that_ends_past_the_deadline_still_writes_the_manifest() -
 
     def slow_bundle(path: Path, key: str) -> None:
         inner(path, key)
-        if key.endswith("repo.bundle.zst"):
+        if key.endswith("repo.bundle"):
             now[0] = 100.0
 
     world.bucket.upload_file = slow_bundle  # ty: ignore[invalid-assignment]
