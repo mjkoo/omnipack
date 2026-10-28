@@ -43,7 +43,7 @@
 
 ## 9. Integration checks
 
-- [ ] 9.1 Run `uv run pack archive --dry-run` against the committed `dist/*.json` and confirm every target reports a resolved version or a skipped, unreachable or no-release outcome, with no crash. Record the summary in the change directory
+- [x] 9.1 Run `uv run pack archive --dry-run` against the committed `dist/*.json` and confirm every target reports a resolved version or a skipped, unreachable or no-release outcome, with no crash. Record the summary in the change directory
 - [ ] 9.2 Run `just test lint-check typecheck format-check` and confirm all pass
 
 ## Workflow follow-up
