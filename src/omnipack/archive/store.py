@@ -1,7 +1,7 @@
 """The S3-compatible bucket the archive writes to.
 
 The store covers what the per-target flow needs: whether a key exists, a JSON
-document put and a file upload. Any failure to configure, authenticate to or
+document put, a file upload, listing the keys under a prefix and deleting keys. Any failure to configure, authenticate to or
 reach the bucket, and any failure of a later request, is a `StoreError`, which
 ends the whole run. Its message can name the endpoint, the bucket or a key, so
 only its fixed `failure` description belongs in a published report.
@@ -10,8 +10,9 @@ only its fixed `failure` description belongs in a published report.
 from __future__ import annotations
 
 import json
-from collections.abc import Generator, Mapping
+from collections.abc import Generator, Iterable, Mapping
 from contextlib import contextmanager
+from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -23,6 +24,7 @@ SECRET_ACCESS_KEY = "ARCHIVE_S3_SECRET_ACCESS_KEY"
 PREFIX = "ARCHIVE_S3_PREFIX"
 REQUIRED = (ENDPOINT, BUCKET, ACCESS_KEY_ID, SECRET_ACCESS_KEY)
 DENIED_STATUSES = frozenset({401, 403})
+DELETE_BATCH = 1000
 
 
 class StoreFailure(StrEnum):
@@ -111,6 +113,44 @@ class ArchiveStore:
         """Upload a file, as a multipart upload when it is large."""
         with _translated():
             self._client.upload_file(str(path), self._bucket, self._key(key))
+
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
+        """Every key under `prefix` with its last-modified time. Keys are
+        relative to the store's own prefix, like the arguments."""
+        strip = len(self._key("")) if self._prefix else 0
+        found: list[tuple[str, datetime]] = []
+        with _translated():
+            pages = self._client.get_paginator("list_objects_v2").paginate(
+                Bucket=self._bucket, Prefix=self._key(prefix)
+            )
+            for page in pages:
+                found.extend(
+                    (item["Key"][strip:], item["LastModified"])
+                    for item in page.get("Contents", [])
+                )
+        return found
+
+    def delete(self, keys: Iterable[str]) -> None:
+        """Delete the keys, a batch per request. A key the bucket refuses to
+        delete is a failure."""
+        names = [self._key(key) for key in keys]
+        with _translated():
+            for start in range(0, len(names), DELETE_BATCH):
+                response = self._client.delete_objects(
+                    Bucket=self._bucket,
+                    Delete={
+                        "Objects": [
+                            {"Key": name}
+                            for name in names[start : start + DELETE_BATCH]
+                        ],
+                        "Quiet": True,
+                    },
+                )
+                if errors := response.get("Errors"):
+                    raise StoreError(
+                        StoreFailure.REQUEST_FAILED,
+                        f"{len(errors)} keys not deleted: {errors[0].get('Code')}",
+                    )
 
 
 def _status(error: Any) -> int | None:

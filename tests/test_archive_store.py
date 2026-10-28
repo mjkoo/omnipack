@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -170,3 +171,91 @@ def test_upload_failure_is_a_run_level_error(tmp_path: Path) -> None:
     path.write_bytes(b"x")
     with pytest.raises(StoreError):
         ArchiveStore(Client(), "bucket").upload_file(path, "a/f")
+
+
+def test_list_keys_pages_through_and_strips_the_prefix() -> None:
+    store, stubber = stubbed("pre")
+    first = datetime(2026, 1, 1, tzinfo=UTC)
+    second = datetime(2026, 1, 2, tzinfo=UTC)
+    request = {"Bucket": "bucket", "Prefix": "pre/apps/a/"}
+    stubber.add_response(
+        "list_objects_v2",
+        {
+            "IsTruncated": True,
+            "NextContinuationToken": "t",
+            "Contents": [{"Key": "pre/apps/a/x", "LastModified": first}],
+        },
+        request,
+    )
+    stubber.add_response(
+        "list_objects_v2",
+        {
+            "IsTruncated": False,
+            "Contents": [{"Key": "pre/apps/a/y", "LastModified": second}],
+        },
+        {**request, "ContinuationToken": "t"},
+    )
+    with stubber:
+        assert store.list_keys("apps/a/") == [
+            ("apps/a/x", first),
+            ("apps/a/y", second),
+        ]
+
+
+def test_list_keys_of_an_empty_prefix_is_empty() -> None:
+    store, stubber = stubbed()
+    stubber.add_response("list_objects_v2", {"IsTruncated": False}, None)
+    with stubber:
+        assert store.list_keys("apps/") == []
+
+
+def test_list_failure_is_a_run_level_error() -> None:
+    store, stubber = stubbed()
+    stubber.add_client_error("list_objects_v2", "500", http_status_code=500)
+    with stubber, pytest.raises(StoreError):
+        store.list_keys("apps/")
+
+
+def test_delete_sends_keys_in_batches_of_a_thousand() -> None:
+    store, stubber = stubbed("pre")
+    keys = [f"k{n}" for n in range(1001)]
+
+    def request(names: list[str]) -> dict[str, Any]:
+        return {
+            "Bucket": "bucket",
+            "Delete": {"Objects": [{"Key": f"pre/{n}"} for n in names], "Quiet": True},
+        }
+
+    stubber.add_response("delete_objects", {}, request(keys[:1000]))
+    stubber.add_response("delete_objects", {}, request(keys[1000:]))
+    with stubber:
+        store.delete(keys)
+    stubber.assert_no_pending_responses()
+
+
+def test_delete_of_no_keys_makes_no_request() -> None:
+    store, stubber = stubbed()
+    with stubber:
+        store.delete([])
+
+
+def test_a_per_key_delete_error_is_a_failure() -> None:
+    store, stubber = stubbed()
+    stubber.add_response(
+        "delete_objects",
+        {"Errors": [{"Key": "a", "Code": "AccessDenied", "Message": "no"}]},
+        None,
+    )
+    with stubber, pytest.raises(StoreError) as caught:
+        store.delete(["a"])
+
+    assert caught.value.failure is StoreFailure.REQUEST_FAILED
+
+
+def test_delete_denied_is_a_run_level_error() -> None:
+    store, stubber = stubbed()
+    stubber.add_client_error("delete_objects", "403", http_status_code=403)
+    with stubber, pytest.raises(StoreError) as caught:
+        store.delete(["a"])
+
+    assert caught.value.failure is StoreFailure.DENIED
