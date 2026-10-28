@@ -46,8 +46,9 @@ The bucket holds only keys under `apps/`:
   not be captured.
 - The bundle is a single uncompressed file per app, outside the version
   prefixes. It is made from a bare clone, so it holds branches and tags but
-  not a forge's pull or merge request refs. Each newly archived version replaces it with a fresh capture; a
-  failed capture leaves the earlier bundle in place. An HTML source has none.
+  not a forge's pull or merge request refs. Each newly archived version
+  replaces it with a fresh capture; a failed capture leaves the earlier bundle
+  in place. An HTML source has none.
 
 A version counts as archived exactly when its manifest exists. Every other
 object is stored first and the manifest last, so an interrupted version has no
@@ -59,10 +60,9 @@ never written again.
 After a new version's manifest is stored, the app keeps its three most
 recently archived versions, ranked by when their manifests were stored, and
 deletes older ones. The version just archived is always kept. A pruned
-version's manifest is deleted first, so a partly
-pruned version never reads as archived. A prefix without a manifest is an
-unfinished attempt and is left alone. A pruned version that is selected again
-is archived again.
+version's manifest is deleted first, so a partly pruned version never reads as
+archived. A prefix without a manifest is an unfinished attempt and is left
+alone. A pruned version that is selected again is archived again.
 
 ## Creating the environment
 
@@ -80,10 +80,11 @@ repository secrets:
 | `ARCHIVE_S3_SECRET_ACCESS_KEY` | Secret access key |
 | `ARCHIVE_S3_PREFIX` | Optional key prefix |
 
-The key needs list, read, write and delete on the bucket. After the first manual dispatch
-archives everything, a second should report every target unchanged. The first
-run may take several nights if it exceeds the job's time budget; the targets
-it did not reach are reported not checked and the next run continues.
+The key needs list, read, write and delete on the bucket. After the first
+manual dispatch archives everything, a second should report every target
+unchanged. The first run may take several nights if it exceeds the job's time
+budget; the targets it did not reach are reported not checked and the next run
+continues.
 
 ## Running it
 

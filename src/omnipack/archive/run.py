@@ -33,7 +33,7 @@ from omnipack.archive.targets import (
     select_targets,
 )
 from omnipack.http import DOWNLOAD_CHUNK, HttpClient, failure_reason
-from omnipack.live_check import PackReadError, request_headers
+from omnipack.live_check import PackReadError, request_headers, write_whole
 from omnipack.model import SourceType
 from omnipack.report_model import Status
 from omnipack.urls import normalize_project_url
@@ -427,10 +427,13 @@ def failed_report(error: str, *, dry_run: bool) -> ArchiveReport:
     return ArchiveReport(status=Status.FAILED, dryRun=dry_run, targets=[], error=error)
 
 
-def target_detail(target: TargetReport) -> str | None:
-    """What a target's line shows: its error when there is one, otherwise its
-    version, otherwise the reason."""
-    return target.get("error") or target.get("version") or target.get("reason")
+def target_line(target: TargetReport) -> str:
+    """A target's line: its outcome (`resolved` in a dry run), URL and name,
+    then its error when there is one, otherwise its version, otherwise the
+    reason."""
+    label = target.get("outcome") or "resolved"
+    detail = target.get("error") or target.get("version") or target.get("reason")
+    return f"{label}: {target['url']} ({target['name']}): {detail}"
 
 
 def render_summary(report: ArchiveReport) -> str:
@@ -450,19 +453,17 @@ def render_summary(report: ArchiveReport) -> str:
         outcome = target.get("outcome")
         if outcome in (Outcome.UNCHANGED, Outcome.NOT_CHECKED):
             continue
-        label = outcome or "resolved"
-        lines.append(
-            html.escape(
-                f"{label}: {target['url']} ({target['name']}): {target_detail(target)}"
-            )
-        )
+        lines.append(html.escape(target_line(target)))
     return "\n".join([*lines, "</pre>"]) + "\n"
 
 
 def write_archive_report(root: Path, report: ArchiveReport) -> None:
-    """Write the report and its summary, replacing any earlier pair."""
-    (root / OUTPUT).mkdir(parents=True, exist_ok=True)
-    (root / REPORT).write_text(
-        json.dumps(report, indent=2, ensure_ascii=False) + "\n", encoding="utf-8"
+    """Write the report and its summary whole, replacing any earlier pair; on
+    failure neither file is left."""
+    write_whole(
+        root / OUTPUT,
+        {
+            root / REPORT: json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+            root / SUMMARY: render_summary(report),
+        },
     )
-    (root / SUMMARY).write_text(render_summary(report), encoding="utf-8")

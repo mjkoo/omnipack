@@ -14,7 +14,7 @@ from omnipack.archive.run import (
     ArchiveReport,
     failed_report,
     run_archive,
-    target_detail,
+    target_line,
     write_archive_report,
 )
 from omnipack.archive.store import ArchiveStore, StoreError
@@ -199,8 +199,7 @@ def archive_command(args: argparse.Namespace) -> int:
         print(f"archive bucket error: {error}", file=sys.stderr)
         report = failed_report(str(error.failure), dry_run=args.dry_run)
     for target in report["targets"]:
-        outcome = target.get("outcome") or "resolved"
-        print(f"{outcome}: {target['url']}: {target_detail(target)}")
+        print(target_line(target))
     failed = report["status"] == Status.FAILED
     if failed:
         print(f"archive failed: {report.get('error')}", file=sys.stderr)

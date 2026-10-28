@@ -328,11 +328,18 @@ def write_live_report(root: Path, report: LiveCheckReport) -> None:
     shown for this run; the `OSError` or `ValueError` (such as a URL that
     cannot be encoded) propagates.
     """
-    output = root / OUTPUT
-    files = {
-        root / REPORT: json.dumps(report, indent=2, ensure_ascii=False) + "\n",
-        root / SUMMARY: render_summary(report),
-    }
+    write_whole(
+        root / OUTPUT,
+        {
+            root / REPORT: json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+            root / SUMMARY: render_summary(report),
+        },
+    )
+
+
+def write_whole(output: Path, files: dict[Path, str]) -> None:
+    """Write each file under `output` whole, replacing any earlier set. On
+    failure none of them is left, and the error propagates."""
     try:
         output.mkdir(parents=True, exist_ok=True)
         for path in files:

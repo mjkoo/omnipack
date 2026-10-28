@@ -40,6 +40,7 @@ def repo(tmp_path: Path) -> Path:
     git(path, "add", "a.txt")
     git(path, "commit", "--quiet", "-m", "one")
     git(path, "tag", "v1")
+    git(path, "tag", "--annotate", "-m", "release", "v1-annotated")
     git(path, "checkout", "--quiet", "-b", "feature")
     (path / "b.txt").write_text("b")
     git(path, "add", "b.txt")
@@ -75,6 +76,7 @@ def test_capture_yields_a_bundle_that_clones_with_every_branch_and_tag(
         "refs/remotes/origin/main",
         "refs/remotes/origin/feature",
         "refs/tags/v1",
+        "refs/tags/v1-annotated",
     } <= set(refs)
     heads = subprocess.run(
         ["git", "bundle", "list-heads", str(destination)],

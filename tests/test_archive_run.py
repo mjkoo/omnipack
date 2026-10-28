@@ -15,9 +15,13 @@ import pytest
 
 from omnipack.archive import Outcome
 from omnipack.archive.run import (
+    OUTPUT,
+    REPORT,
+    SUMMARY,
     Archiver,
     ArchiveReport,
     TargetReport,
+    failed_report,
     render_summary,
     run_archive,
     version_slug,
@@ -413,6 +417,34 @@ def test_a_capture_cut_short_by_the_deadline_abandons_the_target() -> None:
     assert not any(key.endswith("manifest.json") for key in world.bucket.objects)
 
 
+def test_a_github_token_never_reaches_an_asset_download() -> None:
+    world = World([release_v1()])
+
+    world.archiver(github_token="secret").process(select_targets_for(entry())[0])
+
+    assert world.api.requests[0].get_header("Authorization") == "Bearer secret"
+    assert world.downloads.requests
+    assert all(r.get_header("Authorization") is None for r in world.downloads.requests)
+
+
+def test_an_html_target_versioned_by_release_date_fails_and_stores_nothing() -> None:
+    page = "https://example.test/dl"
+    html_entry = entry(
+        page,
+        overrideSource="HTML",
+        additionalSettings=json.dumps({"releaseDateAsVersion": True}),
+    )
+    transport = RoutedTransport({})
+    bucket = FakeBucket()
+    http = HttpClient(transport=transport, stream_transport=Downloads({}))
+    [target] = select_targets_for(html_entry)
+
+    report = Archiver(bucket, http, capture=capture_forbidden).process(target)
+
+    assert report["outcome"] == Outcome.FAILED
+    assert transport.requests == [] and bucket.writes == []
+
+
 def test_an_html_target_through_an_intermediate_page_stores_only_its_file() -> None:
     page = "https://example.test/dl"
     mirror = "https://example.test/mirror/"
@@ -708,6 +740,21 @@ def test_unreadable_packs_give_a_failed_report(tmp_path: Path) -> None:
 
     assert report["status"] == Status.FAILED
     assert "unreadable" in report["error"]
+
+
+def test_a_report_that_cannot_be_written_whole_leaves_neither_file(
+    tmp_path: Path,
+) -> None:
+    write_archive_report(tmp_path, failed_report("first", dry_run=False))
+    # A directory where the summary goes makes its replacement fail.
+    (tmp_path / SUMMARY).unlink()
+    (tmp_path / SUMMARY).mkdir()
+
+    with pytest.raises(OSError):
+        write_archive_report(tmp_path, failed_report("second", dry_run=False))
+
+    assert not (tmp_path / REPORT).exists()
+    assert not list((tmp_path / OUTPUT).glob("*.partial"))
 
 
 def test_the_report_and_summary_are_written(tmp_path: Path) -> None:

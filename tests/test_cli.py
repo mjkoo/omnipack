@@ -1547,7 +1547,7 @@ def test_archive_dry_run_resolves_a_release_and_touches_nothing_else(
     assert cli.main(["archive", "--dry-run"]) == 0
 
     output = capsys.readouterr().out
-    assert "resolved: https://github.com/owner/app: v1" in output
+    assert "resolved: https://github.com/owner/app (X): v1" in output
     assert "skipped: https://example.test/y" in output
     assert forbidden == []
     assert len(api.requests) == 1
@@ -1603,7 +1603,7 @@ def test_archive_prints_a_failed_targets_error_even_with_a_version(
     assert cli.main(["archive", "--dry-run"]) == 0
 
     output = capsys.readouterr().out
-    assert "failed: https://github.com/owner/app: HTTP 404 for app.apk" in output
+    assert "failed: https://github.com/owner/app (X): HTTP 404 for app.apk" in output
 
 
 def test_archive_exits_nonzero_when_the_report_cannot_be_written(
