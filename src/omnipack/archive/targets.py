@@ -100,7 +100,7 @@ def source_key(url: str, source: SourceType | None) -> str:
     another; a `.`, `..` or empty segment is escaped too. A key too long for
     an object key is cut and ends in a digest of the full one.
     """
-    segments = [_escape(part) for part in normalize_project_url(url).split("/")]
+    segments = [escape_segment(part) for part in normalize_project_url(url).split("/")]
     prefix = HTML_PREFIX if source is SourceType.HTML else ""
     key = prefix + "/".join(segments)
     if len(key) <= MAX_KEY_LENGTH:
@@ -111,7 +111,7 @@ def source_key(url: str, source: SourceType | None) -> str:
     return f"{kept}-{hashlib.sha256(key.encode()).hexdigest()[:16]}"
 
 
-def _escape(segment: str) -> str:
+def escape_segment(segment: str) -> str:
     if segment == "":
         return "%2F"
     if set(segment) == {"."}:

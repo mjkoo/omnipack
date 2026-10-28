@@ -1477,3 +1477,45 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
         in output
     )
     assert path.read_bytes() == before
+
+
+def test_archive_dry_run_needs_no_bucket_and_writes_only_the_report(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "dist").mkdir()
+    pack = {
+        "settings": {},
+        "apps": [
+            {
+                "id": "x",
+                "name": "X",
+                "url": "https://example.test/x",
+                "overrideSource": "Other",
+                "additionalSettings": "{}",
+            }
+        ],
+    }
+    for name in ("single-screen.json", "dual-screen.json"):
+        (tmp_path / "dist" / name).write_text(json.dumps(pack))
+    for name in ("ARCHIVE_S3_ENDPOINT", "ARCHIVE_S3_BUCKET"):
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive", "--dry-run"]) == 0
+
+    assert "skipped: https://example.test/x" in capsys.readouterr().out
+    assert (tmp_path / ".build/archive/report.json").exists()
+
+
+def test_archive_without_a_bucket_fails_and_still_writes_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ARCHIVE_S3_BUCKET", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive"]) == 1
+
+    report = json.loads((tmp_path / ".build/archive/report.json").read_text())
+    assert report["status"] == "failed"
