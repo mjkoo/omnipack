@@ -15,11 +15,11 @@
 
 ## 4. Obtainium-equivalent resolution
 
-- [ ] 4.1 Pin an Obtainium upstream commit and cite it in the resolver package docstring. Verify the docstring names the commit hash
-- [ ] 4.2 Extract GitHub release filtering from `src/omnipack/forge_health.py` into one shared function that also implements the remaining settings: title and notes regexes, `sortMethodChoice`, `fallbackToOlderReleases` with the APK filter, invert and zips options, `releaseTitleAsVersion`, `releaseDateAsVersion`, `versionExtractionRegEx` / `matchGroupToUse`, and `verifyLatestTag`. Verify the existing `tests/test_forge_health.py` passes unchanged, and add a table-driven resolver test per setting
-- [ ] 4.3 Implement the GitHub resolver, which returns every asset of the selected release plus its notes and raw record. Verify with fixture tests for prerelease exclusion, fallback to an older release, version extraction, no qualifying release, and a 404 repository
-- [ ] 4.4 Implement the GitLab resolver against the releases API with the same shared settings. It returns the installable files linked only from the release description as well as the asset links, deduplicated. Verify with synthetic fixture tests for selection, asset links, a release whose APK is linked only from its description, and 404
-- [ ] 4.5 Implement the HTML resolver. It sends `requestHeader`, follows `intermediateLink` steps, applies the link filters, sorts, and extracts the version from the link or the whole page. Verify with synthetic page fixtures: a direct link, a two-step intermediate chain, whole-page extraction from a JSON body, and a page answering 410
+- [x] 4.1 Pin an Obtainium upstream commit and cite it in the resolver package docstring. Verify the docstring names the commit hash
+- [x] 4.2 Extract GitHub release filtering from `src/omnipack/forge_health.py` into one shared function that also implements the remaining settings: title and notes regexes, `sortMethodChoice`, `fallbackToOlderReleases` with the APK filter, invert and zips options, `releaseTitleAsVersion`, `releaseDateAsVersion`, `versionExtractionRegEx` / `matchGroupToUse`, and `verifyLatestTag`. Verify the existing `tests/test_forge_health.py` passes unchanged, and add a table-driven resolver test per setting
+- [x] 4.3 Implement the GitHub resolver, which returns every asset of the selected release plus its notes and raw record. Verify with fixture tests for prerelease exclusion, fallback to an older release, version extraction, no qualifying release, and a 404 repository
+- [x] 4.4 Implement the GitLab resolver against the releases API with the same shared settings. It returns the installable files linked only from the release description as well as the asset links, deduplicated. Verify with synthetic fixture tests for selection, asset links, a release whose APK is linked only from its description, and 404
+- [x] 4.5 Implement the HTML resolver. It sends `requestHeader`, follows `intermediateLink` steps, applies the link filters, sorts, and extracts the version from the link or the whole page. Verify with synthetic page fixtures: a direct link, a two-step intermediate chain, whole-page extraction from a JSON body, and a page answering 410
 
 ## 5. Storage and source history
 
