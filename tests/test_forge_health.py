@@ -182,6 +182,21 @@ def test_a_rolling_release_is_dated_by_its_assets() -> None:
     assert isinstance(published, Health) and published.stale
 
 
+def test_a_rolling_release_is_dated_by_the_newest_of_all_its_assets() -> None:
+    rolling = {
+        **release("latest", 400),
+        "assets": [
+            {"name": "app.apk", "updated_at": ago(300)},
+            {"name": "win.zip", "updated_at": ago(5)},
+        ],
+    }
+
+    result, _ = lookup([rolling], settings(useLatestAssetDateAsReleaseDate=True))
+
+    assert isinstance(result, Health) and not result.stale
+    assert result.newest == Release("latest", NOW - timedelta(days=5))
+
+
 def test_the_newest_qualifying_release_is_chosen_by_date() -> None:
     result, _ = lookup([release("v1", 300, "app.apk"), release("v2", 200, "app.apk")])
 

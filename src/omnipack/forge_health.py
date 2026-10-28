@@ -155,7 +155,10 @@ def _newest_qualifying(releases: object, options: dict[str, Any]) -> Release | N
         sort_method=SortMethod.DATE,
         fallback_to_older=True,
     )
-    selected = select_release(github_candidates(releases, settings), settings)
+    # The health lookup dates a release by every asset, installable or not.
+    selected = select_release(
+        github_candidates(releases, settings), settings, date_by_all_assets=True
+    )
     if selected is None:
         return None
     tag = selected.candidate.tag

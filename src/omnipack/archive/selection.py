@@ -162,12 +162,16 @@ def select_release(
     settings: ReleaseSettings,
     *,
     latest: Candidate | None = None,
+    date_by_all_assets: bool = False,
 ) -> Selected | None:
     """The release Obtainium selects, or None when none qualifies.
 
     `candidates` are in the order the source lists them, newest first.
     `latest` is the source's own latest release, given when the entry
-    verifies it: it joins the list if absent and then ranks newest.
+    verifies it: it joins the list if absent and then ranks newest. A release
+    dated by its assets takes Obtainium's date, the newest installable asset
+    that passed the filter, unless `date_by_all_assets` asks for the newest of
+    all its assets.
     """
     releases = list(candidates)
     if latest is not None and not any(_key(r) == _key(latest) for r in releases):
@@ -211,7 +215,7 @@ def select_release(
             release,
             name,
             passing,
-            release_date(release, settings, passing),
+            release_date(release, settings, () if date_by_all_assets else passing),
         )
     return None
 
