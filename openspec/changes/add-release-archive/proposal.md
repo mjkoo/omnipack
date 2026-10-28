@@ -16,18 +16,18 @@ recover any packed app independently of its upstream.
   secrets.
 - For each app, resolve the latest release the way Obtainium would, from the
   entry's `additionalSettings`, for GitHub, GitLab and HTML sources. When the
-  resolved version matches the last archived version, skip the app with no further
-  downloads.
+  resolved version already has a manifest in the bucket, skip the app with no
+  further downloads.
 - Archive each new version under its own prefix. The archive holds:
   - every release asset;
   - the release description;
-  - for forge-hosted projects, a full-history git bundle compressed with zstd,
-    plus the README;
-  - for HTML sources, the resolved APK and a snapshot of the fetched pages.
+  - for forge-hosted projects, the forge's release record and a full-history git
+    bundle compressed with zstd;
+  - for HTML sources, the resolved APK.
 
   Earlier versions are kept, with no retention policy.
-- A version is recorded as archived only after every one of its objects is
-  stored. An interrupted or failed archive is therefore retried on the next run.
+- A version counts as archived only once its manifest is stored, after every other
+  one of its objects. An interrupted or failed archive is therefore retried on the next run.
 - Report each app's outcome: archived, unchanged, unreachable, no release,
   failed, skipped or not checked. Unreachable projects and partial failures never
   stop the other apps.
@@ -45,8 +45,6 @@ The estimated size is:
 
 | Item | Estimate |
 |---|---|
-| Requirements | 12 new, 1 modified |
-| Scenarios | 22 new, 1 added to the modified requirement |
 | Implementation | about 1,200 lines (resolvers about 500, orchestration and storage about 400, workflow and alerts about 300) |
 | Tests | about 1,000 lines |
 
@@ -62,6 +60,7 @@ The estimated size is:
   - the archived contents and bucket layout;
   - completion semantics;
   - per-app outcomes;
+  - the run report, written to the job summary and a workflow artifact;
   - the workflow's schedule and credential scope;
   - the `pack archive` command.
 

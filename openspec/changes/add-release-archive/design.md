@@ -37,8 +37,8 @@ See proposal.md (Why). The current state that shapes this design:
 - Version resolution that matches Obtainium closely enough that "unchanged here"
   means "Obtainium shows no update".
 - Bounded memory and disk, even on a first full backfill.
-- State lives entirely in the bucket. Nothing is committed and nothing is cached in
-  Actions.
+- Archived state is only what the bucket holds. Nothing is committed and nothing is
+  cached in Actions.
 
 **Non-Goals:**
 - Retention or pruning.
@@ -46,8 +46,8 @@ See proposal.md (Why). The current state that shapes this design:
 - Deduplicating identical assets across versions.
 - Archiving track-only or unsupported sources.
 - Per-device arch narrowing (`autoApkFilterByArch`) or Obtainium's
-  installed-version comparison. The archive compares only against its own last
-  archived version.
+  installed-version comparison. The archive compares only against its own archived
+  manifests.
 - Serving the archive publicly, or restore tooling beyond documentation.
 
 ## Decisions
@@ -86,8 +86,7 @@ docstring cites that commit, so a future re-sync has a diff base.
 
 Each resolver returns one `ResolvedRelease`:
 - `version`, `tag`, `date`, `notes` and `raw_record`;
-- `assets`, a list of name and URL pairs;
-- `pages`, a list of URL and bytes pairs.
+- `assets`, a list of name and URL pairs.
 
 GitHub selection extends forge_health's filter into one shared function rather
 than keeping two copies. forge_health keeps its narrower call by passing only the
@@ -103,38 +102,32 @@ installable file the resolution selects, including APKs a GitLab release links
 only from its description; a file reached both ways is stored once. For HTML sources,
 the resolved link is the only asset.
 
-### Bucket state is the change detector
+### Manifest existence is the change detector
 
 The source key is the normalized pack URL from `src/omnipack/urls.py`, with the
 scheme stripped and HTML sources prefixed `html/`. The layout:
 
 ```
-<prefix>/apps/<source-key>/state.json
 <prefix>/apps/<source-key>/releases/<version-slug>/{assets/*, release.json, release.md,
-                                                    page-<n>.html, source/repo.bundle.zst,
-                                                    source/README.md, manifest.json}
-<prefix>/index.json
-<prefix>/runs/<UTC date>-<run id>.json
+                                                    source/repo.bundle.zst, manifest.json}
 ```
 
-`state.json` records `version`, `slug`, `archived_at`, `last_checked`,
-`last_outcome` and `last_error`. `version-slug` is the version sanitized to
+The bucket holds only `apps/...`. `version-slug` is the version sanitized to
 `[A-Za-z0-9._-]` and truncated, then a `-` and the first 8 hex digits of the
 SHA-256 of the raw version.
 
 The commit protocol:
 1. Upload every object.
 2. Upload `manifest.json`.
-3. Rewrite `state.json`.
 
-A target is unchanged when `state.version` equals the resolved version and that
-slug's manifest exists, checked with a HEAD request. If the manifest exists but
-`state.json` lags (the run died between steps 2 and 3), the next run repairs
-`state.json` without re-downloading. The same holds when the resolved version
-differs from `state.version` but its slug already has a manifest, as when a
-release is pulled and selection returns to an older archived version: the run
-rewrites only `state.json` to point at it. A prefix with a manifest is never
-written again, so only incomplete prefixes are retried.
+A version counts as archived exactly when its manifest exists under its version
+prefix. A target is unchanged when the resolved version's manifest exists,
+checked with a HEAD request, and nothing is downloaded. This also covers a
+release that is pulled so that selection returns to an older archived version:
+that version's manifest exists, so its objects are left untouched. A prefix with a
+manifest is never written again, so only incomplete prefixes are retried.
+
+A target's last outcome and error live only in the run report.
 
 Keeping state in a committed file was rejected for three reasons: PRs carry
 sources only, the nightly publisher is the only writer, and a committed file
@@ -156,15 +149,14 @@ The run's resource limits:
   temporary file and computes SHA-256 as it goes.
 - **Rate limits:** a 403 or 429 with rate-limit headers sleeps until the reset,
   capped by the remaining budget, then retries once.
-- **Concurrency:** targets run in a thread pool of 4. Each worker processes one
-  target and deletes its temporary directory before taking the next.
+- **Serial processing:** targets are processed one at a time. Each target deletes
+  its temporary directory before the next starts.
 - **Source:** `git clone --mirror --quiet`, then `git bundle create --all`, then
-  zstd streaming compression at level 10 into the upload file. The README comes
-  from `git show <tag>:<README path>`, with the usual name variants, falling back
-  to `HEAD`.
+  zstd streaming compression at level 10 into the upload file.
 - **Time budget:** the remaining time to the job's limit minus 15 minutes. The
-  pool stops handing out targets when the budget is reached. In-flight targets
-  finish or are abandoned without a manifest.
+  run stops starting new targets when the budget is reached, and passes the
+  deadline to the in-flight target's downloads and clone, so that target is
+  abandoned without a manifest.
 
 ### Outcomes and alerts
 
@@ -177,8 +169,9 @@ Outcomes are a `StrEnum` defined once in the archive package:
 - `SKIPPED`
 - `NOT_CHECKED`
 
-`pack archive` writes `.build/archive/report.json` and `summary.md`, uploads the
-report to `runs/`, rewrites `index.json`, and exits non-zero only for run-level
+`pack archive` writes `.build/archive/report.json` and `summary.md`, which the
+workflow shows in the job summary and uploads as a workflow artifact. The report
+is not stored in the bucket. The command exits non-zero only for run-level
 errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
 
 `scripts/alerts.py` gains:
@@ -200,8 +193,8 @@ errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
 - **A first backfill exceeds one job.** Mitigation: the budget and `NOT_CHECKED`
   let consecutive nights resume, and the work is idempotent.
 - **A huge clone exhausts runner disk.** Mitigation: a clone failure falls back to
-  archiving without a bundle and records the reason. One worker per clone keeps
-  peak disk use to a few targets at a time.
+  archiving without a bundle and records the reason. Serial processing keeps
+  peak disk use to one target at a time.
 - **The GitHub API rate limit is shared with checkout.** Mitigation: the job's
   token allows plenty of requests for a few hundred targets. Rate-limit handling
   backs off within the budget.

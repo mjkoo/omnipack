@@ -90,11 +90,11 @@ and the HTML intermediate-link, link-filter and request-header settings.
 
 ### Requirement: Unchanged versions are not downloaded
 
-When a target's resolved version equals the version it last completely archived,
-the run SHALL download no asset, page snapshot or source history for it, and SHALL
+When a target's resolved version already has a manifest in the bucket,
+the run SHALL download no asset or source history for it, and SHALL
 report it as unchanged. A prefix holding a manifest SHALL NOT be written again: a
-resolved version whose prefix already has one SHALL be made the last archived
-version and reported unchanged, with nothing downloaded.
+resolved version whose prefix already has one SHALL be reported unchanged, with
+nothing downloaded.
 
 #### Scenario: Nothing changed since the last run
 
@@ -103,13 +103,13 @@ version and reported unchanged, with nothing downloaded.
 
 #### Scenario: A new release appears
 
-- **WHEN** a target's resolved version differs from the last version it archived
+- **WHEN** a target's resolved version has no manifest in the bucket
 - **THEN** the new version is archived and the earlier version's objects are left in place
 
 #### Scenario: Returning to an earlier archived version
 
 - **WHEN** a target was archived at version A, then at version B, and a later run resolves A again
-- **THEN** nothing is downloaded, A becomes the last archived version, and A's objects and manifest are left exactly as stored, even if that run is interrupted
+- **THEN** A's manifest exists, nothing is downloaded, and A's objects and manifest are left exactly as stored, even if that run is interrupted
 
 ### Requirement: Each archived version has its own prefix
 
@@ -129,9 +129,8 @@ versions SHALL be kept.
 For a GitHub or GitLab target, an archived version SHALL store every asset on the
 selected release and every installable file Obtainium's resolution selects for it,
 including files linked only from the release description, each stored once and
-listed in the manifest, the release notes and the forge's release record, a
-zstd-compressed git bundle of every ref, and the README at the release's tag, or
-at the default branch when the tag cannot be found.
+listed in the manifest, the release notes and the forge's release record, and a
+zstd-compressed git bundle of every ref.
 
 #### Scenario: A GitHub release with desktop and Android builds
 
@@ -148,23 +147,22 @@ at the default branch when the tag cannot be found.
 - **WHEN** a stored git bundle is decompressed and cloned
 - **THEN** it yields every branch and tag the repository had when that version was archived
 
-### Requirement: An HTML release stores its file and page snapshots
+### Requirement: An HTML release stores its resolved file
 
-For an HTML target, an archived version SHALL store the resolved file and every
-page fetched while resolving it, and no git bundle.
+For an HTML target, an archived version SHALL store the resolved file and its
+manifest recording the source URLs fetched while resolving it, and no git bundle.
 
 #### Scenario: An HTML source
 
 - **WHEN** an HTML entry resolves a new version through one intermediate page
-- **THEN** the resolved APK and both fetched pages are stored, and no git bundle is stored
+- **THEN** the resolved APK is stored, the manifest records both fetched URLs, and no git bundle is stored
 
 ### Requirement: A version counts as archived only when complete
 
-A version SHALL become the target's last archived version only after its manifest
-is stored. The manifest SHALL be written after every other object of that version
-has been stored. A run that is interrupted or fails before then SHALL leave the
-previous last archived version in place, so a later run archives that version
-again.
+A version SHALL count as archived exactly when its manifest is stored. The
+manifest SHALL be written after every other object of that version has been
+stored. A run that is interrupted or fails before then SHALL leave the version
+without a manifest, so a later run archives it again.
 
 #### Scenario: An asset download fails
 
@@ -180,8 +178,8 @@ again.
 
 A run SHALL report one outcome per target: archived, unchanged, unreachable (HTTP
 404 or 410), no release (none qualifies under the entry's settings), failed,
-skipped or not checked. It SHALL store the report in the bucket and summarize it
-in the run. No target's outcome SHALL prevent others being processed. Targets not
+skipped or not checked. It SHALL write the report and a summary to the run's
+output. No target's outcome SHALL prevent others being processed. Targets not
 reached within the run's time budget SHALL be reported not checked.
 
 #### Scenario: A deleted repository
