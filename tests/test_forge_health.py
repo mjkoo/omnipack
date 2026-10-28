@@ -197,6 +197,18 @@ def test_a_rolling_release_is_dated_by_the_newest_of_all_its_assets() -> None:
     assert result.newest == Release("latest", NOW - timedelta(days=5))
 
 
+def test_a_rolling_release_with_an_undated_asset_is_inconclusive() -> None:
+    rolling = {
+        **release("latest", 400),
+        "assets": [{"name": "app.apk", "created_at": ago(5)}],
+    }
+
+    result, _ = lookup([rolling], settings(useLatestAssetDateAsReleaseDate=True))
+
+    assert isinstance(result, HealthUnknown)
+    assert "release date is missing" in result.reason
+
+
 def test_the_newest_qualifying_release_is_chosen_by_date() -> None:
     result, _ = lookup([release("v1", 300, "app.apk"), release("v2", 200, "app.apk")])
 

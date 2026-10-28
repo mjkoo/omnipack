@@ -17,7 +17,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import quote, urlsplit
 
-from omnipack.forge_health import SettingsError, decode_settings
+from omnipack.archive.selection import SettingsError
+from omnipack.forge_health import decode_settings
 from omnipack.live_check import read_targets
 from omnipack.model import SourceType
 from omnipack.urls import normalize_project_url

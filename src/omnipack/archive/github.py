@@ -18,7 +18,7 @@ from omnipack.archive.selection import (
     select_release,
 )
 from omnipack.forge_health import (
-    API,
+    GITHUB_API,
     RELEASES_PER_PAGE,
     ResponseError,
     decode_settings,
@@ -61,12 +61,12 @@ def resolve_github(
         return response.json()
 
     releases = get_json(
-        f"{API}/repos/{repository}/releases?per_page={RELEASES_PER_PAGE}"
+        f"{GITHUB_API}/repos/{repository}/releases?per_page={RELEASES_PER_PAGE}"
     )
     latest = None
     if settings.verify_latest_tag:
         try:
-            latest_record = get_json(f"{API}/repos/{repository}/releases/latest")
+            latest_record = get_json(f"{GITHUB_API}/repos/{repository}/releases/latest")
         except UnreachableError as error:
             raise NoReleaseError("the repository has no latest release") from error
         [latest] = github_candidates([latest_record], settings)

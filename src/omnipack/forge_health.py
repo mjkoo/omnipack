@@ -33,7 +33,7 @@ from omnipack.archive.selection import (
 from omnipack.http import HttpClient, HttpError, failure_reason
 from omnipack.urls import normalize_project_url
 
-API = "https://api.github.com"
+GITHUB_API = "https://api.github.com"
 STALE_DAYS = 180
 RELEASES_PER_PAGE = 100
 
@@ -117,11 +117,11 @@ def check_health(
     try:
         options = decode_settings(settings)
         before_request()
-        state = _get_json(http, f"{API}/repos/{repository}", credential)
+        state = _get_json(http, f"{GITHUB_API}/repos/{repository}", credential)
         before_request()
         releases = _get_json(
             http,
-            f"{API}/repos/{repository}/releases?per_page={RELEASES_PER_PAGE}",
+            f"{GITHUB_API}/repos/{repository}/releases?per_page={RELEASES_PER_PAGE}",
             credential,
         )
         archived = _repository_archived(state)
@@ -171,7 +171,7 @@ def _newest_qualifying(releases: object, options: dict[str, Any]) -> Release | N
 
 def github_candidates(releases: object, settings: ReleaseSettings) -> list[Candidate]:
     """Normalize a GitHub releases response for selection, raising
-    `ResponseError` for a shape the lookup cannot judge.
+    `ResponseError` for a shape selection cannot judge.
 
     A release that selection will skip is not inspected further: a draft
     carries no publication date, and a prerelease the entry excludes is
@@ -216,7 +216,7 @@ def _release_asset(asset: dict[str, Any], settings: ReleaseSettings) -> ReleaseA
         raise ResponseError("release asset has no name")
     updated = None
     if settings.use_latest_asset_date:
-        updated = _parse_date(asset.get("updated_at") or asset.get("created_at"))
+        updated = _parse_date(asset.get("updated_at"))
     return ReleaseAsset(
         name, is_installable(name, include_zips=settings.include_zips), updated
     )
