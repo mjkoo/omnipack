@@ -1,8 +1,11 @@
 from __future__ import annotations
 
+import hashlib
 import json
+import tempfile
 import urllib.error
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
+from datetime import UTC, datetime, timedelta
 from email.message import Message
 from pathlib import Path
 from typing import Any, Self
@@ -26,6 +29,7 @@ from tests.http_support import RoutedTransport
 from tests.test_archive_github import RELEASES, gh_release
 
 APP = "apps/github.com/owner/app/releases"
+BUNDLE = "apps/github.com/owner/app/source/repo.bundle"
 APK_URL = "https://github.com/owner/app/releases/download/v1/app.apk"
 SOURCE_URL = "https://github.com/owner/app"
 
@@ -34,6 +38,8 @@ class FakeBucket:
     def __init__(self, fail: Exception | None = None) -> None:
         self.objects: dict[str, bytes] = {}
         self.writes: list[str] = []
+        self.deletes: list[str] = []
+        self.stored_at: dict[str, datetime] = {}
         self.fail = fail
 
     def exists(self, key: str) -> bool:
@@ -42,12 +48,31 @@ class FakeBucket:
         return key in self.objects
 
     def put_json(self, key: str, document: Any) -> None:
-        self.writes.append(key)
-        self.objects[key] = json.dumps(document).encode()
+        self._store(key, json.dumps(document).encode())
 
     def upload_file(self, path: Path, key: str) -> None:
+        self._store(key, path.read_bytes())
+
+    def _store(self, key: str, data: bytes) -> None:
         self.writes.append(key)
-        self.objects[key] = path.read_bytes()
+        self.objects[key] = data
+        # Every write is a minute later than the one before it.
+        self.stored_at[key] = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(
+            minutes=len(self.writes)
+        )
+
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]:
+        return [
+            (key, self.stored_at[key])
+            for key in sorted(self.objects)
+            if key.startswith(prefix)
+        ]
+
+    def delete(self, keys: Iterable[str]) -> None:
+        for key in keys:
+            self.deletes.append(key)
+            del self.objects[key]
+            del self.stored_at[key]
 
 
 class Body:
@@ -143,8 +168,6 @@ class World:
 
 
 def select_targets_for(*apps: dict[str, object]) -> list[Any]:
-    import tempfile
-
     with tempfile.TemporaryDirectory() as root:
         write_packs(Path(root), list(apps))
         return select_targets(Path(root))
@@ -177,16 +200,20 @@ def test_a_new_version_stores_every_object_and_the_manifest_last() -> None:
         f"{prefix}/assets/app.apk",
         f"{prefix}/release.json",
         f"{prefix}/release.md",
-        f"{prefix}/source/repo.bundle.zst",
         f"{prefix}/manifest.json",
+        BUNDLE,
     }
     manifest = json.loads(world.bucket.objects[f"{prefix}/manifest.json"])
     keys = {o["key"] for o in manifest["objects"]}
-    assert "assets/app.apk" in keys and "source/repo.bundle.zst" in keys
+    assert keys == {"assets/app.apk", "release.json", "release.md"}
     apk = next(o for o in manifest["objects"] if o["key"] == "assets/app.apk")
     assert apk["size"] == 3 and len(apk["sha256"]) == 64
     assert manifest["version"] == "v1"
-    assert manifest["sourceHistory"]["key"] == "source/repo.bundle.zst"
+    assert manifest["sourceHistory"] == {
+        "key": BUNDLE,
+        "size": 6,
+        "sha256": hashlib.sha256(b"bundle").hexdigest(),
+    }
 
 
 def test_a_new_version_is_stored_beside_the_old_one_and_a_return_touches_nothing() -> (
@@ -228,7 +255,96 @@ def test_a_clone_failure_archives_without_a_bundle_and_records_why() -> None:
 
     manifest = json.loads(world.bucket.objects[f"{APP}/{slug('v1')}/manifest.json"])
     assert manifest["sourceHistory"] == {"reason": "git clone failed: gone"}
-    assert not any("repo.bundle" in key for key in world.bucket.objects)
+    assert BUNDLE not in world.bucket.objects
+
+
+def test_a_failed_capture_leaves_the_previous_bundle_and_records_why() -> None:
+    world = World([release_v1()])
+    world.process()
+    previous = world.bucket.objects[BUNDLE]
+
+    world.api.answers[RELEASES] = [gh_release("v2", "2024-02-01T00:00:00Z", "app.apk")]
+    world.downloads.files[
+        "https://github.com/owner/app/releases/download/v2/app.apk"
+    ] = b"2"
+    world.capture = capture_fails
+    assert world.process()["outcome"] == Outcome.ARCHIVED
+
+    assert world.bucket.objects[BUNDLE] == previous
+    manifest = json.loads(world.bucket.objects[f"{APP}/{slug('v2')}/manifest.json"])
+    assert manifest["sourceHistory"] == {"reason": "git clone failed: gone"}
+
+
+def test_a_new_version_replaces_the_targets_bundle() -> None:
+    world = World([release_v1()])
+    world.process()
+
+    def capture_new(url: str, destination: Path, work: Path, **_: Any) -> CaptureResult:
+        destination.write_bytes(b"newer")
+        return CaptureResult(CaptureOutcome.CAPTURED)
+
+    world.capture = capture_new
+    world.api.answers[RELEASES] = [gh_release("v2", "2024-02-01T00:00:00Z", "app.apk")]
+    world.downloads.files[
+        "https://github.com/owner/app/releases/download/v2/app.apk"
+    ] = b"2"
+    world.process()
+
+    assert world.bucket.objects[BUNDLE] == b"newer"
+    assert [k for k in world.bucket.objects if k.endswith("repo.bundle")] == [BUNDLE]
+
+
+def archive_versions(world: World, *versions: str) -> None:
+    for version in versions:
+        world.api.answers[RELEASES] = [
+            gh_release(version, "2024-01-01T00:00:00Z", "app.apk")
+        ]
+        world.downloads.files[
+            f"https://github.com/owner/app/releases/download/{version}/app.apk"
+        ] = b"x"
+        assert world.process()["outcome"] == Outcome.ARCHIVED
+
+
+def test_a_fourth_version_prunes_the_oldest_manifest_first() -> None:
+    world = World([release_v1()])
+    archive_versions(world, "v1", "v2", "v3")
+    assert world.bucket.deletes == []
+
+    archive_versions(world, "v4")
+
+    oldest = f"{APP}/{slug('v1')}/"
+    assert world.bucket.deletes[0] == f"{oldest}manifest.json"
+    assert sorted(world.bucket.deletes[1:]) == [
+        f"{oldest}assets/app.apk",
+        f"{oldest}release.json",
+    ]
+    assert not [k for k in world.bucket.objects if k.startswith(oldest)]
+    for kept in ("v2", "v3", "v4"):
+        assert f"{APP}/{slug(kept)}/manifest.json" in world.bucket.objects
+    assert BUNDLE in world.bucket.objects
+
+
+def test_an_incomplete_prefix_is_not_pruned(tmp_path: Path) -> None:
+    world = World([release_v1()])
+    orphan = f"{APP}/{slug('half')}/assets/app.apk"
+    (tmp_path / "half").write_bytes(b"half")
+    world.bucket.upload_file(tmp_path / "half", orphan)
+
+    archive_versions(world, "v1", "v2", "v3", "v4")
+
+    assert orphan in world.bucket.objects
+    assert world.bucket.deletes
+    assert orphan not in world.bucket.deletes
+
+
+def test_a_pruned_version_selected_again_is_archived_again() -> None:
+    world = World([release_v1()])
+    archive_versions(world, "v1", "v2", "v3", "v4")
+    assert f"{APP}/{slug('v1')}/manifest.json" not in world.bucket.objects
+
+    archive_versions(world, "v1")
+
+    assert f"{APP}/{slug('v1')}/manifest.json" in world.bucket.objects
 
 
 def test_a_capture_cut_short_by_the_deadline_abandons_the_target() -> None:

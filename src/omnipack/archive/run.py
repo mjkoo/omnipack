@@ -16,7 +16,7 @@ import re
 import sys
 import tempfile
 from collections import Counter
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, NotRequired, Protocol, TypedDict
@@ -45,6 +45,7 @@ SUMMARY = OUTPUT / "summary.md"
 SLUG_LENGTH = 80
 _UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
 HASH_CHUNK = 1024 * 1024
+KEEP_VERSIONS = 3
 
 
 class Bucket(Protocol):
@@ -55,6 +56,10 @@ class Bucket(Protocol):
     def put_json(self, key: str, document: Any) -> None: ...
 
     def upload_file(self, path: Path, key: str) -> None: ...
+
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]: ...
+
+    def delete(self, keys: Iterable[str]) -> None: ...
 
 
 class Capture(Protocol):
@@ -261,7 +266,27 @@ class Archiver:
             # Past the last upload the manifest goes in even at the deadline:
             # it is one small write that keeps the whole version.
             bucket.put_json(manifest_key, manifest)
+        self._prune(f"apps/{target.key}/releases/")
         return Outcome.ARCHIVED
+
+    def _prune(self, releases: str) -> None:
+        """Keep the `KEEP_VERSIONS` most recently archived versions under
+        `releases` (ranked by when their manifests were stored) and delete the
+        rest, each manifest before its other objects. A prefix without a
+        manifest is an unfinished attempt and is left alone."""
+        assert self.bucket is not None
+        versions: dict[str, list[str]] = {}
+        stored: dict[str, datetime] = {}
+        for key, modified in self.bucket.list_keys(releases):
+            version, _, name = key.removeprefix(releases).partition("/")
+            versions.setdefault(version, []).append(key)
+            if name == "manifest.json":
+                stored[version] = modified
+        newest_first = sorted(stored, key=stored.__getitem__, reverse=True)
+        for version in newest_first[KEEP_VERSIONS:]:
+            manifest = f"{releases}{version}/manifest.json"
+            self.bucket.delete([manifest])
+            self.bucket.delete([key for key in versions[version] if key != manifest])
 
     def _store_assets(
         self,
@@ -302,7 +327,7 @@ class Archiver:
             notes.write_text(release.notes)
             store(notes, "release.md")
 
-        bundle = work / "repo.bundle.zst"
+        bundle = work / "repo.bundle"
         result = self.capture(
             f"https://{normalize_project_url(target.entry['url'])}",
             bundle,
@@ -314,12 +339,16 @@ class Archiver:
             # Not a missing history: the target is abandoned so the next run
             # archives it whole.
             raise BudgetSpent(result.reason or "the run's time budget passed")
-        if result.outcome is CaptureOutcome.CAPTURED:
-            stored = store(bundle, "source/repo.bundle.zst")
-            return SourceHistory(
-                key=stored["key"], size=stored["size"], sha256=stored["sha256"]
-            )
-        return SourceHistory(reason=result.reason or "source capture failed")
+        if result.outcome is not CaptureOutcome.CAPTURED:
+            return SourceHistory(reason=result.reason or "source capture failed")
+        # The target's one bundle sits outside the version prefixes and is
+        # replaced here, so it is not one of the version's objects.
+        self._check_time()
+        key = f"apps/{target.key}/source/repo.bundle"
+        size, sha256 = _describe(bundle)
+        assert self.bucket is not None
+        self.bucket.upload_file(bundle, key)
+        return SourceHistory(key=key, size=size, sha256=sha256)
 
 
 def run_archive(
