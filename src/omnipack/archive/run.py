@@ -13,6 +13,7 @@ import hashlib
 import html
 import json
 import re
+import sys
 import tempfile
 from collections import Counter
 from collections.abc import Callable
@@ -54,6 +55,29 @@ class Bucket(Protocol):
     def put_json(self, key: str, document: Any) -> None: ...
 
     def upload_file(self, path: Path, key: str) -> None: ...
+
+
+class Capture(Protocol):
+    """Captures a repository's history; see `capture_source`."""
+
+    def __call__(
+        self,
+        url: str,
+        destination: Path,
+        work_dir: Path,
+        /,
+        *,
+        deadline: float | None,
+        clock: Callable[[], float],
+    ) -> CaptureResult: ...
+
+
+class Store(Protocol):
+    """Uploads one file under the version's prefix and records it."""
+
+    def __call__(
+        self, path: Path, key: str, url: str | None = None
+    ) -> ObjectRecord: ...
 
 
 class BudgetSpent(Exception):
@@ -142,14 +166,14 @@ class Archiver:
         github_token: str | None = None,
         deadline: float | None = None,
         now: Callable[[], datetime] = lambda: datetime.now(UTC),
-        capture: Callable[..., CaptureResult] = capture_source,
+        capture: Capture | None = None,
     ) -> None:
         self.bucket = bucket
         self.http = http
         self.github_token = github_token
         self.deadline = deadline
         self.now = now
-        self.capture = capture
+        self.capture: Capture = capture or capture_source
 
     def process(self, target: ArchiveTarget) -> TargetReport:
         """The target's report. Only a `StoreError` escapes; every other
@@ -229,12 +253,13 @@ class Archiver:
                 objects=objects,
             )
             if target.source is SourceType.HTML:
-                manifest["fetchedUrls"] = list(release.raw_record["fetched_urls"])
+                manifest["fetchedUrls"] = list(release.fetched_urls)
             else:
                 manifest["sourceHistory"] = self._store_forge_files(
                     target, release, work, store
                 )
-            self._check_time()
+            # Past the last upload the manifest goes in even at the deadline:
+            # it is one small write that keeps the whole version.
             bucket.put_json(manifest_key, manifest)
         return Outcome.ARCHIVED
 
@@ -243,7 +268,7 @@ class Archiver:
         target: ArchiveTarget,
         release: ResolvedRelease,
         work: Path,
-        store: Callable[..., ObjectRecord],
+        store: Store,
     ) -> None:
         headers = (
             request_headers(target.entry.get("additionalSettings"))
@@ -267,7 +292,7 @@ class Archiver:
         target: ArchiveTarget,
         release: ResolvedRelease,
         work: Path,
-        store: Callable[..., ObjectRecord],
+        store: Store,
     ) -> SourceHistory:
         record = work / "release.json"
         record.write_text(json.dumps(release.raw_record, indent=2, sort_keys=True))
@@ -305,7 +330,8 @@ def run_archive(
     github_token: str | None = None,
     budget: float | None = None,
     now: Callable[[], datetime] = lambda: datetime.now(UTC),
-    capture: Callable[..., CaptureResult] = capture_source,
+    capture: Capture | None = None,
+    checkpoint: Callable[[ArchiveReport], None] | None = None,
 ) -> ArchiveReport:
     """Archive every target of the packs under `root`, serially.
 
@@ -313,7 +339,10 @@ def run_archive(
     target starts and the rest are not checked, and the target in flight is
     abandoned at the deadline. A `bucket` of None resolves without writing.
     A pack that cannot be read, or a bucket error, ends the run with a failed
-    report.
+    report; a bucket error's full message goes only to standard error, since
+    it can name the endpoint or the bucket. `checkpoint` is handed the report
+    so far after each target, the targets not yet reached listed as not
+    checked, so a run killed partway still leaves its outcomes.
     """
     client = http or HttpClient()
     report = ArchiveReport(status=Status.SUCCESS, dryRun=bucket is None, targets=[])
@@ -333,44 +362,36 @@ def run_archive(
         capture=capture,
     )
     stopped: str | None = None
-    for target in targets:
-        entry = target.entry
-        if stopped is not None:
-            report["targets"].append(
-                TargetReport(
-                    name=entry["name"],
-                    url=entry["url"],
-                    outcome=Outcome.NOT_CHECKED,
-                    reason=stopped,
-                )
-            )
-            continue
-        if deadline is not None and client.clock() >= deadline:
+    for number, target in enumerate(targets):
+        if stopped is None and deadline is not None and client.clock() >= deadline:
             stopped = "time budget spent"
-            report["targets"].append(
-                TargetReport(
-                    name=entry["name"],
-                    url=entry["url"],
-                    outcome=Outcome.NOT_CHECKED,
-                    reason=stopped,
-                )
-            )
+        if stopped is not None:
+            report["targets"].append(_not_checked(target, stopped))
             continue
         try:
             report["targets"].append(archiver.process(target))
         except StoreError as error:
+            print(f"archive bucket error: {error}", file=sys.stderr)
             report["status"] = Status.FAILED
-            report["error"] = str(error)
+            report["error"] = str(error.failure)
             stopped = "the run stopped on a bucket error"
-            report["targets"].append(
-                TargetReport(
-                    name=entry["name"],
-                    url=entry["url"],
-                    outcome=Outcome.NOT_CHECKED,
-                    reason=stopped,
-                )
-            )
+            report["targets"].append(_not_checked(target, stopped))
+        if checkpoint is not None:
+            unreached = [
+                _not_checked(rest, "the run ended before reaching it")
+                for rest in targets[number + 1 :]
+            ]
+            checkpoint({**report, "targets": [*report["targets"], *unreached]})
     return report
+
+
+def _not_checked(target: ArchiveTarget, reason: str) -> TargetReport:
+    return TargetReport(
+        name=target.entry["name"],
+        url=target.entry["url"],
+        outcome=Outcome.NOT_CHECKED,
+        reason=reason,
+    )
 
 
 def failed_report(error: str, *, dry_run: bool) -> ArchiveReport:

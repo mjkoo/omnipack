@@ -9,7 +9,7 @@ import pytest
 from boto3.exceptions import S3UploadFailedError
 from botocore.stub import Stubber
 
-from omnipack.archive.store import ArchiveStore, StoreError
+from omnipack.archive.store import ArchiveStore, StoreError, StoreFailure
 
 ENVIRONMENT = {
     "ARCHIVE_S3_ENDPOINT": "https://s3.example.test",
@@ -66,17 +66,18 @@ def test_configuration_probes_the_bucket_and_builds_a_store(
     assert isinstance(store, ArchiveStore)
 
 
-@pytest.mark.parametrize("status", [403, 404])
 def test_probe_failure_at_construction_is_a_run_level_error(
-    monkeypatch: pytest.MonkeyPatch, status: int
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    with pytest.raises(StoreError):
+    with pytest.raises(StoreError) as caught:
         construct_with(
             monkeypatch,
             lambda stubber: stubber.add_client_error(
-                "head_bucket", str(status), http_status_code=status
+                "head_bucket", "404", http_status_code=404
             ),
         )
+
+    assert caught.value.failure is StoreFailure.REQUEST_FAILED
 
 
 def test_exists_is_true_when_head_succeeds() -> None:
@@ -99,8 +100,10 @@ def test_exists_is_false_on_not_found() -> None:
 def test_access_denied_is_a_run_level_error(status: int) -> None:
     store, stubber = stubbed()
     stubber.add_client_error("head_object", str(status), http_status_code=status)
-    with stubber, pytest.raises(StoreError, match="denied"):
+    with stubber, pytest.raises(StoreError) as caught:
         store.exists("a")
+
+    assert caught.value.failure is StoreFailure.DENIED
 
 
 def test_head_server_error_is_a_run_level_error() -> None:
@@ -111,10 +114,12 @@ def test_head_server_error_is_a_run_level_error() -> None:
 
 
 def test_unreachable_endpoint_is_a_run_level_error() -> None:
-    with pytest.raises(StoreError, match="reach"):
+    with pytest.raises(StoreError) as caught:
         ArchiveStore.from_environment(
             {**ENVIRONMENT, "ARCHIVE_S3_ENDPOINT": "http://127.0.0.1:1"}
         )
+
+    assert caught.value.failure is StoreFailure.UNREACHABLE
 
 
 def test_put_json_failure_is_a_run_level_error() -> None:

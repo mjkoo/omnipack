@@ -1562,3 +1562,14 @@ def test_archive_without_a_bucket_fails_and_still_writes_the_report(
 
     report = json.loads((tmp_path / ".build/archive/report.json").read_text())
     assert report["status"] == "failed"
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "nan", "inf", "soon"])
+def test_archive_budget_must_be_a_positive_finite_number_of_minutes(
+    value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["archive", "--dry-run", "--budget-minutes", value])
+
+    assert caught.value.code == 2
+    assert "positive number of minutes" in capsys.readouterr().err

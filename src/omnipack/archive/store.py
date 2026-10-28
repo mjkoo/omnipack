@@ -3,7 +3,8 @@
 The store covers what the per-target flow needs: whether a key exists, a JSON
 document put and a file upload. Any failure to configure, authenticate to or
 reach the bucket, and any failure of a later request, is a `StoreError`, which
-ends the whole run.
+ends the whole run. Its message can name the endpoint, the bucket or a key, so
+only its fixed `failure` description belongs in a published report.
 """
 
 from __future__ import annotations
@@ -11,6 +12,7 @@ from __future__ import annotations
 import json
 from collections.abc import Generator, Mapping
 from contextlib import contextmanager
+from enum import StrEnum
 from pathlib import Path
 from typing import Any
 
@@ -23,9 +25,22 @@ REQUIRED = (ENDPOINT, BUCKET, ACCESS_KEY_ID, SECRET_ACCESS_KEY)
 DENIED_STATUSES = frozenset({401, 403})
 
 
+class StoreFailure(StrEnum):
+    """What went wrong with the bucket, in words safe to publish."""
+
+    NOT_CONFIGURED = "archive bucket is not configured"
+    UNREACHABLE = "cannot reach the archive bucket"
+    DENIED = "archive bucket denied access"
+    REQUEST_FAILED = "archive bucket request failed"
+
+
 class StoreError(Exception):
     """The bucket is not configured, does not exist, refuses the credentials or
     cannot be reached, or a request to it failed."""
+
+    def __init__(self, failure: StoreFailure, detail: str) -> None:
+        super().__init__(f"{failure}: {detail}")
+        self.failure = failure
 
 
 class ArchiveStore:
@@ -45,9 +60,7 @@ class ArchiveStore:
         values = {name: environment.get(name, "").strip() for name in REQUIRED}
         missing = [name for name, value in values.items() if not value]
         if missing:
-            raise StoreError(
-                f"archive bucket is not configured: set {', '.join(missing)}"
-            )
+            raise StoreError(StoreFailure.NOT_CONFIGURED, f"set {', '.join(missing)}")
         import boto3
         from botocore.config import Config
 
@@ -114,9 +127,9 @@ def _translated() -> Generator[None]:
         yield
     except ClientError as error:
         if _status(error) in DENIED_STATUSES:
-            raise StoreError(f"archive bucket denied access: {error}") from error
-        raise StoreError(f"archive bucket request failed: {error}") from error
+            raise StoreError(StoreFailure.DENIED, str(error)) from error
+        raise StoreError(StoreFailure.REQUEST_FAILED, str(error)) from error
     except BotoCoreError as error:
-        raise StoreError(f"cannot reach the archive bucket: {error}") from error
+        raise StoreError(StoreFailure.UNREACHABLE, str(error)) from error
     except Boto3Error as error:
-        raise StoreError(f"archive bucket request failed: {error}") from error
+        raise StoreError(StoreFailure.REQUEST_FAILED, str(error)) from error

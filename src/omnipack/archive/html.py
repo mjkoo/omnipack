@@ -19,7 +19,7 @@ from html.parser import HTMLParser
 from typing import Any, NamedTuple
 from urllib.parse import unquote, urljoin, urlsplit
 
-from omnipack.archive import Asset, HtmlRecord, NoReleaseError, ResolvedRelease
+from omnipack.archive import Asset, NoReleaseError, ResolvedRelease
 from omnipack.archive.fetch import fetch
 from omnipack.archive.selection import (
     SettingsError,
@@ -90,12 +90,11 @@ def resolve_html(
         raise NoReleaseError(f"no link matches on {url}")
     link = links[-1].url
 
-    record = HtmlRecord(fetched_urls=fetched)
     name = unquote(urlsplit(link).path.rsplit("/", 1)[-1]) or urlsplit(link).netloc
     return ResolvedRelease(
         version=_version(options, link, body),
-        raw_record=record,
         assets=(Asset(name, link),),
+        fetched_urls=tuple(fetched),
     )
 
 

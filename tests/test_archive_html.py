@@ -47,7 +47,8 @@ def test_a_direct_link_resolves_to_the_last_sorted_apk_and_its_version() -> None
     url = "https://example.com/downloads/app-1.10.apk"
     assert release.version == "1.10"
     assert release.assets == (Asset("app-1.10.apk", url),)
-    assert release.raw_record == {"fetched_urls": [PAGE]}
+    assert release.fetched_urls == (PAGE,)
+    assert release.raw_record == {}
     assert (release.tag, release.date, release.notes) == (None, None, None)
     assert len(transport.requests) == 1
 
@@ -79,7 +80,7 @@ def test_a_two_step_chain_follows_each_stage_and_records_the_pages() -> None:
 
     assert release.version == "2.3.1"
     assert release.assets == (Asset("app-aarch64.apk", f"{patch}app-aarch64.apk"),)
-    assert release.raw_record == {"fetched_urls": [root, series, patch]}
+    assert release.fetched_urls == (root, series, patch)
     assert [r.full_url for r in transport.requests] == [root, series, patch]
 
 

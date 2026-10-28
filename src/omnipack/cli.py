@@ -3,12 +3,15 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import math
 import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
 from omnipack.archive.run import (
+    ArchiveReport,
     failed_report,
     run_archive,
     write_archive_report,
@@ -176,11 +179,24 @@ def archive_command(args: argparse.Namespace) -> int:
     root = Path.cwd()
     token = os.environ.get("GITHUB_TOKEN", "").strip()
     budget = None if args.budget_minutes is None else args.budget_minutes * 60
+
+    def checkpoint(partial: ArchiveReport) -> None:
+        # The final write below reports a report that cannot be written.
+        with contextlib.suppress(OSError):
+            write_archive_report(root, partial)
+
     try:
         bucket = None if args.dry_run else ArchiveStore.from_environment(os.environ)
-        report = run_archive(root, bucket, github_token=token or None, budget=budget)
+        report = run_archive(
+            root,
+            bucket,
+            github_token=token or None,
+            budget=budget,
+            checkpoint=checkpoint,
+        )
     except StoreError as error:
-        report = failed_report(str(error), dry_run=args.dry_run)
+        print(f"archive bucket error: {error}", file=sys.stderr)
+        report = failed_report(str(error.failure), dry_run=args.dry_run)
     for target in report["targets"]:
         outcome = target.get("outcome") or "resolved"
         detail = target.get("version") or target.get("error") or target.get("reason")
@@ -194,6 +210,16 @@ def archive_command(args: argparse.Namespace) -> int:
         print(f"archive failed: cannot write report: {error}", file=sys.stderr)
         return 1
     return 1 if failed else 0
+
+
+def _positive_minutes(value: str) -> float:
+    try:
+        minutes = float(value)
+    except ValueError:
+        minutes = math.nan
+    if not (math.isfinite(minutes) and minutes > 0):
+        raise argparse.ArgumentTypeError(f"not a positive number of minutes: {value}")
+    return minutes
 
 
 def _parser() -> argparse.ArgumentParser:
@@ -234,7 +260,7 @@ def _parser() -> argparse.ArgumentParser:
     )
     archive_parser.add_argument(
         "--budget-minutes",
-        type=float,
+        type=_positive_minutes,
         help="stop starting targets after this long and abandon the one in flight",
     )
     archive_parser.set_defaults(func=archive_command)

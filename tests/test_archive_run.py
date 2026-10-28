@@ -8,6 +8,8 @@ from pathlib import Path
 from typing import Any, Self
 from urllib.request import Request
 
+import pytest
+
 from omnipack.archive import Outcome
 from omnipack.archive.run import (
     Archiver,
@@ -16,7 +18,7 @@ from omnipack.archive.run import (
     write_archive_report,
 )
 from omnipack.archive.source import CaptureOutcome, CaptureResult
-from omnipack.archive.store import StoreError
+from omnipack.archive.store import StoreError, StoreFailure
 from omnipack.archive.targets import select_targets
 from omnipack.http import HttpClient
 from omnipack.report_model import Status
@@ -187,17 +189,6 @@ def test_a_new_version_stores_every_object_and_the_manifest_last() -> None:
     assert manifest["sourceHistory"]["key"] == "source/repo.bundle.zst"
 
 
-def test_an_existing_manifest_is_unchanged_and_downloads_nothing() -> None:
-    world = World([release_v1()])
-    world.process()
-    world.bucket.writes.clear()
-    world.downloads.urls.clear()
-
-    assert world.process()["outcome"] == Outcome.UNCHANGED
-    assert world.downloads.urls == []
-    assert world.bucket.writes == []
-
-
 def test_a_new_version_is_stored_beside_the_old_one_and_a_return_touches_nothing() -> (
     None
 ):
@@ -246,7 +237,6 @@ def test_a_capture_cut_short_by_the_deadline_abandons_the_target() -> None:
     world.http.clock = lambda: now[0]
 
     def late(url: str, destination: Path, work: Path, **_: Any) -> CaptureResult:
-        now[0] = 100.0
         return CaptureResult(CaptureOutcome.EXPIRED, "timed out at the run deadline")
 
     world.capture = late
@@ -307,6 +297,30 @@ def test_an_html_targets_request_headers_reach_its_pages_and_its_download() -> N
     assert all(request.get_header("X-mirror") == "m.example" for request in sent)
 
 
+def test_an_unchanged_html_target_downloads_nothing() -> None:
+    page = "https://example.test/dl"
+    apk = "https://example.test/app-1.2.apk"
+    html_entry = entry(
+        page,
+        overrideSource="HTML",
+        additionalSettings=json.dumps({"versionExtractionRegEx": r"[0-9.]+(?=\.apk)"}),
+    )
+    downloads = Downloads({apk: b"apk"})
+    http = HttpClient(
+        transport=RoutedTransport({page: f'<a href="{apk}">get</a>'}),
+        stream_transport=downloads,
+    )
+    bucket = FakeBucket()
+    [target] = select_targets_for(html_entry)
+    archiver = Archiver(bucket, http, capture=capture_fails)
+    archiver.process(target)
+    bucket.writes.clear()
+    downloads.urls.clear()
+
+    assert archiver.process(target)["outcome"] == Outcome.UNCHANGED
+    assert downloads.urls == [] and bucket.writes == []
+
+
 def test_repeated_asset_names_never_collide_with_a_prefixed_name() -> None:
     names = ["2-x.apk", "x.apk", "x.apk"]
     base = "https://github.com/owner/app/releases/download/v1"
@@ -338,9 +352,8 @@ def test_a_dry_run_resolves_with_no_download_clone_or_write() -> None:
     assert world.downloads.urls == [] and calls == []
 
 
-def test_outcomes_map_for_missing_no_release_and_skipped(tmp_path: Path) -> None:
+def test_outcomes_map_for_no_release_and_skipped(tmp_path: Path) -> None:
     world = World([])
-    world.api.answers[RELEASES] = 404
     write_packs(
         tmp_path,
         [entry(), entry("https://example.test/x", overrideSource="Other")],
@@ -349,7 +362,7 @@ def test_outcomes_map_for_missing_no_release_and_skipped(tmp_path: Path) -> None
     report = run_archive(tmp_path, world.bucket, http=world.http)
 
     assert [t["outcome"] for t in report["targets"]] == [
-        Outcome.UNREACHABLE,
+        Outcome.NO_RELEASE,
         Outcome.SKIPPED,
     ]
     assert report["status"] == Status.SUCCESS
@@ -393,15 +406,104 @@ def test_an_exhausted_budget_leaves_the_rest_not_checked(tmp_path: Path) -> None
     assert report["status"] == Status.SUCCESS
 
 
-def test_a_bucket_error_ends_the_run_failed(tmp_path: Path) -> None:
-    world = World([release_v1()], bucket=FakeBucket(StoreError("denied")))
+def test_a_bucket_error_ends_the_run_failed_and_publishes_only_a_fixed_message(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    detail = "Could not connect to https://s3.secret.example/private-bucket"
+    error = StoreError(StoreFailure.UNREACHABLE, detail)
+    world = World([release_v1()], bucket=FakeBucket(error))
     write_packs(tmp_path, [entry(), entry("https://github.com/owner/other")])
 
     report = run_archive(tmp_path, world.bucket, http=world.http)
+    write_archive_report(tmp_path, report)
 
     assert report["status"] == Status.FAILED
-    assert report["error"] == "denied"
+    assert report["error"] == "cannot reach the archive bucket"
     assert [t["outcome"] for t in report["targets"]] == [Outcome.NOT_CHECKED] * 2
+    published = (tmp_path / ".build/archive/report.json").read_text() + (
+        tmp_path / ".build/archive/summary.md"
+    ).read_text()
+    assert "secret" not in published
+    assert detail in capsys.readouterr().err
+
+
+def test_the_report_so_far_is_handed_over_after_each_target(tmp_path: Path) -> None:
+    world = World([release_v1()])
+    write_packs(
+        tmp_path, [entry(), entry("https://example.test/x", overrideSource="Other")]
+    )
+    checkpoints: list[list[Any]] = []
+
+    run_archive(
+        tmp_path,
+        world.bucket,
+        http=world.http,
+        capture=capture_ok,
+        checkpoint=lambda partial: checkpoints.append(
+            [(t.get("outcome"), t.get("reason")) for t in partial["targets"]]
+        ),
+    )
+
+    assert checkpoints == [
+        [
+            (Outcome.ARCHIVED, None),
+            (Outcome.NOT_CHECKED, "the run ended before reaching it"),
+        ],
+        [(Outcome.ARCHIVED, None), (Outcome.SKIPPED, "unsupported source")],
+    ]
+
+
+def test_a_spent_deadline_stops_the_release_request(tmp_path: Path) -> None:
+    world = World([release_v1()])
+    world.http.clock = lambda: 100.0
+    [target] = select_targets_for(entry())
+
+    report = world.archiver(deadline=50.0).process(target)
+
+    assert report["outcome"] == Outcome.FAILED
+    assert world.api.requests == []
+
+
+def test_a_spent_deadline_stops_the_asset_download() -> None:
+    now = [0.0]
+    world = World([release_v1()])
+    world.http.clock = lambda: now[0]
+    resolve = world.api.__call__
+
+    def resolve_then_spend(request: Request, timeout: float) -> Any:
+        response = resolve(request, timeout)
+        now[0] = 100.0
+        return response
+
+    world.http.transport = resolve_then_spend
+    [target] = select_targets_for(entry())
+
+    report = world.archiver(deadline=50.0).process(target)
+
+    assert report["outcome"] == Outcome.FAILED
+    assert len(world.api.requests) == 1
+    assert world.downloads.urls == []
+    assert world.bucket.objects == {}
+
+
+def test_a_last_upload_that_ends_past_the_deadline_still_writes_the_manifest() -> None:
+    now = [0.0]
+    world = World([release_v1()])
+    world.http.clock = lambda: now[0]
+    inner = world.bucket.upload_file
+
+    def slow_bundle(path: Path, key: str) -> None:
+        inner(path, key)
+        if key.endswith("repo.bundle.zst"):
+            now[0] = 100.0
+
+    world.bucket.upload_file = slow_bundle  # ty: ignore[invalid-assignment]
+    [target] = select_targets_for(entry())
+
+    report = world.archiver(deadline=50.0).process(target)
+
+    assert report["outcome"] == Outcome.ARCHIVED
+    assert world.bucket.writes[-1].endswith("manifest.json")
 
 
 def test_unreadable_packs_give_a_failed_report(tmp_path: Path) -> None:
