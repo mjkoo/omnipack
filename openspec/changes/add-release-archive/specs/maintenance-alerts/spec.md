@@ -34,8 +34,6 @@ SHALL raise a finding for each of these problems, and for no other outcome:
   finding per variant and package id;
 - a release archive run that cannot read the committed packs or reach its
   bucket;
-- a release archive target reported failed, one finding per normalized project
-  URL;
 - a producing job whose findings do not reach the alert job intact, that
   fails for a reason none of its other findings reports, or that is cancelled,
   one finding per job, so a job stopped by its time limit raises this finding
@@ -58,9 +56,8 @@ that changes nothing SHALL name the project URL and that key, and a finding
 for the extras a catalog lists at a project URL SHALL name the project URL
 and, for each such extra, its package id, each listing source and that
 source's differing fields. A finding for a repeated package id SHALL name the
-variant, the package id and each entry's family and project URL. A release archive target reported unreachable, no release, skipped or not
-checked SHALL raise no finding, and an archive failure finding's details SHALL
-name the URL, the resolved version and the failed object. A stale or
+variant, the package id and each entry's family and project URL. No release archive target's outcome SHALL raise a finding,
+whatever that outcome is; per-target outcomes stay in the run report. A stale or
 archived finding SHALL NOT be
 accounted as the live-check job's failure. Each finding SHALL have a key that
 stays the same while the same problem persists, independent of the problem's
@@ -188,5 +185,5 @@ uploading them fails.
 
 - **WHEN** a release archive run reports one target failed, one unreachable and
   one not checked
-- **THEN** one finding is raised, for the failed target's URL, and the run's
-  verdict is unchanged
+- **THEN** no finding is raised for any of those targets, the outcomes stay in
+  the run report, and the run's verdict is unchanged

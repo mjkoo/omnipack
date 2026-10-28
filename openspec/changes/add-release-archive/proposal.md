@@ -31,8 +31,8 @@ recover any packed app independently of its upstream.
 - Report each app's outcome: archived, unchanged, unreachable, no release,
   failed, skipped or not checked. Unreachable projects and partial failures never
   stop the other apps.
-- Raise maintenance-alert findings for an archive run that fails and for each app
-  whose archive fails. Unreachable projects stay the live check's findings.
+- Raise a maintenance-alert finding only for an archive run that fails. Per-app
+  outcomes, failures included, stay in the run report and raise no finding.
 - Add a `pack archive` command, with a `--dry-run` mode that resolves versions
   without a bucket.
 - Add a streaming download to the HTTP client. Add boto3 in a separate dependency
@@ -67,8 +67,8 @@ The estimated size is:
 
 ### Modified Capabilities
 
-- `maintenance-alerts`: the archive workflow becomes a producer. A failed archive
-  run and each app whose archive fails raise findings.
+- `maintenance-alerts`: the archive workflow becomes a producer. Only a failed archive
+  run raises a finding; per-app outcomes stay in the run report.
 
 ## Impact
 

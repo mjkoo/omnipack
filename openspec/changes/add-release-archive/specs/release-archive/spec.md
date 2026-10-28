@@ -92,7 +92,9 @@ and the HTML intermediate-link, link-filter and request-header settings.
 
 When a target's resolved version equals the version it last completely archived,
 the run SHALL download no asset, page snapshot or source history for it, and SHALL
-report it as unchanged.
+report it as unchanged. A prefix holding a manifest SHALL NOT be written again: a
+resolved version whose prefix already has one SHALL be made the last archived
+version and reported unchanged, with nothing downloaded.
 
 #### Scenario: Nothing changed since the last run
 
@@ -103,6 +105,11 @@ report it as unchanged.
 
 - **WHEN** a target's resolved version differs from the last version it archived
 - **THEN** the new version is archived and the earlier version's objects are left in place
+
+#### Scenario: Returning to an earlier archived version
+
+- **WHEN** a target was archived at version A, then at version B, and a later run resolves A again
+- **THEN** nothing is downloaded, A becomes the last archived version, and A's objects and manifest are left exactly as stored, even if that run is interrupted
 
 ### Requirement: Each archived version has its own prefix
 
@@ -120,7 +127,9 @@ versions SHALL be kept.
 ### Requirement: A forge release stores its assets, description and history
 
 For a GitHub or GitLab target, an archived version SHALL store every asset on the
-selected release, the release notes and the forge's release record, a
+selected release and every installable file Obtainium's resolution selects for it,
+including files linked only from the release description, each stored once and
+listed in the manifest, the release notes and the forge's release record, a
 zstd-compressed git bundle of every ref, and the README at the release's tag, or
 at the default branch when the tag cannot be found.
 
@@ -128,6 +137,11 @@ at the default branch when the tag cannot be found.
 
 - **WHEN** the selected release carries APKs, desktop archives and checksum files
 - **THEN** every one of those assets is stored, and the manifest lists each one with its size and SHA-256
+
+#### Scenario: A GitLab APK linked only from the release description
+
+- **WHEN** a GitLab release has no asset links and its description links the APK Obtainium would install
+- **THEN** that APK is stored and listed in the manifest, and the version counts as archived only once it is stored
 
 #### Scenario: Restoring source history
 

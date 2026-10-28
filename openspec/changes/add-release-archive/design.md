@@ -70,6 +70,13 @@ Folding it into `nightly.yml` was rejected for three reasons:
 `main` picks up the packs the nightly just pushed. A plain cron trigger offset from
 03:00 ET was rejected: it could overlap a slow nightly and read stale packs.
 
+zizmor's pedantic persona flags `workflow_run` as a dangerous trigger. The
+trigger line carries an inline `# zizmor: ignore[dangerous-triggers]` with a
+comment saying why it is safe here: the job checks out `main`, consumes no
+artifact from the triggering run and holds only `contents: read`. Having the
+nightly dispatch the archive instead was rejected because it would need
+`actions: write` in `nightly.yml`.
+
 ### Port Obtainium's source logic at a pinned upstream commit
 
 The resolvers port the release-selection and version logic from Obtainium's
@@ -91,7 +98,9 @@ skip-if-unchanged must match what Obtainium shows, and only a port achieves that
 
 The APK filter (`apkFilterRegEx`, `invertAPKFilter`, `includeZips`) still decides
 which release is selected, and therefore which version results, as Obtainium
-does. Once a release is selected, every asset on it is stored. For HTML sources,
+does. Once a release is selected, every asset on it is stored, together with every
+installable file the resolution selects, including APKs a GitLab release links
+only from its description; a file reached both ways is stored once. For HTML sources,
 the resolved link is the only asset.
 
 ### Bucket state is the change detector
@@ -121,7 +130,11 @@ The commit protocol:
 A target is unchanged when `state.version` equals the resolved version and that
 slug's manifest exists, checked with a HEAD request. If the manifest exists but
 `state.json` lags (the run died between steps 2 and 3), the next run repairs
-`state.json` without re-downloading.
+`state.json` without re-downloading. The same holds when the resolved version
+differs from `state.version` but its slug already has a manifest, as when a
+release is pulled and selection returns to an older archived version: the run
+rewrites only `state.json` to point at it. A prefix with a manifest is never
+written again, so only incomplete prefixes are retried.
 
 Keeping state in a committed file was rejected for three reasons: PRs carry
 sources only, the nightly publisher is the only writer, and a committed file
@@ -171,12 +184,10 @@ errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
 `scripts/alerts.py` gains:
 - an `UnsourcedJob` value `release-archive`, with its key prefixes;
 - an `Owner`;
-- `emit_release_archive`, which reads the report file and raises one finding per
-  `FAILED` target, keyed on the URL through the existing key-shortening helper,
-  plus the run-level finding.
-
-The scope is every target URL in the report, so a target that recovers closes
-its issue. `NOT_CHECKED` targets go in `unchecked`, so their issues stay open.
+- `emit_release_archive`, which reads the report file and raises only the
+  run-level finding. Per-target outcomes, `FAILED` included, stay in the run
+  report and raise no finding: the archive mirrors releases and does not
+  validate apps.
 
 ## Risks / Trade-offs
 
