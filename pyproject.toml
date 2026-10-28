@@ -34,6 +34,7 @@ lint = [
     "ty>=0.0.88",
 ]
 test = [
+    { include-group = "archive" },
     "pytest>=9",
     "pytest-cov>=7",
     "pyyaml>=6.0.3",

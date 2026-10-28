@@ -136,6 +136,7 @@ archive = [
     { name = "boto3" },
 ]
 dev = [
+    { name = "boto3" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pyyaml" },
@@ -147,6 +148,7 @@ lint = [
     { name = "ty" },
 ]
 test = [
+    { name = "boto3" },
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "pyyaml" },
@@ -157,6 +159,7 @@ test = [
 [package.metadata.requires-dev]
 archive = [{ name = "boto3", specifier = ">=1.43.120" }]
 dev = [
+    { name = "boto3", specifier = ">=1.43.120" },
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-cov", specifier = ">=7" },
     { name = "pyyaml", specifier = ">=6.0.3" },
@@ -168,6 +171,7 @@ lint = [
     { name = "ty", specifier = ">=0.0.88" },
 ]
 test = [
+    { name = "boto3", specifier = ">=1.43.120" },
     { name = "pytest", specifier = ">=9" },
     { name = "pytest-cov", specifier = ">=7" },
     { name = "pyyaml", specifier = ">=6.0.3" },
