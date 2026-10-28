@@ -137,9 +137,11 @@ cannot record a half-finished upload.
 
 The S3 API covers AWS, R2, B2 and GCS interop with one endpoint setting.
 `upload_file` gives managed multipart uploads straight from a temporary file.
-boto3 lives in `[dependency-groups] archive`, so `uv sync --locked` for
-everything else stays dependency-free. The workflow syncs with
-`--group archive`. Shelling out to the preinstalled `aws` CLI was rejected: it is
+boto3 lives in `[dependency-groups] archive`. The `test` group includes
+`archive` so the test suite exercises the bucket store, so jobs that sync the
+default dev group (all read-only, holding no bucket credential) also install
+boto3. The core package still has no runtime dependencies. The archive workflow
+syncs with `--no-default-groups --group archive`. Shelling out to the preinstalled `aws` CLI was rejected: it is
 hard to fake in tests and its error surface is opaque.
 
 ### Bounded resources

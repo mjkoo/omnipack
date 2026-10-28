@@ -33,8 +33,8 @@ run. A run's outcome SHALL NOT affect nightly publication.
 
 ### Requirement: Bucket credentials reach only the archive job
 
-The bucket endpoint, bucket name and access keys SHALL come from repository
-secrets that are exposed only to the archive job. No nightly publishing job and no
+The bucket endpoint, bucket name and access keys SHALL come from the
+secrets of a deployment environment that only the archive job uses. No nightly publishing job and no
 source catalog job SHALL receive them. The archive job SHALL hold read-only
 repository contents access.
 

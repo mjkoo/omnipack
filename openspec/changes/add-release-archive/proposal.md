@@ -12,8 +12,8 @@ recover any packed app independently of its upstream.
 
 - Add a scheduled archive workflow that runs after each nightly publishing run,
   and on manual dispatch. It reads both committed packs from `main` and archives
-  each fetchable app to an S3-compatible bucket whose credentials come from GitHub
-  secrets.
+  each fetchable app to an S3-compatible bucket whose credentials come from the
+  secrets of a deployment environment that only the archive job uses.
 - For each app, resolve the latest release the way Obtainium would, from the
   entry's `additionalSettings`, for GitHub, GitLab and HTML sources. When the
   resolved version already has a manifest in the bucket, skip the app with no
