@@ -7,6 +7,7 @@ qualifies by the pack entry's own settings: drafts never do, prereleases only
 for an entry that includes them, and otherwise any release of a track-only
 entry or one carrying an APK-like asset. Per-entry release selection beyond
 that, such as APK filters or version extraction, is deliberately left out.
+The selection itself is the one the release archive uses.
 
 Only GitHub repository URLs get a lookup. A lookup that cannot finish, for
 any reason, is inconclusive rather than a guess.
@@ -20,17 +21,21 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any
 
+from omnipack.archive.selection import (
+    Candidate,
+    ReleaseAsset,
+    ReleaseSettings,
+    SettingsError,
+    SortMethod,
+    is_installable,
+    select_release,
+)
 from omnipack.http import HttpClient, HttpError, failure_reason
 from omnipack.urls import normalize_project_url
 
 API = "https://api.github.com"
 STALE_DAYS = 180
 RELEASES_PER_PAGE = 100
-APK_SUFFIXES = (".apk", ".xapk", ".apkm", ".apks")
-
-
-class SettingsError(ValueError):
-    """An entry's `additionalSettings` do not decode to a JSON object."""
 
 
 class ResponseError(ValueError):
@@ -142,43 +147,76 @@ def _repository_archived(state: object) -> bool:
 
 
 def _newest_qualifying(releases: object, options: dict[str, Any]) -> Release | None:
+    settings = ReleaseSettings(
+        include_prereleases=options.get("includePrereleases") is True,
+        include_zips=options.get("includeZips") is True,
+        track_only=options.get("trackOnly") is True,
+        use_latest_asset_date=options.get("useLatestAssetDateAsReleaseDate") is True,
+        sort_method=SortMethod.DATE,
+        fallback_to_older=True,
+    )
+    selected = select_release(github_candidates(releases, settings), settings)
+    if selected is None:
+        return None
+    tag = selected.candidate.tag
+    if tag is None:
+        raise ResponseError("qualifying release has no tag")
+    if selected.date is None:
+        raise ResponseError("qualifying release has no date")
+    return Release(tag, selected.date)
+
+
+def github_candidates(releases: object, settings: ReleaseSettings) -> list[Candidate]:
+    """Normalize a GitHub releases response for selection, raising
+    `ResponseError` for a shape the lookup cannot judge.
+
+    A release that selection will skip is not inspected further: a draft
+    carries no publication date, and a prerelease the entry excludes is
+    never dated.
+    """
     if not isinstance(releases, list):
         raise ResponseError("releases response is not a list")
-    include_prereleases = options.get("includePrereleases") is True
-    track_only = options.get("trackOnly") is True
-    suffixes = APK_SUFFIXES + ((".zip",) if options.get("includeZips") is True else ())
-    by_assets = options.get("useLatestAssetDateAsReleaseDate") is True
-
-    candidates: list[tuple[datetime, dict[str, Any]]] = []
+    candidates: list[Candidate] = []
     for release in releases:
         if not isinstance(release, dict):
             raise ResponseError("release is not an object")
-        # Drafts carry no publication date, so they are dropped before any
-        # date is read.
         draft, prerelease = release.get("draft"), release.get("prerelease")
         if not isinstance(draft, bool) or not isinstance(prerelease, bool):
             raise ResponseError("release lacks draft and prerelease flags")
-        if draft or (prerelease and not include_prereleases):
-            continue
-        candidates.append((_release_date(release, by_assets=by_assets), release))
-    candidates.sort(key=lambda candidate: candidate[0], reverse=True)
+        published, assets = None, ()
+        if not draft and (settings.include_prereleases or not prerelease):
+            published = _parse_date(release.get("published_at"))
+            assets = tuple(_release_asset(a, settings) for a in _assets(release))
+        tag, title, notes = (
+            release.get("tag_name"),
+            release.get("name"),
+            release.get("body"),
+        )
+        candidates.append(
+            Candidate(
+                tag=tag if isinstance(tag, str) else None,
+                title=title if isinstance(title, str) else None,
+                notes=notes if isinstance(notes, str) else "",
+                published=published,
+                prerelease=prerelease,
+                draft=draft,
+                assets=assets,
+                record=release,
+            )
+        )
+    return candidates
 
-    for date, release in candidates:
-        if track_only or any(
-            name.lower().endswith(suffixes) for name in _asset_names(release)
-        ):
-            tag = release.get("tag_name")
-            if not isinstance(tag, str):
-                raise ResponseError("qualifying release has no tag")
-            return Release(tag, date)
-    return None
 
-
-def _release_date(release: dict[str, Any], *, by_assets: bool) -> datetime:
-    assets = _assets(release)
-    if by_assets and assets:
-        return max(_parse_date(asset.get("updated_at")) for asset in assets)
-    return _parse_date(release.get("published_at"))
+def _release_asset(asset: dict[str, Any], settings: ReleaseSettings) -> ReleaseAsset:
+    name = asset.get("name")
+    if not isinstance(name, str):
+        raise ResponseError("release asset has no name")
+    updated = None
+    if settings.use_latest_asset_date:
+        updated = _parse_date(asset.get("updated_at") or asset.get("created_at"))
+    return ReleaseAsset(
+        name, is_installable(name, include_zips=settings.include_zips), updated
+    )
 
 
 def _assets(release: dict[str, Any]) -> list[dict[str, Any]]:
@@ -188,16 +226,6 @@ def _assets(release: dict[str, Any]) -> list[dict[str, Any]]:
     ):
         raise ResponseError("release assets are not a list of objects")
     return assets
-
-
-def _asset_names(release: dict[str, Any]) -> list[str]:
-    names: list[str] = []
-    for asset in _assets(release):
-        name = asset.get("name")
-        if not isinstance(name, str):
-            raise ResponseError("release asset has no name")
-        names.append(name)
-    return names
 
 
 def _parse_date(value: object) -> datetime:
