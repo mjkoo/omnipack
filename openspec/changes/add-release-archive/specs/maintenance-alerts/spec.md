@@ -187,3 +187,169 @@ uploading them fails.
   one not checked
 - **THEN** no finding is raised for any of those targets, the outcomes stay in
   the run report, and the run's verdict is unchanged
+
+### Requirement: Each finding has one issue that follows its latest re-check
+
+Each finding SHALL have one GitHub issue labelled `omnipack-alert` that
+identifies the finding's key on the first line of its body; an issue SHALL be
+taken to identify a key only when that first line is exactly one key
+identifier, whatever its later lines contain. When a run raises a finding with no issue, an
+issue SHALL be opened. When an open issue's finding is raised again, the issue
+SHALL be updated with the latest details, and the issue SHALL be left
+unedited when its title and details are unchanged; a different run raising
+the same details SHALL NOT count as a change. When a run re-checks a finding's key and does not raise it, that
+finding's open issue SHALL be closed as completed.
+
+A run SHALL NOT close an issue for a key it did not re-check. A key is
+re-checked only when the stage or step it names actually ran: for nightly
+preparation, the stages preparation reports having run, so a run with nothing
+to publish re-checks neither the commit nor the bundle stage, and a failure
+before the checkout stage does not re-check checkout; for a source's
+steps, those that succeeded or failed; for publication, a push or publish
+that was attempted and not refused because main advanced. A skipped step, or
+a stage after the failing one, is not re-checked. A source's test, build,
+verification and catalog guard steps SHALL count as re-checked when they were
+skipped only because generation and staging succeeded with a candidate equal
+to main's catalog. A producing job's early-failure key SHALL count as
+re-checked whenever that job ran, including when it was cancelled; a
+cancelled job SHALL re-check no other key. A live check that read the packs SHALL count
+as re-checking every unreachable and error-status URL key except those of URLs the time budget
+left unchecked and of inconclusive URLs that recorded no status, such as a
+retried status after retries, a timeout or a connection failure, so the issue
+of a URL no longer in the packs is closed. A live check that read the packs
+SHALL count as re-checking every stale and archived key except those of a
+health-inconclusive URL, an unreachable URL and a URL the time budget left
+unchecked, so the health issues of a URL no longer in the packs are closed. A build SHALL count as re-checking
+the build-warning keys only when its report records success; a failed
+build's report SHALL still raise the warnings it lists but SHALL close no
+build-warning issue. A release archive run whose archive step ran and wrote a
+readable report SHALL count as re-checking its run-level key.
+
+An issue the owner closed as not planned SHALL stay closed while its finding
+persists. A mute SHALL last one occurrence: when a run re-checks a muted key
+and does not raise it, the issue SHALL be marked closed as completed with a
+comment naming that run, so that a later recurrence reopens it; a run that did
+not re-check the key SHALL leave the mute in place. An issue closed as
+completed whose finding is raised again SHALL be reopened. Issues carrying the
+label but identifying no valid key SHALL be left alone.
+
+#### Scenario: A finding appears and clears
+
+- **WHEN** a run raises a finding and a later run re-checks it without raising
+  it
+- **THEN** the first run opens an issue and the later run closes it as
+  completed
+
+#### Scenario: A finding persists with new details
+
+- **WHEN** consecutive runs raise the same finding with a different error
+  message
+- **THEN** the same issue is updated rather than a second issue opened
+
+#### Scenario: The owner mutes a finding
+
+- **WHEN** the owner closes an issue as not planned and later runs still raise
+  its finding
+- **THEN** the issue stays closed
+
+#### Scenario: A muted finding clears and recurs
+
+- **WHEN** the owner closes an issue as not planned, a later run re-checks its
+  key without raising it, and a run after that raises it again
+- **THEN** the run that saw it clear marks the issue closed as completed with
+  a comment naming that run, and the run that sees it again reopens it
+
+#### Scenario: A mute survives a run that did not re-check
+
+- **WHEN** the owner closes an issue as not planned and a later run does not
+  re-check its key, as when its URL was left unchecked by the time budget
+- **THEN** the issue stays closed as not planned
+
+#### Scenario: A muted error status becomes unreachable
+
+- **WHEN** the owner mutes a URL's HTTP 403 issue and the URL later answers
+  HTTP 404
+- **THEN** a separate issue for the URL's unreachability is opened
+
+#### Scenario: The owner closes a finding that is not fixed
+
+- **WHEN** the owner closes an issue as completed and the next run still
+  raises its finding
+- **THEN** the issue is reopened
+
+#### Scenario: A URL leaves the packs
+
+- **WHEN** a URL with an open issue is denied and main's rebuilt packs no
+  longer contain it
+- **THEN** the next live check closes that URL's issue as completed
+
+#### Scenario: A URL with health issues leaves the packs
+
+- **WHEN** a URL has an open stale issue and a muted archived issue, and it is
+  denied so that main's rebuilt packs no longer contain it
+- **THEN** the next live check closes the stale issue as completed, and marks
+  the archived issue closed as completed with a comment naming that run
+
+#### Scenario: A key is not re-checked
+
+- **WHEN** an open issue's key was not re-checked by a run, as when
+  preparation failed before the release step
+- **THEN** the issue is left open and unchanged
+
+#### Scenario: An earlier step fails
+
+- **WHEN** a source's verification issue is open and that source's generation
+  fails the next day, or a nightly stage issue is open for a stage after the
+  one that fails
+- **THEN** the later step's or stage's issue is left open and unchanged
+
+#### Scenario: A persisting finding in a later run
+
+- **WHEN** consecutive runs raise the same finding with the same details
+- **THEN** the later run leaves the issue unedited
+
+#### Scenario: A nightly run has nothing to publish
+
+- **WHEN** a nightly commit or bundle stage issue is open and the next
+  preparation succeeds with nothing to commit, so neither stage runs
+- **THEN** that issue is left open and unchanged
+
+#### Scenario: Preparation fails before checkout
+
+- **WHEN** a nightly checkout stage issue is open and the next preparation
+  fails while removing reports left by an earlier run, before checkout runs
+- **THEN** the checkout issue is left open and unchanged
+
+#### Scenario: A release publishes a new revision
+
+- **WHEN** a nightly release issue is open and the next release publishes a
+  new revision
+- **THEN** the release issue is closed as completed
+
+#### Scenario: An inconclusive outcome does not clear an error status
+
+- **WHEN** a URL's HTTP 403 issue is open and the next live check times out
+  on that URL or receives HTTP 429 after retries
+- **THEN** the issue is left open and unchanged
+
+#### Scenario: A build fails before checking categories
+
+- **WHEN** an uncategorized-family issue is open and the next nightly build
+  fails before category assignment, writing a failed report with empty
+  warning lists
+- **THEN** the issue is left open and unchanged
+
+#### Scenario: A dormant project the owner accepts
+
+- **WHEN** the owner closes a stale issue as not planned, later live checks
+  still report the URL stale, and then the project publishes a qualifying
+  release
+- **THEN** the issue stays closed while the URL is stale, and the first live
+  check after the release marks it closed as completed with a comment naming
+  that run
+
+#### Scenario: A failed health lookup does not clear a health issue
+
+- **WHEN** a URL's stale issue is open and the next live check's health lookup
+  for it is rate limited
+- **THEN** the issue is left open and unchanged

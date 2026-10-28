@@ -44,6 +44,9 @@ See proposal.md (Why). The current state that shapes this design:
 - Incremental or delta git bundles.
 - Deduplicating identical assets across versions.
 - Archiving track-only or unsupported sources.
+- HTML entries versioned by `partialAPKHash`, `ETag` or `releaseDateAsVersion`,
+  which are reported failed. `APKLinkHash` yields a stable stand-in, not
+  Obtainium's displayed value.
 - Per-device arch narrowing (`autoApkFilterByArch`) or Obtainium's
   installed-version comparison. The archive compares only against its own archived
   manifests.
@@ -56,7 +59,9 @@ See proposal.md (Why). The current state that shapes this design:
 `.github/workflows/release-archive.yml` triggers on `workflow_run` of "Nightly
 publishing" (`completed`) and on `workflow_dispatch`. An `archive` job runs in a
 GitHub Environment named `release-archive` that holds the `ARCHIVE_S3_*` secrets,
-with `contents: read` and `timeout-minutes: 330`. An `alert` job holds
+with `contents: read` and `timeout-minutes: 330`. Checkout persists no
+credential, no step caches, every action is pinned by SHA, and the job that
+holds the secrets installs only the project and the `archive` group. An `alert` job holds
 `issues: write`. The concurrency group is `omnipack-release-archive`, with
 `cancel-in-progress: false`.
 
@@ -160,20 +165,26 @@ hard to fake in tests and its error surface is opaque.
 The run's resource limits:
 - **HTTP:** `HttpClient.download(url, dest, headers)` streams in chunks to a
   temporary file and computes SHA-256 as it goes.
-- **Rate limits:** a 403 or 429 with rate-limit headers sleeps until the reset,
-  capped by the remaining budget, then retries once.
+- **Download hashing:** `download` does not hash; the archive hashes each file
+  once, when it uploads it.
+- **Rate limits:** a wait happens only in `download`, once, for a 403 or 429
+  with rate-limit headers, capped at 120 seconds and by the remaining budget;
+  a longer wait fails the target. GitHub API lookups are not retried on a rate
+  limit: the target fails.
 - **Serial processing:** targets are processed one at a time. Each target deletes
   its temporary directory before the next starts.
-- **Source:** `git clone --mirror --quiet`, then `git bundle create --all` into
+- **Source:** `git clone --bare --quiet`, which fetches branches and tags only and not
+  pull or merge request refs, then `git bundle create --all` into
   the upload file, uncompressed because git pack data is already compressed. The
   upload replaces the target's single bundle key only when the capture succeeds,
   and the version's manifest records the bundle it captured (key, size, sha256)
   or why none was captured. A failed capture leaves the earlier bundle in place
   and does not fail the version.
-- **Time budget:** the remaining time to the job's limit minus 15 minutes. The
-  run stops starting new targets when the budget is reached, and passes the
-  deadline to the in-flight target's downloads and clone, so that target is
-  abandoned without a manifest.
+- **Time budget:** 300 minutes of the job's 330, leaving a 30-minute margin for
+  setup, the report and the alert job. The run stops starting new targets when
+  the budget is reached, and passes the deadline to the in-flight target's
+  downloads and clone, so that target is abandoned without a manifest and
+  reported failed.
 
 ### Outcomes and alerts
 
@@ -189,7 +200,8 @@ Outcomes are a `StrEnum` defined once in the archive package:
 `pack archive` writes `.build/archive/report.json` and `summary.md`, which the
 workflow shows in the job summary and uploads as a workflow artifact. The report
 is not stored in the bucket. The command exits non-zero only for run-level
-errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
+errors: an unreadable pack, or a bucket the run cannot reach or authenticate to,
+or a report it cannot write.
 
 `scripts/alerts.py` gains:
 - an `UnsourcedJob` value `release-archive`, with its key prefixes;
@@ -214,7 +226,7 @@ errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
   archiving without a bundle and records the reason. Serial processing keeps
   peak disk use to one target at a time.
 - **The GitHub API rate limit is shared with checkout.** Mitigation: the job's
-  token allows plenty of requests for a few hundred targets. Rate-limit handling
+  token allows plenty of requests for the number of targets. Rate-limit handling
   backs off within the budget.
 - **HTML pages change their markup, so the resolved version flips and triggers
   re-archives.** Mitigation: this matches what Obtainium would then report. Each
@@ -233,4 +245,4 @@ errors: an unreadable pack, or a bucket the run cannot reach or authenticate to.
 
 ## Open Questions
 
-- The exact pinned Obtainium commit is chosen when the port starts.
+- None. The pinned Obtainium commit is `fcd1807c8f8d2b8a5e27d4214ac4d472ed045598`.

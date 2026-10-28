@@ -36,7 +36,9 @@ run. A run's outcome SHALL NOT affect nightly publication.
 The bucket endpoint, bucket name and access keys SHALL come from the
 secrets of a deployment environment that only the archive job uses. No nightly publishing job and no
 source catalog job SHALL receive them. The archive job SHALL hold read-only
-repository contents access.
+repository contents access, SHALL NOT persist a checkout credential, SHALL use
+no caches and SHALL pin every action by commit SHA. The job that holds the
+secrets SHALL install only the project and the `archive` dependency group.
 
 #### Scenario: Publishing runs without the bucket credential
 
@@ -88,6 +90,17 @@ and the HTML intermediate-link, link-filter and request-header settings.
 - **WHEN** an HTML entry lists intermediate link steps and a final link filter
 - **THEN** each step's matching link is followed in order, and the APK and version come from the final page as Obtainium would resolve them
 
+### Requirement: Some HTML versioning settings are stated exceptions
+
+An HTML entry versioned by `partialAPKHash`, `ETag` or `releaseDateAsVersion`
+SHALL be reported failed, and one versioned by `APKLinkHash` SHALL get a stable
+stand-in version rather than the value Obtainium displays.
+
+#### Scenario: An entry versioned by the release date
+
+- **WHEN** an HTML entry sets `releaseDateAsVersion`
+- **THEN** the target is reported failed and nothing is stored for it
+
 ### Requirement: Unchanged versions are not downloaded
 
 When a target's resolved version already has a manifest in the bucket,
@@ -129,8 +142,8 @@ After a new version's manifest is stored, the target SHALL keep its three most
 recently archived versions, ranked by when their manifests were stored, and SHALL
 delete older ones. Each pruned version's manifest SHALL be deleted before its
 other objects, so a partly pruned version never reads as archived. Prefixes
-without a manifest SHALL NOT be pruned. A pruned version that is selected again
-SHALL be archived again.
+without a manifest SHALL NOT be pruned. The version just archived SHALL always
+be kept. A pruned version that is selected again SHALL be archived again.
 
 #### Scenario: A fourth version prunes the oldest
 
@@ -166,7 +179,7 @@ listed in the manifest, the release notes and the forge's release record.
 
 ### Requirement: Source history is one bundle per target
 
-The source history SHALL be one uncompressed git bundle of every ref at
+The source history SHALL be one uncompressed git bundle of every branch and tag at
 `apps/<source-key>/source/repo.bundle`, outside the version prefixes, replaced
 only by a successful fresh capture made when a new version is archived. The
 version's manifest SHALL record the bundle it captured (key, size and SHA-256)
@@ -234,15 +247,87 @@ that reason alone.
 - **WHEN** a new release's assets download but cloning its repository fails
 - **THEN** the version is archived with its assets and description, its manifest records the clone failure, and the earlier bundle is left in place
 
-### Requirement: The archive command supports a dry run
+### Requirement: The archive command runs and supports a dry run
 
-The `pack archive` command SHALL perform an archive run against the configured
-bucket. With `--dry-run`, it SHALL resolve every target and report each one's
-resolved version, or its skipped, unreachable or no-release outcome, without
-bucket credentials. A dry run SHALL
-NOT download assets, clone repositories or write to any bucket.
+The system SHALL provide `pack archive`, which performs an archive run against
+the bucket configured by the `ARCHIVE_S3_*` environment variables and prints
+each target's outcome, or its resolved version in a dry run, with the error
+when there is one, otherwise the version, otherwise the reason. With
+`--dry-run`, it SHALL resolve every target without bucket credentials and
+download, clone and write nothing. `--budget-minutes` SHALL accept only a
+positive, finite number.
 
 #### Scenario: Dry run without credentials
 
 - **WHEN** `pack archive --dry-run` runs with no bucket configured
 - **THEN** it reports each target's resolved version and makes no asset download, clone or bucket write
+
+#### Scenario: A target fails
+
+- **WHEN** one target fails and the others are archived
+- **THEN** the printed line and the report for the failed target show its error even when a version was resolved
+
+#### Scenario: An invalid budget
+
+- **WHEN** `--budget-minutes` is zero, negative, not a number or infinite
+- **THEN** the command rejects it as invalid usage and starts no run
+
+### Requirement: The archive command's exit status and report
+
+The command SHALL exit nonzero only when the committed packs cannot be read,
+the bucket cannot be reached or refuses the credentials, or the report cannot
+be written; failed, unreachable or not-checked targets leave it zero. It SHALL
+write, whole, a report and a summary under `.build/archive/` on every
+invocation, a failed report recording the error when the run fails as a whole,
+and SHALL rewrite them after each target, listing the targets not yet reached
+as not checked.
+
+#### Scenario: The bucket cannot be used
+
+- **WHEN** the bucket is not configured or refuses the credentials
+- **THEN** the command exits nonzero and writes a failed report recording the error
+
+#### Scenario: The report cannot be written
+
+- **WHEN** the report or its summary cannot be written
+- **THEN** the command exits nonzero with a concise diagnostic whatever the targets' outcomes
+
+#### Scenario: A killed run
+
+- **WHEN** a run is killed after some targets were processed
+- **THEN** the report on disk lists those targets' outcomes and the rest as not checked
+
+### Requirement: The archive command's budget deadline
+
+The run's time budget SHALL bound the whole run: no target SHALL start once it
+is spent, and the target in flight when it passes SHALL be abandoned without a
+manifest and reported failed.
+
+#### Scenario: The deadline arrives mid-target
+
+- **WHEN** the run's time budget passes while a target's files are being fetched or stored
+- **THEN** that target is reported failed with no manifest stored, and the next run archives it in full
+
+### Requirement: The archive command publishes only safe text and credentials
+
+A bucket error's full message, which can name the endpoint or bucket, SHALL go
+only to standard error; the failed report and the summary SHALL carry a fixed
+description of its kind. The summary SHALL HTML-escape every URL, name, version,
+error and reason inside a preformatted block. The `GITHUB_TOKEN` environment
+variable, when non-empty, SHALL go only to the GitHub API and never across a
+redirect.
+
+#### Scenario: A bucket error names the bucket
+
+- **WHEN** the bucket error's message contains the endpoint
+- **THEN** the endpoint appears on standard error and in neither the report nor the summary
+
+#### Scenario: Markup in a target's text
+
+- **WHEN** a target's name, version or error contains markup
+- **THEN** the run summary shows it escaped
+
+#### Scenario: A download redirects off GitHub
+
+- **WHEN** a GitHub asset download answers with a redirect to another host
+- **THEN** the redirected request carries no token

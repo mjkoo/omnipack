@@ -10,7 +10,7 @@ recover any packed app independently of its upstream.
 
 ## What Changes
 
-- Add a scheduled archive workflow that runs after each nightly publishing run,
+- Add a follow-on archive workflow that runs after each nightly publishing run,
   and on manual dispatch. It reads both committed packs from `main` and archives
   each fetchable app to an S3-compatible bucket whose credentials come from the
   secrets of a deployment environment that only the archive job uses.
@@ -24,7 +24,7 @@ recover any packed app independently of its upstream.
   - for forge-hosted projects, the forge's release record;
   - for HTML sources, the resolved APK.
 
-  Source history is one uncompressed git bundle of every ref per target, kept
+  Source history is one uncompressed git bundle of every branch and tag per target, kept
   outside the version prefixes and replaced only by a successful fresh capture
   made when a new version is archived. After a new version is archived, the
   target keeps its three most recently archived versions and older ones are
@@ -44,18 +44,11 @@ recover any packed app independently of its upstream.
 Nothing is retired. Track-only entries, and entries whose source is not GitHub,
 GitLab or HTML, are skipped.
 
-The estimated size is:
-
-| Item | Estimate |
-|---|---|
-| Implementation | about 1,200 lines (resolvers about 500, orchestration and storage about 400, workflow and alerts about 300) |
-| Tests | about 1,000 lines |
-
 ## Capabilities
 
 ### New Capabilities
 
-- `release-archive`: the scheduled mirror of each packed app's resolved release.
+- `release-archive`: the follow-on mirror of each packed app's resolved release.
   It covers:
   - target selection from the committed packs;
   - Obtainium-equivalent version resolution;
@@ -79,7 +72,8 @@ The estimated size is:
     bundling, retention, orchestration);
   - the `archive` subcommand in `src/omnipack/cli.py`;
   - a streaming download in `src/omnipack/http.py`;
-  - shared settings filtering in `src/omnipack/forge_health.py`.
+  - shared release selection and settings filtering in
+    `src/omnipack/archive/selection.py`.
 - New workflow: `.github/workflows/release-archive.yml`. It runs in a
   `release-archive` environment holding the `ARCHIVE_S3_*` secrets, and has its
   own concurrency group.
