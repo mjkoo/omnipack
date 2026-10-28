@@ -4,14 +4,31 @@ from __future__ import annotations
 
 import os
 import shutil
+import signal
 import subprocess
 import tempfile
 import time
 from collections.abc import Callable
 from compression import zstd
+from dataclasses import dataclass
+from enum import StrEnum
 from pathlib import Path
 
 ZSTD_LEVEL = 10
+
+
+class CaptureOutcome(StrEnum):
+    CAPTURED = "captured"
+    # Git or the compression failed: the target is archived without a bundle.
+    FAILED = "failed"
+    # The run deadline passed: the target is abandoned.
+    EXPIRED = "expired"
+
+
+@dataclass(frozen=True)
+class CaptureResult:
+    outcome: CaptureOutcome
+    reason: str | None = None
 
 
 def capture_source(
@@ -21,13 +38,13 @@ def capture_source(
     *,
     deadline: float | None = None,
     clock: Callable[[], float] = time.monotonic,
-) -> str | None:
+) -> CaptureResult:
     """Write a compressed bundle of every ref of `url` to `destination`.
 
     The mirror clone and the intermediate bundle live under `work_dir` and are
     removed before returning. `deadline` is a reading of `clock` that bounds
-    the clone and the bundling. Returns None on success, otherwise the reason
-    the source could not be captured; it never raises for a failed capture.
+    the clone, the bundling and the compression; a capture that outlasts it is
+    `EXPIRED` and leaves no output. It never raises for a failed capture.
     """
     scratch = Path(tempfile.mkdtemp(dir=work_dir, prefix="source-"))
     try:
@@ -42,9 +59,9 @@ def capture_source(
             ),
         )
         for step, command, cwd in steps:
-            reason = _run(step, command, cwd, deadline, clock)
-            if reason is not None:
-                return reason
+            result = _run(step, command, cwd, deadline, clock)
+            if result is not None:
+                return result
         try:
             with (
                 bundle.open("rb") as source,
@@ -53,8 +70,15 @@ def capture_source(
                 shutil.copyfileobj(source, out)
         except OSError as error:
             destination.unlink(missing_ok=True)
-            return f"compressing the bundle failed: {error}"
-        return None
+            return CaptureResult(
+                CaptureOutcome.FAILED, f"compressing the bundle failed: {error}"
+            )
+        if deadline is not None and clock() >= deadline:
+            destination.unlink(missing_ok=True)
+            return CaptureResult(
+                CaptureOutcome.EXPIRED, "the run deadline passed while compressing"
+            )
+        return CaptureResult(CaptureOutcome.CAPTURED)
     finally:
         shutil.rmtree(scratch, ignore_errors=True)
 
@@ -65,25 +89,48 @@ def _run(
     cwd: Path | None,
     deadline: float | None,
     clock: Callable[[], float],
-) -> str | None:
+) -> CaptureResult | None:
     timeout = None if deadline is None else deadline - clock()
     if timeout is not None and timeout <= 0:
-        return f"git {step} not started: the run deadline passed"
-    try:
-        completed = subprocess.run(
-            command,
-            cwd=cwd,
-            check=False,
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-            env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        return CaptureResult(
+            CaptureOutcome.EXPIRED, f"git {step} not started: the run deadline passed"
         )
+    try:
+        completed = _run_process(command, cwd, timeout)
     except subprocess.TimeoutExpired:
-        return f"git {step} timed out at the run deadline"
+        return CaptureResult(
+            CaptureOutcome.EXPIRED, f"git {step} timed out at the run deadline"
+        )
     except OSError as error:
-        return f"git {step} could not run: {error}"
+        return CaptureResult(
+            CaptureOutcome.FAILED, f"git {step} could not run: {error}"
+        )
     if completed.returncode != 0:
         detail = completed.stderr.strip().splitlines()
-        return f"git {step} failed: {detail[-1] if detail else f'exit {completed.returncode}'}"
+        reason = detail[-1] if detail else f"exit {completed.returncode}"
+        return CaptureResult(CaptureOutcome.FAILED, f"git {step} failed: {reason}")
     return None
+
+
+def _run_process(
+    command: list[str], cwd: Path | None, timeout: float | None
+) -> subprocess.CompletedProcess[str]:
+    """Run a command in its own process group; on timeout kill the whole group
+    so transport helpers git spawns (git-remote-https, ssh) do not outlive it.
+    Raises `subprocess.TimeoutExpired` after the group is gone."""
+    with subprocess.Popen(
+        command,
+        cwd=cwd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        env={**os.environ, "GIT_TERMINAL_PROMPT": "0"},
+        start_new_session=True,
+    ) as process:
+        try:
+            stdout, stderr = process.communicate(timeout=timeout)
+        except subprocess.TimeoutExpired:
+            os.killpg(process.pid, signal.SIGKILL)
+            process.communicate()
+            raise
+    return subprocess.CompletedProcess(command, process.returncode, stdout, stderr)

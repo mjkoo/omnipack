@@ -1,13 +1,15 @@
 from __future__ import annotations
 
+import os
 import subprocess
+import time
 from compression import zstd
 from pathlib import Path
 
 import pytest
 
 from omnipack.archive import source
-from omnipack.archive.source import capture_source
+from omnipack.archive.source import CaptureOutcome, capture_source
 
 
 def git(cwd: Path, *args: str) -> None:
@@ -53,7 +55,8 @@ def test_capture_yields_a_bundle_that_clones_with_every_ref(
     work = tmp_path / "work"
     work.mkdir()
     destination = work / "repo.bundle.zst"
-    assert capture_source(str(repo), destination, work) is None
+    result = capture_source(str(repo), destination, work)
+    assert result.outcome is CaptureOutcome.CAPTURED and result.reason is None
 
     bundle = tmp_path / "repo.bundle"
     bundle.write_bytes(zstd.decompress(destination.read_bytes()))
@@ -83,8 +86,9 @@ def test_work_directory_holds_only_the_output_afterwards(
 def test_missing_remote_returns_a_reason(tmp_path: Path) -> None:
     work = tmp_path / "work"
     work.mkdir()
-    reason = capture_source(str(tmp_path / "absent"), work / "out.zst", work)
-    assert reason is not None and "clone" in reason
+    result = capture_source(str(tmp_path / "absent"), work / "out.zst", work)
+    assert result.outcome is CaptureOutcome.FAILED
+    assert result.reason is not None and "clone" in result.reason
     assert not (work / "out.zst").exists()
 
 
@@ -94,8 +98,9 @@ def test_empty_repository_returns_a_reason(tmp_path: Path) -> None:
     git(empty, "init", "--quiet", "--bare")
     work = tmp_path / "work"
     work.mkdir()
-    reason = capture_source(str(empty), work / "out.zst", work)
-    assert reason is not None and "bundle" in reason
+    result = capture_source(str(empty), work / "out.zst", work)
+    assert result.outcome is CaptureOutcome.FAILED
+    assert result.reason is not None and "bundle" in result.reason
 
 
 def test_passed_deadline_returns_a_reason_without_running_git(
@@ -103,20 +108,52 @@ def test_passed_deadline_returns_a_reason_without_running_git(
 ) -> None:
     work = tmp_path / "work"
     work.mkdir()
-    reason = capture_source(
+    result = capture_source(
         str(repo), work / "out.zst", work, deadline=0.0, clock=lambda: 1.0
     )
-    assert reason is not None and "deadline" in reason
+    assert result.outcome is CaptureOutcome.EXPIRED
+    assert result.reason is not None and "deadline" in result.reason
 
 
-def test_clone_timeout_returns_a_reason(
+def test_clone_timeout_expires_the_capture(
     repo: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    def hang(command: list[str], **kwargs: object) -> None:
+    def hang(command: list[str], cwd: object, timeout: object) -> None:
         raise subprocess.TimeoutExpired(command, 1)
 
-    monkeypatch.setattr(source.subprocess, "run", hang)
+    monkeypatch.setattr(source, "_run_process", hang)
     work = tmp_path / "work"
     work.mkdir()
-    reason = capture_source(str(repo), work / "out.zst", work)
-    assert reason is not None and "timed out" in reason
+    result = capture_source(str(repo), work / "out.zst", work)
+    assert result.outcome is CaptureOutcome.EXPIRED
+    assert result.reason is not None and "timed out" in result.reason
+
+
+def test_deadline_passing_during_compression_deletes_the_output(
+    repo: Path, tmp_path: Path
+) -> None:
+    work = tmp_path / "work"
+    work.mkdir()
+    destination = work / "out.zst"
+    # Time is within the deadline for both git steps, then past it afterwards.
+    readings = iter([0.0, 0.0, 10.0])
+    result = capture_source(
+        str(repo), destination, work, deadline=5.0, clock=lambda: next(readings)
+    )
+    assert result.outcome is CaptureOutcome.EXPIRED
+    assert not destination.exists()
+
+
+def test_timeout_kills_the_whole_process_group(tmp_path: Path) -> None:
+    pid_file = tmp_path / "grandchild.pid"
+    script = f"sleep 30 & echo $! > {pid_file}; wait"
+    with pytest.raises(subprocess.TimeoutExpired):
+        source._run_process(["sh", "-c", script], None, 1)
+    pid = int(pid_file.read_text())
+    for _ in range(50):
+        try:
+            os.kill(pid, 0)
+        except ProcessLookupError:
+            return
+        time.sleep(0.1)
+    pytest.fail("the grandchild outlived the timeout")
