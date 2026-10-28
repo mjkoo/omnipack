@@ -147,12 +147,15 @@ class HttpClient:
         headers: Mapping[str, str] | None = None,
         *,
         credential: str | None = None,
+        deadline: float | None = None,
     ) -> HttpResponse:
         """Fetch one URL, retrying transient failures up to the configured bound.
 
         `headers` are sent with the request and may replace the client's
         default user agent. `credential` is an `Authorization` value sent
-        only to `url` itself, never to a redirect target.
+        only to `url` itself, never to a redirect target. `deadline` is a
+        reading of this client's `clock` that bounds the call, including its
+        retry waits; passing it raises `DeadlineExceeded`.
         """
         # http.client rejects a control or non-Latin-1 character with a message
         # quoting it, and failure reasons reach published reports.
@@ -167,7 +170,8 @@ class HttpClient:
         attempts = self.retries + 1
         for number in range(attempts):
             try:
-                return self.transport(request, self.timeout)
+                timeout = self._remaining(url, deadline, self.timeout)
+                return self.transport(request, timeout)
             except (OSError, HTTPException) as error:
                 if isinstance(error, urllib.error.HTTPError):
                     error.close()
@@ -182,7 +186,7 @@ class HttpClient:
                         else None,
                         detail=str(error) or type(error).__name__,
                     ) from error
-                self.sleep(self.backoff * (2**number))
+                self._wait(url, self.backoff * (2**number), deadline)
         raise AssertionError("request loop did not return or raise")
 
     def download(

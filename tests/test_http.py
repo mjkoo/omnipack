@@ -131,6 +131,31 @@ def test_retries_transient_failures_with_bounded_backoff() -> None:
     assert len(transport.requests) == 3
 
 
+def test_get_stops_before_a_request_once_the_deadline_has_passed() -> None:
+    transport = RecordingTransport([response()])
+
+    with pytest.raises(DeadlineExceeded):
+        HttpClient(transport=transport, clock=lambda: 100.0).get(
+            "https://example.com/data", deadline=100.0
+        )
+
+    assert transport.requests == []
+
+
+def test_get_abandons_a_retry_wait_that_outlasts_the_deadline() -> None:
+    sleeps: list[float] = []
+    transport = RecordingTransport([urllib.error.URLError("temporary"), response()])
+    client = HttpClient(
+        backoff=30.0, sleep=sleeps.append, transport=transport, clock=lambda: 50.0
+    )
+
+    with pytest.raises(DeadlineExceeded):
+        client.get("https://example.com/data", deadline=60.0)
+
+    assert sleeps == []
+    assert len(transport.requests) == 1
+
+
 def test_exhausted_retries_raise_http_error() -> None:
     transport = RecordingTransport([urllib.error.URLError("down")] * 3)
     client = HttpClient(retries=2, sleep=lambda _: None, transport=transport)
