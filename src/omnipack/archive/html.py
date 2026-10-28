@@ -30,6 +30,7 @@ from omnipack.archive.selection import (
 )
 from omnipack.forge_health import decode_settings
 from omnipack.http import HttpClient, HttpResponse
+from omnipack.live_check import request_headers
 
 MAX_INTERMEDIATE_LINKS = 10
 _LINK_SCHEMES = ("http", "https", "ftp")
@@ -57,7 +58,7 @@ def resolve_html(
     failure.
     """
     options = decode_settings(entry.get("additionalSettings"))
-    headers = _request_headers(options)
+    headers = request_headers(entry.get("additionalSettings"))
     fetched: list[str] = []
 
     def load(url: str) -> tuple[HttpResponse, str]:
@@ -116,18 +117,6 @@ def _version(options: Mapping[str, Any], link: str, body: str) -> str:
             f"{method} versioning needs a download; set versionExtractionRegEx"
         )
     return hashlib.sha256(link.encode()).hexdigest()[:16]
-
-
-def _request_headers(options: Mapping[str, Any]) -> dict[str, str]:
-    """The headers an entry's `requestHeader` list sets, each `Name: value`."""
-    headers: dict[str, str] = {}
-    entries = options.get("requestHeader")
-    for item in entries if isinstance(entries, list) else []:
-        line = item.get("requestHeader") if isinstance(item, dict) else None
-        if isinstance(line, str) and line:
-            name, _, value = line.partition(":")
-            headers[name.strip()] = value.strip()
-    return headers
 
 
 def _text(response: HttpResponse) -> str:

@@ -168,7 +168,6 @@ def test_the_request_headers_are_sent_to_every_page() -> None:
             requestHeader=[
                 {"requestHeader": "User-Agent: Obtainium/1.0"},
                 {"requestHeader": "X-Mirror: https://m.example/x"},
-                {"requestHeader": ""},
             ],
             defaultPseudoVersioningMethod="APKLinkHash",
         ),

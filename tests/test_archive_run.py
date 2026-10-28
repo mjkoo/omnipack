@@ -73,9 +73,11 @@ class Downloads:
     def __init__(self, files: dict[str, bytes | int]) -> None:
         self.files = files
         self.urls: list[str] = []
+        self.requests: list[Request] = []
 
     def __call__(self, request: Request, timeout: float) -> Body:
         self.urls.append(request.full_url)
+        self.requests.append(request)
         data = self.files[request.full_url]
         if isinstance(data, int):
             raise urllib.error.HTTPError(
@@ -277,6 +279,32 @@ def test_an_html_target_stores_the_file_and_the_fetched_urls() -> None:
     assert manifest["fetchedUrls"] == [page]
     assert "sourceHistory" not in manifest
     assert [o["key"] for o in manifest["objects"]] == ["assets/app-1.2.apk"]
+
+
+def test_an_html_targets_request_headers_reach_its_pages_and_its_download() -> None:
+    page = "https://example.test/dl"
+    apk = "https://example.test/app-1.2.apk"
+    html_entry = entry(
+        page,
+        overrideSource="HTML",
+        additionalSettings=json.dumps(
+            {
+                "versionExtractionRegEx": r"[0-9.]+(?=\.apk)",
+                "requestHeader": [{"requestHeader": "X-Mirror: m.example"}],
+            }
+        ),
+    )
+    transport = RoutedTransport({page: f'<a href="{apk}">get</a>'})
+    downloads = Downloads({apk: b"apk"})
+    http = HttpClient(transport=transport, stream_transport=downloads)
+    [target] = select_targets_for(html_entry)
+
+    report = Archiver(FakeBucket(), http, capture=capture_fails).process(target)
+
+    assert report["outcome"] == Outcome.ARCHIVED
+    sent = [*transport.requests, *downloads.requests]
+    assert [request.full_url for request in sent] == [page, apk]
+    assert all(request.get_header("X-mirror") == "m.example" for request in sent)
 
 
 def test_repeated_asset_names_never_collide_with_a_prefixed_name() -> None:
