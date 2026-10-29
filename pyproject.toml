@@ -25,12 +25,16 @@ Issues = "https://github.com/mjkoo/omnipack/issues"
 pack = "omnipack.cli:main"
 
 [dependency-groups]
+archive = [
+    "boto3>=1.43.120",
+]
 dev = [{ include-group = "lint" }, { include-group = "test" }]
 lint = [
     "ruff>=0.17.0",
     "ty>=0.0.88",
 ]
 test = [
+    { include-group = "archive" },
     "pytest>=9",
     "pytest-cov>=7",
     "pyyaml>=6.0.3",

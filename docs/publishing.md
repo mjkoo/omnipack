@@ -12,6 +12,9 @@ each limited to 60 minutes, so they can take about 120 minutes end to end. An
 effort: GitHub does not guarantee an exact start time or execution of every
 queued trigger.
 
+After each run, a separate workflow mirrors the packed apps' releases to a
+bucket; see the [release archive](archive.md).
+
 Nightly publishing is the only writer of the two packs and the README catalog.
 Pull requests carry sources only, and CI fails one that changes those generated
 files, so a merged change reaches the packs at the next nightly run; see

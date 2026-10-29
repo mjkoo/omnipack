@@ -5,17 +5,21 @@ import urllib.error
 import urllib.request
 from email.message import Message
 from io import BytesIO
-from typing import TYPE_CHECKING
+from pathlib import Path
+from typing import TYPE_CHECKING, Self
 from urllib.response import addinfourl
 
 import pytest
 
 from omnipack.http import (
+    DeadlineExceeded,
     HttpClient,
     HttpError,
     HttpResponse,
     HttpStatusError,
+    RateLimitError,
     TransientHttpError,
+    failure_reason,
     redact_url,
 )
 
@@ -126,6 +130,31 @@ def test_retries_transient_failures_with_bounded_backoff() -> None:
     assert client.get("https://example.com/data").body == b"ok"
     assert sleeps == [0.25, 0.5]
     assert len(transport.requests) == 3
+
+
+def test_get_stops_before_a_request_once_the_deadline_has_passed() -> None:
+    transport = RecordingTransport([response()])
+
+    with pytest.raises(DeadlineExceeded):
+        HttpClient(transport=transport, clock=lambda: 100.0).get(
+            "https://example.com/data", deadline=100.0
+        )
+
+    assert transport.requests == []
+
+
+def test_get_abandons_a_retry_wait_that_outlasts_the_deadline() -> None:
+    sleeps: list[float] = []
+    transport = RecordingTransport([urllib.error.URLError("temporary"), response()])
+    client = HttpClient(
+        backoff=30.0, sleep=sleeps.append, transport=transport, clock=lambda: 50.0
+    )
+
+    with pytest.raises(DeadlineExceeded):
+        client.get("https://example.com/data", deadline=60.0)
+
+    assert sleeps == []
+    assert len(transport.requests) == 1
 
 
 def test_exhausted_retries_raise_http_error() -> None:
@@ -274,8 +303,9 @@ def test_a_credential_outside_printable_ascii_is_refused_without_echoing_it(
     assert transport.requests == []
 
 
+@pytest.mark.parametrize("deadline", [None, 60.0])
 def test_a_credential_is_not_forwarded_on_a_redirect(
-    monkeypatch: pytest.MonkeyPatch,
+    monkeypatch: pytest.MonkeyPatch, deadline: float | None
 ) -> None:
     requests: list[Request] = []
 
@@ -294,8 +324,8 @@ def test_a_credential_is_not_forwarded_on_a_redirect(
 
     monkeypatch.setattr(urllib.request.HTTPSHandler, "https_open", open_fixture)
 
-    result = HttpClient(retries=0).get(
-        "https://api.example/old", credential="Bearer secret"
+    result = HttpClient(retries=0, clock=lambda: 0.0).get(
+        "https://api.example/old", credential="Bearer secret", deadline=deadline
     )
 
     assert result.body == b"payload"
@@ -303,3 +333,260 @@ def test_a_credential_is_not_forwarded_on_a_redirect(
     assert first.get_header("Authorization") == "Bearer secret"
     assert redirected.full_url == "https://api.example/new"
     assert redirected.get_header("Authorization") is None
+
+
+class FakeStream:
+    """A streamed response: chunks served one per `read1`, then end of body.
+
+    `length` is what a urllib response reports still owed by Content-Length.
+    """
+
+    def __init__(
+        self,
+        chunks: list[bytes],
+        *,
+        url: str = "https://example.com/file",
+        status: int = 200,
+        fail_after: Exception | None = None,
+        length: int | None = None,
+    ) -> None:
+        self.chunks = list(chunks)
+        self.url = url
+        self.status = status
+        self.headers = Message()
+        self.fail_after = fail_after
+        self.length = length
+
+    def __enter__(self) -> Self:
+        return self
+
+    def __exit__(self, *exc: object) -> None:
+        return None
+
+    def read1(self, size: int = -1) -> bytes:
+        if self.chunks:
+            return self.chunks.pop(0)
+        if self.fail_after is not None:
+            raise self.fail_after
+        return b""
+
+
+class StreamingTransport:
+    def __init__(self, outcomes: list[FakeStream | Exception]) -> None:
+        self.outcomes = iter(outcomes)
+        self.requests: list[Request] = []
+        self.timeouts: list[float] = []
+
+    def __call__(self, request: Request, timeout: float) -> FakeStream:
+        self.requests.append(request)
+        self.timeouts.append(timeout)
+        outcome = next(self.outcomes)
+        if isinstance(outcome, Exception):
+            raise outcome
+        return outcome
+
+
+def http_error(status: int, **headers: str) -> urllib.error.HTTPError:
+    message = Message()
+    for name, value in headers.items():
+        message[name.replace("_", "-")] = value
+    return urllib.error.HTTPError(
+        "https://example.com/file", status, "error", message, None
+    )
+
+
+def trickle(now: list[float], chunks: list[bytes]) -> FakeStream:
+    """A stream whose every read takes ten seconds on the `now` clock."""
+
+    class Trickle(FakeStream):
+        def read1(self, size: int = -1) -> bytes:
+            now[0] += 10
+            return super().read1(size)
+
+    return Trickle(chunks)
+
+
+def test_download_writes_every_chunk(tmp_path: Path) -> None:
+    transport = StreamingTransport([FakeStream([b"abc", b"def", b"g"])])
+    destination = tmp_path / "out.bin"
+
+    HttpClient(stream_transport=transport).download(
+        "https://example.com/file", destination
+    )
+
+    assert destination.read_bytes() == b"abcdefg"
+
+
+def test_download_retries_a_transient_failure_from_the_start(tmp_path: Path) -> None:
+    sleeps: list[float] = []
+    transport = StreamingTransport(
+        [
+            FakeStream([b"par"], fail_after=OSError("reset")),
+            FakeStream([b"whole"]),
+        ]
+    )
+    destination = tmp_path / "out.bin"
+
+    HttpClient(stream_transport=transport, sleep=sleeps.append).download(
+        "https://example.com/file", destination
+    )
+
+    assert destination.read_bytes() == b"whole"
+    assert sleeps == [0.5]
+
+
+def test_download_cut_short_by_the_server_is_retried_then_reported(
+    tmp_path: Path,
+) -> None:
+    transport = StreamingTransport(
+        [FakeStream([b"par"], length=4), FakeStream([b"par"], length=4)]
+    )
+    destination = tmp_path / "out.bin"
+
+    with pytest.raises(TransientHttpError):
+        HttpClient(
+            retries=1, stream_transport=transport, sleep=lambda _: None
+        ).download("https://example.com/file", destination)
+
+    assert len(transport.requests) == 2
+    assert not destination.exists()
+
+
+def test_download_of_a_missing_file_is_a_typed_status_and_leaves_nothing(
+    tmp_path: Path,
+) -> None:
+    transport = StreamingTransport([http_error(404)])
+    destination = tmp_path / "out.bin"
+
+    with pytest.raises(HttpStatusError) as caught:
+        HttpClient(stream_transport=transport).download(
+            "https://example.com/file", destination
+        )
+
+    assert caught.value.status == 404
+    assert not destination.exists()
+
+
+def test_download_sleeps_until_a_rate_limit_resets_then_retries_once(
+    tmp_path: Path,
+) -> None:
+    sleeps: list[float] = []
+    transport = StreamingTransport(
+        [
+            http_error(403, X_RateLimit_Remaining="0", X_RateLimit_Reset="1060"),
+            FakeStream([b"ok"]),
+        ]
+    )
+
+    HttpClient(
+        stream_transport=transport,
+        sleep=sleeps.append,
+        wall_clock=lambda: 1000.0,
+    ).download("https://example.com/file", tmp_path / "out.bin", deadline=None)
+
+    assert sleeps == [60.0]
+    assert len(transport.requests) == 2
+
+
+def test_download_honours_retry_after_on_429(tmp_path: Path) -> None:
+    sleeps: list[float] = []
+    transport = StreamingTransport(
+        [http_error(429, Retry_After="7"), FakeStream([b"x"])]
+    )
+
+    HttpClient(stream_transport=transport, sleep=sleeps.append).download(
+        "https://example.com/file", tmp_path / "out.bin"
+    )
+
+    assert sleeps == [7.0]
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        http_error(429, Retry_After="121"),
+        http_error(403, X_RateLimit_Remaining="0", X_RateLimit_Reset="8200"),
+    ],
+)
+def test_download_fails_at_once_when_a_rate_limit_lifts_too_late(
+    tmp_path: Path, error: urllib.error.HTTPError
+) -> None:
+    sleeps: list[float] = []
+    transport = StreamingTransport([error])
+
+    with pytest.raises(RateLimitError) as caught:
+        HttpClient(
+            stream_transport=transport,
+            sleep=sleeps.append,
+            wall_clock=lambda: 1000.0,
+        ).download("https://example.com/file", tmp_path / "out.bin")
+
+    assert sleeps == []
+    assert len(transport.requests) == 1
+    assert failure_reason(caught.value).startswith(f"HTTP {error.code}: rate limit")
+
+
+def test_download_abandons_a_rate_limit_wait_that_outlasts_the_deadline(
+    tmp_path: Path,
+) -> None:
+    sleeps: list[float] = []
+    transport = StreamingTransport(
+        [http_error(403, X_RateLimit_Remaining="0", X_RateLimit_Reset="1100")]
+    )
+
+    with pytest.raises(DeadlineExceeded):
+        HttpClient(
+            stream_transport=transport,
+            sleep=sleeps.append,
+            clock=lambda: 50.0,
+            wall_clock=lambda: 1000.0,
+        ).download("https://example.com/file", tmp_path / "out.bin", deadline=100.0)
+
+    assert sleeps == []
+    assert len(transport.requests) == 1
+
+
+def test_download_stops_a_trickling_body_at_the_deadline(tmp_path: Path) -> None:
+    now = [0.0]
+    transport = StreamingTransport([trickle(now, [b"a", b"b", b"c"])])
+    destination = tmp_path / "out.bin"
+
+    with pytest.raises(DeadlineExceeded):
+        HttpClient(stream_transport=transport, clock=lambda: now[0]).download(
+            "https://example.com/file", destination, deadline=15.0
+        )
+
+    assert now[0] == 20.0
+    assert not destination.exists()
+
+
+def test_get_stops_a_trickling_page_at_the_deadline() -> None:
+    now = [0.0]
+    transport = StreamingTransport([trickle(now, [b"a", b"b", b"c"])])
+
+    with pytest.raises(DeadlineExceeded):
+        HttpClient(stream_transport=transport, clock=lambda: now[0]).get(
+            "https://example.com/file", deadline=15.0
+        )
+
+    assert now[0] == 20.0
+
+
+def test_get_with_a_deadline_reads_the_whole_page() -> None:
+    transport = StreamingTransport([FakeStream([b"o", b"k"])])
+
+    response = HttpClient(stream_transport=transport, clock=lambda: 0.0).get(
+        "https://example.com/file", deadline=15.0
+    )
+
+    assert response.body == b"ok"
+
+
+def test_download_bounds_each_attempt_by_the_remaining_time(tmp_path: Path) -> None:
+    transport = StreamingTransport([FakeStream([b"x"])])
+
+    HttpClient(stream_transport=transport, timeout=30.0, clock=lambda: 90.0).download(
+        "https://example.com/file", tmp_path / "out.bin", deadline=100.0
+    )
+
+    assert transport.timeouts == [10.0]

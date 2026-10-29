@@ -13,6 +13,7 @@ Start with [development](development.md) for setup, building packs, and running 
 - [Version detection](version-detection.md): how Obtainium compares installed and upstream versions.
 - [Verification](verification.md): structural checks, diagnostics, and limitations.
 - [Nightly publishing](publishing.md): scheduling, permissions, and failure recovery.
+- [Release archive](archive.md): the bucket mirror of each app's release, notes and source, and how to restore one.
 - [Maintenance alerts](alerts.md): the issues scheduled workflows open for failures and build warnings.
 - [Project context](project-context.md): curation intent and pending additions.
 

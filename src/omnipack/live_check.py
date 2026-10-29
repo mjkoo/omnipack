@@ -18,10 +18,10 @@ import html
 import json
 import time
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import NotRequired, TypedDict
+from typing import Any, NotRequired, TypedDict
 
 from omnipack.build import OUTPUTS
 from omnipack.forge_health import (
@@ -98,12 +98,13 @@ class _BudgetSpent(Exception):
 
 @dataclass(frozen=True, slots=True)
 class Target:
-    """A distinct pack URL with the name and `additionalSettings` of its first
-    entry, which supply its request headers and its health settings."""
+    """A distinct pack URL with the name of its first entry. `entry` is that
+    whole pack entry, whose `additionalSettings` supply the request headers and
+    the health settings."""
 
     url: str
     name: str
-    settings: object
+    entry: dict[str, Any] = field(compare=False, repr=False)
 
 
 def check_live(
@@ -159,7 +160,7 @@ def check_live(
             try:
                 result = check_health(
                     repository,
-                    target.settings,
+                    target.entry.get("additionalSettings"),
                     client,
                     token=github_token,
                     now=now,
@@ -177,7 +178,9 @@ def _check_reachability(
 ) -> bool:
     """Request one target and record its outcome; False when unreachable."""
     try:
-        client.get(target.url, headers=request_headers(target.settings))
+        client.get(
+            target.url, headers=request_headers(target.entry.get("additionalSettings"))
+        )
     except HttpStatusError as error:
         if error.status in UNREACHABLE_STATUSES:
             report["unreachable"].append({"url": target.url, "status": error.status})
@@ -244,10 +247,7 @@ def _pack_entries(path: Path, name: str) -> list[Target]:
         raise PackReadError(
             f"pack {name} is malformed: apps must be objects with a string url and name"
         )
-    return [
-        Target(entry["url"], entry["name"], entry.get("additionalSettings"))
-        for entry in apps
-    ]
+    return [Target(entry["url"], entry["name"], entry) for entry in apps]
 
 
 def request_headers(settings: object) -> dict[str, str]:
@@ -328,11 +328,18 @@ def write_live_report(root: Path, report: LiveCheckReport) -> None:
     shown for this run; the `OSError` or `ValueError` (such as a URL that
     cannot be encoded) propagates.
     """
-    output = root / OUTPUT
-    files = {
-        root / REPORT: json.dumps(report, indent=2, ensure_ascii=False) + "\n",
-        root / SUMMARY: render_summary(report),
-    }
+    write_whole(
+        root / OUTPUT,
+        {
+            root / REPORT: json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+            root / SUMMARY: render_summary(report),
+        },
+    )
+
+
+def write_whole(output: Path, files: dict[Path, str]) -> None:
+    """Write each file under `output` whole, replacing any earlier set. On
+    failure none of them is left, and the error propagates."""
     try:
         output.mkdir(parents=True, exist_ok=True)
         for path in files:

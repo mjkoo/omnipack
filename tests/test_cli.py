@@ -2,17 +2,23 @@ import json
 from collections.abc import Callable
 from email.message import Message
 from pathlib import Path
+from typing import Any
 from urllib.request import Request
 
 import pytest
 
 from omnipack import cli
+from omnipack.archive import Outcome
+from omnipack.archive import run as archive_run
+from omnipack.archive.store import ArchiveStore
 from omnipack.build import BuildInputs
 from omnipack.cli import main
 from omnipack.http import HttpClient, HttpResponse, HttpStatusError
 from omnipack.model import App, Provenance, Source, SourceType, Variant
 from omnipack.overlay import ComposedApp
+from omnipack.report_model import Status
 from omnipack.sources import IngestionReport
+from tests.http_support import RoutedTransport
 from tests.test_build import write_config
 from tests.test_composition_policy import candidate as policy_candidate
 from tests.test_composition_policy import policy, rule
@@ -1477,3 +1483,193 @@ def test_build_then_report_displays_diagnostics_without_changing_report(
         in output
     )
     assert path.read_bytes() == before
+
+
+def test_archive_dry_run_resolves_a_release_and_touches_nothing_else(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "dist").mkdir()
+    pack = {
+        "settings": {},
+        "apps": [
+            {
+                "id": "x",
+                "name": "X",
+                "url": "https://github.com/owner/app",
+                "overrideSource": "GitHub",
+                "additionalSettings": "{}",
+            },
+            {
+                "id": "y",
+                "name": "Y",
+                "url": "https://example.test/y",
+                "overrideSource": "Other",
+                "additionalSettings": "{}",
+            },
+        ],
+    }
+    for name in ("single-screen.json", "dual-screen.json"):
+        (tmp_path / "dist" / name).write_text(json.dumps(pack))
+    release = {
+        "tag_name": "v1",
+        "name": None,
+        "body": "",
+        "draft": False,
+        "prerelease": False,
+        "published_at": "2024-01-01T00:00:00Z",
+        "assets": [
+            {
+                "name": "app.apk",
+                "updated_at": "2024-01-01T00:00:00Z",
+                "browser_download_url": "https://github.com/owner/app/releases/download/v1/app.apk",
+            }
+        ],
+    }
+    api = RoutedTransport(
+        {"https://api.github.com/repos/owner/app/releases?per_page=100": [release]}
+    )
+    forbidden: list[str] = []
+
+    def forbid(name: str) -> Callable[..., object]:
+        def call(*args: object, **kwargs: object) -> object:
+            forbidden.append(name)
+            raise AssertionError(f"{name} must not run in a dry run")
+
+        return call
+
+    monkeypatch.setattr(HttpClient, "_urllib_transport", staticmethod(api))
+    monkeypatch.setattr(HttpClient, "_urllib_stream_transport", forbid("download"))
+    monkeypatch.setattr(ArchiveStore, "from_environment", forbid("store"))
+    monkeypatch.setattr(archive_run, "capture_source", forbid("capture"))
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive", "--dry-run"]) == 0
+
+    output = capsys.readouterr().out
+    assert "resolved: https://github.com/owner/app (X): v1" in output
+    assert "skipped: https://example.test/y" in output
+    assert forbidden == []
+    assert len(api.requests) == 1
+    assert (tmp_path / ".build/archive/report.json").exists()
+
+
+def test_archive_without_a_bucket_fails_and_still_writes_the_report(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.delenv("ARCHIVE_S3_BUCKET", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive"]) == 1
+
+    report = json.loads((tmp_path / ".build/archive/report.json").read_text())
+    assert report["status"] == "failed"
+
+
+@pytest.mark.parametrize("value", ["0", "-5", "nan", "inf", "soon"])
+def test_archive_budget_must_be_a_positive_finite_number_of_minutes(
+    value: str, capsys: pytest.CaptureFixture[str]
+) -> None:
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["archive", "--dry-run", "--budget-minutes", value])
+
+    assert caught.value.code == 2
+    assert "positive number of minutes" in capsys.readouterr().err
+
+
+def test_archive_prints_a_failed_targets_error_even_with_a_version(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    def failed_run(*args: object, **kwargs: object) -> archive_run.ArchiveReport:
+        return archive_run.ArchiveReport(
+            status=Status.SUCCESS,
+            dryRun=True,
+            targets=[
+                archive_run.TargetReport(
+                    name="X",
+                    url="https://github.com/owner/app",
+                    outcome=Outcome.FAILED,
+                    version="v1",
+                    error="HTTP 404 for app.apk",
+                )
+            ],
+        )
+
+    monkeypatch.setattr(cli, "run_archive", failed_run)
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive", "--dry-run"]) == 0
+
+    output = capsys.readouterr().out
+    assert "failed: https://github.com/owner/app (X): HTTP 404 for app.apk" in output
+
+
+def test_a_killed_archive_run_leaves_the_report_so_far_on_disk(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    class Killed(Exception):
+        pass
+
+    def killed_run(*args: object, **kwargs: Any) -> archive_run.ArchiveReport:
+        kwargs["checkpoint"](
+            archive_run.ArchiveReport(
+                status=Status.SUCCESS,
+                dryRun=True,
+                targets=[
+                    archive_run.TargetReport(
+                        name="X", url="https://github.com/owner/x", version="v1"
+                    ),
+                    archive_run.TargetReport(
+                        name="Y",
+                        url="https://github.com/owner/y",
+                        outcome=Outcome.NOT_CHECKED,
+                        reason="the run ended before reaching it",
+                    ),
+                ],
+            )
+        )
+        raise Killed
+
+    monkeypatch.setattr(cli, "run_archive", killed_run)
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(Killed):
+        cli.main(["archive", "--dry-run"])
+
+    report = json.loads((tmp_path / archive_run.REPORT).read_text())
+    assert [t.get("outcome") for t in report["targets"]] == [None, "not checked"]
+    assert (tmp_path / archive_run.SUMMARY).exists()
+
+
+def test_archive_exits_nonzero_when_the_report_cannot_be_written(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+    capsys: pytest.CaptureFixture[str],
+) -> None:
+    (tmp_path / "dist").mkdir()
+    pack = {
+        "settings": {},
+        "apps": [
+            {
+                "id": "y",
+                "name": "Y",
+                "url": "https://example.test/y",
+                "overrideSource": "Other",
+                "additionalSettings": "{}",
+            }
+        ],
+    }
+    for name in ("single-screen.json", "dual-screen.json"):
+        (tmp_path / "dist" / name).write_text(json.dumps(pack))
+    (tmp_path / ".build").mkdir()
+    (tmp_path / ".build/archive").write_text("not a directory")
+    monkeypatch.chdir(tmp_path)
+
+    assert cli.main(["archive", "--dry-run"]) == 1
+
+    captured = capsys.readouterr()
+    assert "skipped: https://example.test/y" in captured.out
+    assert "cannot write report" in captured.err

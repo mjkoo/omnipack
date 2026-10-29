@@ -14,6 +14,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
 | `live-check` (`live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403; a GitHub project the check reports stale (no qualifying release in 180 days, or none at all) or archived |
+| `release-archive` (**Release archive**, `archive`) | From `.build/archive/report.json`: a run that cannot read the committed packs or reach its bucket. No target outcome raises a finding, failed ones included; those stay in the run report |
 
 Each owner also has an early-failure finding, titled "<owner> job failed
 without reporting findings". A cancelled job raises only that finding and
@@ -49,10 +50,11 @@ owner's prefix, the stage or kind, and a subject where there is one:
 | `<source>/check/` | `generation`, `stage`, `tests`, `build`, `verify`, `guard` |
 | `<source>/publish/` | `proposal` |
 | `live-check/` | `read`, `gone/<url>`, `status/<url>`, `stale/<url>`, `archived/<url>` |
+| `release-archive/` | `read` |
 
 Every owner also has a `run` key under its first prefix (for example
-`nightly/prepare/run`, `codm/check/run`, `live-check/run`) for the
-early-failure finding. `<source>` is `codm` or `quiver`.
+`nightly/prepare/run`, `codm/check/run`, `live-check/run`,
+`release-archive/run`) for the early-failure finding. `<source>` is `codm` or `quiver`.
 
 A subject is percent-encoded: each UTF-8 byte of a character outside letters,
 digits and `/:._~+-` becomes `%XX`. So
@@ -96,7 +98,8 @@ archived keys are re-checked by every successful report except for a URL whose
 health lookup did not finish (health inconclusive, such as a spent rate limit
 or the budget running out) or that is unreachable, which leave those issues
 as they were. The stale and archived issues of a URL no longer in the packs
-close too.
+close too. A release archive run re-checks its `read` key only when its
+archive step ran and wrote a readable report.
 
 ### Stale and archived projects
 
@@ -164,8 +167,8 @@ recurrence reopens the issue.
 - **The alert job fails or issues are disabled.** The red run is the only
   trace; no issue is opened. The alert jobs are `alert` in **Nightly
   publishing** and in the source maintenance workflow, and `alert-live-check`
-  in **Reviewed source catalog**. A producer's own verdict never depends on
-  them.
+  in **Reviewed source catalog**, and `alert` in **Release archive**. A
+  producer's own verdict never depends on them.
 - **Health lookups that never finish.** A URL whose GitHub lookup fails on
   every run, for example because the token is missing or the API rate limit
   is spent each time, is health inconclusive on every run and raises nothing.
@@ -174,10 +177,11 @@ recurrence reopens the issue.
   more likely to be rate limited until its pack URL is updated.
 - **A flake opens an issue and the next clean run closes it.** This costs two
   notifications; it is accepted to keep the workflows stateless.
-- **A queued live check replaced by a newer one.** Its group does not cancel
-  a running check, but a pending run replaced by a newer one is reported as
-  cancelled, which raises a one-run early-failure issue (`live-check/run`)
-  that the next live check closes. Accepted rather than guarded.
+- **A queued live check or archive run replaced by a newer one.** Neither
+  group cancels a running job, but a pending run replaced by a newer one is
+  reported as cancelled, which raises a one-run early-failure issue
+  (`live-check/run` or `release-archive/run`) that the next run of that job
+  closes. Accepted rather than guarded.
 - **A manual re-run of an older alert job.** Re-running an older run's alert job
   after a newer run reconciled can close, reopen or clear the mute of an issue
   from stale findings. The next scheduled run corrects it, except that a

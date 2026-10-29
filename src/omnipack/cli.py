@@ -3,11 +3,21 @@
 from __future__ import annotations
 
 import argparse
+import contextlib
+import math
 import os
 import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+from omnipack.archive.run import (
+    ArchiveReport,
+    failed_report,
+    run_archive,
+    target_line,
+    write_archive_report,
+)
+from omnipack.archive.store import ArchiveStore, StoreError
 from omnipack.build import BuildInputs, previous_entries, publish_build
 from omnipack.generation import generate
 from omnipack.http import HttpClient
@@ -166,6 +176,51 @@ def check_live_command(_args: argparse.Namespace) -> int:
     return 1 if failed or result["unreachable"] else 0
 
 
+def archive_command(args: argparse.Namespace) -> int:
+    root = Path.cwd()
+    token = os.environ.get("GITHUB_TOKEN", "").strip()
+    budget = None if args.budget_minutes is None else args.budget_minutes * 60
+
+    def checkpoint(partial: ArchiveReport) -> None:
+        # The final write below reports a report that cannot be written.
+        with contextlib.suppress(OSError):
+            write_archive_report(root, partial)
+
+    try:
+        bucket = None if args.dry_run else ArchiveStore.from_environment(os.environ)
+        report = run_archive(
+            root,
+            bucket,
+            github_token=token or None,
+            budget=budget,
+            checkpoint=checkpoint,
+        )
+    except StoreError as error:
+        print(f"archive bucket error: {error}", file=sys.stderr)
+        report = failed_report(str(error.failure), dry_run=args.dry_run)
+    for target in report["targets"]:
+        print(target_line(target))
+    failed = report["status"] == Status.FAILED
+    if failed:
+        print(f"archive failed: {report.get('error')}", file=sys.stderr)
+    try:
+        write_archive_report(root, report)
+    except OSError as error:
+        print(f"archive failed: cannot write report: {error}", file=sys.stderr)
+        return 1
+    return 1 if failed else 0
+
+
+def _positive_minutes(value: str) -> float:
+    try:
+        minutes = float(value)
+    except ValueError:
+        minutes = math.nan
+    if not (math.isfinite(minutes) and minutes > 0):
+        raise argparse.ArgumentTypeError(f"not a positive number of minutes: {value}")
+    return minutes
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(prog="pack")
     subparsers = parser.add_subparsers(dest="command", required=True)
@@ -193,6 +248,21 @@ def _parser() -> argparse.ArgumentParser:
         "check-live", help="report pack projects that no longer answer"
     )
     check_live_parser.set_defaults(func=check_live_command)
+
+    archive_parser = subparsers.add_parser(
+        "archive", help="mirror each pack project's current release to the bucket"
+    )
+    archive_parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="resolve every target without credentials, downloads or writes",
+    )
+    archive_parser.add_argument(
+        "--budget-minutes",
+        type=_positive_minutes,
+        help="stop starting targets after this long and abandon the one in flight",
+    )
+    archive_parser.set_defaults(func=archive_command)
 
     return parser
 

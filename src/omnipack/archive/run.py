@@ -1,0 +1,469 @@
+"""Archive each target's current release, and the run loop around it.
+
+A version counts as archived exactly when its manifest exists in the bucket.
+A target is checked by resolving its version and asking for that manifest; a
+version without one has every object stored under its own prefix and the
+manifest written last, so an interrupted or failed attempt leaves nothing
+that reads as archived and is simply attempted again.
+"""
+
+from __future__ import annotations
+
+import hashlib
+import html
+import json
+import re
+import sys
+import tempfile
+from collections import Counter
+from collections.abc import Callable, Iterable, Mapping
+from datetime import UTC, datetime
+from pathlib import Path
+from typing import Any, NotRequired, Protocol, TypedDict
+
+from omnipack.archive import Outcome, ResolutionError, ResolvedRelease
+from omnipack.archive.github import resolve_github
+from omnipack.archive.gitlab import resolve_gitlab
+from omnipack.archive.html import resolve_html
+from omnipack.archive.source import CaptureOutcome, CaptureResult, capture_source
+from omnipack.archive.store import StoreError
+from omnipack.archive.targets import (
+    ArchiveTarget,
+    escape_segment,
+    select_targets,
+)
+from omnipack.http import DOWNLOAD_CHUNK, HttpClient, failure_reason
+from omnipack.live_check import PackReadError, request_headers, write_whole
+from omnipack.model import SourceType
+from omnipack.report_model import Status
+from omnipack.urls import normalize_project_url
+
+OUTPUT = Path(".build/archive")
+REPORT = OUTPUT / "report.json"
+SUMMARY = OUTPUT / "summary.md"
+
+SLUG_LENGTH = 80
+_UNSAFE = re.compile(r"[^A-Za-z0-9._-]")
+KEEP_VERSIONS = 3
+
+
+class Bucket(Protocol):
+    """What the flow needs of the store."""
+
+    def exists(self, key: str) -> bool: ...
+
+    def put_json(self, key: str, document: Mapping[str, Any]) -> None: ...
+
+    def upload_file(self, path: Path, key: str) -> None: ...
+
+    def list_keys(self, prefix: str) -> list[tuple[str, datetime]]: ...
+
+    def delete(self, keys: Iterable[str]) -> None: ...
+
+
+class Capture(Protocol):
+    """Captures a repository's history; see `capture_source`."""
+
+    def __call__(
+        self,
+        url: str,
+        destination: Path,
+        work_dir: Path,
+        /,
+        *,
+        deadline: float | None,
+        clock: Callable[[], float],
+    ) -> CaptureResult: ...
+
+
+class Store(Protocol):
+    """Uploads one file under the version's prefix and records it."""
+
+    def __call__(self, path: Path, key: str, url: str | None = None) -> None: ...
+
+
+class BudgetSpent(Exception):
+    """The run's deadline passed while a target was being archived."""
+
+
+class ObjectRecord(TypedDict):
+    """One stored object, keyed relative to its version's prefix."""
+
+    key: str
+    size: int
+    sha256: str
+    url: NotRequired[str]
+
+
+class SourceHistory(TypedDict):
+    """A forge version's source bundle, or why there is none."""
+
+    key: NotRequired[str]
+    size: NotRequired[int]
+    sha256: NotRequired[str]
+    reason: NotRequired[str]
+
+
+class Manifest(TypedDict):
+    """The record that marks a version archived."""
+
+    entry: dict[str, Any]
+    sourceType: SourceType
+    version: str
+    tag: str | None
+    releaseDate: str | None
+    archivedAt: str
+    objects: list[ObjectRecord]
+    sourceHistory: NotRequired[SourceHistory]
+    fetchedUrls: NotRequired[list[str]]
+
+
+class TargetReport(TypedDict):
+    """One target's result. A dry run that resolved a target carries its
+    version and no outcome, since nothing was archived or compared."""
+
+    name: str
+    url: str
+    outcome: NotRequired[Outcome]
+    version: NotRequired[str]
+    error: NotRequired[str]
+    reason: NotRequired[str]
+
+
+class ArchiveReport(TypedDict):
+    """The run's report. `status` is `failed` only for a run-level error
+    (unreadable packs, an unusable bucket), described by `error`; any
+    target-level outcome leaves a run `success`."""
+
+    status: Status
+    dryRun: bool
+    targets: list[TargetReport]
+    error: NotRequired[str]
+
+
+def version_slug(version: str) -> str:
+    """The version as a bucket path segment: sanitized, truncated and tagged
+    with a digest of the raw version so distinct versions never share one."""
+    digest = hashlib.sha256(version.encode()).hexdigest()[:8]
+    return f"{_UNSAFE.sub('_', version)[:SLUG_LENGTH]}-{digest}"
+
+
+def _describe(path: Path) -> tuple[int, str]:
+    digest = hashlib.sha256()
+    with path.open("rb") as file:
+        while chunk := file.read(DOWNLOAD_CHUNK):
+            digest.update(chunk)
+    return path.stat().st_size, digest.hexdigest()
+
+
+class Archiver:
+    """Archives targets one at a time into a bucket, or only resolves them
+    when `bucket` is None (a dry run)."""
+
+    def __init__(
+        self,
+        bucket: Bucket | None,
+        http: HttpClient,
+        *,
+        github_token: str | None = None,
+        deadline: float | None = None,
+        now: Callable[[], datetime] = lambda: datetime.now(UTC),
+        capture: Capture | None = None,
+    ) -> None:
+        self.bucket = bucket
+        self.http = http
+        self.github_token = github_token
+        self.deadline = deadline
+        self.now = now
+        self.capture: Capture = capture or capture_source
+
+    def process(self, target: ArchiveTarget) -> TargetReport:
+        """The target's report. Only a `StoreError` escapes; every other
+        failure is that target's outcome."""
+        report = TargetReport(name=target.entry["name"], url=target.entry["url"])
+        if target.skip is not None:
+            report["outcome"] = Outcome.SKIPPED
+            report["reason"] = str(target.skip)
+            return report
+        try:
+            release = self._resolve(target)
+            report["version"] = release.version
+            if self.bucket is not None:
+                report["outcome"] = self._archive(target, release)
+        except StoreError:
+            raise
+        except ResolutionError as error:
+            report["outcome"] = error.outcome
+            report["error"] = str(error)
+        except Exception as error:  # noqa: BLE001 - every failure is the target
+            report["outcome"] = Outcome.FAILED
+            report["error"] = failure_reason(error)
+        return report
+
+    def _resolve(self, target: ArchiveTarget) -> ResolvedRelease:
+        match target.source:
+            case SourceType.GITHUB:
+                return resolve_github(
+                    target.entry,
+                    self.http,
+                    token=self.github_token,
+                    deadline=self.deadline,
+                )
+            case SourceType.GITLAB:
+                return resolve_gitlab(target.entry, self.http, deadline=self.deadline)
+            case SourceType.HTML:
+                return resolve_html(target.entry, self.http, deadline=self.deadline)
+        raise ValueError(f"no resolver for source {target.source}")
+
+    def _check_time(self) -> None:
+        if self.deadline is not None and self.http.clock() >= self.deadline:
+            raise BudgetSpent("the run's time budget passed")
+
+    def _archive(self, target: ArchiveTarget, release: ResolvedRelease) -> Outcome:
+        bucket = self.bucket
+        assert bucket is not None
+        if target.source is None:
+            raise ValueError(f"target {target.key} has no source type")
+        prefix = f"apps/{target.key}/releases/{version_slug(release.version)}"
+        manifest_key = f"{prefix}/manifest.json"
+        if bucket.exists(manifest_key):
+            return Outcome.UNCHANGED
+
+        objects: list[ObjectRecord] = []
+        with tempfile.TemporaryDirectory(prefix="archive-") as scratch:
+            work = Path(scratch)
+
+            def store(path: Path, key: str, url: str | None = None) -> None:
+                self._check_time()
+                size, sha256 = _describe(path)
+                bucket.upload_file(path, f"{prefix}/{key}")
+                record = ObjectRecord(key=key, size=size, sha256=sha256)
+                if url is not None:
+                    record["url"] = url
+                objects.append(record)
+                path.unlink()
+
+            self._store_assets(target, release, work, store)
+            manifest = Manifest(
+                entry=target.entry,
+                sourceType=target.source,
+                version=release.version,
+                tag=release.tag,
+                releaseDate=release.date.isoformat() if release.date else None,
+                archivedAt=self.now().isoformat(),
+                objects=objects,
+            )
+            if target.source is SourceType.HTML:
+                manifest["fetchedUrls"] = list(release.fetched_urls)
+            else:
+                manifest["sourceHistory"] = self._store_forge_files(
+                    target, release, work, store
+                )
+            # Past the last upload the manifest goes in even at the deadline:
+            # it is one small write that keeps the whole version.
+            bucket.put_json(manifest_key, manifest)
+        self._prune(f"apps/{target.key}/releases/", version_slug(release.version))
+        return Outcome.ARCHIVED
+
+    def _prune(self, releases: str, archived: str) -> None:
+        """Keep the `KEEP_VERSIONS` most recently archived versions under
+        `releases` (ranked by when their manifests were stored) and delete the
+        rest, each manifest before its other objects. The version just
+        `archived` is always kept, and a prefix without a manifest is an
+        unfinished attempt and is left alone."""
+        assert self.bucket is not None
+        versions: dict[str, list[str]] = {}
+        stored: dict[str, datetime] = {}
+        for key, modified in self.bucket.list_keys(releases):
+            version, _, name = key.removeprefix(releases).partition("/")
+            versions.setdefault(version, []).append(key)
+            if name == "manifest.json":
+                stored[version] = modified
+        newest_first = sorted(stored, key=stored.__getitem__, reverse=True)
+        for version in newest_first[KEEP_VERSIONS:]:
+            if version == archived:
+                continue
+            manifest = f"{releases}{version}/manifest.json"
+            self.bucket.delete([manifest])
+            self.bucket.delete([key for key in versions[version] if key != manifest])
+
+    def _store_assets(
+        self,
+        target: ArchiveTarget,
+        release: ResolvedRelease,
+        work: Path,
+        store: Store,
+    ) -> None:
+        headers = (
+            request_headers(target.entry.get("additionalSettings"))
+            if target.source is SourceType.HTML
+            else None
+        )
+        used: set[str] = set()
+        for number, asset in enumerate(release.assets):
+            name = escape_segment(asset.name)
+            if name in used:
+                name = f"{number}-{name}"
+                while name in used:
+                    name = f"{number}-{name}"
+            used.add(name)
+            path = work / "asset"
+            self.http.download(asset.url, path, headers, deadline=self.deadline)
+            store(path, f"assets/{name}", asset.url)
+
+    def _store_forge_files(
+        self,
+        target: ArchiveTarget,
+        release: ResolvedRelease,
+        work: Path,
+        store: Store,
+    ) -> SourceHistory:
+        record = work / "release.json"
+        record.write_text(json.dumps(release.raw_record, indent=2, sort_keys=True))
+        store(record, "release.json")
+        if release.notes:
+            notes = work / "release.md"
+            notes.write_text(release.notes)
+            store(notes, "release.md")
+
+        bundle = work / "repo.bundle"
+        result = self.capture(
+            f"https://{normalize_project_url(target.entry['url'])}",
+            bundle,
+            work,
+            deadline=self.deadline,
+            clock=self.http.clock,
+        )
+        if result.outcome is CaptureOutcome.EXPIRED:
+            # Not a missing history: the target is abandoned so the next run
+            # archives it whole.
+            raise BudgetSpent(result.reason or "the run's time budget passed")
+        if result.outcome is not CaptureOutcome.CAPTURED:
+            return SourceHistory(reason=result.reason or "source capture failed")
+        # The target's one bundle sits outside the version prefixes and is
+        # replaced here, so it is not one of the version's objects.
+        self._check_time()
+        key = f"apps/{target.key}/source/repo.bundle"
+        size, sha256 = _describe(bundle)
+        assert self.bucket is not None
+        self.bucket.upload_file(bundle, key)
+        return SourceHistory(key=key, size=size, sha256=sha256)
+
+
+def run_archive(
+    root: Path,
+    bucket: Bucket | None,
+    *,
+    http: HttpClient | None = None,
+    github_token: str | None = None,
+    budget: float | None = None,
+    now: Callable[[], datetime] = lambda: datetime.now(UTC),
+    capture: Capture | None = None,
+    checkpoint: Callable[[ArchiveReport], None] | None = None,
+) -> ArchiveReport:
+    """Archive every target of the packs under `root`, serially.
+
+    `budget` is seconds on the client's clock from now: once spent no new
+    target starts and the rest are not checked, and the target in flight is
+    abandoned at the deadline. A `bucket` of None resolves without writing.
+    A pack that cannot be read, or a bucket error, ends the run with a failed
+    report; a bucket error's full message goes only to standard error, since
+    it can name the endpoint or the bucket. `checkpoint` is handed the report
+    so far after each target, the targets not yet reached listed as not
+    checked, so a run killed partway still leaves its outcomes.
+    """
+    client = http or HttpClient()
+    report = ArchiveReport(status=Status.SUCCESS, dryRun=bucket is None, targets=[])
+    try:
+        targets = select_targets(root)
+    except PackReadError as error:
+        report["status"] = Status.FAILED
+        report["error"] = str(error)
+        return report
+    deadline = None if budget is None else client.clock() + budget
+    archiver = Archiver(
+        bucket,
+        client,
+        github_token=github_token,
+        deadline=deadline,
+        now=now,
+        capture=capture,
+    )
+    stopped: str | None = None
+    for number, target in enumerate(targets):
+        if stopped is None and deadline is not None and client.clock() >= deadline:
+            stopped = "time budget spent"
+        if stopped is not None:
+            report["targets"].append(_not_checked(target, stopped))
+            continue
+        try:
+            report["targets"].append(archiver.process(target))
+        except StoreError as error:
+            print(f"archive bucket error: {error}", file=sys.stderr)
+            report["status"] = Status.FAILED
+            report["error"] = str(error.failure)
+            stopped = "the run stopped on a bucket error"
+            report["targets"].append(_not_checked(target, stopped))
+        if checkpoint is not None:
+            unreached = [
+                _not_checked(rest, "the run ended before reaching it")
+                for rest in targets[number + 1 :]
+            ]
+            checkpoint({**report, "targets": [*report["targets"], *unreached]})
+    return report
+
+
+def _not_checked(target: ArchiveTarget, reason: str) -> TargetReport:
+    return TargetReport(
+        name=target.entry["name"],
+        url=target.entry["url"],
+        outcome=Outcome.NOT_CHECKED,
+        reason=reason,
+    )
+
+
+def failed_report(error: str, *, dry_run: bool) -> ArchiveReport:
+    """A report for a run that could not start."""
+    return ArchiveReport(status=Status.FAILED, dryRun=dry_run, targets=[], error=error)
+
+
+def target_line(target: TargetReport) -> str:
+    """A target's line: its outcome (`resolved` in a dry run), URL and name,
+    then its error when there is one, otherwise its version, otherwise the
+    reason."""
+    label = target.get("outcome") or "resolved"
+    detail = target.get("error") or target.get("version") or target.get("reason")
+    return f"{label}: {target['url']} ({target['name']}): {detail}"
+
+
+def render_summary(report: ArchiveReport) -> str:
+    """Render the report for a run summary, escaped inside a `<pre>` block."""
+    title = "Release archive dry run" if report["dryRun"] else "Release archive"
+    lines = [f"## {title}", "", "<pre>"]
+    if report["status"] == Status.FAILED:
+        lines.append(f"Run failed: {html.escape(report.get('error', ''))}")
+    counts = Counter(target.get("outcome") for target in report["targets"])
+    for outcome in Outcome:
+        if counts[outcome]:
+            lines.append(f"{outcome}: {counts[outcome]}")
+    if counts[None]:
+        lines.append(f"resolved: {counts[None]}")
+    lines.append("")
+    for target in report["targets"]:
+        outcome = target.get("outcome")
+        if outcome in (Outcome.UNCHANGED, Outcome.NOT_CHECKED):
+            continue
+        lines.append(html.escape(target_line(target)))
+    return "\n".join([*lines, "</pre>"]) + "\n"
+
+
+def write_archive_report(root: Path, report: ArchiveReport) -> None:
+    """Write the report and its summary whole, replacing any earlier pair; on
+    failure neither file is left."""
+    write_whole(
+        root / OUTPUT,
+        {
+            root / REPORT: json.dumps(report, indent=2, ensure_ascii=False) + "\n",
+            root / SUMMARY: render_summary(report),
+        },
+    )

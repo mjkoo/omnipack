@@ -23,6 +23,7 @@ from scripts.alerts import (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
     OWNERS,
+    RELEASE_ARCHIVE,
     TITLE_LIMIT,
     Finding,
     FindingsFile,
@@ -2398,3 +2399,89 @@ def test_cli_emit_reads_a_report_from_the_given_path(
     parsed = parse_findings(LIVE_CHECK, output.read_text())
     assert parsed is not None
     assert [f.key for f in parsed.findings] == ["live-check/gone/https://a/b"]
+
+
+def _archive_report(status: str = "success", **overrides: object) -> dict:
+    report: dict = {"status": status, "dryRun": False, "targets": []}
+    if status == "failed":
+        report["error"] = "the bucket cannot be reached"
+    return {**report, **overrides}
+
+
+def test_archive_target_outcomes_raise_no_finding(tmp_path: Path) -> None:
+    targets = [
+        {
+            "name": "A",
+            "url": "https://github.com/a/a",
+            "outcome": "failed",
+            "error": "x",
+        },
+        {"name": "B", "url": "https://github.com/b/b", "outcome": "unreachable"},
+        {"name": "C", "url": "https://github.com/c/c", "outcome": "not checked"},
+        {"name": "D", "url": "https://github.com/d/d", "outcome": "archived"},
+    ]
+
+    file = _emit(
+        RELEASE_ARCHIVE,
+        report=_archive_report(targets=targets),
+        tmp_path=tmp_path,
+        ARCHIVE_RESULT="success",
+    )
+
+    assert file == FindingsFile(RELEASE_ARCHIVE, scope=("release-archive/read",))
+
+
+def test_archive_run_that_cannot_read_packs_or_reach_bucket_raises_one_finding(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        RELEASE_ARCHIVE,
+        "failure",
+        report=_archive_report("failed"),
+        tmp_path=tmp_path,
+        ARCHIVE_RESULT="failure",
+    )
+
+    assert _keys(file) == ["release-archive/read"]
+    assert file.scope == ("release-archive/read",)
+
+
+def test_archive_missing_report_raises_the_early_failure_finding(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        RELEASE_ARCHIVE,
+        "failure",
+        tmp_path=tmp_path,
+        ARCHIVE_RESULT="failure",
+    )
+
+    assert _keys(file) == _early(RELEASE_ARCHIVE)
+    assert file.scope == ()
+
+
+def test_archive_report_is_not_read_when_the_step_did_not_run(tmp_path: Path) -> None:
+    file = _emit(
+        RELEASE_ARCHIVE,
+        "failure",
+        report=_archive_report("failed"),
+        tmp_path=tmp_path,
+        ARCHIVE_RESULT="skipped",
+    )
+
+    assert _keys(file) == _early(RELEASE_ARCHIVE)
+
+
+def test_archive_cancelled_job_keeps_only_the_early_failure_finding(
+    tmp_path: Path,
+) -> None:
+    file = _emit(
+        RELEASE_ARCHIVE,
+        "cancelled",
+        report=_archive_report("failed"),
+        tmp_path=tmp_path,
+        ARCHIVE_RESULT="cancelled",
+    )
+
+    assert _keys(file) == _early(RELEASE_ARCHIVE)
+    assert file.scope == ()
