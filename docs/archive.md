@@ -80,7 +80,10 @@ repository secrets:
 | `ARCHIVE_S3_SECRET_ACCESS_KEY` | Secret access key |
 | `ARCHIVE_S3_PREFIX` | Optional key prefix |
 
-The key needs list, read, write and delete on the bucket. After the first
+The key needs list, read, write and delete on the bucket. On Google Cloud
+Storage, the endpoint is `https://storage.googleapis.com` and the key is an
+HMAC key of a service account granted `roles/storage.objectAdmin` on the
+bucket alone. After the first
 manual dispatch archives everything, a second should report every target
 unchanged. The first run may take several nights if it exceeds the job's time
 budget; the targets it did not reach are reported not checked and the next run

@@ -74,6 +74,11 @@ class ArchiveStore:
             aws_secret_access_key=values[SECRET_ACCESS_KEY],
             region_name="auto",
             config=Config(
+                # Default request checksums are trailing aws-chunked checksums,
+                # which some S3-compatible stores, Cloud Storage among them,
+                # reject. The archive hashes every object into its manifest.
+                request_checksum_calculation="when_required",
+                response_checksum_validation="when_required",
                 retries={"max_attempts": 3, "mode": "standard"},
                 connect_timeout=10,
                 read_timeout=60,

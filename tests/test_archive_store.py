@@ -8,6 +8,7 @@ from typing import Any
 import boto3
 import pytest
 from boto3.exceptions import S3UploadFailedError
+from botocore.awsrequest import AWSResponse
 from botocore.stub import Stubber
 
 from omnipack.archive.store import ArchiveStore, StoreError, StoreFailure
@@ -138,6 +139,36 @@ def test_unreachable_endpoint_is_a_run_level_error() -> None:
         )
 
     assert caught.value.failure is StoreFailure.UNREACHABLE
+
+
+class EmptyBody:
+    def stream(self, **_: Any) -> Any:
+        return iter(())
+
+
+def test_uploads_carry_no_checksum_unless_the_operation_requires_one(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """Cloud Storage rejects the default trailing checksums of boto3 uploads."""
+    sent: list[dict[str, str]] = []
+    real_client = boto3.client
+
+    def answer(request: Any, **_: Any) -> AWSResponse:
+        sent.append(dict(request.headers))
+        return AWSResponse(request.url, 200, {}, EmptyBody())
+
+    def client(*args: Any, **kwargs: Any) -> Any:
+        built = real_client(*args, **kwargs)
+        built.meta.events.register("before-send.s3", answer)
+        return built
+
+    monkeypatch.setattr(boto3, "client", client)
+    store = ArchiveStore.from_environment(ENVIRONMENT)
+    store.put_json("k.json", {"n": 1})
+
+    put = sent[-1]
+    assert not [name for name in put if name.lower().startswith("x-amz-checksum")]
+    assert "x-amz-trailer" not in {name.lower() for name in put}
 
 
 def test_put_json_failure_is_a_run_level_error() -> None:
