@@ -11,8 +11,8 @@ reach the owner.
 
 ### Requirement: Unattended problems raise findings
 
-The scheduled nightly publishing and source catalog workflows SHALL raise a
-finding for each of these problems, and for no other outcome:
+The scheduled nightly publishing, source catalog and release archive workflows
+SHALL raise a finding for each of these problems, and for no other outcome:
 
 - a nightly preparation stage that fails, one finding per stage;
 - a nightly push or release synchronization that fails;
@@ -39,6 +39,8 @@ finding for each of these problems, and for no other outcome:
   listed by a catalog, one finding per URL covering every such extra there;
 - each package id the build report lists as repeated within a variant, one
   finding per variant and package id;
+- a release archive run that cannot read the committed packs or reach its
+  bucket;
 - a producing job whose findings do not reach the alert job intact, that
   fails for a reason none of its other findings reports, or that is cancelled,
   one finding per job, so a job stopped by its time limit raises this finding
@@ -61,7 +63,9 @@ that changes nothing SHALL name the project URL and that key, and a finding
 for the extras a catalog lists at a project URL SHALL name the project URL
 and, for each such extra, its package id, each listing source and that
 source's differing fields. A finding for a repeated package id SHALL name the
-variant, the package id and each entry's family and project URL. A stale or
+variant, the package id and each entry's family and project URL. No release
+archive target's outcome SHALL raise a finding, whatever that outcome is;
+per-target outcomes stay in the run report. A stale or
 archived finding SHALL NOT be
 accounted as the live-check job's failure. Each finding SHALL have a key that
 stays the same while the same problem persists, independent of the problem's
@@ -185,6 +189,13 @@ uploading them fails.
   entries' families and project URLs, and the nightly run's verdict is
   unchanged
 
+#### Scenario: Release archive outcomes
+
+- **WHEN** a release archive run reports one target failed, one unreachable and
+  one not checked
+- **THEN** no finding is raised for any of those targets, the outcomes stay in
+  the run report, and the run's verdict is unchanged
+
 ### Requirement: Each finding has one issue that follows its latest re-check
 
 Each finding SHALL have one GitHub issue labelled `omnipack-alert` that
@@ -219,7 +230,8 @@ health-inconclusive URL, an unreachable URL and a URL the time budget left
 unchecked, so the health issues of a URL no longer in the packs are closed. A build SHALL count as re-checking
 the build-warning keys only when its report records success; a failed
 build's report SHALL still raise the warnings it lists but SHALL close no
-build-warning issue.
+build-warning issue. A release archive run whose archive step ran and wrote a
+readable report SHALL count as re-checking its run-level key.
 
 An issue the owner closed as not planned SHALL stay closed while its finding
 persists. A mute SHALL last one occurrence: when a run re-checks a muted key
