@@ -125,5 +125,10 @@
     "url": "https://github.com/kyannon/gba-ds",
     "reason": "On one screen it is a controller-only mGBA shell whose releases follow its companion; a standalone GBA emulator for single would be vetted on its own merits.",
     "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/SibiryakovSA/SephiriaCompanion",
+    "reason": "A second-screen companion that does not run the game, so it has no use on one display.",
+    "packs": ["single"]
   }
 ]
