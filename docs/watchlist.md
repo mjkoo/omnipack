@@ -44,23 +44,12 @@ they are not re-proposed unless something material changes.
 
 ## Provenance or maturity
 
-- **Super Mario Galaxy (Galaxy-Android)** - https://github.com/OpenPort-Labs/Galaxy-Android.
-  A Petari-based port with APK releases, but they are tester builds whose asset
-  names only recently settled, from a new organization with one heavily
-  AI-assisted committer. Its original signing key and password were committed to
-  the public repository, so every release before the key change is signed with a
-  compromised key, and moving to the new key needs an uninstall. The APKs are
-  debuggable, and the app requests all-files storage access to keep the cooked
-  game and saves in shared storage.
-  Promote when stable (non-prerelease) releases are signed with the new key and
-  are no longer debuggable, asset names stay consistent, and the project has a
-  sustained history.
 - **Super Mario Galaxy (Nebula)** - https://github.com/keepvaibin/nebula.
   A GPL Petari-based native port, playable to the end on Windows, with an
   Android app in its source tree that requests no sensitive permissions and keeps
   game data in app-private storage. Releases carry only a Windows installer so
   far. Promote when a release carries an Android APK and it passes the usual
-  checks; it is the stronger Galaxy candidate of the two.
+  checks.
 - **Pathfinder** - https://github.com/KaitonGxx/thor-pathfinder.
   An open-source AYN Thor utility in the spirit of Wayfinder, not a replacement
   for it: a smaller feature set, a short AI-written history, and accessibility
@@ -73,14 +62,17 @@ they are not re-proposed unless something material changes.
   serves a self-updater that checks its own release asset's digest.
   Promote when releases have stayed stable, with none pulled, for about a month.
 - **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
-  `config/deny.json` while it has a single release: whether a later release
-  installs over it with the same signing key is not yet known, and its Super
-  Mario Galaxy integration has been validated only in emulation, not on an AYN
-  Thor. It ships Nintendo's own menu music, HUD art and cover scans in the APK
-  rather than taking them from the user's disc, which raises takedown risk
-  without disqualifying it. Promote by removing the denial once a later release
-  installs over the first; triage then decides single as for any codm arrival,
-  with a `"packs": ["single"]` denial if it does not work on one display.
+  `config/deny.json`. Releases now install over one another under one signing
+  key, and its notes report Super Mario Galaxy booting on an AYN Thor, but it
+  has grown into a multi-game Wii hub that ships Nintendo's own menu music, HUD
+  art and cover scans, bundles a large mod patch, and in a prerelease adds a
+  Brawl engine that its own notes say still contains original Nintendo data,
+  with redistribution permission unrecorded. It requests all-files storage, and
+  its install permission serves an in-app updater whose code is published only
+  in release source archives. Its own notes call single-screen support
+  incomplete. Promote by removing the denial when the owner accepts the takedown
+  exposure; triage then decides single as for any codm arrival, with a
+  `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
   A gbarecomp-based recomp with one APK per release under a stable asset name,
   from a brand-new account with many quick recomps. The repository sets a
@@ -98,12 +90,6 @@ they are not re-proposed unless something material changes.
   it AI-generated and disclaims it, uses prereleases heavily, and requests
   all-files storage. Promote when the maintainer shows a sustained, owned release
   history; trademark and takedown exposure is the owner's call.
-- **Call of Duty: Modern Warfare 2 (mw2-android)** - https://github.com/OpenPort-Labs/mw2-android.
-  A GPL fork of mw2-recompiled from the Galaxy-Android organization, with
-  inconsistent asset names and multiple flavors, and a self-updater that installs
-  APKs from a different repository without its own signature check, alongside
-  all-files storage. Promote when one repository publishes the releases with
-  consistent asset names, the updater follows it, and the history is sustained.
 - **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
   An Android port of the DK64 N64 recomp with one APK per release, from an author
   of many quick ports, with a short burst of largely automated commits and
@@ -122,8 +108,12 @@ they are not re-proposed unless something material changes.
   and wide outside use, from a recently created account with a rapid stream of
   AI-assisted ports that says it replaces a compromised earlier account. It
   requests all-files storage for its game folder. The same author's
-  nfsmw-android and nfsu1-recompiled ports wait on the same terms, the latter
-  until its Android build is playable.
+  nfsmw-android, nfsu1-recompiled and NFS-CARBON-360-ANDROID-RECOMP ports wait
+  on the same terms. A continuation by another author,
+  https://github.com/mininxd/NFSU2-Revived-Android, signs its releases with a
+  keystore whose password is committed to the public repository, so anyone can
+  build an APK that installs over it; it waits until releases move to a private
+  key and the history is sustained.
   Promote when the account has kept up Android releases that install over one
   another for about a month.
 - **Link's Awakening (LASRecomp Android Plus)** - https://github.com/Nycolazs/LASRecomp-Android-Plus.
@@ -142,19 +132,52 @@ they are not re-proposed unless something material changes.
   An MIT frontend for static recomps with one APK per release, all-files storage
   and a self-updater limited to its own package. Its own documentation calls
   Android support initial and unvalidated on devices.
-  Promote when the documentation no longer describes Android as initial or
-  unvalidated.
+  Promote when the documentation no longer describes Android as initial or as
+  needing device validation.
 - **Sonic R (sonic-r-android)** - https://github.com/ZinexDa/sonic-r-android.
   An Android port of the Sonic R PC decompilation under that project's
   noncommercial license, from a small single-author account, with drifting asset
   names and debug-signed local builds.
   Promote when asset names are stable and the history is sustained.
 - **God of War III (gow3_android)** - https://github.com/zFitness/gow3_android.
-  A GPL fork of gow3_pc on FEXCore and the shadPS4 renderer with several
-  contributors and wide outside use, but its package id and signing key have
-  both changed between releases.
-  Promote when the package id and signing key have held across several
-  releases; Sony trademark and takedown exposure is the owner's call.
+  A GPL fork of gow3_pc (now SpartanPort) on FEXCore and the shadPS4 renderer
+  with wide outside use. Its standalone APK releases changed package id and
+  signing key repeatedly and have stopped; the port now ships as a package
+  imported into the author's closed-source nixport host app, itself an alpha
+  prerelease. Promote when a release carries a trackable Android APK whose
+  package id and signing key hold across several releases; Sony trademark and
+  takedown exposure is the owner's call.
+- **Ninja Gaiden Black Recompiled** - https://github.com/gamboozino/ngbrecomp.
+  A GPL static recomp of the Xbox game with outside interest and a few outside
+  contributors, but a young, heavily AI-assisted history. Every release is a
+  prerelease, not all of them carry the APK, and the README calls Android
+  experimental. Promote when releases that are not prereleases carry the APK,
+  Android is no longer described as experimental, and releases keep installing
+  over one another.
+- **Sin and Punishment (snprecomp)** - https://github.com/wootbeer/snprecomp.
+  A GPL N64Recomp port with one APK per release and a private signing key, from
+  a brand-new account with a rapid stream of almost entirely AI-written ports.
+  The same account's other Android ports (Descent-Android, Descent2-Android,
+  gsrandroid and its DOS ports) wait on the same terms.
+  Promote when the account has a sustained history and Android releases have
+  kept installing over one another for about a month.
+- **Pokemon Snap (Snap64Recomp)** - https://github.com/JackandBeans/Snap64Recomp.
+  A GPL N64 recomp from a dedicated, heavily AI-assisted account, with one APK
+  per release signed with a private key. It requests all-files storage, and its
+  README describes Android as beta, run on a single phone.
+  Promote when several releases have installed over one another and Android
+  leaves beta.
+- **Dragon Ball Z: Budokai Tenkaichi 3 (Dragon Rage)** - https://github.com/dfdx047/Tenkaichi3DecompAndroid.
+  An Android fork of the Tenkaichi3Decomp PC port with outside interest and one
+  APK per release beside a nightly prerelease stream. Releases are signed with a
+  test keystore whose password is committed to the public repository, and its
+  install permission serves a self-updater that installs from its own releases
+  without a digest check. Promote when releases are signed with a private key
+  and keep installing over one another.
+- **Midnight Club: Los Angeles (mcla-recomp-android-g)** - https://github.com/gabrielbskk/mcla-recomp-android-g.
+  An Android recomp built in a single burst of agent-written commits, with only
+  open-beta and test releases, tested on one phone.
+  Promote when it has a sustained history with stable releases.
 
 ## Declined
 
@@ -174,3 +197,10 @@ they are not re-proposed unless something material changes.
 - **Super Mario Strikers (Strikers-Android-Port)** - https://github.com/luisxl15/Strikers-Android-Port.
   A one-off Android build of the strikers port whose release republishes a
   committed debug-signed APK.
+- **Super Mario Galaxy (Galaxy-Android) and Call of Duty: Modern Warfare 2
+  (mw2-android)** - formerly https://github.com/OpenPort-Labs. Discontinued by
+  their developer and the organization deleted; its releases were signed with a
+  compromised key, so reuploads are not candidates.
+- **Rayman Origins and Rayman Legends recomps (edeegg)** - https://github.com/edeegg/origins-recomp
+  and https://github.com/edeegg/Legends-Recomp. Reuploaded prebuilt APKs with no
+  source and no license.
