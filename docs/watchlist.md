@@ -178,6 +178,17 @@ they are not re-proposed unless something material changes.
   An Android recomp built in a single burst of agent-written commits, with only
   open-beta and test releases, tested on one phone.
   Promote when it has a sustained history with stable releases.
+- **Elder Scrolls 3 Morrowind (OpenMW-DS Duo Lite)** - https://github.com/SergeShack/OpenMW-DS.
+  A GPL fork of Josh-Daniels/OpenMW-DS, the dual-screen OpenMW build already in
+  the packs, tuned for the Retroid Pocket Duo Lite (a 30 fps cap, shorter view
+  distance, larger text and inventory options, a fix for a first-cast freeze).
+  It ships its own package id, `io.github.sergeshack.openmwds`, so it could sit
+  beside upstream. It is a small, readable diff on top of upstream, but it comes
+  from a single burst of commits and releases with almost no downloads, and it
+  keeps upstream's all-files storage and the self-updater, now pointed at its
+  own releases. A fork tuned for one device is worth carrying when that device
+  is popular. Promote when it has a sustained history and keeps pace with
+  upstream OpenMW-DS releases.
 
 ## Declined
 
