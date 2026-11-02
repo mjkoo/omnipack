@@ -49,7 +49,7 @@
   },
   {
     "url": "https://github.com/Maddex712/WiiDS",
-    "reason": "Held while it has a single release, so whether a later release installs over it is unproven, and its Super Mario Galaxy integration has been validated only in emulation; remove this denial once a later release installs over the first. It also ships Nintendo menu music, HUD art and cover scans in the APK, which raises takedown risk."
+    "reason": "Held for an owner decision on takedown exposure: releases now install over one another, but the APK ships Nintendo menu music, HUD art and cover scans, and a prerelease adds a Brawl engine that its own notes say still contains original Nintendo data with redistribution permission unrecorded; remove this denial once the owner accepts that risk."
   },
   {
     "url": "https://github.com/mastercook777/Heimdall-AYN-Thor-Assistant",
