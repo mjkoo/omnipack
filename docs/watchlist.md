@@ -69,9 +69,10 @@ they are not re-proposed unless something material changes.
   Brawl engine that its own notes say still contains original Nintendo data,
   with redistribution permission unrecorded. It requests all-files storage, and
   its install permission serves an in-app updater whose code is published only
-  in release source archives. Its own notes call single-screen support
-  incomplete. Promote by removing the denial when the owner accepts the takedown
-  exposure; triage then decides single as for any codm arrival, with a
+  in release source archives. The prerelease's notes call Brawl's single-screen
+  acceptance incomplete. Promote by removing the denial when the updater has been
+  read and the owner accepts the takedown exposure; triage then decides single as
+  for any codm arrival, with a
   `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
   A gbarecomp-based recomp with one APK per release under a stable asset name,
@@ -112,8 +113,7 @@ they are not re-proposed unless something material changes.
   on the same terms. A continuation by another author,
   https://github.com/mininxd/NFSU2-Revived-Android, signs its releases with a
   keystore whose password is committed to the public repository, so anyone can
-  build an APK that installs over it; it waits until releases move to a private
-  key and the history is sustained.
+  build an APK that installs over it; it waits until the history is sustained.
   Promote when the account has kept up Android releases that install over one
   another for about a month.
 - **Link's Awakening (LASRecomp Android Plus)** - https://github.com/Nycolazs/LASRecomp-Android-Plus.
@@ -172,8 +172,8 @@ they are not re-proposed unless something material changes.
   APK per release beside a nightly prerelease stream. Releases are signed with a
   test keystore whose password is committed to the public repository, and its
   install permission serves a self-updater that installs from its own releases
-  without a digest check. Promote when releases are signed with a private key
-  and keep installing over one another.
+  without a digest check. Promote when the history is sustained and releases
+  keep installing over one another.
 - **Midnight Club: Los Angeles (mcla-recomp-android-g)** - https://github.com/gabrielbskk/mcla-recomp-android-g.
   An Android recomp built in a single burst of agent-written commits, with only
   open-beta and test releases, tested on one phone.
@@ -199,8 +199,8 @@ they are not re-proposed unless something material changes.
   committed debug-signed APK.
 - **Super Mario Galaxy (Galaxy-Android) and Call of Duty: Modern Warfare 2
   (mw2-android)** - formerly https://github.com/OpenPort-Labs. Discontinued by
-  their developer and the organization deleted; its releases were signed with a
-  compromised key, so reuploads are not candidates.
+  their developer and the organization deleted. Galaxy-Android's early releases
+  were signed with a compromised key, so reuploads are not candidates.
 - **Rayman Origins and Rayman Legends recomps (edeegg)** - https://github.com/edeegg/origins-recomp
   and https://github.com/edeegg/Legends-Recomp. Reuploaded prebuilt APKs with no
   source and no license.
