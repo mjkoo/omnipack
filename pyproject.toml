@@ -26,22 +26,22 @@ pack = "omnipack.cli:main"
 
 [dependency-groups]
 archive = [
-    "boto3>=1.43.120",
+    "boto3>=1.43.121",
 ]
 dev = [{ include-group = "lint" }, { include-group = "test" }]
 lint = [
-    "ruff>=0.17.1",
-    "ty>=0.0.90",
+    "ruff>=0.17.3",
+    "ty>=0.0.94",
 ]
 test = [
     { include-group = "archive" },
-    "pytest>=9",
+    "pytest>=9.2.0",
     "pytest-cov>=7",
     "pyyaml>=6.0.3",
 ]
 
 [build-system]
-requires = ["uv_build>=0.13.5,<0.14.0"]
+requires = ["uv_build>=0.13.6,<0.14.0"]
 build-backend = "uv_build"
 
 [tool.uv]
