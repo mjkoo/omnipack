@@ -190,7 +190,9 @@ they are not re-proposed unless something material changes.
   the Banjo-Kazooie recomp and Cluster Tune already in the packs, with one APK
   per release, Adreno GPUs only, and an optional second-screen companion for
   the AYN Thor and Retroid Pocket Duo that is skipped on single-screen devices.
-  The project is brand new and targets a recent first-party Nintendo title.
+  It requests all-files storage for game data, and its install permission
+  serves an opt-out self-updater that checks the APK's checksum and signing
+  certificate. The project is brand new and targets a recent first-party Nintendo title.
   Promote when it has a sustained release history and the owner accepts the
   takedown exposure.
 - **Need for Speed: Most Wanted (MostWanted-Android)** - https://github.com/RanggaCasper/MostWanted-Android.
@@ -205,7 +207,9 @@ they are not re-proposed unless something material changes.
   An MIT recomp on Peiikai's LASRecomp engine, from an established account
   with outside contributors and wide outside use, with one APK per release.
   Every release is a beta prerelease, and the repository also builds a separate
-  probe app. It requests all-files storage to read game files in place.
+  probe app. It requests all-files storage to read game files in place. The
+  same author's TOTKDroid (https://github.com/mamcjr/TOTKDroid, a Tears of the
+  Kingdom fork of it) waits on the same terms.
   Promote when a release that is not a prerelease carries the APK.
 - **Sonic the Hedgehog 2006 (MarathonRecomp-Android)** - https://github.com/SansNope/MarathonRecomp-Android.
   A GPL Android port of the MarathonRecomp Xbox 360 recomp by the author of the
@@ -223,6 +227,29 @@ they are not re-proposed unless something material changes.
   release under a fixed asset name, from an account whose history could not be
   checked, in a young burst of commits. Promote when the account's provenance
   is established and it has a sustained history.
+- **Banjo-Tooie (Tooie Recompiled)** - https://github.com/Frostie77/Tooie-Recompiled.
+  An N64Recomp and RT64 port, well documented with device reports and only the
+  internet permission, but from a brand-new account in a single burst of
+  commits. Its release builds add a `.release` package suffix.
+  Promote when it has a sustained history and outside use.
+- **Recompa** - https://github.com/kalasyan/recompa.
+  A GPL launcher and installer for native ports from an established account,
+  with one APK per release and a second-screen view on the AYN Thor. Installing
+  and removing port APKs, with checksum and signature checks, is its main
+  function, which overlaps what Obtainium does for the packs.
+  Promote when releases have been stable for about a month and the owner
+  decides an in-app port store belongs in the packs.
+- **Fable II (FableDroid)** - https://github.com/hardsilinder/FableDroid.
+  An Android port of the Fable-2-Recomp Xbox 360 recomp that keeps upstream
+  history and requests only internet and vibrate, but every release is a beta,
+  no license is stated, and its release assets have not been checked.
+  Promote when a license is stated and releases carrying the APK have a
+  sustained history.
+- **Raitchi** - https://github.com/igawa6/Raitchi.
+  An experimental runtime that runs Switch games natively with an Eden-derived
+  frontend; its gradle files carry only test package ids and most listed games
+  only boot. Promote when it ships a final package id and leaves the
+  experimental stage.
 
 ## Declined
 
