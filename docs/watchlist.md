@@ -193,8 +193,8 @@ they are not re-proposed unless something material changes.
   It requests all-files storage for game data, and its install permission
   serves an opt-out self-updater that checks the APK's checksum and signing
   certificate. The project is brand new and targets a recent first-party Nintendo title.
-  Promote when it has a sustained release history and the owner accepts the
-  takedown exposure.
+  The owner accepts its takedown exposure.
+  Promote when it has a sustained release history.
 - **Need for Speed: Most Wanted (MostWanted-Android)** - https://github.com/RanggaCasper/MostWanted-Android.
   A GPL static recomp of the Xbox game on XboxXBE-Recomp, from an established
   account, with one APK per release, wide outside use and outside
@@ -216,8 +216,7 @@ they are not re-proposed unless something material changes.
   Sonic Unleashed Recomp port already in the packs, with one APK per release
   and only the vibrate permission. Its README says upstream MarathonRecomp is
   not meant for public use yet and the port inherits that state.
-  Promote when upstream MarathonRecomp makes a public release, or earlier if
-  the owner decides upstream's stance does not hold the port back.
+  Promote when upstream MarathonRecomp makes a public release.
 - **Super Mario All-Stars (SuperMarioAllStars)** - https://github.com/Darhkfox/SuperMarioAllStars.
   A native port that runs from the user's own SNES ROM, with an Android APK
   beside PC builds in each release, from a small account in a single burst of
@@ -236,9 +235,9 @@ they are not re-proposed unless something material changes.
   A GPL launcher and installer for native ports from an established account,
   with one APK per release and a second-screen view on the AYN Thor. Installing
   and removing port APKs, with checksum and signature checks, is its main
-  function, which overlaps what Obtainium does for the packs.
-  Promote when releases have been stable for about a month and the owner
-  decides an in-app port store belongs in the packs.
+  function, which overlaps what Obtainium does for the packs; the owner does
+  not treat that overlap as disqualifying.
+  Promote when releases have been stable for about a month.
 - **Fable II (FableDroid)** - https://github.com/hardsilinder/FableDroid.
   An Android port of the Fable-2-Recomp Xbox 360 recomp that keeps upstream
   history and requests only internet and vibrate, but every release is a beta,
