@@ -41,6 +41,11 @@ The pack opts into prereleases, so Obtainium offers beta builds.
 The project publishes every Android build as a prerelease, so the pack opts
 into prereleases.
 
+## DAO-Duo (Dragon Age: Origins)
+
+The project publishes every Android build as a prerelease, so the pack opts
+into prereleases.
+
 ## Silent Hill Decomp
 
 Builds replace the assets of one rolling release, so the entry is tracked by

@@ -130,5 +130,20 @@
     "url": "https://github.com/SibiryakovSA/SephiriaCompanion",
     "reason": "A second-screen companion that does not run the game, so it has no use on one display.",
     "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/BrianJr03/GrandTheftCompanion",
+    "reason": "A second-screen companion for GTA IV and V that does not run the game, so it has no use on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/Gamersmood/SA-Companion",
+    "reason": "A second-screen companion for GTA San Andreas that does not run the game, so it has no use on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/harmssi/thor-halflife",
+    "reason": "On one screen it is Xash3D FWGS with the classic HUD, which the single-screen pack already carries.",
+    "packs": ["single"]
   }
 ]
