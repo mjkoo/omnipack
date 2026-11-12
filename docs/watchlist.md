@@ -68,10 +68,13 @@ they are not re-proposed unless something material changes.
   art and cover scans, bundles a large mod patch, and in a prerelease adds a
   Brawl engine that its own notes say still contains original Nintendo data,
   with redistribution permission unrecorded. It requests all-files storage, and
-  its install permission serves an in-app updater whose code is published only
-  in release source archives. The prerelease's notes call Brawl's single-screen
-  acceptance incomplete. Promote by removing the denial when the updater has been
-  read and the owner accepts the takedown exposure; triage then decides single as
+  its install permission serves an in-app updater, readable in the repository,
+  that installs only the latest stable release after checking GitHub's asset
+  digest, its own release inventory and the installed signing key. The author
+  has replaced APKs under an existing release tag, which Obtainium does not
+  detect as an update. The prerelease's notes call Brawl's single-screen
+  acceptance incomplete. Promote by removing the denial when the owner accepts the
+  takedown exposure; triage then decides single as
   for any codm arrival, with a
   `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
@@ -85,12 +88,6 @@ they are not re-proposed unless something material changes.
   account with a burst of commits and releases. It requests all-files storage,
   and its install permission serves a self-updater that verifies its own
   signature. Promote when it has a sustained history and outside use.
-- **Grand Theft Auto IV (LibertyRecompAndroid)** - https://github.com/vaduur/LibertyRecompAndroid.
-  An Android fork of the established LibertyRecomp Xbox 360 recomp with high
-  reach, but the Android work comes from a single-repository account that calls
-  it AI-generated and disclaims it, uses prereleases heavily, and requests
-  all-files storage. Promote when the maintainer shows a sustained, owned release
-  history; trademark and takedown exposure is the owner's call.
 - **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
   An Android port of the DK64 N64 recomp with one APK per release, from an author
   of many quick ports, with a short burst of largely automated commits and
@@ -149,11 +146,10 @@ they are not re-proposed unless something material changes.
   takedown exposure is the owner's call.
 - **Ninja Gaiden Black Recompiled** - https://github.com/gamboozino/ngbrecomp.
   A GPL static recomp of the Xbox game with outside interest and a few outside
-  contributors, but a young, heavily AI-assisted history. Every release is a
-  prerelease, not all of them carry the APK, and the README calls Android
-  experimental. Promote when releases that are not prereleases carry the APK,
-  Android is no longer described as experimental, and releases keep installing
-  over one another.
+  contributors, but a young, heavily AI-assisted history. Releases that are not
+  prereleases now carry the APK, but the README still calls Android
+  experimental and tested on a single phone. Promote when Android is no longer
+  described as experimental and releases keep installing over one another.
 - **Sin and Punishment (snprecomp)** - https://github.com/wootbeer/snprecomp.
   A GPL N64Recomp port with one APK per release and a private signing key, from
   a brand-new account with a rapid stream of almost entirely AI-written ports.
@@ -189,6 +185,70 @@ they are not re-proposed unless something material changes.
   own releases. A fork tuned for one device is worth carrying when that device
   is popular. Promote when it has a sustained history and keeps pace with
   upstream OpenMW-DS releases.
+- **Zelda: Tears of the Kingdom (TotK Native)** - https://github.com/AurelioB/totk-android.
+  An MIT native Android runner for the user's own Switch dump, by the author of
+  the Banjo-Kazooie recomp and Cluster Tune already in the packs, with one APK
+  per release, Adreno GPUs only, and an optional second-screen companion for
+  the AYN Thor and Retroid Pocket Duo that is skipped on single-screen devices.
+  It requests all-files storage for game data, and its install permission
+  serves an opt-out self-updater that checks the APK's checksum and signing
+  certificate. The project is brand new and targets a recent first-party Nintendo title.
+  The owner accepts its takedown exposure.
+  Promote when it has a sustained release history.
+- **Need for Speed: Most Wanted (MostWanted-Android)** - https://github.com/RanggaCasper/MostWanted-Android.
+  A GPL static recomp of the Xbox game on XboxXBE-Recomp, from an established
+  account, with one APK per release, wide outside use and outside
+  contributors, but a young, AI-assisted history. It requests all-files storage
+  for its game folder; its update checker only links to its own releases. The
+  same author's Black-Android and ShaolinMonks-Android ports share its Android
+  host and have not been vetted. Promote when it has a sustained history and
+  releases keep installing over one another.
+- **Zelda: Breath of the Wild (BOTWRecompAndroid)** - https://github.com/mamcjr/BOTWRecompAndroid.
+  An MIT recomp on Peiikai's LASRecomp engine, from an established account
+  with outside contributors and wide outside use, with one APK per release.
+  Every release is a beta prerelease, and the repository also builds a separate
+  probe app. It requests all-files storage to read game files in place. The
+  same author's TOTKDroid (https://github.com/mamcjr/TOTKDroid, a Tears of the
+  Kingdom fork of it) waits on the same terms.
+  Promote when a release that is not a prerelease carries the APK.
+- **Sonic the Hedgehog 2006 (MarathonRecomp-Android)** - https://github.com/SansNope/MarathonRecomp-Android.
+  A GPL Android port of the MarathonRecomp Xbox 360 recomp by the author of the
+  Sonic Unleashed Recomp port already in the packs, with one APK per release
+  and only the vibrate permission. Its README says upstream MarathonRecomp is
+  not meant for public use yet and the port inherits that state.
+  Promote when upstream MarathonRecomp makes a public release.
+- **Super Mario All-Stars (SuperMarioAllStars)** - https://github.com/Darhkfox/SuperMarioAllStars.
+  A native port that runs from the user's own SNES ROM, with an Android APK
+  beside PC builds in each release, from a small account in a single burst of
+  commits. Promote when it has a sustained history.
+- **Persona 5 Royal (p5r-android)** - https://github.com/Brandon04Gonzalez/p5r-android.
+  An MIT native runner for the user's own Switch dump and keys, with one APK per
+  release under a fixed asset name, from an account whose history could not be
+  checked, in a young burst of commits. Promote when the account's provenance
+  is established and it has a sustained history.
+- **Banjo-Tooie (Tooie Recompiled)** - https://github.com/Frostie77/Tooie-Recompiled.
+  An N64Recomp and RT64 port, well documented with device reports and only the
+  internet permission, but from a brand-new account in a single burst of
+  commits. Its release builds add a `.release` package suffix.
+  Promote when it has a sustained history and outside use.
+- **Recompa** - https://github.com/kalasyan/recompa.
+  A GPL launcher and installer for native ports from an established account,
+  with one APK per release and a second-screen view on the AYN Thor. Installing
+  and removing port APKs, with checksum and signature checks, is its main
+  function, which overlaps what Obtainium does for the packs; the owner does
+  not treat that overlap as disqualifying.
+  Promote when releases have been stable for about a month.
+- **Fable II (FableDroid)** - https://github.com/hardsilinder/FableDroid.
+  An Android port of the Fable-2-Recomp Xbox 360 recomp that keeps upstream
+  history and requests only internet and vibrate, but every release is a beta,
+  no license is stated, and its release assets have not been checked.
+  Promote when a license is stated and releases carrying the APK have a
+  sustained history.
+- **Raitchi** - https://github.com/igawa6/Raitchi.
+  An experimental runtime that runs Switch games natively with an Eden-derived
+  frontend; its gradle files carry only test package ids and most listed games
+  only boot. Promote when it ships a final package id and leaves the
+  experimental stage.
 
 ## Declined
 
@@ -215,3 +275,5 @@ they are not re-proposed unless something material changes.
 - **Rayman Origins and Rayman Legends recomps (edeegg)** - https://github.com/edeegg/origins-recomp
   and https://github.com/edeegg/Legends-Recomp. Reuploaded prebuilt APKs with no
   source and no license.
+- **Grand Theft Auto IV (LibertyRecompAndroid)** - https://github.com/vaduur/LibertyRecompAndroid.
+  Put on hiatus by its maintainer, who points users to forks.
