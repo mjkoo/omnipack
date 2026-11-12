@@ -232,6 +232,14 @@
     }
   },
   {
+    "url": "https://github.com/mabencs/Dragon-Age-Origins-Recomp-Android-Duo",
+    "patch": {
+      "additionalSettings": {
+        "includePrereleases": true
+      }
+    }
+  },
+  {
     "url": "https://github.com/mastercook777/Heimdall-AYN-Thor-Assistant",
     "patch": {
       "additionalSettings": {
