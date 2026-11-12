@@ -93,15 +93,6 @@
     }
   },
   {
-    "url": "https://github.com/citron-neo/emulator",
-    "patch": {
-      "additionalSettings": {
-        "apkFilterRegEx": "^(?!.*8[.]Elite).*[.]apk$",
-        "versionDetection": false
-      }
-    }
-  },
-  {
     "url": "https://github.com/coffincolors/winlator",
     "patch": {
       "additionalSettings": {

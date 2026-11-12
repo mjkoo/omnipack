@@ -142,6 +142,10 @@
     "packs": ["single"]
   },
   {
+    "url": "https://github.com/citron-neo/emulator",
+    "reason": "GitHub removed the repository after a DMCA takedown; the project's Android builds are tracked from citron-neo/CI instead."
+  },
+  {
     "url": "https://github.com/harmssi/thor-halflife",
     "reason": "On one screen it is Xash3D FWGS with the classic HUD, which the single-screen pack already carries.",
     "packs": ["single"]

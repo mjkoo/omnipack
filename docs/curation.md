@@ -92,7 +92,13 @@ stable/beta pair sharing a numeric version requires revisiting the policy.
 Cemu uses its release tag rather than its release title, retaining its source
 URL and asset selection. RPCSX retains v20250425 unchanged.
 
-CTR, Shipwright, Citron, Vita3K, XenDroid, Ludashi, Cmod and Mjolnir explicitly
+Citron Neo is an explicit extra on the project's `citron-neo/CI` repository,
+whose rolling `nightly-android` release carries the Android builds beside
+other platforms' nightly releases. The release title filter `Android Nightly`
+selects it, and because the tag never changes, the entry turns off version
+detection and versions by the latest asset date.
+
+CTR, Shipwright, Vita3K, XenDroid, Ludashi, Cmod and Mjolnir explicitly
 set only `versionDetection: false`. Their complete source versions remain
 intact. Source polling, installation, background checks and notifications
 remain enabled; this does not turn them into track-only entries.
@@ -110,7 +116,8 @@ release without republishing it, so it also sets
 upload of only another platform's build also registers as an update.
 
 Where a release carries APKs for different apps or a different device's build
-beside the intended one, an overlay filter selects the intended asset by name.
+beside the intended one, a filter in its overlay record or extra selects the
+intended asset by name.
 Skate 3 Mobile's filter `^(?!.*-debug[.]apk$).*[.]apk$` excludes the debug
 build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
 and SleepManager keep the main app rather than their companion apps (which
