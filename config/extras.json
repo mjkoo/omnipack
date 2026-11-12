@@ -325,6 +325,25 @@
     "additionalSettings": {}
   },
   {
+    "id": "org.citron.citron_emu",
+    "url": "https://github.com/citron-neo/CI",
+    "name": "Citron Neo",
+    "author": "citron-neo",
+    "categories": ["Emulator"],
+    "additionalSettings": {
+      "includePrereleases": false,
+      "fallbackToOlderReleases": true,
+      "filterReleaseTitlesByRegEx": "Android Nightly",
+      "verifyLatestTag": false,
+      "useLatestAssetDateAsReleaseDate": true,
+      "releaseDateAsVersion": true,
+      "apkFilterRegEx": "^(?!.*8[.]Elite).*[.]apk$",
+      "versionDetection": false,
+      "trackOnly": false,
+      "about": "Nintendo Switch emulator"
+    }
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",

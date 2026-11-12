@@ -31,7 +31,6 @@ FIXTURES = Path(__file__).parent / "fixtures/curation"
 SOURCE_IDS = {
     "com.simon358.ctrnative",
     "com.waterdish.shipwright",
-    "org.citron.citron_emu",
     "org.vita3k.emulator",
     "xendroid.compose",
     "com.winlator.ludashi",
@@ -40,7 +39,6 @@ SOURCE_IDS = {
 }
 NUMERIC_IDS = {"com.aure.banjorecomp", "com.sergiomanzur.sotnrecomp"}
 APK_FILTERS = {
-    "org.citron.citron_emu": "^(?!.*8[.]Elite).*[.]apk$",
     "com.winlator.ludashi": "vanilla",
 }
 
@@ -182,6 +180,26 @@ def test_cinderbox_retains_release_selection_settings(
         assert not settings["versionExtractionRegEx"]
         assert not settings["releaseTitleAsVersion"]
         assert settings["fallbackToOlderReleases"] is True
+
+
+def test_citron_tracks_the_android_nightly_by_asset_date(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    for variant in Variant:
+        document = json.loads(render(current_configuration.result.apps[variant]))
+        matches = [
+            app for app in document["apps"] if app["id"] == "org.citron.citron_emu"
+        ]
+        assert len(matches) == 1
+        app = matches[0]
+        assert normalize_project_url(app["url"]) == "github.com/citron-neo/ci"
+        settings = json.loads(app["additionalSettings"])
+        assert settings["filterReleaseTitlesByRegEx"] == "Android Nightly"
+        assert settings["apkFilterRegEx"] == "^(?!.*8[.]Elite).*[.]apk$"
+        assert settings["useLatestAssetDateAsReleaseDate"] is True
+        assert settings["releaseDateAsVersion"] is True
+        assert settings["versionDetection"] is False
+        assert not settings["trackOnly"] and not settings["includePrereleases"]
 
 
 def test_maintained_version_override_survives_refreshed_source_settings(
