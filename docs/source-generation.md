@@ -367,16 +367,18 @@ interior of `README.md`; it never stages a catalog change.
 
 ## Live project check
 
-The same **Reviewed source catalog** workflow also runs a read-only job,
-`live-check`, which runs `uv run --no-sync pack check-live` against `main`'s
-committed packs. Generation itself still inspects no project; this job requests
-each distinct pack URL once, with the request headers the entry declares (for
-example `User-Agent: Obtainium/1.0`), and for each GitHub repository URL also
-looks up its update health, as below. It holds only `contents: read`, passes
-the job's `github.token` as `GITHUB_TOKEN` to the check step alone, checks out
-with `persist-credentials: false`, runs in its own non-canceling
-`omnipack-live-check` concurrency group without waiting on any source job, and
-is limited to 30 minutes, above the command's own 20-minute budget.
+The **Live project check** workflow runs a read-only job, `live-check`, which
+runs `uv run --no-sync pack check-live` against `main`'s committed packs. It
+starts each time **Nightly publishing** completes, so it checks the packs that
+run just published, and can be dispatched manually with no inputs. Generation
+itself still inspects no project; this job requests each distinct pack URL
+once, with the request headers the entry declares (for example
+`User-Agent: Obtainium/1.0`), and for each GitHub repository URL also looks up
+its update health, as below. It holds only `contents: read`, passes the job's
+`github.token` as `GITHUB_TOKEN` to the check step alone, checks out with
+`persist-credentials: false`, runs in its own non-canceling
+`omnipack-live-check` concurrency group, and is limited to 30 minutes, above
+the command's own 20-minute budget.
 
 A URL that answers 404 or 410 is unreachable: it fails the run and raises an
 issue (see [maintenance alerts](alerts.md)). Packs that cannot be read also

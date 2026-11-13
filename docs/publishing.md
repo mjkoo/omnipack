@@ -13,7 +13,9 @@ effort: GitHub does not guarantee an exact start time or execution of every
 queued trigger.
 
 After each run, a separate workflow mirrors the packed apps' releases to a
-bucket; see the [release archive](archive.md).
+bucket; see the [release archive](archive.md). Another checks that each project
+in the packs just published still answers; see the [live project
+check](source-generation.md#live-project-check).
 
 Nightly publishing is the only writer of the two packs and the README catalog.
 Pull requests carry sources only, and CI fails one that changes those generated

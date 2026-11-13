@@ -13,7 +13,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
-| `live-check` (`live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403; a GitHub project the check reports stale (no qualifying release in 180 days, or none at all) or archived |
+| `live-check` (**Live project check**, `live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403; a GitHub project the check reports stale (no qualifying release in 180 days, or none at all) or archived |
 | `release-archive` (**Release archive**, `archive`) | From `.build/archive/report.json`: a run that cannot read the committed packs or reach its bucket. No target outcome raises a finding, failed ones included; those stay in the run report |
 
 Each owner also has an early-failure finding, titled "<owner> job failed
@@ -166,8 +166,8 @@ recurrence reopens the issue.
 
 - **The alert job fails or issues are disabled.** The red run is the only
   trace; no issue is opened. The alert jobs are `alert` in **Nightly
-  publishing** and in the source maintenance workflow, and `alert-live-check`
-  in **Reviewed source catalog**, and `alert` in **Release archive**. A
+  publishing** and in the source maintenance workflow, `alert-live-check`
+  in **Live project check**, and `alert` in **Release archive**. A
   producer's own verdict never depends on them.
 - **Health lookups that never finish.** A URL whose GitHub lookup fails on
   every run, for example because the token is missing or the API rate limit

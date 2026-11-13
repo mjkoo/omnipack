@@ -307,7 +307,7 @@ def test_sources_run_independent_complete_check_publish_chains():
     }
     assert caller["permissions"] == {}
     assert "concurrency" not in caller
-    assert set(caller["jobs"]) == {*GENERATED, "live-check", "alert-live-check"}
+    assert set(caller["jobs"]) == set(GENERATED)
     for source in GENERATED:
         job = caller["jobs"][source]
         assert job["uses"] == "./.github/workflows/source-maintenance.yml"
@@ -326,8 +326,28 @@ def test_sources_run_independent_complete_check_publish_chains():
         assert job["if"] == GUARD
 
 
+def test_live_check_runs_after_nightly_or_by_hand():
+    workflow = load("live-check.yml")
+    assert triggers(workflow) == {
+        "workflow_run": {
+            "workflows": ["Nightly publishing"],
+            "types": ["completed"],
+            "branches": ["main"],
+        },
+        "workflow_dispatch": None,
+    }
+    assert workflow["permissions"] == {}
+    assert set(workflow["jobs"]) == {"live-check", "alert-live-check"}
+    text = (WORKFLOWS / "live-check.yml").read_text()
+    [ignored] = [line for line in text.splitlines() if "zizmor: ignore" in line]
+    assert ignored.strip() == "workflow_run: # zizmor: ignore[dangerous-triggers]"
+    # It checks the main commit the nightly just published.
+    (checkout,) = action_steps(workflow["jobs"]["live-check"], "actions/checkout")
+    assert checkout["with"]["ref"] == "${{ github.sha }}"
+
+
 def test_live_check_job_reads_only_and_reports_its_findings():
-    job = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())["jobs"][
+    job = yaml.safe_load((WORKFLOWS / "live-check.yml").read_text())["jobs"][
         "live-check"
     ]
     assert (
@@ -377,7 +397,7 @@ def test_live_check_job_reads_only_and_reports_its_findings():
     assert [s for s in job["steps"] if "env" in s] == [check, emit]
     assert check["env"] == {"GITHUB_TOKEN": "${{ github.token }}"}
     assert "GITHUB_TOKEN" not in job.get("env", {})
-    workflow = yaml.safe_load((WORKFLOWS / "source-catalog.yml").read_text())
+    workflow = yaml.safe_load((WORKFLOWS / "live-check.yml").read_text())
     assert "GITHUB_TOKEN" not in workflow.get("env", {})
     runs = " ".join(step.get("run", "") for step in job["steps"])
     for word in ("git", "gh ", "GITHUB_TOKEN", "github.token"):
@@ -438,7 +458,7 @@ def alert_cases():
             "alert",
             {"$SOURCE-check": "check", "$SOURCE-publish": "publish"},
         ),
-        ("source-catalog.yml", "alert-live-check", {"live-check": "live-check"}),
+        ("live-check.yml", "alert-live-check", {"live-check": "live-check"}),
         ("release-archive.yml", "alert", {"release-archive": "archive"}),
     ]
 
@@ -462,7 +482,7 @@ def test_alert_job_holds_only_issue_access_and_reconciles_producer_findings(
     # The caller's group serializes the source alert job; the live check and
     # the archive have their own.
     own_groups = {
-        "source-catalog.yml": "omnipack-live-check-alerts",
+        "live-check.yml": "omnipack-live-check-alerts",
         "release-archive.yml": "omnipack-release-archive-alerts",
     }
     if file in own_groups:
@@ -577,7 +597,7 @@ EMIT_BINDINGS = {
         '"$SOURCE-publish"',
         {"PUBLISH_OUTCOME": "${{ steps.publish.outputs.outcome }}"},
     ),
-    ("source-catalog.yml", "live-check"): (
+    ("live-check.yml", "live-check"): (
         "live-check",
         {"CHECK_RESULT": "${{ steps.check.outcome }}"},
     ),
@@ -621,7 +641,7 @@ def test_producing_jobs_emit_findings_last_and_tolerate_emit_failure(file, job_n
                 "check": {"contents": "read"},
                 "publish": {"contents": "write", "pull-requests": "write"},
             },
-            "source-catalog.yml": {"live-check": {"contents": "read"}},
+            "live-check.yml": {"live-check": {"contents": "read"}},
             "release-archive.yml": {"archive": {"contents": "read"}},
         }[file][job_name]
     )
@@ -656,7 +676,7 @@ def test_findings_uploads_are_unique_and_each_alert_downloads_its_producers():
     downloads = action_steps(source["jobs"]["alert"], "actions/download-artifact")
     assert [d["with"]["name"] for d in downloads] == list(uploads.values())
 
-    catalog = load("source-catalog.yml")
+    catalog = load("live-check.yml")
     live = next(
         s for s in catalog["jobs"]["live-check"]["steps"] if is_findings_upload(s)
     )["with"]["name"]
@@ -674,7 +694,7 @@ def test_findings_uploads_are_unique_and_each_alert_downloads_its_producers():
     (download,) = action_steps(archive["jobs"]["alert"], "actions/download-artifact")
     assert download["with"]["name"] == archived
 
-    # One run holds the codm, Quiver and live-check uploads: all distinct.
+    # Every findings upload across the workflows is distinct.
     run_names = [
         n.replace("${{ inputs.source }}", source_name)
         for source_name in GENERATED
