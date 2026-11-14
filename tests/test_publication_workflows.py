@@ -694,13 +694,13 @@ def test_findings_uploads_are_unique_and_each_alert_downloads_its_producers():
     downloads = action_steps(source["jobs"]["alert"], "actions/download-artifact")
     assert [d["with"]["name"] for d in downloads] == list(uploads.values())
 
-    catalog = load("live-check.yml")
+    live_check = load("live-check.yml")
     live = next(
-        s for s in catalog["jobs"]["live-check"]["steps"] if is_findings_upload(s)
+        s for s in live_check["jobs"]["live-check"]["steps"] if is_findings_upload(s)
     )["with"]["name"]
     assert live == findings_name("live-check")
     (download,) = action_steps(
-        catalog["jobs"]["alert-live-check"], "actions/download-artifact"
+        live_check["jobs"]["alert-live-check"], "actions/download-artifact"
     )
     assert download["with"]["name"] == live
 

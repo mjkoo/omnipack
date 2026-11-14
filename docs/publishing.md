@@ -29,14 +29,17 @@ runs `uv run --no-sync pack check-live` against `main`'s committed packs. It
 starts each time a **Nightly publishing** run completes, whatever that run's
 outcome, so it checks the packs that run just published, or those already on
 `main` when the run failed, and can be dispatched manually with no inputs.
-Source generation itself inspects no project; this job requests each distinct
-pack URL once, with the request headers the entry declares (for example
+Both paths run only for `mjkoo/omnipack` on `main`. [Source
+generation](source-generation.md) itself inspects no project; this job requests
+each distinct pack URL once, with the request headers the entry declares (for example
 `User-Agent: Obtainium/1.0`), and for each GitHub repository URL also looks up
 its update health, as below. It holds only `contents: read`, passes the job's
 `github.token` as `GITHUB_TOKEN` to the check step alone, checks out with
 `persist-credentials: false`, runs in its own non-canceling
 `omnipack-live-check` concurrency group, and is limited to 30 minutes, above
-the command's own 20-minute budget.
+the command's own 20-minute budget. An `alert-live-check` job limited to 10
+minutes then raises and clears [maintenance alert](alerts.md) issues from its
+findings.
 
 A URL that answers 404 or 410 is unreachable: it fails the run and raises an
 issue (see [maintenance alerts](alerts.md)). Packs that cannot be read also
@@ -84,7 +87,6 @@ page is detected only as far as that page's final status allows. When the page
 answers an error status the project is inconclusive (gitlab.com answers 403),
 so an inconclusive URL on such a host may be gone and is worth a look. When it
 answers 2xx the missing project is not detected at all.
-
 
 ## Two-job flow and credential split
 
