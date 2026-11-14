@@ -41,6 +41,15 @@ they are not re-proposed unless something material changes.
   teased by ItsRetroPup (https://github.com/ItsRetroPup) but not yet published.
   Promote once a repository with an Android APK release appears under that
   account and it passes the usual checks.
+- **Metroid Prime (MetroidPrimePort successor)** - formerly
+  https://github.com/Odrannnn/MetroidPrimePort. A native port on the PrimeDecomp
+  decompilation that was in the pack until its author's account was deleted,
+  with no takedown or move announced. Remaining GitHub forks carry the source
+  but no releases, and iChris4/MetroidPrimePortVR, now the fork network's root,
+  ships only a Quest VR build. This entry tracks a successor, so a sweep keeps
+  it while the original stays gone: search for a re-hosted repository or a
+  maintained fork. Promote when one publishes Android APK releases and passes
+  the usual checks, with particular weight on its takedown exposure.
 
 ## Provenance or maturity
 

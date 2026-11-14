@@ -234,14 +234,6 @@
     }
   },
   {
-    "id": "org.metroidprime.port",
-    "url": "https://github.com/Odrannnn/MetroidPrimePort",
-    "name": "Metroid Prime Port",
-    "author": "Odrannnn",
-    "categories": ["Decomps/Recomps"],
-    "additionalSettings": {}
-  },
-  {
     "id": "org.wwhdrecomp.app",
     "url": "https://github.com/GreenNaugahyde/ZeldaWWHDRecompAndroid",
     "name": "Zelda: The Wind Waker HD Recomp",
