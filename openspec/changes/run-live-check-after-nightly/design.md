@@ -67,9 +67,11 @@ morning.
 ### Documentation moves next to nightly publishing
 
 The "Live project check" section lived in `docs/source-generation.md` only
-because the job shared that workflow. It moves to `docs/publishing.md`, after
-the release archive pointer, and the links in `docs/development.md` and
-`docs/alerts.md` follow it.
+because the job shared that workflow. It moves to the end of
+`docs/publishing.md`, with a pointer from the release archive paragraph, and
+the links in `docs/development.md` and `docs/alerts.md` follow it. The
+requirement moves with it, as five requirements, from the source-generation
+capability to nightly-publishing.
 
 ## Risks / Trade-offs
 

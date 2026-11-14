@@ -27,9 +27,11 @@ unflagged for most of a day while users already have it.
 
 Retires the requirement that the daily source catalog workflow runs the live
 check, and the rule that the live check does not wait on a source's runs, which
-no longer applies once the jobs are in separate workflows. Estimated size: three
-modified requirements, one of them renamed, two added scenarios; about 120
-workflow lines moved rather than written, and about 40 test lines changed.
+no longer applies once the jobs are in separate workflows. Estimated size: two
+modified requirements (maintenance-alerts, release-archive) and one requirement
+moved from source-generation to nightly-publishing as five requirements, three
+added scenarios; about 120 workflow lines moved rather than written, and about
+40 test lines changed.
 
 ## Capabilities
 
@@ -39,9 +41,10 @@ None.
 
 ### Modified Capabilities
 
-- `source-generation`: the live-check requirement is renamed and now ties the
-  check to each nightly publishing run's completion and manual dispatch,
-  instead of the daily source catalog workflow.
+- `source-generation`: its live-check requirement is removed, moving to
+  nightly-publishing.
+- `nightly-publishing`: gains five requirements for the live check: its trigger,
+  its read-only job, its reported outcome, its verdict and its alert job.
 - `maintenance-alerts`: the workflows that raise findings now include the live
   project check workflow.
 - `release-archive`: the bucket-credentials requirement now states generally
