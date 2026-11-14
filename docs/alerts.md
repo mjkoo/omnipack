@@ -104,8 +104,8 @@ archive step ran and wrote a readable report.
 ### Stale and archived projects
 
 `pack check-live` reads the newest 100 releases and the archive state of each
-GitHub repository URL that is not unreachable;
-[source generation](source-generation.md#live-project-check) describes which
+GitHub repository URL that is not unreachable; the
+[live project check](publishing.md#live-project-check) describes which
 releases qualify. A stale finding is titled "Project has had no qualifying
 release in 180 days: <url>", with the newest qualifying release's tag and date
 in its details, or "Project has no qualifying release: <url>" when none of

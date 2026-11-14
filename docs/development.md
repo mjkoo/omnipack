@@ -207,8 +207,8 @@ limited, so later URLs read as health inconclusive. The token is sent to no
 other request and never follows a redirect. The command exits nonzero when a URL
 is unreachable, the packs cannot be read, or the report cannot be written,
 whatever the health results, and writes `.build/live-check/report.json` and
-`summary.md` on every run. It changes no committed file; see [source
-generation](source-generation.md#live-project-check) for acting on its findings.
+`summary.md` on every run. It changes no committed file; see the [live project
+check](publishing.md#live-project-check) for acting on its findings.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
