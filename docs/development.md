@@ -207,8 +207,8 @@ limited, so later URLs read as health inconclusive. The token is sent to no
 other request and never follows a redirect. The command exits nonzero when a URL
 is unreachable, the packs cannot be read, or the report cannot be written,
 whatever the health results, and writes `.build/live-check/report.json` and
-`summary.md` on every run. It changes no committed file; see [source
-generation](source-generation.md#live-project-check) for acting on its findings.
+`summary.md` on every run. It changes no committed file; see the [live project
+check](publishing.md#live-project-check) for acting on its findings.
 
 See [pack composition](composition.md) for family selection, policy,
 exclusion, overlay, migration, and rollback behavior.
@@ -225,8 +225,8 @@ See [nightly publishing](publishing.md) for scheduled refreshes, permissions,
 the one-time release bootstrap, failure and rerun behavior, diagnostics, and
 rollback.
 
-See [maintenance alerts](alerts.md) for the issues that scheduled workflows
-open, update and close, and how to mute one.
+See [maintenance alerts](alerts.md) for the issues that the unattended
+workflows open, update and close, and how to mute one.
 
 See [onboarding validation](../openspec/changes/archive/2026-09-10-simplify-pack-onboarding/onboarding-validation.md) for the latest README,
 schedule, tracker-exclusion, and pack verification evidence.

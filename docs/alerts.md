@@ -1,9 +1,10 @@
 # Maintenance alerts
 
-Scheduled workflows open one GitHub issue per problem, update it while the
-problem persists, and close it when a run that re-checked it no longer sees it.
-Issues are the only state: the workflows keep none of their own. Every alert
-issue carries the `omnipack-alert` label, which the first alert job creates.
+The scheduled workflows, and those that run after each nightly, open one GitHub
+issue per problem, update it while the problem persists, and close it when a run
+that re-checked it no longer sees it. Issues are the only state: the workflows
+keep none of their own. Every alert issue carries the `omnipack-alert` label,
+which the first alert job creates.
 
 ## What raises a finding
 
@@ -13,7 +14,7 @@ issue carries the `omnipack-alert` label, which the first alert job creates.
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
-| `live-check` (`live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403; a GitHub project the check reports stale (no qualifying release in 180 days, or none at all) or archived |
+| `live-check` (**Live project check**, `live-check`) | From `.build/live-check/report.json`: packs that cannot be read; a project URL answering 404 or 410; a URL answering another error status that the client does not retry, such as a 403; a GitHub project the check reports stale (no qualifying release in 180 days, or none at all) or archived |
 | `release-archive` (**Release archive**, `archive`) | From `.build/archive/report.json`: a run that cannot read the committed packs or reach its bucket. No target outcome raises a finding, failed ones included; those stay in the run report |
 
 Each owner also has an early-failure finding, titled "<owner> job failed
@@ -104,8 +105,8 @@ archive step ran and wrote a readable report.
 ### Stale and archived projects
 
 `pack check-live` reads the newest 100 releases and the archive state of each
-GitHub repository URL that is not unreachable;
-[source generation](source-generation.md#live-project-check) describes which
+GitHub repository URL that is not unreachable; the
+[live project check](publishing.md#live-project-check) describes which
 releases qualify. A stale finding is titled "Project has had no qualifying
 release in 180 days: <url>", with the newest qualifying release's tag and date
 in its details, or "Project has no qualifying release: <url>" when none of
@@ -166,8 +167,8 @@ recurrence reopens the issue.
 
 - **The alert job fails or issues are disabled.** The red run is the only
   trace; no issue is opened. The alert jobs are `alert` in **Nightly
-  publishing** and in the source maintenance workflow, and `alert-live-check`
-  in **Reviewed source catalog**, and `alert` in **Release archive**. A
+  publishing** and in the source maintenance workflow, `alert-live-check`
+  in **Live project check**, and `alert` in **Release archive**. A
   producer's own verdict never depends on them.
 - **Health lookups that never finish.** A URL whose GitHub lookup fails on
   every run, for example because the token is missing or the API rate limit
@@ -175,6 +176,11 @@ recurrence reopens the issue.
   The run summary lists such URLs with their reasons. A renamed repository's
   API redirect is followed without the token, so its lookup is anonymous and
   more likely to be rate limited until its pack URL is updated.
+- **The live check and the release archive share one API quota.** Both start
+  when a nightly run completes and draw on the repository token's GitHub API
+  quota at the same time. A health lookup that hits the rate limit reads as
+  health inconclusive and raises no finding, so the cost is lost health
+  coverage for that run, never a false issue.
 - **A flake opens an issue and the next clean run closes it.** This costs two
   notifications; it is accepted to keep the workflows stateless.
 - **A queued live check or archive run replaced by a newer one.** Neither
@@ -184,14 +190,14 @@ recurrence reopens the issue.
   closes. Accepted rather than guarded.
 - **A manual re-run of an older alert job.** Re-running an older run's alert job
   after a newer run reconciled can close, reopen or clear the mute of an issue
-  from stale findings. The next scheduled run corrects it, except that a
-  cleared mute must be re-muted by hand. Scheduled runs cannot cause this,
+  from stale findings. The next automatic run corrects it, except that a
+  cleared mute must be re-muted by hand. Automatic runs cannot cause this,
   because each alert job is serialized in a non-canceling concurrency group.
 - **A manual re-run attempt whose producer dies before uploading.** Findings
   artifact names carry only the run ID, so the alert job of a re-run attempt
   whose producer failed before uploading its findings can reconcile the
   previous attempt's file instead. Accepted beside the manual re-run risk
-  above; the next scheduled run corrects it.
+  above; the next automatic run corrects it.
 - **The repository becomes private.** The alert job's checkout holds no
   `contents` permission and relies on the repository being public, so making
   it private fails every alert job visibly, with no issue opened.

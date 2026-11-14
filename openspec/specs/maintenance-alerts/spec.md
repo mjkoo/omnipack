@@ -11,8 +11,9 @@ reach the owner.
 
 ### Requirement: Unattended problems raise findings
 
-The scheduled nightly publishing, source catalog and release archive workflows
-SHALL raise a finding for each of these problems, and for no other outcome:
+The scheduled nightly publishing and source catalog workflows, and the live
+check and release archive workflows that follow each nightly run, SHALL raise
+a finding for each of these problems, and for no other outcome:
 
 - a nightly preparation stage that fails, one finding per stage;
 - a nightly push or release synchronization that fails;

@@ -2,9 +2,9 @@
 the reports the build and live check write.
 
 Each test runs the producing script or writer, resolves the producing job's
-emit-step environment from `nightly.yml` or `source-catalog.yml` the way
-Actions would, then emits and reconciles, so a renamed output, binding or
-report key fails here.
+emit-step environment from `nightly.yml`, `live-check.yml` or
+`release-archive.yml` the way Actions would, then emits and reconciles, so a
+renamed output, binding or report key fails here.
 """
 
 from __future__ import annotations
@@ -258,7 +258,7 @@ def test_live_check_report_from_the_real_writer_raises_gone_and_status_findings(
 
     _run_emit(
         monkeypatch,
-        _emit_step("source-catalog.yml", "live-check"),
+        _emit_step("live-check.yml", "live-check"),
         findings,
         report=tmp_path / REPORT,
         outputs={},
