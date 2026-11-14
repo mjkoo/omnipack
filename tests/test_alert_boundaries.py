@@ -2,9 +2,9 @@
 the reports the build and live check write.
 
 Each test runs the producing script or writer, resolves the producing job's
-emit-step environment from `nightly.yml`, `live-check.yml` or `release-archive.yml` the way
-Actions would, then emits and reconciles, so a renamed output, binding or
-report key fails here.
+emit-step environment from `nightly.yml`, `live-check.yml` or
+`release-archive.yml` the way Actions would, then emits and reconciles, so a
+renamed output, binding or report key fails here.
 """
 
 from __future__ import annotations
