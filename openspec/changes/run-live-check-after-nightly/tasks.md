@@ -18,7 +18,7 @@
 ## 4. Integration checks and review
 
 - [x] 4.1 Run `just test lint-check typecheck format-check` and confirm all pass
-- [ ] 4.2 Run the implementation review the spec-implementation skill requires on the branch diff against main, and fix or record every finding. Verify the review record names no open blocking finding
+- [x] 4.2 Run the implementation review the spec-implementation skill requires on the branch diff against main, and fix or record every finding. Verify the review record names no open blocking finding
 
 ## Workflow follow-up
 
