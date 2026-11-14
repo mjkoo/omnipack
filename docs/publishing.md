@@ -31,8 +31,8 @@ outcome, so it checks the packs that run just published, or those already on
 `main` when the run failed, and can be dispatched manually with no inputs.
 Both paths run only for `mjkoo/omnipack` on `main`. [Source
 generation](source-generation.md) itself inspects no project; this job requests
-each distinct pack URL once, with the request headers the entry declares (for example
-`User-Agent: Obtainium/1.0`), and for each GitHub repository URL also looks up
+each distinct pack URL once, with the request headers the entry declares (for
+example `User-Agent: Obtainium/1.0`), and for each GitHub repository URL also looks up
 its update health, as below. It holds only `contents: read`, passes the job's
 `github.token` as `GITHUB_TOKEN` to the check step alone, checks out with
 `persist-credentials: false`, runs in its own non-canceling
