@@ -12,81 +12,15 @@ each limited to 60 minutes, so they can take about 120 minutes end to end. An
 effort: GitHub does not guarantee an exact start time or execution of every
 queued trigger.
 
-Nightly publishing is the only writer of the two packs and the README catalog.
-Pull requests carry sources only, and CI fails one that changes those generated
-files, so a merged change reaches the packs at the next nightly run; see
-[manual review and PR contents](development.md#manual-review-and-pr-contents).
-
 After each run, a separate workflow mirrors the packed apps' releases to a
 bucket; see the [release archive](archive.md). Another checks that each project
 in the packs just published still answers, as the [live project
 check](#live-project-check) below describes.
 
-## Live project check
-
-The **Live project check** workflow runs a read-only job, `live-check`, which
-runs `uv run --no-sync pack check-live` against `main`'s committed packs. It
-starts each time a **Nightly publishing** run completes, whatever that run's
-outcome, so it checks the packs that run just published, or those already on
-`main` when the run failed, and can be dispatched manually with no inputs.
-Both paths run only for `mjkoo/omnipack` on `main`. [Source
-generation](source-generation.md) itself inspects no project; this job requests
-each distinct pack URL once, with the request headers the entry declares (for
-example `User-Agent: Obtainium/1.0`), and for each GitHub repository URL also looks up
-its update health, as below. It holds only `contents: read`, passes the job's
-`github.token` as `GITHUB_TOKEN` to the check step alone, checks out with
-`persist-credentials: false`, runs in its own non-canceling
-`omnipack-live-check` concurrency group, and is limited to 30 minutes, above
-the command's own 20-minute budget. An `alert-live-check` job limited to 10
-minutes then raises and clears [maintenance alert](alerts.md) issues from its
-findings.
-
-A URL that answers 404 or 410 is unreachable: it fails the run and raises an
-issue (see [maintenance alerts](alerts.md)). Packs that cannot be read also
-fail it. Any other outcome, such as a 403, one of the statuses the HTTP client
-retries (408, 425, 429, 500, 502, 503, 504), a timeout or the URLs left
-unchecked when the budget runs out, is inconclusive: it is listed with its
-reason but does not fail the run. An error status the client does not retry,
-such as a 403, still raises an issue; a status it retries, a timeout or an
-unchecked URL does not.
-
-A GitHub repository URL, one whose normalized project URL is
-`github.com/<owner>/<repo>`, that is not unreachable also gets two GitHub API
-reads, made with the token: the repository and its newest 100 releases. A
-release qualifies when it is not a draft, is a prerelease only if the entry
-sets `includePrereleases`, and carries an asset ending in `.apk`, `.xapk`,
-`.apkm` or `.apks` (or `.zip` when the entry sets `includeZips`); a track-only
-entry needs no such asset. A release is dated by its newest asset when the
-entry sets `useLatestAssetDateAsReleaseDate` and the release has assets, and by
-its publication date otherwise. The URL is stale when its newest qualifying
-release is 180 or more whole days old, Obtainium's default threshold, or when
-none qualifies, and archived when GitHub reports the repository archived or
-disabled. Health uses the settings of the first entry at the URL. A lookup that
-fails for any reason, such as a spent rate limit, is health inconclusive. URLs
-on other hosts, gitlab.com included, get no lookup. Stale, archived and
-health-inconclusive URLs never fail the run; stale and archived URLs raise
-issues as [maintenance alerts](alerts.md) describes.
-
-The run summary lists the unreachable and inconclusive URLs, the stale and
-archived URLs, and the health-inconclusive URLs with their reasons, or the
-error of a failed check, and the `live-check-report-<run id>` artifact keeps
-`.build/live-check/report.json` for 14 days.
-
-The job changes no branch, PR or committed file. To drop a project that is gone,
-the owner confirms the URL by hand and then, in one commit, adds the deny record
-to `config/deny.json` and removes any overlay record or composition pin for that
-URL; the commit carries no packs or README, which nightly publishing rebuilds.
-Because each run checks `main`'s committed packs afresh, the first run after
-that nightly stops failing on that URL, as it does when the project answers
-again. An unreachable HTML-source URL may
-instead mean the project moved its downloads, which a corrected source or extras
-URL fixes.
-
-A host that redirects an anonymous request for a missing project to a sign-in
-page is detected only as far as that page's final status allows. When the page
-answers an error status the project is inconclusive (gitlab.com answers 403),
-so an inconclusive URL on such a host may be gone and is worth a look. When it
-answers 2xx the missing project is not detected at all.
+Nightly publishing is the only writer of the two packs and the README catalog.
+Pull requests carry sources only, and CI fails one that changes those generated
+files, so a merged change reaches the packs at the next nightly run; see
+[manual review and PR contents](development.md#manual-review-and-pr-contents).
 
 ## Two-job flow and credential split
 
@@ -380,3 +314,69 @@ guarantee on-device deletion.
 See [reviewed source generation](source-generation.md) for the separate
 workflow that proposes changes to the committed codm and Quiver catalogs;
 nightly publishing never writes those catalogs or any other configuration.
+
+## Live project check
+
+The **Live project check** workflow runs a read-only job, `live-check`, which
+runs `uv run --no-sync pack check-live` against `main`'s committed packs. It
+starts each time a **Nightly publishing** run completes, whatever that run's
+outcome, so it checks the packs that run just published, or those already on
+`main` when the run failed, and can be dispatched manually with no inputs.
+Both paths run only for `mjkoo/omnipack` on `main`. [Source
+generation](source-generation.md) itself inspects no project; this job requests
+each distinct pack URL once, with the request headers the entry declares (for
+example `User-Agent: Obtainium/1.0`), and for each GitHub repository URL also
+looks up its update health, as below. It holds only `contents: read`, passes the
+job's `github.token` as `GITHUB_TOKEN` to the check step alone, checks out
+with `persist-credentials: false`, runs in its own non-canceling
+`omnipack-live-check` concurrency group, and is limited to 30 minutes, above
+the command's own 20-minute budget. An `alert-live-check` job limited to 10
+minutes then raises and clears [maintenance alert](alerts.md) issues from its
+findings.
+
+A URL that answers 404 or 410 is unreachable: it fails the run and raises an
+issue (see [maintenance alerts](alerts.md)). Packs that cannot be read also
+fail it. Any other outcome, such as a 403, one of the statuses the HTTP client
+retries (408, 425, 429, 500, 502, 503, 504), a timeout or the URLs left
+unchecked when the budget runs out, is inconclusive: it is listed with its
+reason but does not fail the run. An error status the client does not retry,
+such as a 403, still raises an issue; a status it retries, a timeout or an
+unchecked URL does not.
+
+A GitHub repository URL, one whose normalized project URL is
+`github.com/<owner>/<repo>`, that is not unreachable also gets two GitHub API
+reads, made with the token: the repository and its newest 100 releases. A
+release qualifies when it is not a draft, is a prerelease only if the entry
+sets `includePrereleases`, and carries an asset ending in `.apk`, `.xapk`,
+`.apkm` or `.apks` (or `.zip` when the entry sets `includeZips`); a track-only
+entry needs no such asset. A release is dated by its newest asset when the
+entry sets `useLatestAssetDateAsReleaseDate` and the release has assets, and by
+its publication date otherwise. The URL is stale when its newest qualifying
+release is 180 or more whole days old, Obtainium's default threshold, or when
+none qualifies, and archived when GitHub reports the repository archived or
+disabled. Health uses the settings of the first entry at the URL. A lookup that
+fails for any reason, such as a spent rate limit, is health inconclusive. URLs
+on other hosts, gitlab.com included, get no lookup. Stale, archived and
+health-inconclusive URLs never fail the run; stale and archived URLs raise
+issues as [maintenance alerts](alerts.md) describes.
+
+The run summary lists the unreachable and inconclusive URLs, the stale and
+archived URLs, and the health-inconclusive URLs with their reasons, or the
+error of a failed check, and the `live-check-report-<run id>` artifact keeps
+`.build/live-check/report.json` for 14 days.
+
+The job changes no branch, PR or committed file. To drop a project that is gone,
+the owner confirms the URL by hand and then, in one commit, adds the deny record
+to `config/deny.json` and removes any overlay record or composition pin for that
+URL; the commit carries no packs or README, which nightly publishing rebuilds.
+Because each run checks `main`'s committed packs afresh, the first run after
+that nightly stops failing on that URL, as it does when the project answers
+again. An unreachable HTML-source URL may
+instead mean the project moved its downloads, which a corrected source or extras
+URL fixes.
+
+A host that redirects an anonymous request for a missing project to a sign-in
+page is detected only as far as that page's final status allows. When the page
+answers an error status the project is inconclusive (gitlab.com answers 403),
+so an inconclusive URL on such a host may be gone and is worth a look. When it
+answers 2xx the missing project is not detected at all.
