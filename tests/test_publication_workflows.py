@@ -326,21 +326,30 @@ def test_sources_run_independent_complete_check_publish_chains():
         assert job["if"] == GUARD
 
 
-def test_live_check_runs_after_nightly_or_by_hand():
-    workflow = load("live-check.yml")
-    assert triggers(workflow) == {
-        "workflow_run": {
-            "workflows": ["Nightly publishing"],
-            "types": ["completed"],
-            "branches": ["main"],
-        },
-        "workflow_dispatch": None,
-    }
-    assert workflow["permissions"] == {}
-    assert set(workflow["jobs"]) == {"live-check", "alert-live-check"}
-    text = (WORKFLOWS / "live-check.yml").read_text()
+# Workflows that follow each nightly run, or run by hand.
+AFTER_NIGHTLY_TRIGGERS = {
+    "workflow_run": {
+        "workflows": ["Nightly publishing"],
+        "types": ["completed"],
+        "branches": ["main"],
+    },
+    "workflow_dispatch": None,
+}
+
+
+def assert_only_the_run_trigger_is_ignored(name):
+    # The one dangerous trigger is ignored inline, with the reason above it.
+    text = (WORKFLOWS / name).read_text()
     [ignored] = [line for line in text.splitlines() if "zizmor: ignore" in line]
     assert ignored.strip() == "workflow_run: # zizmor: ignore[dangerous-triggers]"
+
+
+def test_live_check_runs_after_nightly_or_by_hand():
+    workflow = load("live-check.yml")
+    assert triggers(workflow) == AFTER_NIGHTLY_TRIGGERS
+    assert workflow["permissions"] == {}
+    assert set(workflow["jobs"]) == {"live-check", "alert-live-check"}
+    assert_only_the_run_trigger_is_ignored("live-check.yml")
     # It checks the main commit the nightly just published.
     (checkout,) = action_steps(workflow["jobs"]["live-check"], "actions/checkout")
     assert checkout["with"]["ref"] == "${{ github.sha }}"
@@ -723,19 +732,9 @@ ARCHIVE_SECRETS = {
 
 def test_release_archive_runs_after_nightly_or_by_hand_and_holds_only_read_access():
     workflow = load("release-archive.yml")
-    assert triggers(workflow) == {
-        "workflow_run": {
-            "workflows": ["Nightly publishing"],
-            "types": ["completed"],
-            "branches": ["main"],
-        },
-        "workflow_dispatch": None,
-    }
+    assert triggers(workflow) == AFTER_NIGHTLY_TRIGGERS
     assert workflow["permissions"] == {}
-    text = (WORKFLOWS / "release-archive.yml").read_text()
-    # The one dangerous trigger is ignored inline, with the reason above it.
-    [ignored] = [line for line in text.splitlines() if "zizmor: ignore" in line]
-    assert ignored.strip() == "workflow_run: # zizmor: ignore[dangerous-triggers]"
+    assert_only_the_run_trigger_is_ignored("release-archive.yml")
 
     job = workflow["jobs"]["archive"]
     assert set(workflow["jobs"]) == {"archive", "alert"}
