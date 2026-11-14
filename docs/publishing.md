@@ -371,9 +371,8 @@ to `config/deny.json` and removes any overlay record or composition pin for that
 URL; the commit carries no packs or README, which nightly publishing rebuilds.
 Because each run checks `main`'s committed packs afresh, the first run after
 that nightly stops failing on that URL, as it does when the project answers
-again. An unreachable HTML-source URL may
-instead mean the project moved its downloads, which a corrected source or extras
-URL fixes.
+again. An unreachable HTML-source URL may instead mean the project moved its
+downloads, which a corrected source or extras URL fixes.
 
 A host that redirects an anonymous request for a missing project to a sign-in
 page is detected only as far as that page's final status allows. When the page
