@@ -5,7 +5,8 @@
 Keeps the raw Obtainium import files and generated README catalog on main
 current through scheduled, verified refreshes. It owns publication credential
 isolation, main-publication outcomes, release synchronization and recoverable
-failure reporting for maintainers.
+failure reporting for maintainers, and the live check that follows each run to
+confirm the published packs' projects still answer.
 
 ## Requirements
 
