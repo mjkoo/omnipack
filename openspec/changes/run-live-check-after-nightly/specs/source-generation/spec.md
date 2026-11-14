@@ -11,8 +11,8 @@
 
 A live check SHALL start when each nightly publishing run completes, whatever
 that run's outcome, and on manual dispatch. It SHALL run `pack check-live`
-against the committed packs of the main commit current when it starts, in the
-canonical repository only, in a job of its own whose token can only read
+against the committed packs of the main commit current when it is triggered, in
+the canonical repository only, in a job of its own whose token can only read
 repository contents, with no write credential and no checkout that persists a
 credential. Its runs SHALL be serialized in their own group without canceling
 active runs. The job's timeout SHALL be 30 minutes, above the command's own

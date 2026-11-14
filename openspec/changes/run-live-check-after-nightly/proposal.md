@@ -28,8 +28,8 @@ unflagged for most of a day while users already have it.
 Retires the requirement that the daily source catalog workflow runs the live
 check, and the rule that the live check does not wait on a source's runs, which
 no longer applies once the jobs are in separate workflows. Estimated size: three
-modified requirements, one of them renamed, three added scenarios; about 120 workflow lines
-moved rather than written, and about 40 test lines changed.
+modified requirements, one of them renamed, two added scenarios; about 120
+workflow lines moved rather than written, and about 40 test lines changed.
 
 ## Capabilities
 
@@ -44,9 +44,9 @@ None.
   instead of the daily source catalog workflow.
 - `maintenance-alerts`: the workflows that raise findings now include the live
   project check workflow.
-- `release-archive`: the bucket secrets are also kept from the live check job,
-  which the requirement covered implicitly while that job was part of the
-  source catalog workflow.
+- `release-archive`: the bucket-credentials requirement now states generally
+  that no job other than the archive job receives the bucket secrets, instead
+  of listing jobs, which also covers the live check job.
 
 ## Impact
 
