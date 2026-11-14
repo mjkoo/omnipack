@@ -1,9 +1,10 @@
 # Maintenance alerts
 
-Scheduled workflows open one GitHub issue per problem, update it while the
-problem persists, and close it when a run that re-checked it no longer sees it.
-Issues are the only state: the workflows keep none of their own. Every alert
-issue carries the `omnipack-alert` label, which the first alert job creates.
+The scheduled workflows, and those that run after each nightly, open one GitHub
+issue per problem, update it while the problem persists, and close it when a run
+that re-checked it no longer sees it. Issues are the only state: the workflows
+keep none of their own. Every alert issue carries the `omnipack-alert` label,
+which the first alert job creates.
 
 ## What raises a finding
 
@@ -189,14 +190,14 @@ recurrence reopens the issue.
   closes. Accepted rather than guarded.
 - **A manual re-run of an older alert job.** Re-running an older run's alert job
   after a newer run reconciled can close, reopen or clear the mute of an issue
-  from stale findings. The next scheduled run corrects it, except that a
-  cleared mute must be re-muted by hand. Scheduled runs cannot cause this,
+  from stale findings. The next automatic run corrects it, except that a
+  cleared mute must be re-muted by hand. Automatic runs cannot cause this,
   because each alert job is serialized in a non-canceling concurrency group.
 - **A manual re-run attempt whose producer dies before uploading.** Findings
   artifact names carry only the run ID, so the alert job of a re-run attempt
   whose producer failed before uploading its findings can reconcile the
   previous attempt's file instead. Accepted beside the manual re-run risk
-  above; the next scheduled run corrects it.
+  above; the next automatic run corrects it.
 - **The repository becomes private.** The alert job's checkout holds no
   `contents` permission and relies on the repository being public, so making
   it private fails every alert job visibly, with no issue opened.
