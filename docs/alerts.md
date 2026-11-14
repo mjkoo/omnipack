@@ -175,6 +175,11 @@ recurrence reopens the issue.
   The run summary lists such URLs with their reasons. A renamed repository's
   API redirect is followed without the token, so its lookup is anonymous and
   more likely to be rate limited until its pack URL is updated.
+- **The live check and the release archive share one API quota.** Both start
+  when a nightly run completes and draw on the repository token's GitHub API
+  quota at the same time. A health lookup that hits the rate limit reads as
+  health inconclusive and raises no finding, so the cost is lost health
+  coverage for that run, never a false issue.
 - **A flake opens an issue and the next clean run closes it.** This costs two
   notifications; it is accepted to keep the workflows stateless.
 - **A queued live check or archive run replaced by a newer one.** Neither
