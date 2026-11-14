@@ -2,8 +2,8 @@
 
 ## 1. Live check workflow
 
-- [ ] 1.1 Carry over commit `f3f592f` from branch `ci/live-check-after-nightly` with `git cherry-pick`. It adds `.github/workflows/live-check.yml` (Nightly publishing `workflow_run` and `workflow_dispatch`, the inline `dangerous-triggers` ignore, the checkout pinned to `${{ github.sha }}`, the `live-check` and `alert-live-check` jobs unchanged), drops those jobs from `.github/workflows/source-catalog.yml`, points the tests at the new file and updates the docs. Verify `tests/test_publication_workflows.py` and `tests/test_alert_boundaries.py` pass, and that actionlint and `zizmor --persona pedantic .github/workflows` report nothing. `test_only_the_release_archive_job_references_the_bucket_secrets` globs every workflow, so its passing shows the live check job holds no `ARCHIVE_S3_*` secret
-- [ ] 1.2 Add a test that the live check job runs whatever the nightly's outcome: the workflow has no `conclusion` filter on either job's `if`. Verify it passes, and that it fails against a copy of the workflow with a conclusion filter added
+- [x] 1.1 Carry over commit `f3f592f` from branch `ci/live-check-after-nightly` with `git cherry-pick`. It adds `.github/workflows/live-check.yml` (Nightly publishing `workflow_run` and `workflow_dispatch`, the inline `dangerous-triggers` ignore, the checkout pinned to `${{ github.sha }}`, the `live-check` and `alert-live-check` jobs unchanged), drops those jobs from `.github/workflows/source-catalog.yml`, points the tests at the new file and updates the docs. Verify `tests/test_publication_workflows.py` and `tests/test_alert_boundaries.py` pass, and that actionlint and `zizmor --persona pedantic .github/workflows` report nothing. `test_only_the_release_archive_job_references_the_bucket_secrets` globs every workflow, so its passing shows the live check job holds no `ARCHIVE_S3_*` secret
+- [x] 1.2 Add a test that the live check job runs whatever the nightly's outcome: the workflow has no `conclusion` filter on either job's `if`. Verify it passes, and that it fails against a copy of the workflow with a conclusion filter added
 
 ## 2. Documentation
 
