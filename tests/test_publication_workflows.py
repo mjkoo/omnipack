@@ -346,6 +346,15 @@ def test_live_check_runs_after_nightly_or_by_hand():
     assert checkout["with"]["ref"] == "${{ github.sha }}"
 
 
+def filters_on_conclusion(workflow):
+    return [n for n, j in workflow["jobs"].items() if "conclusion" in j.get("if", "")]
+
+
+def test_live_check_runs_whatever_the_nightly_outcome():
+    # A failed nightly leaves main's packs in place, and they still get checked.
+    assert filters_on_conclusion(load("live-check.yml")) == []
+
+
 def test_live_check_job_reads_only_and_reports_its_findings():
     job = yaml.safe_load((WORKFLOWS / "live-check.yml").read_text())["jobs"][
         "live-check"
