@@ -355,23 +355,17 @@ def test_live_check_runs_after_nightly_or_by_hand():
     assert checkout["with"]["ref"] == "${{ github.sha }}"
 
 
-def filters_on_conclusion(workflow):
-    return [n for n, j in workflow["jobs"].items() if "conclusion" in j.get("if", "")]
-
-
 def test_live_check_runs_whatever_the_nightly_outcome():
     # A failed nightly leaves main's packs in place, and they still get checked.
-    assert filters_on_conclusion(load("live-check.yml")) == []
+    # Filtering on the outcome means reading the triggering run, which the
+    # inline dangerous-triggers ignore also rules out.
+    assert "github.event.workflow_run" not in (WORKFLOWS / "live-check.yml").read_text()
 
 
 def test_live_check_job_reads_only_and_reports_its_findings():
-    job = yaml.safe_load((WORKFLOWS / "live-check.yml").read_text())["jobs"][
-        "live-check"
-    ]
-    assert (
-        job["if"]
-        == "github.repository == 'mjkoo/omnipack' && github.ref == 'refs/heads/main'"
-    )
+    workflow = load("live-check.yml")
+    job = workflow["jobs"]["live-check"]
+    assert job["if"] == GUARD
     assert job["permissions"] == {"contents": "read"}
     assert job["concurrency"] == {
         "group": "omnipack-live-check",
@@ -415,7 +409,6 @@ def test_live_check_job_reads_only_and_reports_its_findings():
     assert [s for s in job["steps"] if "env" in s] == [check, emit]
     assert check["env"] == {"GITHUB_TOKEN": "${{ github.token }}"}
     assert "GITHUB_TOKEN" not in job.get("env", {})
-    workflow = yaml.safe_load((WORKFLOWS / "live-check.yml").read_text())
     assert "GITHUB_TOKEN" not in workflow.get("env", {})
     runs = " ".join(step.get("run", "") for step in job["steps"])
     for word in ("git", "gh ", "GITHUB_TOKEN", "github.token"):
