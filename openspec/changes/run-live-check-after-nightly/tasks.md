@@ -12,8 +12,8 @@
 
 ## 3. Test tidy-up
 
-- [ ] 3.1 In `tests/test_publication_workflows.py`, define one constant for the after-nightly `workflow_run` triggers and one helper that asserts the single inline `dangerous-triggers` ignore. Use both in the release archive and live check trigger tests. Verify both tests pass and that no duplicated trigger dict remains
-- [ ] 3.2 Reflow the module docstring of `tests/test_alert_boundaries.py` so it names `nightly.yml`, `live-check.yml` and `release-archive.yml` within the line length. Verify `uv run ruff check` and `uv run ruff format --check` pass
+- [x] 3.1 In `tests/test_publication_workflows.py`, define one constant for the after-nightly `workflow_run` triggers and one helper that asserts the single inline `dangerous-triggers` ignore. Use both in the release archive and live check trigger tests. Verify both tests pass and that no duplicated trigger dict remains
+- [x] 3.2 Reflow the module docstring of `tests/test_alert_boundaries.py` so it names `nightly.yml`, `live-check.yml` and `release-archive.yml` within the line length. Verify `uv run ruff check` and `uv run ruff format --check` pass
 
 ## 4. Integration checks and review
 
