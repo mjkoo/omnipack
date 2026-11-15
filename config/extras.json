@@ -326,6 +326,48 @@
     "additionalSettings": {}
   },
   {
+    "id": "io.github.sansnope.marathonrecomp.android",
+    "url": "https://github.com/SansNope/MarathonRecomp-Android",
+    "name": "Sonic the Hedgehog 2006 (Marathon Recompiled)",
+    "author": "SansNope",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.nfsu2.androidevolved",
+    "url": "https://github.com/codepdbh/nfsu2-recompiled",
+    "name": "Need for Speed: Underground 2 (nfsu2-recompiled)",
+    "author": "codepdbh",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.nfsu1.androidevolved",
+    "url": "https://github.com/codepdbh/nfsu1-recompiled",
+    "name": "Need for Speed: Underground (nfsu1-recompiled)",
+    "author": "codepdbh",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "com.nfsmw.android",
+    "url": "https://github.com/codepdbh/nfsmw-android",
+    "name": "Need for Speed: Most Wanted (nfsmw-android)",
+    "author": "codepdbh",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {}
+  },
+  {
+    "id": "org.gt3revisited.gt3r",
+    "url": "https://github.com/matt-pulsipher/GT3-revisited",
+    "name": "Gran Turismo 3 A-Spec (GT3 Revisited)",
+    "author": "matt-pulsipher",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {
+      "apkFilterRegEx": "^(?!.*-quest[.]apk$).*[.]apk$"
+    }
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
