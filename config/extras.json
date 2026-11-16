@@ -336,6 +336,15 @@
     }
   },
   {
+    "id": "dev.nxnative.android.peanuts",
+    "url": "https://github.com/igawa6/peanuts-native",
+    "name": "Peanuts Native",
+    "author": "igawa6",
+    "categories": ["Emulator"],
+    "dualScreen": true,
+    "additionalSettings": {}
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
