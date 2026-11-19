@@ -394,5 +394,53 @@
         "versionDetection": false
       }
     }
+  },
+  {
+    "url": "https://github.com/Bownz/Donkey-Kong-64-Recompiled-Android-DS",
+    "patch": {
+      "id": "io.github.bownz.dk64recomp"
+    }
+  },
+  {
+    "url": "https://github.com/Jreese702/DS-Forever",
+    "patch": {
+      "id": "app.dsforever.companion"
+    }
+  },
+  {
+    "url": "https://github.com/LLCOOLT/paper-cut",
+    "patch": {
+      "id": "dev.ttyd.port.us",
+      "additionalSettings": {
+        "apkFilterRegEx": "^(?!.*-(eu|jp)-android-).*[.]apk$"
+      }
+    }
+  },
+  {
+    "url": "https://github.com/mrmushrooms11/themehospitalthor",
+    "patch": {
+      "id": "org.corsixth.thor"
+    }
+  },
+  {
+    "url": "https://github.com/simonbrtrnd/augustus-thor",
+    "patch": {
+      "id": "io.github.simonbrtrnd.augustusthor"
+    }
+  },
+  {
+    "url": "https://github.com/Skifchara/terraria-dualscreen-companion",
+    "patch": {
+      "id": "com.terraduo.companion",
+      "additionalSettings": {
+        "includePrereleases": true
+      }
+    }
+  },
+  {
+    "url": "https://github.com/ZeldaWWHDRecomp/ZeldaWWHDRecomp",
+    "patch": {
+      "id": "org.wwhdrecomp.wwhd"
+    }
   }
 ]

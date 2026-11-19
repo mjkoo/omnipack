@@ -18,6 +18,11 @@ they are not re-proposed unless something material changes.
   CI artifacts only; releases carry desktop builds. Community forks with APK
   releases are one-off builds that do not follow upstream.
   Promote when an upstream release carries an Android APK.
+- **Dark Cloud (Chronicle Dual Screen)** - https://github.com/SirTobyGirl/Chronicle-Dual-Screen.
+  A fork of the Chronicle decomp port that adds a lower-screen item panel, with
+  source only; neither it nor upstream publishes a release. A catalog lists it,
+  so it is denied meanwhile. Promote, by removing the denial and categorizing
+  it, when a release carries an Android APK.
 - **EarthBound (Phase-Distorter)** - https://github.com/TheRunaway5/Phase-Distorter.
   A PC port with desktop builds only; Android is an open request.
   Promote when a release carries an Android APK.
@@ -112,6 +117,12 @@ they are not re-proposed unless something material changes.
   account with a burst of commits and releases. It requests all-files storage,
   and its install permission serves a self-updater that verifies its own
   signature. Promote when it has a sustained history and outside use.
+- **Lightning Returns: Final Fantasy XIII (ff13-lr-recomp)** - https://github.com/Lazaer-YZY/ff13-lr-recomp.
+  An Xbox 360 recomp published as snapshot commits from a brand-new pseudonymous
+  account, with little outside use. It requests all-files storage, downloads
+  GPU drivers without a digest check and is debug-signed. A catalog lists it,
+  so it is denied meanwhile. Promote, by removing the denial and categorizing
+  it, when it has a sustained history and outside use.
 - **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
   An Android port of the DK64 N64 recomp with one APK per release, from an author
   of many quick ports, with a short burst of largely automated commits and
@@ -273,8 +284,16 @@ they are not re-proposed unless something material changes.
   AI-written and unreviewed, from a small account in a single burst of
   releases. It signs in to Steam with a stored token for achievements, and its
   install permission serves a self-updater without a digest check and an
-  installer for a third-party guide app. Promote when it has a sustained
-  history and outside use.
+  installer for a third-party guide app, and it requests all-files storage. A
+  catalog lists it, so it is denied meanwhile. Promote, by removing the denial
+  and categorizing it, when it has a sustained history and outside use.
+- **Final Fantasy IX (FF9Recomp)** - https://github.com/bhuiyah/ff9-recomp-android.
+  A GPL port from the FF7Recomp author with the same code: it stores a Steam
+  refresh token unencrypted, its self-updater has no digest check and also
+  installs a third-party app, and it requests all-files storage. A catalog
+  lists it, so it is denied meanwhile. Promote, by removing the denial and
+  categorizing it, when it has a sustained history and the updater verifies
+  what it installs.
 - **Star Wars: Rogue Squadron (Rogue Squadron 64 Recompiled)** - https://github.com/MikeSemicolonD/RogueSquadron64Recomp.
   A GPL N64Recomp port with a long single-author, heavily AI-assisted history,
   an Android build in its source tree that requests only internet and vibrate,
