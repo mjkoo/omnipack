@@ -117,7 +117,10 @@ build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
 and SleepManager keep the main app rather than their companion apps (which
 declare their own packages), GameNative keeps the non-XR build, and GT3
 Revisited keeps the phone build rather than the Meta Quest build, which
-declares the same package. Releases
+declares the same package. Paper Cut publishes one APK per disc region, each
+declaring its own package, so its filter excludes the EU and JP builds and its
+id is the US build's. Terraduo Companion flags every release as a prerelease,
+so its entry opts into prereleases. Releases
 whose APKs are alternative builds of one app for different Android versions,
 regions or preferences, such as ARMSX2 and Simpsons Hit and Run,
 keep every alternative, so Obtainium asks which one to install. Filters exclude

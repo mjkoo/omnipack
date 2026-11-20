@@ -149,5 +149,40 @@
     "url": "https://github.com/harmssi/thor-halflife",
     "reason": "On one screen it is Xash3D FWGS with the classic HUD, which the single-screen pack already carries.",
     "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/bhuiyah/ff7-recomp-android",
+    "reason": "A days-old project that stores a Steam refresh token unencrypted, self-updates and installs a third-party APK with no digest check, and requests all-files storage; revisit once it has a sustained history."
+  },
+  {
+    "url": "https://github.com/bhuiyah/ff9-recomp-android",
+    "reason": "A days-old project sharing FF7Recomp's unencrypted Steam token storage, undigested self-updater and third-party APK installer, plus all-files storage; revisit once it has a sustained history."
+  },
+  {
+    "url": "https://github.com/Lazaer-YZY/ff13-lr-recomp",
+    "reason": "A brand-new pseudonymous account publishing snapshot commits with little outside use, requesting all-files storage; revisit once it has a sustained history."
+  },
+  {
+    "url": "https://github.com/SirTobyGirl/Chronicle-Dual-Screen",
+    "reason": "Publishes no APK or release, only source to build yourself, so Obtainium has nothing to install."
+  },
+  {
+    "url": "https://nexusmods.com/stardewvalley/mods/55498",
+    "reason": "A Nexus Mods page for a Stardew Valley SMAPI mod, not an Android app; Obtainium cannot track or install from it."
+  },
+  {
+    "url": "https://github.com/Jreese702/DS-Forever",
+    "reason": "Tested on the AYN Thor only and built around its second-screen companion.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/simonbrtrnd/augustus-thor",
+    "reason": "On one screen it is Augustus with the original layout, which the single-screen pack already carries.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/Skifchara/terraria-dualscreen-companion",
+    "reason": "A second-screen companion that does not run the game, so it has no use on one display.",
+    "packs": ["single"]
   }
 ]
