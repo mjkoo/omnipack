@@ -143,7 +143,7 @@
   },
   {
     "url": "https://github.com/citron-neo/emulator",
-    "reason": "GitHub removed the repository after a DMCA takedown; the project's Android builds are tracked from citron-neo/CI instead."
+    "reason": "GitHub removed the repository after a DMCA takedown."
   },
   {
     "url": "https://github.com/harmssi/thor-halflife",

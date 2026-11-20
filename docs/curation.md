@@ -92,12 +92,6 @@ stable/beta pair sharing a numeric version requires revisiting the policy.
 Cemu uses its release tag rather than its release title, retaining its source
 URL and asset selection. RPCSX retains v20250425 unchanged.
 
-Citron Neo is an explicit extra on the project's `citron-neo/CI` repository,
-whose rolling `nightly-android` release carries the Android builds beside
-other platforms' nightly releases. The release title filter `Android Nightly`
-selects it, and because the tag never changes, the entry turns off version
-detection and versions by the latest asset date.
-
 CTR, Shipwright, Vita3K, XenDroid, Ludashi, Cmod and Mjolnir explicitly
 set only `versionDetection: false`. Their complete source versions remain
 intact. Source polling, installation, background checks and notifications
@@ -121,8 +115,7 @@ intended asset by name.
 Skate 3 Mobile's filter `^(?!.*-debug[.]apk$).*[.]apk$` excludes the debug
 build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
 and SleepManager keep the main app rather than their companion apps (which
-declare their own packages), GameNative keeps the non-XR build, and Citron
-keeps the mainline build rather than the Snapdragon 8 Elite build. Releases
+declare their own packages), and GameNative keeps the non-XR build. Releases
 whose APKs are alternative builds of one app for different Android versions,
 regions or preferences, such as ARMSX2 and Simpsons Hit and Run,
 keep every alternative, so Obtainium asks which one to install. Filters exclude

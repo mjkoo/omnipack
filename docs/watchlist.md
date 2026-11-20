@@ -50,6 +50,15 @@ they are not re-proposed unless something material changes.
   it while the original stays gone: search for a re-hosted repository or a
   maintained fork. Promote when one publishes Android APK releases and passes
   the usual checks, with particular weight on its takedown exposure.
+- **Citron Neo (successor host)** - formerly https://github.com/citron-neo/CI.
+  A Nintendo Switch emulator that was in the pack until GitHub blocked the
+  repository carrying its Android nightly builds under a DMCA notice, along
+  with its forks; the project's source repository had been removed the same way
+  earlier. The project's site still links only to the blocked repositories.
+  This entry tracks a successor, so a sweep keeps it while the original stays
+  blocked: check the project's site for a new release host. Promote when the
+  project publishes Android APK builds from a host that answers and Obtainium
+  can track, with particular weight on its takedown exposure.
 
 ## Provenance or maturity
 
