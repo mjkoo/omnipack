@@ -652,7 +652,7 @@ def test_an_exhausted_budget_leaves_the_rest_not_checked(tmp_path: Path) -> None
         now[0] = 10.0
         inner(path, key)
 
-    world.bucket.upload_file = spend  # ty: ignore[invalid-assignment]
+    world.bucket.upload_file = spend
     write_packs(tmp_path, [entry(), entry("https://github.com/owner/other")])
 
     report = run_archive(
@@ -757,7 +757,7 @@ def test_a_last_upload_that_ends_past_the_deadline_still_writes_the_manifest() -
         if key.endswith("repo.bundle"):
             now[0] = 100.0
 
-    world.bucket.upload_file = slow_bundle  # ty: ignore[invalid-assignment]
+    world.bucket.upload_file = slow_bundle
     [target] = select_targets_for(entry())
 
     report = world.archiver(deadline=50.0).process(target)
