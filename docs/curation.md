@@ -115,7 +115,9 @@ intended asset by name.
 Skate 3 Mobile's filter `^(?!.*-debug[.]apk$).*[.]apk$` excludes the debug
 build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
 and SleepManager keep the main app rather than their companion apps (which
-declare their own packages), and GameNative keeps the non-XR build. Releases
+declare their own packages), GameNative keeps the non-XR build, and GT3
+Revisited keeps the phone build rather than the Meta Quest build, which
+declares the same package. Releases
 whose APKs are alternative builds of one app for different Android versions,
 regions or preferences, such as ARMSX2 and Simpsons Hit and Run,
 keep every alternative, so Obtainium asks which one to install. Filters exclude
