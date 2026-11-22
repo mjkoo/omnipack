@@ -84,7 +84,7 @@ they are not re-proposed unless something material changes.
   for it: a smaller feature set, a short AI-written history, and accessibility
   service plus Shizuku access. Promote as an optional alternative to Wayfinder
   once it has a sustained release history and outside use.
-- **New Super Mario Bros. Wii (NSMBW Recompiled)** - https://github.com/WitherBlitz/NSMB-Wii-Multiplayer-Recompilation.
+- **New Super Mario Bros. Wii (NSMBW Recompiled)** - https://github.com/WitherBlitz/NSMB-Wii-Recompilation.
   A GPL static recomp on WiiCompiled and aurora with one APK per release and
   outside contributors, but a young, almost entirely AI-written history in which
   releases have been pulled for game-breaking bugs. Its install permission
@@ -93,7 +93,7 @@ they are not re-proposed unless something material changes.
 - **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
   `config/deny.json`. Releases now install over one another under one signing
   key, and its notes report Super Mario Galaxy booting on an AYN Thor, but it
-  has grown into a multi-game Wii hub that ships Nintendo's own menu music, HUD
+  has grown into a multi-game Wii and GameCube hub that ships Nintendo's own menu music, HUD
   art and cover scans, bundles a large mod patch, and in stable releases adds a
   Brawl engine, with Brawl content generated from the user's own disc but
   redistribution permission for the engine unrecorded. It requests all-files storage, and
@@ -123,13 +123,6 @@ they are not re-proposed unless something material changes.
   GPU drivers without a digest check and is debug-signed. A catalog lists it,
   so it is denied meanwhile. Promote, by removing the denial and categorizing
   it, when it has a sustained history and outside use.
-- **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
-  An Android port of the DK64 N64 recomp with one APK per release, from an author
-  of many quick ports, with a short burst of largely automated commits and
-  little outside use; development went quiet after its first releases.
-  Promote when new APK releases show sustained maintenance and the project gains
-  outside use.
-
 - **Skies of Arcadia Legends: Recompiled** - https://github.com/ogdanimal/SkiesOfArcadiaLegends-Recomp.
   A GPL GameCube static recomp on a patched Dolphin Android app, by the author
   of the Goemon and Hybrid Heaven recomps, with one APK per release and a pinned
@@ -165,17 +158,14 @@ they are not re-proposed unless something material changes.
   Android support initial and unvalidated on devices.
   Promote when the documentation no longer describes Android as initial or as
   needing device validation.
-- **Sonic R (sonic-r-android)** - https://github.com/ZinexDa/sonic-r-android.
-  An Android port of the Sonic R PC decompilation under that project's
-  noncommercial license, from a small single-author account, with one
-  debug-signed APK per release under a stable asset name.
-  Promote when the history is sustained.
 - **God of War III (gow3_android)** - https://github.com/zFitness/gow3_android.
   A GPL fork of gow3_pc (now SpartanPort) on FEXCore and the shadPS4 renderer
   with wide outside use. Its standalone APK releases changed package id and
   signing key repeatedly and have stopped; the port now ships as a package
   imported into the author's nixport host app, whose alpha APK releases come
-  from a repository with no published source yet. Promote when a release
+  from a repository with no published source yet, under the package id
+  `ro.cobrabm.fexdroid`, whose origin is unclear, and request all-files storage
+  and package installation. Promote when a release
   carries a trackable Android APK whose package id and signing key hold across
   several releases; Sony trademark and takedown exposure is the owner's call.
 - **Ninja Gaiden Black Recompiled** - https://github.com/gamboozino/ngbrecomp.
@@ -207,10 +197,12 @@ they are not re-proposed unless something material changes.
 - **Midnight Club: Los Angeles (mcla-recomp-rv)** - https://github.com/gabrielbskk/mcla-recomp-rv.
   A GPL Android port built on holdmysocks/mcla-recomp, moved to a new
   repository after the earlier one was deleted, with a short, single-author
-  history. Its only regular release sits on a fixed tag whose APK name carries
-  no version, it is signed with a debug certificate, diagnostic prereleases
-  share the repository, and it supports Snapdragon and Adreno only, tested
-  mainly on one phone. Promote when it has a sustained history with versioned
+  history; its source now lives in a separate repository,
+  https://github.com/gabrielbskk/mcla-recomp-source. Its regular release is
+  signed with a debug certificate, experimental, diagnostic and device-specific
+  builds share the repository, development was announced as paused and then
+  resumed, and it supports Snapdragon and Adreno only, tested mainly on one
+  phone. Promote when it has a sustained history with versioned
   releases signed with a release key.
 - **Elder Scrolls 3 Morrowind (OpenMW-DS Duo Lite)** - https://github.com/SergeShack/OpenMW-DS.
   A GPL fork of Josh-Daniels/OpenMW-DS, the dual-screen OpenMW build already in
@@ -252,16 +244,9 @@ they are not re-proposed unless something material changes.
   Kingdom fork of it) waits on the same terms.
   Promote when a release that is not a prerelease carries the APK.
 - **Super Mario All-Stars (SuperMarioAllStars)** - https://github.com/Darhkfox/SuperMarioAllStars.
-  A native port that runs from the user's own SNES ROM, with an Android APK
-  beside PC builds in each release, from a small account in a single burst of
-  commits. Promote when it has a sustained history.
-- **Persona 5 Royal (p5r-android)** - https://github.com/Brandon04Gonzalez/p5r-android.
-  An MIT native runner for the user's own Switch dump and keys, built on
-  BelmanteGu's SwitchGamesRecomp runtime, with one APK per release under a fixed
-  asset name, from an account that also maintains other Switch port
-  repositories, in a young burst of commits. It requests all-files storage for
-  game data. The same account's nier-android (NieR:Automata) waits on the same
-  terms. Promote when it has a sustained history.
+  An MIT native port that runs from the user's own SNES ROM, with an Android
+  APK beside PC builds in each release, signed with a debug certificate, from a
+  small account in a single burst of commits. Promote when it has a sustained history.
 - **Banjo-Tooie (Tooie Recompiled)** - https://github.com/Frostie77/Tooie-Recompiled.
   An N64Recomp and RT64 port, well documented with device reports and only the
   internet permission, but from a brand-new account in a single burst of
@@ -274,8 +259,8 @@ they are not re-proposed unless something material changes.
   sustained history.
 - **Raitchi** - https://github.com/igawa6/Raitchi.
   An experimental runtime that runs Switch games natively with an Eden-derived
-  frontend, with one APK per release beside source and documentation files;
-  every release is a prerelease and most listed games only boot. Promote when
+  frontend, with one APK per release beside source and documentation files,
+  signed with a local test certificate; every release is a prerelease and most listed games only boot. Promote when
   it leaves the experimental stage with a release that is not a prerelease.
 - **Final Fantasy VII (FF7Recomp)** - https://github.com/bhuiyah/ff7-recomp-android.
   A GPL static recomp of the Steam PC game on pcrecomp and FFNx, compiled on the
@@ -302,8 +287,8 @@ they are not re-proposed unless something material changes.
 - **Delphis** - https://github.com/HiramRG/Delphis.
   An AYN Thor companion that sets Dolphin controls per game and shows a button
   guide on the bottom screen, from a brand-new, entirely AI-written repository
-  with no stated license. It publishes a single rolling `latest` release
-  carrying a release and a debug APK, and it requests an accessibility service
+  with no stated license. It publishes rolling `latest` and `beta` releases,
+  each carrying one APK with a checksum file, and it requests an accessibility service
   plus self-update permissions. Promote when it states a license, publishes
   versioned releases and has a sustained history.
 - **Boxshelf** - https://github.com/sassiestrhihno/boxshelf-beta.
@@ -338,9 +323,18 @@ they are not re-proposed unless something material changes.
 - **Xenra** - https://github.com/Yebot32/xenra.
   A GPL Original Xbox and Xbox 360 emulator on xemu and Xenia Edge, with one
   APK per release, split between two accounts, that once sold a Patreon-gated
-  build. Its released package id has changed and no longer matches the one in
-  the repository. Promote when the package id holds across several releases
-  and matches the source, and the ownership is settled.
+  build. Its released package id keeps changing and does not match the one in
+  the repository, whose app source no longer follows the releases. Promote when
+  the package id holds across several releases, releases are built from the
+  published source, and the ownership is settled.
+- **Spore (spore-re)** - https://github.com/VinTeRuS/spore-re.
+  A static x86 recomp of the PC game on the author's own Win32 and D3D9 layer,
+  run from the user's own copy, from an established account. Releases carry
+  two APKs (Vulkan 1.3 and Vulkan 1.1 builds sharing one package id), there is
+  no license file, APKs are debug-signed, and the history is single-author and
+  early-stage, tested on one phone. It requests all-files storage for its game
+  folder. Promote when it has a sustained history and releases keep installing
+  over one another.
 
 ## Declined
 
@@ -376,4 +370,12 @@ they are not re-proposed unless something material changes.
   A fork of the Wind Waker HD recomp already in both packs that reuses its
   package id, with a signing key that has changed across releases.
 - **hakuX-Advanced** - https://github.com/Jdewitz/hakuX-Advanced. An
-  experimental fork of hakuX, already in both packs, that reuses its package id.
+  experimental fork of hakuX, already in both packs. Its builds now carry their
+  own package id, with a `.themes` suffix set on the debug build type, so it
+  could sit beside hakuX; it has not been vetted as a separate app.
+- **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
+  Went quiet after its first releases; the game is covered by the DK64
+  Recompiled DS port in both packs.
+- **Persona 5 Royal (p5r-android) and NieR:Automata (nier-android)** - https://github.com/Brandon04Gonzalez/p5r-android
+  and https://github.com/Brandon04Gonzalez/nier-android. Maintenance stopped by
+  their author.

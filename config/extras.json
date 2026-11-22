@@ -368,6 +368,13 @@
     }
   },
   {
+    "id": "org.sonicr.android",
+    "url": "https://github.com/ZinexDa/sonic-r-android",
+    "name": "Sonic R (sonic-r-android)",
+    "author": "ZinexDa",
+    "categories": ["Decomps/Recomps"]
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
