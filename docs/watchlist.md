@@ -335,6 +335,42 @@ they are not re-proposed unless something material changes.
   early-stage, tested on one phone. It requests all-files storage for its game
   folder. Promote when it has a sustained history and releases keep installing
   over one another.
+- **Thor Command Panel** - https://github.com/BrianJr03/command-panel.
+  A GPL replacement for the AYN Thor's stock dual-screen assistant, by the
+  author of Jarngreipr, with two APKs per release (the panel and a separate
+  save-clip trigger app). It runs a root shell through the Thor's vendor
+  service, writes secure settings, and its install permission serves a
+  self-updater without a digest check and installers for the author's other
+  apps. The history is a single-author burst. Promote when it has a sustained
+  release history; its reach makes it worth an owner look before it is
+  offered beside Wayfinder.
+- **Resident Evil 4 Wii (RE4Wii-Android)** - https://github.com/PotatoRecomp/RE4Wii-Android.
+  A GPL static recomp on WiiCompiled, run from the user's own disc, with one
+  APK per release, from a brand-new organization with an entirely AI-written
+  history. Release builds are signed with a debug key, it requests all-files
+  storage, and its install permission serves a self-updater that checks
+  GitHub's asset digest. The same organization's DefJam-FFNY-Android waits on
+  the same terms. Promote when the history is sustained and releases are
+  signed with a release key.
+- **GTA Liberty City Stories and Vice City Stories (gta-stories-recompiled)** - https://github.com/batinium/gta-stories-recompiled.
+  A GPL port built on gta-vcs-recomp and PS2Recomp from an established
+  account, with one APK per release beside desktop builds and a history of
+  release snapshots only. The APK is a runtime; the game library is built on a
+  PC from the user's disc and imported. Its install permission serves an
+  updater that checks the published digest and signing key. Promote when the
+  history is sustained; Rockstar takedown exposure is the owner's call.
+- **Metroid: Samus Returns (msr2ds)** - https://github.com/gminustwo/msr2ds.
+  A GPL native port recompiled from the user's own 3DS dump, with one APK per
+  release beside desktop builds and only the vibrate permission, from a very
+  new, heavily AI-assisted account with a few outside contributors. Its README
+  says the developers have no Android device to test on, and the Android game
+  code is built on a PC first. Promote when Android is tested and the history
+  is sustained.
+- **Age of Kings (Thor AoK)** - https://github.com/harmssi/thor-aok.
+  An MIT fork of openaok, keeping upstream history, by the author of the Thor
+  Diablo II and Half-Life ports in the packs, with one APK per release and
+  only internet and vibrate. Game data is converted on a PC from the user's
+  copy. The history is short. Promote when it has a sustained release history.
 
 ## Declined
 
@@ -379,3 +415,6 @@ they are not re-proposed unless something material changes.
 - **Persona 5 Royal (p5r-android) and NieR:Automata (nier-android)** - https://github.com/Brandon04Gonzalez/p5r-android
   and https://github.com/Brandon04Gonzalez/nier-android. Maintenance stopped by
   their author.
+- **Final Fantasy IX deck (Thor FF IX)** - https://github.com/harmssi/thor-ffix.
+  Needs a patched game DLL shipped in each release and installed by script,
+  beyond an APK.
