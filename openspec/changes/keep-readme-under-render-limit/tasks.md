@@ -31,7 +31,7 @@
 
 ## 3. Integration check
 
-- [ ] 3.1 Run `uv run pack build`, confirm the rendered README is under 460,800
+- [x] 3.1 Run `uv run pack build`, confirm the rendered README is under 460,800
   bytes and every catalog row still has its "Add to Obtainium" links, run
   `uv run pack verify` and the full `uv run pytest`, then discard the rebuilt
   `dist/` and README so the branch carries sources only
