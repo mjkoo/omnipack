@@ -34,8 +34,8 @@ app record exactly: for GitHub and GitLab entries it recovers the record minus
 default-valued settings. It retires nothing else.
 
 Estimated size: two modified requirements in readme-catalog, one each in
-maintenance-alerts and pack-verification, and about five scenarios; about 50 implementation lines and
-60 test lines.
+maintenance-alerts and pack-verification, and about five scenarios; about 50
+implementation lines and 60 test lines.
 
 ## Capabilities
 

@@ -46,8 +46,9 @@ The link for an entry whose `overrideSource` is GitHub or GitLab carries its
 `additionalSettings` with each key removed whose value equals that source's
 entry in the defaults table the renderer already uses. The trimmed settings are
 re-serialized in the same compact form; every other record field is untouched.
-A record whose settings are not a string holding a JSON object is linked
-unchanged. A value equals a default only when both have the same JSON type as
+A record whose settings are not a string holding a JSON object, or whose
+trimmed settings cannot be re-encoded as UTF-8 (a lone surrogate escape), is
+linked unchanged. A value equals a default only when both have the same JSON type as
 well as the same value, so a `0` is never trimmed against a `false` default
 even though Python's `==` treats them as equal.
 

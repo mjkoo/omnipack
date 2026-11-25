@@ -70,7 +70,9 @@ Each link SHALL use the documented Obtainium HTTPS redirect with an app deep lin
 carrying the final exported JSON object, except that for an entry whose source
 type is GitHub or GitLab, each additionalSettings key whose value equals that
 source's value in omnipack's committed settings defaults table SHALL be left
-out. Decoding the redirect parameter and deep-link payload SHALL recover every
+out. An entry whose additionalSettings string does not decode to a JSON object,
+or whose trimmed settings cannot be re-encoded as UTF-8, SHALL be linked with
+its settings unchanged. Decoding the redirect parameter and deep-link payload SHALL recover every
 other field and setting exactly, preserving field types, unknown fields and
 string-valued additionalSettings. Pack-wide settings SHALL NOT be included. Link
 generation SHALL be deterministic and network-free.
@@ -94,8 +96,9 @@ generation SHALL be deterministic and network-free.
 - **THEN** decoding its link recovers the entry exactly, those settings
   included
 
-#### Scenario: A GitHub entry's settings are not a JSON object
+#### Scenario: A GitHub entry's settings cannot be trimmed
 
 - **WHEN** a GitHub entry's additionalSettings string does not decode to a JSON
-  object
+  object, or decodes to one holding a lone surrogate escape that UTF-8 cannot
+  encode
 - **THEN** decoding its link recovers the entry exactly
