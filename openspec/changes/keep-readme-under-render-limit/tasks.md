@@ -9,8 +9,9 @@
   default-valued setting are absent from the decoded link while their other
   settings survive, and the HTML redirect fixture still round-trips exactly
   (`uv run pytest tests/test_catalog.py`)
-- [ ] 1.2 Record in the `settings_defaults.py` docstring that the GitHub and
-  GitLab defaults were checked against Obtainium v1.7.5's form defaults, and
+- [ ] 1.2 Record in the `settings_defaults.py` docstring that every listed
+  GitHub and GitLab value equals what Obtainium v1.7.5 uses when the key is
+  absent, and
   why catalog links depend on them; verify the docstring reads correctly
   without any other document
 

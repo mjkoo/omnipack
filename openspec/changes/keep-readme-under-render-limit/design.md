@@ -15,8 +15,8 @@ approach:
   reads the settings as sent. For HTML, an import migration reads the original
   settings, so an omitted HTML setting is not guaranteed to import as its
   default.
-- omnipack's GitHub and GitLab defaults table matches Obtainium v1.7.5's form
-  defaults key for key.
+- Every value omnipack's GitHub and GitLab defaults table lists equals what
+  Obtainium v1.7.5 uses when that key is absent.
 - The build renders the README in memory before it writes `.build/report.json`,
   and the nightly's alert step turns build report fields into `build/` findings.
   Every successful build report re-checks all `build/` keys, so a key a later
@@ -94,9 +94,9 @@ re-check scope closes the issue when a successful nightly records `null`.
 
 - [Obtainium changes a GitHub or GitLab default] → A trimmed link would import
   the new default where the pack holds the old value. The packs keep the full
-  records, the defaults table's docstring records the version it was checked
-  against, and the same table already governs what the packs render, so a
-  default change needs that table updated in any case.
+  records and the defaults table's docstring records the version it was checked
+  against, but nothing forces the table to follow Obtainium; this drift risk is
+  accepted, with no recurring check.
 - [GitHub changes its render limit] → The threshold is one constant; the alert
   documentation names the limit it guards.
 - [Growth outpaces the warning] → At about 1.5 KiB per new app, 50 KiB of

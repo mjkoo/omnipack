@@ -6,8 +6,8 @@
 
 Each link SHALL use the documented Obtainium HTTPS redirect with an app deep link
 carrying the final exported JSON object, except that for an entry whose source
-type is GitHub or GitLab, each additionalSettings key whose value equals the
-default Obtainium applies to an omitted setting of that source SHALL be left
+type is GitHub or GitLab, each additionalSettings key whose value equals that
+source's value in omnipack's committed settings defaults table SHALL be left
 out. Decoding the redirect parameter and deep-link payload SHALL recover every
 other field and setting exactly, preserving field types, unknown fields and
 string-valued additionalSettings. Pack-wide settings SHALL NOT be included. Link
@@ -20,8 +20,8 @@ generation SHALL be deterministic and network-free.
 
 #### Scenario: A GitHub entry carries default-valued settings
 
-- **WHEN** a GitHub entry's additionalSettings hold one setting at Obtainium's
-  default for GitHub and one setting at another value
+- **WHEN** a GitHub entry's additionalSettings hold one setting at its value
+  in the GitHub defaults table and one setting at another value
 - **THEN** decoding its link recovers the entry without the default-valued
   setting, with the other setting and every other field unchanged
 
