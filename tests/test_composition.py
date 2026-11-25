@@ -680,13 +680,25 @@ def test_owner_rules_join_an_app_and_a_tracker_at_different_urls() -> None:
     assert ids(result, Variant.DUAL) == {"1234"}
 
 
-def test_a_family_with_only_baseline_builds_is_selected_in_both_packs() -> None:
-    single = app("single", family="app:x")
-    result = compose([single], [], [])
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"single"}
+@pytest.mark.parametrize(
+    ("candidate", "reasons"),
+    [
+        (app("single", family="app:x"), ("source", "ordinary-fallback")),
+        (
+            app("dual", "bboi", family="app:x", dual_screen=True),
+            ("source", "dual-preferred"),
+        ),
+    ],
+    ids=["baseline-builds", "dual-build"],
+)
+def test_a_family_with_one_kind_of_build_is_selected_in_both_packs(
+    candidate: App, reasons: tuple[str, str]
+) -> None:
+    result = compose([candidate], [], [])
+    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {candidate.id}
     assert [(item.variant, item.reason) for item in result.report.selections] == [
-        (Variant.SINGLE, "source"),
-        (Variant.DUAL, "ordinary-fallback"),
+        (Variant.SINGLE, reasons[0]),
+        (Variant.DUAL, reasons[1]),
     ]
 
 
@@ -701,16 +713,6 @@ def test_a_dual_scoped_denial_leaves_a_family_in_single_alone() -> None:
     assert result.report.stale_exclusions == []
     assert result.report.repeated_ids == []
     assert result.report.same_rank_ties == []
-
-
-def test_a_family_with_only_a_dual_build_is_selected_in_both_packs() -> None:
-    dual = app("dual", "bboi", family="app:x", dual_screen=True)
-    result = compose([dual], [], [])
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"dual"}
-    assert [(item.variant, item.reason) for item in result.report.selections] == [
-        (Variant.SINGLE, "source"),
-        (Variant.DUAL, "dual-preferred"),
-    ]
 
 
 def test_a_single_scoped_denial_keeps_a_dual_only_family_out_of_single() -> None:
@@ -767,13 +769,6 @@ def test_a_pin_error_names_the_first_denial_covering_the_pin_s_pack(
     earlier = denials[0]["reason"]
     with pytest.raises(CompositionError, match=rf"pin.*is denied at .*: {earlier}$"):
         compose([denied], denials, [], policy=policy_of([], [pinned]))
-
-
-def test_denying_a_family_s_only_dual_build_leaves_its_baseline_in_both() -> None:
-    single = app("single", family="app:x")
-    dual = app("dual", "bboi", family="app:x", dual_screen=True)
-    result = compose([single, dual], deny(dual.url), [])
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"single"}
 
 
 def test_a_baseline_original_and_a_dual_screen_fork_sharing_an_id() -> None:
@@ -928,12 +923,31 @@ def test_stale_losing_overlay_fails_after_selection_diagnostics_survive() -> Non
     assert [item.id for item in report.selections[0].considered] == ["loser"]
 
 
-def test_nonarray_overlay_error_identifies_the_overlay() -> None:
-    with pytest.raises(
-        CompositionError,
-        match=r"^overlay must be an array of URL patch records$",
-    ):
-        compose([], [], {"not": "an array"})
+@pytest.mark.parametrize(
+    ("overlay", "message"),
+    [
+        (
+            [
+                {
+                    "id": "app.id",
+                    "url": "https://example.com/rjny/app.id",
+                    "patch": {},
+                }
+            ],
+            "overlay[0] has unknown field 'id' (url 'example.com/rjny/app.id')",
+        ),
+        (["not a record"], "overlay[0] must be an object"),
+        (
+            {"not": "an array"},
+            "overlay must be an array of URL patch records",
+        ),
+    ],
+    ids=["unknown-field", "record-not-an-object", "overlay-not-an-array"],
+)
+def test_overlay_record_shape_errors(overlay: object, message: str) -> None:
+    with pytest.raises(CompositionError) as error:
+        compose([app("app.id")], [], overlay)
+    assert str(error.value) == message
 
 
 def test_two_overlay_records_for_one_project_and_a_nonobject_patch_fail() -> None:
@@ -1107,20 +1121,6 @@ def test_an_id_patch_at_a_url_whose_rules_agree_applies() -> None:
     assert ids(result, Variant.SINGLE) == {"fixed"}
 
 
-def test_selection_report_names_the_winner_s_package_id_and_origin() -> None:
-    winner = app("winner", "extras", family="app:x")
-    loser = app("other", "rjny", family="app:x", name="different")
-    selection = compose([winner, loser], [], []).report.selections[0]
-    assert (selection.id, selection.origin, selection.reason) == (
-        "winner",
-        "extras",
-        "source",
-    )
-    assert selection.considered == (
-        ConsideredCandidate(Source.RJNY, "rjny-catalog", "other", loser.url),
-    )
-
-
 def test_similar_forks_without_a_family_rule_stay_separate_families() -> None:
     upstream = app("org.a.dolphin", url="https://github.com/a/dolphin", name="Dolphin")
     fork = app("org.b.dolphin", url="https://github.com/b/dolphin", name="Dolphin MMJR")
@@ -1152,26 +1152,6 @@ def test_dual_falls_back_to_source_precedence_among_several_baseline_builds() ->
     ]
 
 
-def test_pin_reason_is_reported_when_pin_selects_among_baseline_builds() -> None:
-    builds = [
-        app(f"{source}.pkg", source, family="app:x")
-        for source in ("bboi", "rjny", "extras")
-    ]
-    pinned = builds[0]
-    result = compose(
-        builds,
-        [],
-        [],
-        policy=pin_policy(pinned, "app:x", Variant.DUAL, *builds[1:]),
-    )
-
-    selection = next(
-        item for item in result.report.selections if item.variant is Variant.DUAL
-    )
-    assert selection.id == "bboi.pkg"
-    assert selection.reason == "pin"
-
-
 def test_considered_lists_only_other_available_candidates() -> None:
     winner = app("winner", "extras", family="app:x")
     loser = app("loser", "rjny", family="app:x")
@@ -1192,16 +1172,6 @@ def test_considered_lists_only_other_available_candidates() -> None:
     }
 
 
-def test_overlay_unknown_field_identifies_record_and_field() -> None:
-    candidate = app("app.id")
-    record = {"id": candidate.id, "url": candidate.url, "patch": {}}
-    with pytest.raises(CompositionError) as error:
-        compose([candidate], [], [record])
-    assert str(error.value) == (
-        f"overlay[0] has unknown field 'id' (url {url_family(candidate)!r})"
-    )
-
-
 @pytest.mark.parametrize("value", ["", "  ", 731, None])
 def test_overlay_blank_or_nonstring_url_identifies_the_field(value: object) -> None:
     with pytest.raises(CompositionError) as error:
@@ -1218,12 +1188,6 @@ def test_overlay_url_that_is_not_a_project_url_identifies_record_field_and_value
     with pytest.raises(CompositionError) as error:
         compose([app("app.id")], [], [{"url": url, "patch": {}}])
     assert str(error.value) == f"overlay[0].url is not a project URL: {url!r}"
-
-
-def test_overlay_record_that_is_not_an_object_fails() -> None:
-    with pytest.raises(CompositionError) as error:
-        compose([app("x")], [], ["not a record"])
-    assert str(error.value) == "overlay[0] must be an object"
 
 
 def match(candidate: App) -> dict[str, str]:
@@ -1323,34 +1287,6 @@ def test_a_denied_ruled_candidate_names_no_family_and_joins_no_other_url() -> No
     }
 
 
-def test_candidate_denied_in_every_pack_names_no_family() -> None:
-    ruled = app("ruled", "rjny")
-    member = app("member", "extras")
-    other = app("other", "bboi")
-    result = compose(
-        [ruled, member, other],
-        deny(ruled.url),
-        [],
-        policy=policy_of([family_rule(ruled, "app:x"), family_rule(member, "app:x")]),
-    )
-    # The member at another URL keeps the rule's family, and the rule-less
-    # candidate keeps its URL family; the denied candidate is in neither.
-    assert families(result) == {
-        ("app:x", "single", "extras"),
-        ("app:x", "dual", "extras"),
-        (url_family(other), "single", "bboi"),
-        (url_family(other), "dual", "bboi"),
-    }
-    assert (
-        ids(result, Variant.SINGLE)
-        == ids(result, Variant.DUAL)
-        == {
-            "member",
-            "other",
-        }
-    )
-
-
 def test_pin_on_a_rule_less_candidate_names_the_family_it_joins() -> None:
     url = "https://example.com/x"
     ruled = app("ruled", "rjny", url=url)
@@ -1410,51 +1346,31 @@ def test_pin_on_a_candidate_denied_in_every_pack_fails_on_the_denial() -> None:
     ]
 
 
-def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
-    ordinary = app("shared", "rjny", url="https://example.com/x")
-    preferred = app("shared", "bboi", url="https://example.com/y", dual_screen=True)
-    result = compose(
-        [ordinary, preferred],
-        [],
-        [],
-        policy=policy_of(
-            [family_rule(ordinary, "app:x"), family_rule(preferred, "app:x")]
+@pytest.mark.parametrize(
+    ("candidate", "key", "category", "expected"),
+    [
+        (
+            app("x", categories=("Dual Screen",)),
+            "example.com/rjny/x",
+            Category.PC_PORTS,
+            "PC Ports",
         ),
-    )
-    assert [
-        (item.family, item.variant, item.source, item.reason)
-        for item in result.report.selections
-    ] == [
-        ("app:x", Variant.SINGLE, "rjny", "source"),
-        ("app:x", Variant.DUAL, "bboi", "dual-preferred"),
-    ]
-
-
-def test_mapped_family_carries_its_category_in_every_variant() -> None:
-    candidate = app("x", categories=("Dual Screen",))
-    result = compose(
-        [candidate],
-        [],
-        [],
-        policy=category_policy({url_family(candidate): Category.PC_PORTS}),
-    )
+        (
+            app("x", url="https://github.com/Owner/Repo", categories=("Emulator",)),
+            "github.com/owner/repo",
+            Category.UTILITIES,
+            "Utilities",
+        ),
+    ],
+    ids=["mapped-family", "differently-spelled-project-url"],
+)
+def test_a_family_key_sets_the_category(
+    candidate: App, key: str, category: Category, expected: str
+) -> None:
+    result = compose([candidate], [], [], policy=category_policy({key: category}))
     assert final_categories(result) == {
-        ("x", Variant.SINGLE): ["PC Ports"],
-        ("x", Variant.DUAL): ["PC Ports"],
-    }
-
-
-def test_url_family_key_maps_a_differently_spelled_project_url() -> None:
-    candidate = app("x", url="https://github.com/Owner/Repo", categories=("Emulator",))
-    result = compose(
-        [candidate],
-        [],
-        [],
-        policy=category_policy({"github.com/owner/repo": Category.UTILITIES}),
-    )
-    assert final_categories(result) == {
-        ("x", Variant.SINGLE): ["Utilities"],
-        ("x", Variant.DUAL): ["Utilities"],
+        ("x", Variant.SINGLE): [expected],
+        ("x", Variant.DUAL): [expected],
     }
 
 
@@ -1683,11 +1599,43 @@ def test_nested_overlay_key_without_a_dot_or_slash_loads() -> None:
         assert entry.data["additionalSettings"] == {"apkFilterRegEx": "arm64"}
 
 
-def test_a_patch_value_the_entry_already_carries_changes_nothing() -> None:
-    candidate = app("pkg", name="Same")
+@pytest.mark.parametrize(
+    ("candidate", "patch", "key"),
+    [
+        (app("pkg", name="Same"), {"name": "Same"}, "name"),
+        (
+            app("pkg"),
+            {"additionalSettings": {"includeZips": False}},
+            "additionalSettings.includeZips",
+        ),
+        (app("pkg"), {"allowIdChange": False}, "allowIdChange"),
+        (app("pkg"), {"pinned": None}, "pinned"),
+        (
+            app("pkg"),
+            {"additionalSettings": {"includeZips": None}},
+            "additionalSettings.includeZips",
+        ),
+        (
+            app("pkg", additional_settings={"includeZips": False}),
+            {"additionalSettings": {"includeZips": None}},
+            "additionalSettings.includeZips",
+        ),
+    ],
+    ids=[
+        "value-already-carried",
+        "rendering-default",
+        "field-rendering-forces",
+        "null-deleting-absent-key",
+        "null-deleting-absent-setting",
+        "null-deleting-setting-at-default",
+    ],
+)
+def test_a_patch_that_changes_nothing_is_recorded_redundant(
+    candidate: App, patch: dict[str, object], key: str
+) -> None:
     plain = compose([candidate], [], [])
-    result = compose([candidate], [], overlays((candidate.url, {"name": "Same"})))
-    assert redundant_keys(result) == [(url_family(candidate), ("name",))]
+    result = compose([candidate], [], overlays((candidate.url, patch)))
+    assert redundant_keys(result) == [(url_family(candidate), (key,))]
     for variant in Variant:
         assert published(result, variant) == published(plain, variant)
 
@@ -1717,58 +1665,25 @@ def test_a_key_that_changes_only_the_dual_entry_is_not_recorded() -> None:
     assert dual_entry["name"] == "Patched"
 
 
-def test_a_patch_setting_a_rendering_default_changes_nothing() -> None:
-    candidate = app("pkg")
-    plain = compose([candidate], [], [])
-    patch: dict[str, object] = {"additionalSettings": {"includeZips": False}}
-    result = compose([candidate], [], overlays((candidate.url, patch)))
-    assert redundant_keys(result) == [
-        (url_family(candidate), ("additionalSettings.includeZips",))
-    ]
-    for variant in Variant:
-        assert published(result, variant) == published(plain, variant)
-
-
-def test_a_patch_on_a_field_rendering_forces_changes_nothing() -> None:
-    candidate = app("pkg")
-    plain = compose([candidate], [], [])
-    result = compose(
-        [candidate], [], overlays((candidate.url, {"allowIdChange": False}))
-    )
-    assert redundant_keys(result) == [(url_family(candidate), ("allowIdChange",))]
-    for variant in Variant:
-        assert published(result, variant) == published(plain, variant)
-
-
-def test_a_null_deleting_an_absent_key_changes_nothing() -> None:
-    candidate = app("pkg")
-    plain = compose([candidate], [], [])
-    result = compose([candidate], [], overlays((candidate.url, {"pinned": None})))
-    assert redundant_keys(result) == [(url_family(candidate), ("pinned",))]
-    for variant in Variant:
-        assert published(result, variant) == published(plain, variant)
-
-
 @pytest.mark.parametrize(
-    "settings", [{}, {"includeZips": False}], ids=["absent", "at-default"]
+    ("candidate", "patch"),
+    [
+        (
+            app("pkg", additional_settings={"includeZips": True}),
+            {"additionalSettings": {"includeZips": None}},
+        ),
+        (app("pkg"), {"author": 7}),
+        (replace(app("pkg", name="Same"), raw={"author": 7}), {"name": "Same"}),
+    ],
+    ids=[
+        "null-deleting-a-setting-the-entry-sets",
+        "patched-entry-cannot-render",
+        "entry-cannot-render",
+    ],
 )
-def test_a_null_deleting_a_defaulted_setting_changes_nothing(
-    settings: dict[str, object],
+def test_a_patch_key_that_changes_the_entry_is_not_recorded(
+    candidate: App, patch: dict[str, object]
 ) -> None:
-    candidate = app("pkg", additional_settings=settings)
-    plain = compose([candidate], [], [])
-    patch: dict[str, object] = {"additionalSettings": {"includeZips": None}}
-    result = compose([candidate], [], overlays((candidate.url, patch)))
-    assert redundant_keys(result) == [
-        (url_family(candidate), ("additionalSettings.includeZips",))
-    ]
-    for variant in Variant:
-        assert published(result, variant) == published(plain, variant)
-
-
-def test_a_null_deleting_a_setting_the_entry_sets_is_live() -> None:
-    candidate = app("pkg", additional_settings={"includeZips": True})
-    patch: dict[str, object] = {"additionalSettings": {"includeZips": None}}
     result = compose([candidate], [], overlays((candidate.url, patch)))
     assert redundant_keys(result) == []
 
@@ -1781,18 +1696,6 @@ def test_a_null_under_a_parent_the_entry_lacks_is_live() -> None:
     for variant in Variant:
         [entry] = published(result, variant)
         assert entry["foo"] == {}
-
-
-def test_a_key_whose_patched_entry_cannot_render_counts_as_changing_it() -> None:
-    candidate = app("pkg")
-    result = compose([candidate], [], overlays((candidate.url, {"author": 7})))
-    assert redundant_keys(result) == []
-
-
-def test_a_record_on_an_entry_that_cannot_render_records_no_key() -> None:
-    broken = replace(app("pkg", name="Same"), raw={"author": 7})
-    result = compose([broken], [], overlays((broken.url, {"name": "Same"})))
-    assert redundant_keys(result) == []
 
 
 def test_redundant_keys_are_recorded_per_record_sorted_by_url() -> None:

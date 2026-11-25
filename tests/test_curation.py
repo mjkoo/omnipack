@@ -76,11 +76,7 @@ def test_upstream_pack_tracker_stays_excluded_from_current_composition(
 def test_every_committed_denial_excludes_its_project_when_present(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    # A denial can match nothing because a source dropped the project. The
-    # build reports such a denial as stale rather than failing, so check that
-    # every stale report has no candidate at all at its URL, that every other
-    # denial is reported as a removal, and that no denied project reaches a
-    # pack its denial names.
+    # A denial whose project a source dropped is reported stale, not failed.
     entries = read(ROOT / "config/deny.json")
     denied = {normalize_project_url(entry["url"]) for entry in entries}
     present = {
@@ -243,13 +239,7 @@ def test_maintained_version_override_survives_refreshed_source_settings(
 
 
 def assert_categories_follow_the_taxonomy(result: CompositionResult) -> None:
-    """Every selected entry carries taxonomy categories, Track Only exactly when
-    it is track-only, or none while the build reports its family uncategorized.
-
-    A family without a category key and a key without a selected family are
-    reported by the build, not failed, so a valid generated catalog that adds
-    or removes a project needs no other edit to be accepted.
-    """
+    """Selected entries carry taxonomy categories, Track Only if track-only, or none if uncategorized."""
     uncategorized = {
         (item.family, variant)
         for item in result.report.uncategorized_families
@@ -274,10 +264,7 @@ def test_current_composition_categorizes_every_entry_from_the_taxonomy(
 def test_split_and_joined_families_ship_as_intended(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    """melonDS stable and nightly share a repository but ship separately, and
-    Minish Cap ships one build per pack from different repositories, and Cemu
-    ships the one build RJNY exports, in both packs.
-    """
+    """Shared-repository, per-pack and single-export builds each ship as intended."""
     apps = current_configuration.result.apps
     for variant in Variant:
         by_family: dict[str, list[str]] = {}
@@ -372,8 +359,6 @@ GENERATED_OVERRIDES = {
 def test_generated_entries_take_their_settings_and_categories_from_configuration(
     current_configuration: CurrentConfiguration,
 ) -> None:
-    # Generated entries lose their names, settings and categories, so every
-    # value checked below can only come from configuration.
     regenerated = [
         replace(app, name="regenerated", additional_settings={}, categories=())
         if app.origin in GENERATED_ORIGINS
