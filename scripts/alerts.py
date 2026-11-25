@@ -750,8 +750,11 @@ def emit_nightly_prepare(
     report_path: Path = BUILD_REPORT,
     readme_path: Path = README,
 ) -> FindingsFile:
-    """Stage findings from the prepare step's outputs, build warnings from its
-    report, and a README-size finding from the README a successful build wrote."""
+    """The prepare job's findings: stages, build warnings and README size.
+
+    Stage findings come from the prepare step's outputs, build warnings from its
+    report, and the README-size finding from the README a successful build wrote.
+    """
     owner = NIGHTLY_PREPARE
     prefix = owner.prefixes[0]
     findings: list[Finding] = []

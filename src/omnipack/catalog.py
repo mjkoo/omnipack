@@ -217,7 +217,8 @@ def _without_default_settings(record: dict[str, Any]) -> dict[str, Any]:
     on import, and a complete record per link makes the README too large for
     GitHub to render. HTML entries keep every setting, because Obtainium's HTML
     import migrations read the settings as sent. Settings that are not a JSON
-    object string are linked unchanged.
+    object string, or that cannot be decoded and re-encoded, are linked
+    unchanged.
     """
     source = record.get("overrideSource")
     settings = record.get("additionalSettings")
@@ -231,17 +232,16 @@ def _without_default_settings(record: dict[str, Any]) -> dict[str, Any]:
         kept = {
             key: value
             for key, value in decoded.items()
-            if not _is_default(value, defaults.get(key, _ABSENT))
+            if not (key in defaults and _is_default(value, defaults[key]))
         }
         trimmed = json.dumps(
             kept, ensure_ascii=False, allow_nan=False, separators=(",", ":")
         )
-    except ValueError:
+        # A lone surrogate escape decodes to text UTF-8 cannot encode.
+        trimmed.encode()
+    except ValueError, RecursionError:
         return record
     return {**record, "additionalSettings": trimmed}
-
-
-_ABSENT = object()
 
 
 def _is_default(value: object, default: object) -> bool:

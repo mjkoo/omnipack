@@ -1,4 +1,4 @@
-"""Canonical per-source settings defaults used by pack rendering.
+"""Canonical per-source settings defaults used by pack rendering and catalog links.
 
 The GitHub and HTML key sets were seeded from Obtainium v1.6.14 and checked
 against the exports produced by RJNY/Obtainium-Emulation-Pack. The bounded

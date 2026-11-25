@@ -128,12 +128,20 @@ def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() ->
         "https://gitlab.com/AuroraOSS/Parent/AuroraStore",
         source="GitLab",
         additionalSettings=json.dumps(
-            {"fallbackToOlderReleases": True, "apkFilterRegEx": "x"}
+            {
+                "fallbackToOlderReleases": True,
+                "apkFilterRegEx": "x",
+                # A GitHub default that the GitLab table does not list.
+                "includePrereleases": False,
+            }
         ),
     )
     catalog = generate_catalog(pack(gitlab), pack(dict(gitlab)), policy())
     assert catalog.decode().count(">GitLab</a>") == 2
-    linked = {**gitlab, "additionalSettings": '{"apkFilterRegEx":"x"}'}
+    linked = {
+        **gitlab,
+        "additionalSettings": '{"apkFilterRegEx":"x","includePrereleases":false}',
+    }
     assert decoded_apps(catalog) == [linked, linked]
 
 
@@ -142,9 +150,16 @@ def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() ->
     [
         # 0 == False in Python, but a 0 is not the boolean default.
         '{"includePrereleases":0}',
+        # null is no setting's default, including a setting the table lacks.
+        '{"unknownKey":null}',
         "[false]",
         "not json",
+        # A lone surrogate escape cannot be re-encoded as UTF-8.
+        '{"includePrereleases":false,"x":"\\ud800"}',
+        # Deep enough that decoding raises RecursionError.
+        '{"x":' + "[" * 1_000_000 + "]" * 1_000_000 + "}",
     ],
+    ids=["zero", "null", "array", "invalid", "surrogate", "deep"],
 )
 def test_github_link_keeps_settings_that_are_not_default_valued_objects(
     settings: str,
@@ -157,7 +172,12 @@ def test_github_link_keeps_settings_that_are_not_default_valued_objects(
 
 
 def test_entry_without_a_source_type_is_labelled_by_its_host() -> None:
-    itch = app("a1b2c3d4e5f6", "Pokétch", "https://christt105.itch.io/poketch")
+    itch = app(
+        "a1b2c3d4e5f6",
+        "Pokétch",
+        "https://christt105.itch.io/poketch",
+        additionalSettings='{"trackOnly":false}',
+    )
     del itch["overrideSource"]
     catalog = generate_catalog(pack(itch), pack(dict(itch)), policy())
     assert catalog.decode().count(">christt105&#46;itch&#46;io</a>") == 2

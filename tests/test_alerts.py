@@ -1496,6 +1496,7 @@ def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
             520_000,
             "README is past GitHub's render limit and is cut off",
         ),
+        ("success", "complete", 512_000, "README is nearing GitHub's render limit"),
         ("success", "complete", 460_800, None),
         ("failure", "build", 520_000, None),
     ],
@@ -1503,7 +1504,8 @@ def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
 def test_readme_size_raises_one_finding_past_the_threshold_of_a_successful_build(
     tmp_path: Path, job: str, stage: str, size: int, title: str | None
 ) -> None:
-    (tmp_path / "README.md").write_bytes(b"x" * size)
+    # Two bytes per character, so counting characters halves the size.
+    (tmp_path / "README.md").write_text("é" * (size // 2), encoding="utf-8")
     file = _emit(
         NIGHTLY_PREPARE,
         job,
