@@ -88,3 +88,7 @@ exclude_also = [
   "@overload",
   "if __name__ == .__main__.:",
 ]
+
+[tool.mutmut]
+source_paths = ["src/"]
+also_copy = ["README.md", "scripts/", "config/", "dist/", "docs/", "openspec/", ".github/", "justfile", "flake.nix", "lefthook.yml", ".worktreeinclude", ".gitignore"]
