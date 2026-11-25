@@ -168,9 +168,6 @@ def test_changed_verifier_identity_is_stale(tmp_path: Path) -> None:
     report = run_verification(tmp_path)
     assert report["verifier"] == verifier_identity()
     assert "Evidence: current" in format_reports(tmp_path)
-    # Denials now apply only to the packs they name and an unpaired entry is
-    # no longer a finding, so evidence from the preceding verifier must read
-    # as stale over unchanged inputs.
     assert VERIFIER_VERSION == "5.0.0"
     assert report["schemaVersion"] == 5
     report["verifier"]["version"] = "4.0.0"
@@ -633,9 +630,7 @@ def only(
     capsys: pytest.CaptureFixture[str],
     **fields: object,
 ) -> str:
-    """Display, through `pack report`, a successful build report holding one
-    kind of diagnostic.
-    """
+    """Display, through `pack report`, a successful report holding one diagnostic kind."""
     from omnipack.cli import main
 
     changes = {variant: {"added": [], "removed": []} for variant in ("single", "dual")}
