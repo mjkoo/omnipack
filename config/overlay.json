@@ -223,6 +223,12 @@
     }
   },
   {
+    "url": "https://github.com/Maddex712/WiiDS",
+    "patch": {
+      "name": "WiiDS"
+    }
+  },
+  {
     "url": "https://github.com/mabencs/Dragon-Age-Origins-Recomp-Android-Duo",
     "patch": {
       "additionalSettings": {
