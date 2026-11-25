@@ -45,12 +45,12 @@ approach:
 The link for an entry whose `overrideSource` is GitHub or GitLab carries its
 `additionalSettings` with each key removed whose value equals that source's
 entry in the defaults table the renderer already uses. The trimmed settings are
-re-serialized in the same compact form; every other record field is untouched.
-A record whose settings are not a string holding a JSON object, or whose
-trimmed settings cannot be re-encoded as UTF-8 (a lone surrogate escape), is
-linked unchanged. A value equals a default only when both have the same JSON type as
-well as the same value, so a `0` is never trimmed against a `false` default
-even though Python's `==` treats them as equal.
+re-serialized in the same compact form; every other record field is untouched. A
+record whose settings are not a string holding a JSON object, or whose trimmed
+settings cannot be re-encoded as UTF-8 (a lone surrogate escape), is linked
+unchanged. A value equals a default only when both have the same JSON type as
+well as the same value, so a `0` is never trimmed against a `false` default even
+though Python's `==` treats them as equal.
 
 Alternatives considered:
 
@@ -81,7 +81,9 @@ step reads the size of `README.md` in the checkout and raises
 of the whole rendered README, handwritten text included, because GitHub's limit
 applies to the file. Gating on a successful build keeps the check inside the
 `build/` re-check scope, so a successful nightly under the threshold closes the
-issue, and a failed build neither raises nor closes it.
+issue, and a failed build neither raises nor closes it. A README the step
+cannot read (absent, not a regular file, or failing to stat) is listed as
+unchecked, so an open issue is neither raised again nor closed unmeasured.
 
 The title says whether the README is nearing or past the limit and carries no
 byte count, so a growing README does not retitle the issue every night; the

@@ -66,16 +66,16 @@ structure or create HTML elements.
 
 ### Requirement: Individual links preserve exported app configuration
 
-Each link SHALL use the documented Obtainium HTTPS redirect with an app deep link
-carrying the final exported JSON object, except that for an entry whose source
-type is GitHub or GitLab, each additionalSettings key whose value equals that
-source's value in omnipack's committed settings defaults table SHALL be left
-out. An entry whose additionalSettings string does not decode to a JSON object,
-or whose trimmed settings cannot be re-encoded as UTF-8, SHALL be linked with
-its settings unchanged. Decoding the redirect parameter and deep-link payload SHALL recover every
-other field and setting exactly, preserving field types, unknown fields and
-string-valued additionalSettings. Pack-wide settings SHALL NOT be included. Link
-generation SHALL be deterministic and network-free.
+Each link SHALL use the documented Obtainium HTTPS redirect with an app deep
+link carrying the final exported JSON object, except that for an entry whose
+source type is GitHub or GitLab, each additionalSettings key whose value equals
+that source's value in omnipack's committed settings defaults table SHALL be
+left out. An entry whose additionalSettings string does not decode to a JSON
+object, or whose trimmed settings cannot be re-encoded as UTF-8, SHALL be linked
+with its settings unchanged. Decoding the redirect parameter and deep-link
+payload SHALL recover every other field and setting exactly, preserving field
+types, unknown fields and string-valued additionalSettings. Pack-wide settings
+SHALL NOT be included. Link generation SHALL be deterministic and network-free.
 
 #### Scenario: Encoded values contain reserved characters
 
