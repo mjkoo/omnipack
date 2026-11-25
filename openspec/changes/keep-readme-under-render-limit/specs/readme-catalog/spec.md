@@ -27,27 +27,13 @@ generation SHALL be deterministic and network-free.
 
 #### Scenario: An HTML entry carries default-valued settings
 
-- **WHEN** an HTML entry's additionalSettings hold settings at Obtainium's
-  defaults for HTML
+- **WHEN** an HTML entry's additionalSettings hold settings at their values in
+  the HTML defaults table
 - **THEN** decoding its link recovers the entry exactly, those settings
   included
 
-## ADDED Requirements
+#### Scenario: A GitHub entry's settings are not a JSON object
 
-### Requirement: The build warns before the README outgrows GitHub's render limit
-
-GitHub stops rendering a README after 512,000 bytes. Each build SHALL record a
-README-size warning holding the rendered README's size in bytes when that size
-exceeds 460,800 bytes, and SHALL record none otherwise. The warning SHALL NOT
-change whether the build succeeds or what it publishes.
-
-#### Scenario: The README exceeds the threshold
-
-- **WHEN** a build renders a README of 470,000 bytes
-- **THEN** the build records a README-size warning of 470,000 bytes, succeeds,
-  and publishes the packs and README as it would without the warning
-
-#### Scenario: The README is under the threshold
-
-- **WHEN** a build renders a README of 300,000 bytes
-- **THEN** the build records no README-size warning
+- **WHEN** a GitHub entry's additionalSettings string does not decode to a JSON
+  object
+- **THEN** decoding its link recovers the entry exactly

@@ -17,10 +17,10 @@ approach:
   default.
 - Every value omnipack's GitHub and GitLab defaults table lists equals what
   Obtainium v1.7.5 uses when that key is absent.
-- The build renders the README in memory before it writes `.build/report.json`,
-  and the nightly's alert step turns build report fields into `build/` findings.
-  Every successful build report re-checks all `build/` keys, so a key a later
-  report does not raise is closed.
+- The nightly's prepare step runs the build, which writes `README.md` in the
+  runner's checkout; the alert step that follows turns build report fields into
+  `build/` findings. Every successful build report re-checks all `build/` keys,
+  so a key a later run does not raise is closed.
 
 ## Goals / Non-Goals
 
@@ -46,7 +46,10 @@ The link for an entry whose `overrideSource` is GitHub or GitLab carries its
 `additionalSettings` with each key removed whose value equals that source's
 entry in the defaults table the renderer already uses. The trimmed settings are
 re-serialized in the same compact form; every other record field is untouched.
-A record whose settings are not a JSON object string is linked unchanged.
+A record whose settings are not a string holding a JSON object is linked
+unchanged. A value equals a default only when both have the same JSON type as
+well as the same value, so a `0` is never trimmed against a `false` default
+even though Python's `==` treats them as equal.
 
 Alternatives considered:
 
@@ -68,27 +71,30 @@ may not import as its default; HTML entries keep every setting. An entry without
 guessing that source here would duplicate Obtainium's detection for little gain,
 so those entries also stay complete.
 
-### Record the warning as one nullable build report field
+### The alert step reads the README's size directly
 
-The build report gains a top-level field holding `{"bytes": <size>}` when the
-rendered README exceeds 460,800 bytes and `null` otherwise, including when the
-build fails before the README is rendered. The build report schema version
-advances by one, so `pack report` asks for a fresh `pack build` rather than
-misreading an older report. The threshold is one named constant beside the
-catalog code, documented with GitHub's 512,000-byte limit. The size is that of
-the whole rendered README, handwritten text included, because GitHub's limit
-applies to the file.
+When the build report records a successful build, the nightly-prepare alert
+step reads the size of `README.md` in the checkout and raises
+`build/readme-size` when it exceeds 460,800 bytes. The threshold and GitHub's
+512,000-byte limit are named constants in `scripts/alerts.py`. The size is that
+of the whole rendered README, handwritten text included, because GitHub's limit
+applies to the file. Gating on a successful build keeps the check inside the
+`build/` re-check scope, so a successful nightly under the threshold closes the
+issue, and a failed build neither raises nor closes it.
 
-Alternative considered: a nonfatal offline-verification finding. Verification
-findings describe the packs, not the README, and the alert step reads build
-report fields, not verification findings.
+The title says whether the README is nearing or past the limit and carries no
+byte count, so a growing README does not re-edit the issue every night; the
+details give the size, the threshold and the limit. A single nightly can add
+enough apps to cross both numbers at once, and the title then says the README
+is already truncated. With one README there is one key and no subject.
 
-### One alert key with no subject
+Alternatives considered:
 
-`scripts/alerts.py` raises `build/readme-size` when the field is set, titled
-with the size and giving the size and the threshold in its details. With one
-README there is one key, so no subject encoding is needed, and the existing
-re-check scope closes the issue when a successful nightly records `null`.
+- *A nullable build report field.* Lets `pack report` show the warning
+  locally, but needs a schema version advance, report validation and display
+  code for a number the nightly can read from the file it already has.
+- *A nonfatal offline-verification finding.* Verification findings describe
+  the packs, not the README, and the alert step does not read them.
 
 ## Risks / Trade-offs
 
@@ -100,11 +106,13 @@ re-check scope closes the issue when a successful nightly records `null`.
 - [GitHub changes its render limit] → The threshold is one constant; the alert
   documentation names the limit it guards.
 - [Growth outpaces the warning] → At about 1.5 KiB per new app, 50 KiB of
-  headroom is roughly 30 apps, several weekly sweeps at the current pace.
+  headroom is roughly 30 apps, several weekly sweeps at the current pace; a
+  jump past both numbers at once is reported as past the limit.
+- [No local display] → `pack report` does not show the size; a maintainer
+  checks `README.md` directly. The nightly is where the warning matters.
 
 ## Migration Plan
 
-Nothing to migrate. The schema advance makes existing local `.build/report.json`
-files unsupported until the next `pack build`, which is the existing behavior
-for a schema change. The README shrinks at the first nightly after merge.
+Nothing to migrate; the build report schema is unchanged. The README shrinks
+at the first nightly after merge.
 Rollback is reverting the change; the next nightly restores full links.
