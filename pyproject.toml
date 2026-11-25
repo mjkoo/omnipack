@@ -92,3 +92,6 @@ exclude_also = [
 [tool.mutmut]
 source_paths = ["src/"]
 also_copy = ["README.md", "scripts/", "config/", "dist/", "docs/", "openspec/", ".github/", "justfile", "flake.nix", "lefthook.yml", ".worktreeinclude", ".gitignore"]
+# Its FakeHttp is built at collection time, so it cannot pass when mutmut runs
+# the suite twice in one process.
+pytest_add_cli_args = ["--deselect", "tests/test_generation.py::test_generation_sends_no_credentials_when_a_token_is_set"]
