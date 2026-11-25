@@ -222,6 +222,9 @@ def test_build_report_from_the_real_writer_raises_its_warnings(
             stale_category_assignments=["Some Key"],
         ),
     )
+    # The step reads README.md from the job's working directory.
+    (tmp_path / "README.md").write_bytes(b"x" * 470_000)
+    monkeypatch.chdir(tmp_path)
     findings = tmp_path / "findings.json"
 
     _run_emit(
@@ -239,6 +242,7 @@ def test_build_report_from_the_real_writer_raises_its_warnings(
         "build/uncategorized/example.test/family",
         "build/stale-denial/example.test/stale",
         "build/stale-category/Some%20Key",
+        "build/readme-size",
     ]
     assert parsed.findings[0].details == (
         "Family: example.test/family",

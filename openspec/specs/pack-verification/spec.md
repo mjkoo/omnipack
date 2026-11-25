@@ -167,7 +167,8 @@ Catalog errors SHALL prevent successful verification.
 
 #### Scenario: Stale import link
 
-- **WHEN** an app's exported configuration differs from its README import payload
+- **WHEN** an app's exported configuration changes and its README import link
+  still carries the payload generated from the earlier configuration
 - **THEN** offline verification fails without repairing either file
 
 #### Scenario: Handwritten instructions change

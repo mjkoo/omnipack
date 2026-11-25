@@ -40,6 +40,8 @@ a finding for each of these problems, and for no other outcome:
   listed by a catalog, one finding per URL covering every such extra there;
 - each package id the build report lists as repeated within a variant, one
   finding per variant and package id;
+- a README a successful nightly build rendered that exceeds 460,800 bytes,
+  one finding, which counts as a build warning;
 - a release archive run that cannot read the committed packs or reach its
   bucket;
 - a producing job whose findings do not reach the alert job intact, that
@@ -64,7 +66,11 @@ that changes nothing SHALL name the project URL and that key, and a finding
 for the extras a catalog lists at a project URL SHALL name the project URL
 and, for each such extra, its package id, each listing source and that
 source's differing fields. A finding for a repeated package id SHALL name the
-variant, the package id and each entry's family and project URL. No release
+variant, the package id and each entry's family and project URL. A README-size
+finding's title SHALL say whether the README exceeds GitHub's 512,000-byte
+render limit and SHALL NOT carry the size, and its details SHALL give the
+size in bytes, the 460,800-byte threshold and the limit, and a README the
+alert step cannot read SHALL count as not re-checking that finding's key. No release
 archive target's outcome SHALL raise a finding, whatever that outcome is;
 per-target outcomes stay in the run report. A stale or
 archived finding SHALL NOT be
@@ -189,6 +195,16 @@ uploading them fails.
 - **THEN** two findings are raised, one per variant, each naming `p` and the
   entries' families and project URLs, and the nightly run's verdict is
   unchanged
+
+#### Scenario: The README nears GitHub's render limit
+
+- **WHEN** a successful nightly build renders a README of 470,000 bytes
+- **THEN** one finding is raised whose title says the README is nearing the
+  limit and whose details give 470,000 bytes, the threshold and the limit,
+  and the nightly run's verdict is unchanged
+- **AND** a README of 520,000 bytes raises the same finding with a title
+  saying the README is past the limit, and one of exactly 460,800 bytes
+  raises none
 
 #### Scenario: Release archive outcomes
 

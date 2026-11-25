@@ -10,7 +10,7 @@ which the first alert job creates.
 
 | Owner (job that produces findings) | Raises |
 | --- | --- |
-| `nightly-prepare` (**Nightly publishing**, `prepare`) | A failed preparation stage; build warnings from `.build/report.json`: a family with no category, a denial matching nothing, a category assignment matching nothing, an overlay patch key that changes nothing, a project URL where a catalog lists an extra, a package id repeated within a pack |
+| `nightly-prepare` (**Nightly publishing**, `prepare`) | A failed preparation stage; build warnings from `.build/report.json`: a family with no category, a denial matching nothing, a category assignment matching nothing, an overlay patch key that changes nothing, a project URL where a catalog lists an extra, a package id repeated within a pack; after a successful build, a `README.md` over 460,800 bytes |
 | `nightly-publish` (`publish`) | A failed push to `main`; a failed rolling-release synchronization |
 | `codm-check`, `quiver-check` (**Reviewed source catalog**, `check`) | A failed generation, staging, test, build, verification or catalog-guard step |
 | `codm-publish`, `quiver-publish` (`publish`) | A failed publication of the source proposal |
@@ -46,7 +46,7 @@ owner's prefix, the stage or kind, and a subject where there is one:
 | Prefix | Keys |
 | --- | --- |
 | `nightly/prepare/` | `<stage>`: `checkout`, `build`, `allowlist`, `readme-boundary`, `commit`, `verify`, `drift-after-verify`, `bundle` |
-| `build/` | `uncategorized/<family>`, `stale-denial/<url>`, `stale-category/<key>`, `redundant-patch/<url>/<dotted key>`, `listed-extra/<url>`, `repeated-id/<variant>/<package id>` |
+| `build/` | `uncategorized/<family>`, `stale-denial/<url>`, `stale-category/<key>`, `redundant-patch/<url>/<dotted key>`, `listed-extra/<url>`, `repeated-id/<variant>/<package id>`, `readme-size` |
 | `nightly/publish/` | `push`, `release` |
 | `<source>/check/` | `generation`, `stage`, `tests`, `build`, `verify`, `guard` |
 | `<source>/publish/` | `proposal` |
@@ -152,6 +152,21 @@ the pack, the package id and each entry's family and project URL. Obtainium
 stores imported apps by package id, so a user importing that pack keeps only
 one of the entries. [Composition](composition.md#denials-and-patches) says how
 to resolve it, usually with a family rule joining the two URLs.
+
+### README size
+
+GitHub stops rendering a README after 512,000 bytes and gives no sign that it
+did, so a catalog that grows past that loses its later tables and the sources
+section from the rendered page. After a successful build, a `README.md` larger
+than 460,800 bytes, about 50 KiB short of the limit, raises one finding keyed
+`build/readme-size`. Its title says whether the README is nearing the limit or
+already past it and cut off; its details give the size, the threshold and the
+limit. The title carries no byte count, so the issue is not retitled as the
+README grows. It closes when the README after a later successful build is back
+under the threshold, and a README the step cannot read leaves it unchanged.
+Most of the README's size is the catalog's "Add to Obtainium" links; when
+trimming them is no longer enough, the catalog needs another shape, such as
+splitting it across linked documents.
 
 ## Muting an issue
 

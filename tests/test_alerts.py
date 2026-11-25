@@ -23,6 +23,7 @@ from scripts.alerts import (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
     OWNERS,
+    README,
     RELEASE_ARCHIVE,
     TITLE_LIMIT,
     Finding,
@@ -1010,6 +1011,13 @@ def _emit(
     **env: str,
 ) -> FindingsFile:
     """The emitted file, checked to survive validation unchanged."""
+    readme_path = README  # read only by the nightly-prepare owner
+    if owner == NIGHTLY_PREPARE:
+        # Never the repository's own README or build report.
+        assert tmp_path is not None
+        readme_path = tmp_path / "README.md"
+        if not readme_path.exists():
+            readme_path.write_bytes(b"")
     report_path = None
     if report is not None:
         assert tmp_path is not None
@@ -1017,7 +1025,7 @@ def _emit(
         report_path.write_text(json.dumps(report))
     elif tmp_path is not None:
         report_path = tmp_path / "absent-report.json"
-    file = emit(owner, {"JOB_STATUS": status, **env}, report_path)
+    file = emit(owner, {"JOB_STATUS": status, **env}, report_path, readme_path)
     assert parse_findings(owner, file.to_json()) == file
     return file
 
@@ -1482,6 +1490,51 @@ def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
     assert "build/uncategorized/Alpha" in _keys(raising)
     assert not any(entry.startswith("build/") for entry in raising.scope)
     assert not any(entry.startswith("build/") for entry in quiet.scope)
+
+
+@pytest.mark.parametrize(
+    ("job", "stage", "size", "title"),
+    [
+        ("success", "complete", 470_000, "README is nearing GitHub's render limit"),
+        (
+            "success",
+            "complete",
+            520_000,
+            "README is past GitHub's render limit and is cut off",
+        ),
+        ("success", "complete", 512_000, "README is nearing GitHub's render limit"),
+        ("success", "complete", 460_800, None),
+        ("failure", "build", 520_000, None),
+        # A README that cannot be measured leaves its key unchecked.
+        ("success", "complete", None, None),
+    ],
+)
+def test_readme_size_raises_one_finding_past_the_threshold_of_a_successful_build(
+    tmp_path: Path, job: str, stage: str, size: int | None, title: str | None
+) -> None:
+    if size is None:
+        (tmp_path / "README.md").mkdir()
+    else:
+        # Two bytes per character, so counting characters halves the size.
+        (tmp_path / "README.md").write_text("é" * (size // 2), encoding="utf-8")
+    file = _emit(
+        NIGHTLY_PREPARE,
+        job,
+        report=_build_report("success" if job == "success" else "failed"),
+        tmp_path=tmp_path,
+        PREPARE_STAGE=stage,
+        PREPARE_STAGES=STAGES,
+    )
+
+    raised = [f for f in file.findings if f.key == "build/readme-size"]
+    assert [f.title for f in raised] == ([title] if title else [])
+    assert ("build/readme-size" in file.unchecked) == (size is None)
+    if title:
+        assert raised[0].details == (
+            f"README.md size: {size} bytes",
+            "Warning threshold: 460800 bytes",
+            "GitHub render limit: 512000 bytes",
+        )
 
 
 def test_missing_or_malformed_build_report_contributes_nothing(
