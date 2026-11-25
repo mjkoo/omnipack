@@ -225,16 +225,6 @@ they are not re-proposed unless something material changes.
   the self-updater, pointed at its own releases. A fork tuned for one device is
   worth carrying when that device is popular. Promote when it has a sustained
   history and keeps pace with upstream OpenMW-DS releases.
-- **Zelda: Tears of the Kingdom (TotK Native)** - https://github.com/AurelioB/totk-android.
-  An MIT native Android runner for the user's own Switch dump, by the author of
-  the Banjo-Kazooie recomp and Cluster Tune already in the packs, with one APK
-  per release, Adreno GPUs only, and an optional second-screen companion for
-  the AYN Thor and Retroid Pocket Duo that is skipped on single-screen devices.
-  It requests all-files storage for game data, and its install permission
-  serves an opt-out self-updater that checks the APK's checksum and signing
-  certificate. The project is brand new and targets a recent first-party Nintendo title.
-  The owner accepts its takedown exposure.
-  Promote when it has a sustained release history.
 - **Need for Speed: Most Wanted (MostWanted-Android)** - https://github.com/RanggaCasper/MostWanted-Android.
   A GPL static recomp of the Xbox game on XboxXBE-Recomp, from an established
   account, with one APK per release, wide outside use and outside

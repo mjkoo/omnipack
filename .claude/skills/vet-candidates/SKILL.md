@@ -113,6 +113,10 @@ inferring it. Each candidate needs:
 - Suspicious signs: a brand-new account or organization with a single burst of
   commits, reuploaded binaries with no source, impersonation of an established
   project, releases with no downloads, a one-off fork far behind its upstream.
+- A young project is not a suspicious sign by itself. An author whose work is
+  already in the packs, or whose account has a real track record, carries that
+  record to a new project: it passes without waiting for a history of its own
+  when the rest of the bar holds.
 - Signals that help clear a project: stars, issues and outside contributors,
   download counts, press or community coverage, a real upstream it builds on, a
   small reviewable diff from upstream.

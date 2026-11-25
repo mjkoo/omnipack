@@ -386,6 +386,14 @@
     }
   },
   {
+    "id": "com.aure.totk",
+    "url": "https://github.com/AurelioB/totk-android",
+    "name": "Zelda: Tears of the Kingdom (TotK Native)",
+    "author": "AurelioB",
+    "categories": ["Decomps/Recomps"],
+    "dualScreen": true
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
