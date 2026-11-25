@@ -23,6 +23,7 @@ from scripts.alerts import (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
     OWNERS,
+    README,
     RELEASE_ARCHIVE,
     TITLE_LIMIT,
     Finding,
@@ -999,7 +1000,6 @@ def test_cli_rejects_a_malformed_producer_with_a_usage_error(
 # --- emitters --------------------------------------------------------------
 
 STAGES = "checkout,build,allowlist,README boundary,verify,drift after verify"
-ABSENT_README = Path(__file__).parent / "fixtures" / "absent-README.md"
 
 
 def _emit(
@@ -1011,9 +1011,10 @@ def _emit(
     **env: str,
 ) -> FindingsFile:
     """The emitted file, checked to survive validation unchanged."""
-    # Never the repository's own README; an empty one unless the test wrote one.
-    readme_path = ABSENT_README
-    if tmp_path is not None:
+    readme_path = README  # read only by the nightly-prepare owner
+    if owner == NIGHTLY_PREPARE:
+        # Never the repository's own README or build report.
+        assert tmp_path is not None
         readme_path = tmp_path / "README.md"
         if not readme_path.exists():
             readme_path.write_bytes(b"")
