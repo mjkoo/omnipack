@@ -56,8 +56,7 @@ they are not re-proposed unless something material changes.
   mirror builds from forks without an independent history. This entry tracks a
   successor, so a sweep keeps it while the original stays gone: search for a
   re-hosted repository or a maintained fork. Promote when one publishes Android
-  APK releases and passes the usual checks, with particular weight on its
-  takedown exposure.
+  APK releases and passes the usual checks.
 
 ## Provenance or maturity
 
@@ -81,22 +80,6 @@ they are not re-proposed unless something material changes.
   releases have been pulled for game-breaking bugs. Its install permission
   serves a self-updater that checks its own release asset's digest.
   Promote when releases have stayed stable, with none pulled, for about a month.
-- **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
-  `config/deny.json`. Releases now install over one another under one signing
-  key, and its notes report Super Mario Galaxy booting on an AYN Thor, but it
-  has grown into a multi-game Wii and GameCube hub that ships Nintendo's own
-  menu music, HUD art and cover scans, bundles a large mod patch, and in stable
-  releases adds a Brawl engine, with Brawl content generated from the user's own
-  disc but redistribution permission for the engine unrecorded. It requests
-  all-files storage, and its install permission serves an in-app updater,
-  readable in the repository, that installs only the latest stable release
-  after checking GitHub's asset digest, its own release inventory and the
-  installed signing key. The author has replaced APKs under an existing release
-  tag, which Obtainium does not detect as an update. Its notes do not say
-  whether Brawl works on a single screen. Promote by removing the denial when
-  the owner accepts the takedown exposure; triage then decides single as
-  for any codm arrival, with a
-  `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
   A gbarecomp-based recomp with one APK per release under a stable asset name,
   from a brand-new account with many quick recomps. The repository sets a
@@ -156,9 +139,8 @@ they are not re-proposed unless something material changes.
   imported into the author's nixport host app, whose alpha APK releases come
   from a repository with no published source yet, under the package id
   `ro.cobrabm.fexdroid`, whose origin is unclear, and request all-files storage
-  and package installation. Promote when a release
-  carries a trackable Android APK whose package id and signing key hold across
-  several releases; Sony trademark and takedown exposure is the owner's call.
+  and package installation. Promote when a release carries a trackable Android
+  APK whose package id and signing key hold across several releases.
 - **Ninja Gaiden Black Recompiled** - https://github.com/gamboozino/ngbrecomp.
   A GPL static recomp of the Xbox game with outside interest and a few outside
   contributors, but a young, heavily AI-assisted history. Releases that are not
@@ -332,7 +314,7 @@ they are not re-proposed unless something material changes.
   release snapshots only. The APK is a runtime; the game library is built on a
   PC from the user's disc and imported. Its install permission serves an
   updater that checks the published digest and signing key. Promote when the
-  history is sustained; Rockstar takedown exposure is the owner's call.
+  history is sustained.
 - **Metroid: Samus Returns (msr2ds)** - https://github.com/gminustwo/msr2ds.
   A GPL native port recompiled from the user's own 3DS dump, with one APK per
   release beside desktop builds and only the vibrate permission, from a very
