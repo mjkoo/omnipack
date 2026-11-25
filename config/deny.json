@@ -67,6 +67,11 @@
     "packs": ["single"]
   },
   {
+    "url": "https://github.com/BrianJr03/command-panel",
+    "reason": "A replacement for the AYN Thor's stock dual-screen assistant with no use on one display.",
+    "packs": ["single"]
+  },
+  {
     "url": "https://github.com/Space001000/ZomboidDS",
     "reason": "A second-screen companion that does not run the game, so it has no use on one display.",
     "packs": ["single"]

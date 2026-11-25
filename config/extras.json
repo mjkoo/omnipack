@@ -375,6 +375,17 @@
     "categories": ["Decomps/Recomps"]
   },
   {
+    "id": "jr.brian.commandpannel",
+    "url": "https://github.com/BrianJr03/command-panel",
+    "name": "Thor Command Panel",
+    "author": "BrianJr03",
+    "categories": ["Utilities"],
+    "dualScreen": true,
+    "additionalSettings": {
+      "apkFilterRegEx": "^(?!tcp-sc-).*[.]apk$"
+    }
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",

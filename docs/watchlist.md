@@ -58,15 +58,23 @@ they are not re-proposed unless something material changes.
   re-hosted repository or a maintained fork. Promote when one publishes Android
   APK releases and passes the usual checks, with particular weight on its
   takedown exposure.
-- **Citron Neo (successor host)** - formerly https://github.com/citron-neo/CI.
+- **Citron Neo** - https://git.mythrax-rs.org/Citron-NEO/CI, formerly
+  https://github.com/citron-neo/CI.
   A Nintendo Switch emulator that was in the pack until GitHub blocked the
   repository carrying its Android nightly builds under a DMCA notice, along
   with its forks; the project's source repository had been removed the same way
-  earlier. The project's site still links only to the blocked repositories.
-  This entry tracks a successor, so a sweep keeps it while the original stays
-  blocked: check the project's site for a new release host. Promote when the
-  project publishes Android APK builds from a host that answers and Obtainium
-  can track, with particular weight on its takedown exposure.
+  earlier. Its CI repository moved to a self-hosted Forgejo instance, keeping
+  the GitHub history and the same maintainers, and now builds from the
+  project's emulator repository on that host, signing with a stored keystore.
+  Each platform has fixed nightly and stable release tags whose assets are
+  replaced on every build, nightlies are marked as prereleases, and Android
+  releases carry a standard and an 8 Elite APK. Obtainium reads and downloads
+  the releases through its Forgejo source, but the host answers plain HTTP
+  clients with a Cloudflare browser challenge, so `pack check-live` may report
+  it inconclusive. The Android APK is signed with a generic debug certificate,
+  and the CI workflows before the move did no signing either, so it is unknown
+  whether successive builds install over one another. Promote when they do,
+  with particular weight on its takedown exposure.
 
 ## Provenance or maturity
 
@@ -337,23 +345,14 @@ they are not re-proposed unless something material changes.
   early-stage, tested on one phone. It requests all-files storage for its game
   folder. Promote when it has a sustained history and releases keep installing
   over one another.
-- **Thor Command Panel** - https://github.com/BrianJr03/command-panel.
-  A GPL replacement for the AYN Thor's stock dual-screen assistant, by the
-  author of Jarngreipr, with two APKs per release (the panel and a separate
-  save-clip trigger app). It runs a root shell through the Thor's vendor
-  service, writes secure settings, and its install permission serves a
-  self-updater without a digest check and installers for the author's other
-  apps. The history is a single-author burst. Promote when it has a sustained
-  release history; its reach makes it worth an owner look before it is
-  offered beside Wayfinder.
 - **Resident Evil 4 Wii (RE4Wii-Android)** - https://github.com/PotatoRecomp/RE4Wii-Android.
   A GPL static recomp on WiiCompiled, run from the user's own disc, with one
   APK per release, from a brand-new organization with an entirely AI-written
   history. Release builds are signed with a debug key, it requests all-files
   storage, and its install permission serves a self-updater that checks
   GitHub's asset digest. The same organization's DefJam-FFNY-Android waits on
-  the same terms. Promote when the history is sustained and releases are
-  signed with a release key.
+  the same terms. Promote when the history is sustained and releases keep
+  installing over one another.
 - **GTA Liberty City Stories and Vice City Stories (gta-stories-recompiled)** - https://github.com/batinium/gta-stories-recompiled.
   A GPL port built on gta-vcs-recomp and PS2Recomp from an established
   account, with one APK per release beside desktop builds and a history of
@@ -373,6 +372,15 @@ they are not re-proposed unless something material changes.
   Diablo II and Half-Life ports in the packs, with one APK per release and
   only internet and vibrate. Game data is converted on a PC from the user's
   copy. The history is short. Promote when it has a sustained release history.
+- **hakuX-Advanced** - https://github.com/Jdewitz/hakuX-Advanced.
+  An unofficial fork of hakuX, which is in both packs, adding shaders, themes,
+  mods and trainers, from a young single-author repository that is largely
+  AI-written. Its releases carry one APK each and ship the debug build type:
+  a package id with a `.themes` suffix, so it sits beside hakuX rather than
+  replacing it, marked debuggable and signed with a debug certificate that has
+  held across releases. Its install permission serves a self-updater that
+  checks GitHub's asset digest, the package name and the installed signer.
+  Promote when it has a sustained release history.
 
 ## Declined
 
@@ -407,10 +415,6 @@ they are not re-proposed unless something material changes.
 - **Zelda: The Wind Waker HD (WindWakerHD-Android-Plus)** - https://github.com/Nycolazs/WindWakerHD-Android-Plus.
   A fork of the Wind Waker HD recomp already in both packs that reuses its
   package id, with a signing key that has changed across releases.
-- **hakuX-Advanced** - https://github.com/Jdewitz/hakuX-Advanced. An
-  experimental fork of hakuX, already in both packs. Its builds now carry their
-  own package id, with a `.themes` suffix set on the debug build type, so it
-  could sit beside hakuX; it has not been vetted as a separate app.
 - **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
   Went quiet after its first releases; the game is covered by the DK64
   Recompiled DS port in both packs.
