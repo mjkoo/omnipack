@@ -2,7 +2,7 @@
 
 ## 1. Catalog links leave out default-valued settings
 
-- [ ] 1.1 Make catalog link generation drop each GitHub and GitLab
+- [x] 1.1 Make catalog link generation drop each GitHub and GitLab
   `additionalSettings` key equal to that source's value in the defaults table,
   leaving HTML entries, entries without a source type and every other field
   unchanged; verify with catalog tests where a GitHub default-valued setting
@@ -10,7 +10,7 @@
   their other settings survive, a `0` kept against a `false` default, a GitHub entry whose settings string is not a
   JSON object round-trips exactly, and the HTML redirect fixture still
   round-trips exactly (`uv run pytest tests/test_catalog.py`)
-- [ ] 1.2 Record in the `settings_defaults.py` docstring that every listed
+- [x] 1.2 Record in the `settings_defaults.py` docstring that every listed
   GitHub and GitLab value equals what Obtainium v1.7.5 uses when the key is
   absent, and why catalog links depend on them; verify the docstring reads
   correctly without any other document
