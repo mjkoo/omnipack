@@ -58,23 +58,6 @@ they are not re-proposed unless something material changes.
   re-hosted repository or a maintained fork. Promote when one publishes Android
   APK releases and passes the usual checks, with particular weight on its
   takedown exposure.
-- **Citron Neo** - https://git.mythrax-rs.org/Citron-NEO/CI, formerly
-  https://github.com/citron-neo/CI.
-  A Nintendo Switch emulator that was in the pack until GitHub blocked the
-  repository carrying its Android nightly builds under a DMCA notice, along
-  with its forks; the project's source repository had been removed the same way
-  earlier. Its CI repository moved to a self-hosted Forgejo instance, keeping
-  the GitHub history and the same maintainers, and now builds from the
-  project's emulator repository on that host, signing with a stored keystore.
-  Each platform has fixed nightly and stable release tags whose assets are
-  replaced on every build, nightlies are marked as prereleases, and Android
-  releases carry a standard and an 8 Elite APK. Obtainium reads and downloads
-  the releases through its Forgejo source, but the host answers plain HTTP
-  clients with a Cloudflare browser challenge, so `pack check-live` may report
-  it inconclusive. The Android APK is signed with a generic debug certificate,
-  and the CI workflows before the move did no signing either, so it is unknown
-  whether successive builds install over one another. Promote when they do,
-  with particular weight on its takedown exposure.
 
 ## Provenance or maturity
 

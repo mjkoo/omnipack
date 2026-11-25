@@ -92,6 +92,14 @@ stable/beta pair sharing a numeric version requires revisiting the policy.
 Cemu uses its release tag rather than its release title, retaining its source
 URL and asset selection. RPCSX retains v20250425 unchanged.
 
+Citron Neo is an explicit extra on the project's self-hosted Forgejo CI
+repository, read through Obtainium's Forgejo source (`overrideSource:
+Codeberg`, which accepts other hosts). Each platform's nightly build replaces
+the assets of one fixed release marked as a prerelease, so the entry opts into
+prereleases, selects the Android nightly with the title filter
+`^Citron nightly .*\(android\)$`, turns off version detection and versions by
+the latest asset date.
+
 CTR, Shipwright, Vita3K, XenDroid, Ludashi, Cmod and Mjolnir explicitly
 set only `versionDetection: false`. Their complete source versions remain
 intact. Source polling, installation, background checks and notifications
@@ -117,7 +125,8 @@ build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
 and SleepManager keep the main app rather than their companion apps (which
 declare their own packages), GameNative keeps the non-XR build, and GT3
 Revisited keeps the phone build rather than the Meta Quest build, which
-declares the same package. Paper Cut publishes one APK per disc region, each
+declares the same package. Citron keeps the standard build rather than the
+Snapdragon 8 Elite build. Paper Cut publishes one APK per disc region, each
 declaring its own package, so its filter excludes the EU and JP builds and its
 id is the US build's. Terraduo Companion flags every release as a prerelease,
 so its entry opts into prereleases. Releases

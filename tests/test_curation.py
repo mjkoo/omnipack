@@ -160,6 +160,30 @@ def test_policies_preserve_existing_entries_and_settings():
             } == expected_record
 
 
+def test_citron_tracks_the_android_nightly_by_asset_date(
+    current_configuration: CurrentConfiguration,
+) -> None:
+    for variant in Variant:
+        document = json.loads(render(current_configuration.result.apps[variant]))
+        matches = [
+            app for app in document["apps"] if app["id"] == "org.citron.citron_emu"
+        ]
+        assert len(matches) == 1
+        app = matches[0]
+        assert normalize_project_url(app["url"]) == "git.mythrax-rs.org/Citron-NEO/CI"
+        assert app["overrideSource"] == "Codeberg"
+        settings = json.loads(app["additionalSettings"])
+        assert (
+            settings["filterReleaseTitlesByRegEx"] == r"^Citron nightly .*\(android\)$"
+        )
+        assert settings["apkFilterRegEx"] == "^(?!.*-8elite[.]apk$).*[.]apk$"
+        assert settings["useLatestAssetDateAsReleaseDate"] is True
+        assert settings["releaseDateAsVersion"] is True
+        assert settings["versionDetection"] is False
+        assert settings["includePrereleases"] is True
+        assert not settings["trackOnly"]
+
+
 def test_cinderbox_retains_release_selection_settings(
     current_configuration: CurrentConfiguration,
 ) -> None:

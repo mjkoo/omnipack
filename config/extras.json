@@ -394,6 +394,26 @@
     "dualScreen": true
   },
   {
+    "id": "org.citron.citron_emu",
+    "url": "https://git.mythrax-rs.org/Citron-NEO/CI",
+    "name": "Citron Neo",
+    "author": "Citron-NEO",
+    "categories": ["Emulator"],
+    "overrideSource": "Codeberg",
+    "additionalSettings": {
+      "includePrereleases": true,
+      "fallbackToOlderReleases": true,
+      "filterReleaseTitlesByRegEx": "^Citron nightly .*\\(android\\)$",
+      "verifyLatestTag": false,
+      "useLatestAssetDateAsReleaseDate": true,
+      "releaseDateAsVersion": true,
+      "apkFilterRegEx": "^(?!.*-8elite[.]apk$).*[.]apk$",
+      "versionDetection": false,
+      "trackOnly": false,
+      "about": "Nintendo Switch emulator"
+    }
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",
