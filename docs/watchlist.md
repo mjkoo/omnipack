@@ -56,17 +56,7 @@ they are not re-proposed unless something material changes.
   mirror builds from forks without an independent history. This entry tracks a
   successor, so a sweep keeps it while the original stays gone: search for a
   re-hosted repository or a maintained fork. Promote when one publishes Android
-  APK releases and passes the usual checks, with particular weight on its
-  takedown exposure.
-- **Citron Neo (successor host)** - formerly https://github.com/citron-neo/CI.
-  A Nintendo Switch emulator that was in the pack until GitHub blocked the
-  repository carrying its Android nightly builds under a DMCA notice, along
-  with its forks; the project's source repository had been removed the same way
-  earlier. The project's site still links only to the blocked repositories.
-  This entry tracks a successor, so a sweep keeps it while the original stays
-  blocked: check the project's site for a new release host. Promote when the
-  project publishes Android APK builds from a host that answers and Obtainium
-  can track, with particular weight on its takedown exposure.
+  APK releases and passes the usual checks.
 
 ## Provenance or maturity
 
@@ -84,28 +74,12 @@ they are not re-proposed unless something material changes.
   for it: a smaller feature set, a short AI-written history, and accessibility
   service plus Shizuku access. Promote as an optional alternative to Wayfinder
   once it has a sustained release history and outside use.
-- **New Super Mario Bros. Wii (NSMBW Recompiled)** - https://github.com/WitherBlitz/NSMB-Wii-Multiplayer-Recompilation.
+- **New Super Mario Bros. Wii (NSMBW Recompiled)** - https://github.com/WitherBlitz/NSMB-Wii-Recompilation.
   A GPL static recomp on WiiCompiled and aurora with one APK per release and
   outside contributors, but a young, almost entirely AI-written history in which
   releases have been pulled for game-breaking bugs. Its install permission
   serves a self-updater that checks its own release asset's digest.
   Promote when releases have stayed stable, with none pulled, for about a month.
-- **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
-  `config/deny.json`. Releases now install over one another under one signing
-  key, and its notes report Super Mario Galaxy booting on an AYN Thor, but it
-  has grown into a multi-game Wii hub that ships Nintendo's own menu music, HUD
-  art and cover scans, bundles a large mod patch, and in stable releases adds a
-  Brawl engine, with Brawl content generated from the user's own disc but
-  redistribution permission for the engine unrecorded. It requests all-files storage, and
-  its install permission serves an in-app updater, readable in the repository,
-  that installs only the latest stable release after checking GitHub's asset
-  digest, its own release inventory and the installed signing key. The author
-  has replaced APKs under an existing release tag, which Obtainium does not
-  detect as an update. Its notes do not say whether Brawl works on a single
-  screen. Promote by removing the denial when the owner accepts the
-  takedown exposure; triage then decides single as
-  for any codm arrival, with a
-  `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
   A gbarecomp-based recomp with one APK per release under a stable asset name,
   from a brand-new account with many quick recomps. The repository sets a
@@ -123,30 +97,11 @@ they are not re-proposed unless something material changes.
   GPU drivers without a digest check and is debug-signed. A catalog lists it,
   so it is denied meanwhile. Promote, by removing the denial and categorizing
   it, when it has a sustained history and outside use.
-- **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
-  An Android port of the DK64 N64 recomp with one APK per release, from an author
-  of many quick ports, with a short burst of largely automated commits and
-  little outside use; development went quiet after its first releases.
-  Promote when new APK releases show sustained maintenance and the project gains
-  outside use.
-
-- **Skies of Arcadia Legends: Recompiled** - https://github.com/ogdanimal/SkiesOfArcadiaLegends-Recomp.
-  A GPL GameCube static recomp on a patched Dolphin Android app, by the author
-  of the Goemon and Hybrid Heaven recomps, with one APK per release and a pinned
-  signing key. Every release is a beta prerelease, some carry no APK, and it
-  requests all-files storage for an optional data folder.
-  Promote when a release that is not a prerelease carries an Android APK.
-- **Need for Speed Carbon (NFS-CARBON-360-ANDROID-RECOMP)** - https://github.com/codepdbh/NFS-CARBON-360-ANDROID-RECOMP.
-  An experimental ReXGlue static recomp of the Xbox 360 game by the author of
-  the Need for Speed Underground and Most Wanted ports in the packs, with one
-  APK per release signed with the same key as those ports. It requests
-  all-files storage for its game folder, and its releases stopped after a short
-  burst. A continuation of the Underground 2 port by another author,
-  https://github.com/mininxd/NFSU2-Revived-Android, signs its releases with a
-  keystore whose password is committed to the public repository, so anyone can
-  build an APK that installs over it; it waits until the history is sustained.
-  Promote when Android releases have kept installing over one another for about
-  a month.
+- **Need for Speed: Underground 2 (NFSU2-Revived-Android)** - https://github.com/mininxd/NFSU2-Revived-Android.
+  A continuation of codepdbh's Underground 2 port, which is in the packs, by
+  another author. It signs its releases with a keystore whose password is
+  committed to the public repository, so anyone can build an APK that installs
+  over it. Promote when the history is sustained.
 - **Link's Awakening (LASRecomp Android Plus)** - https://github.com/Nycolazs/LASRecomp-Android-Plus.
   An almost entirely AI-written Android fork of the LASRecomp Switch recomp,
   with one APK per Android release beside upstream test tags. The game is
@@ -165,19 +120,15 @@ they are not re-proposed unless something material changes.
   Android support initial and unvalidated on devices.
   Promote when the documentation no longer describes Android as initial or as
   needing device validation.
-- **Sonic R (sonic-r-android)** - https://github.com/ZinexDa/sonic-r-android.
-  An Android port of the Sonic R PC decompilation under that project's
-  noncommercial license, from a small single-author account, with one
-  debug-signed APK per release under a stable asset name.
-  Promote when the history is sustained.
 - **God of War III (gow3_android)** - https://github.com/zFitness/gow3_android.
   A GPL fork of gow3_pc (now SpartanPort) on FEXCore and the shadPS4 renderer
   with wide outside use. Its standalone APK releases changed package id and
   signing key repeatedly and have stopped; the port now ships as a package
   imported into the author's nixport host app, whose alpha APK releases come
-  from a repository with no published source yet. Promote when a release
-  carries a trackable Android APK whose package id and signing key hold across
-  several releases; Sony trademark and takedown exposure is the owner's call.
+  from a repository with no published source yet, under the package id
+  `ro.cobrabm.fexdroid`, whose origin is unclear, and request all-files storage
+  and package installation. Promote when a release carries a trackable Android
+  APK whose package id and signing key hold across several releases.
 - **Ninja Gaiden Black Recompiled** - https://github.com/gamboozino/ngbrecomp.
   A GPL static recomp of the Xbox game with outside interest and a few outside
   contributors, but a young, heavily AI-assisted history. Releases that are not
@@ -207,10 +158,12 @@ they are not re-proposed unless something material changes.
 - **Midnight Club: Los Angeles (mcla-recomp-rv)** - https://github.com/gabrielbskk/mcla-recomp-rv.
   A GPL Android port built on holdmysocks/mcla-recomp, moved to a new
   repository after the earlier one was deleted, with a short, single-author
-  history. Its only regular release sits on a fixed tag whose APK name carries
-  no version, it is signed with a debug certificate, diagnostic prereleases
-  share the repository, and it supports Snapdragon and Adreno only, tested
-  mainly on one phone. Promote when it has a sustained history with versioned
+  history; its source now lives in a separate repository,
+  https://github.com/gabrielbskk/mcla-recomp-source. Its regular release is
+  signed with a debug certificate, experimental, diagnostic and device-specific
+  builds share the repository, development was announced as paused and then
+  resumed, and it supports Snapdragon and Adreno only, tested mainly on one
+  phone. Promote when it has a sustained history with versioned
   releases signed with a release key.
 - **Elder Scrolls 3 Morrowind (OpenMW-DS Duo Lite)** - https://github.com/SergeShack/OpenMW-DS.
   A GPL fork of Josh-Daniels/OpenMW-DS, the dual-screen OpenMW build already in
@@ -225,16 +178,6 @@ they are not re-proposed unless something material changes.
   the self-updater, pointed at its own releases. A fork tuned for one device is
   worth carrying when that device is popular. Promote when it has a sustained
   history and keeps pace with upstream OpenMW-DS releases.
-- **Zelda: Tears of the Kingdom (TotK Native)** - https://github.com/AurelioB/totk-android.
-  An MIT native Android runner for the user's own Switch dump, by the author of
-  the Banjo-Kazooie recomp and Cluster Tune already in the packs, with one APK
-  per release, Adreno GPUs only, and an optional second-screen companion for
-  the AYN Thor and Retroid Pocket Duo that is skipped on single-screen devices.
-  It requests all-files storage for game data, and its install permission
-  serves an opt-out self-updater that checks the APK's checksum and signing
-  certificate. The project is brand new and targets a recent first-party Nintendo title.
-  The owner accepts its takedown exposure.
-  Promote when it has a sustained release history.
 - **Need for Speed: Most Wanted (MostWanted-Android)** - https://github.com/RanggaCasper/MostWanted-Android.
   A GPL static recomp of the Xbox game on XboxXBE-Recomp, from an established
   account, with one APK per release, wide outside use and outside
@@ -252,16 +195,10 @@ they are not re-proposed unless something material changes.
   Kingdom fork of it) waits on the same terms.
   Promote when a release that is not a prerelease carries the APK.
 - **Super Mario All-Stars (SuperMarioAllStars)** - https://github.com/Darhkfox/SuperMarioAllStars.
-  A native port that runs from the user's own SNES ROM, with an Android APK
-  beside PC builds in each release, from a small account in a single burst of
-  commits. Promote when it has a sustained history.
-- **Persona 5 Royal (p5r-android)** - https://github.com/Brandon04Gonzalez/p5r-android.
-  An MIT native runner for the user's own Switch dump and keys, built on
-  BelmanteGu's SwitchGamesRecomp runtime, with one APK per release under a fixed
-  asset name, from an account that also maintains other Switch port
-  repositories, in a young burst of commits. It requests all-files storage for
-  game data. The same account's nier-android (NieR:Automata) waits on the same
-  terms. Promote when it has a sustained history.
+  An MIT native port that runs from the user's own SNES ROM, with an Android
+  APK beside PC builds in each release, signed with a debug certificate, from a
+  small account in a single burst of commits. Promote when it has a sustained
+  history.
 - **Banjo-Tooie (Tooie Recompiled)** - https://github.com/Frostie77/Tooie-Recompiled.
   An N64Recomp and RT64 port, well documented with device reports and only the
   internet permission, but from a brand-new account in a single burst of
@@ -274,9 +211,10 @@ they are not re-proposed unless something material changes.
   sustained history.
 - **Raitchi** - https://github.com/igawa6/Raitchi.
   An experimental runtime that runs Switch games natively with an Eden-derived
-  frontend, with one APK per release beside source and documentation files;
-  every release is a prerelease and most listed games only boot. Promote when
-  it leaves the experimental stage with a release that is not a prerelease.
+  frontend, with one APK per release beside source and documentation files,
+  signed with a local test certificate; every release is a prerelease and most
+  listed games only boot. Promote when it leaves the experimental stage with a
+  release that is not a prerelease.
 - **Final Fantasy VII (FF7Recomp)** - https://github.com/bhuiyah/ff7-recomp-android.
   A GPL static recomp of the Steam PC game on pcrecomp and FFNx, compiled on the
   device from the user's own copy, with one APK per release under a stable
@@ -302,10 +240,10 @@ they are not re-proposed unless something material changes.
 - **Delphis** - https://github.com/HiramRG/Delphis.
   An AYN Thor companion that sets Dolphin controls per game and shows a button
   guide on the bottom screen, from a brand-new, entirely AI-written repository
-  with no stated license. It publishes a single rolling `latest` release
-  carrying a release and a debug APK, and it requests an accessibility service
-  plus self-update permissions. Promote when it states a license, publishes
-  versioned releases and has a sustained history.
+  with no stated license. It publishes rolling `latest` and `beta` releases,
+  each carrying one APK with a checksum file, and it requests an accessibility
+  service plus self-update permissions. Promote when it states a license,
+  publishes versioned releases and has a sustained history.
 - **Boxshelf** - https://github.com/sassiestrhihno/boxshelf-beta.
   A GPL 3D box-art frontend for emulators and PC ports, with source published
   per beta in https://github.com/sassiestrhihno/boxshelf-source, wide outside
@@ -338,9 +276,34 @@ they are not re-proposed unless something material changes.
 - **Xenra** - https://github.com/Yebot32/xenra.
   A GPL Original Xbox and Xbox 360 emulator on xemu and Xenia Edge, with one
   APK per release, split between two accounts, that once sold a Patreon-gated
-  build. Its released package id has changed and no longer matches the one in
-  the repository. Promote when the package id holds across several releases
-  and matches the source, and the ownership is settled.
+  build. Its released package id keeps changing and does not match the one in
+  the repository, whose app source no longer follows the releases. Promote when
+  the package id holds across several releases, releases are built from the
+  published source, and the ownership is settled.
+- **Resident Evil 4 Wii (RE4Wii-Android)** - https://github.com/PotatoRecomp/RE4Wii-Android.
+  A GPL static recomp on WiiCompiled, run from the user's own disc, with one
+  APK per release, from a brand-new organization with an entirely AI-written
+  history. Release builds are signed with a debug key, it requests all-files
+  storage, and its install permission serves a self-updater that checks
+  GitHub's asset digest. The same organization's DefJam-FFNY-Android waits on
+  the same terms. Promote when the history is sustained and releases keep
+  installing over one another.
+- **Metroid: Samus Returns (msr2ds)** - https://github.com/gminustwo/msr2ds.
+  A GPL native port recompiled from the user's own 3DS dump, with one APK per
+  release beside desktop builds and only the vibrate permission, from a very
+  new, heavily AI-assisted account with a few outside contributors. Its README
+  says the developers have no Android device to test on, and the Android game
+  code is built on a PC first. Promote when Android is tested and the history
+  is sustained.
+- **hakuX-Advanced** - https://github.com/Jdewitz/hakuX-Advanced.
+  An unofficial fork of hakuX, which is in both packs, adding shaders, themes,
+  mods and trainers, from a young single-author repository that is largely
+  AI-written. Its releases carry one APK each and ship the debug build type:
+  a package id with a `.themes` suffix, so it sits beside hakuX rather than
+  replacing it, marked debuggable and signed with a debug certificate that has
+  held across releases. Its install permission serves a self-updater that
+  checks GitHub's asset digest, the package name and the installed signer.
+  Promote when it has a sustained release history.
 
 ## Declined
 
@@ -375,5 +338,12 @@ they are not re-proposed unless something material changes.
 - **Zelda: The Wind Waker HD (WindWakerHD-Android-Plus)** - https://github.com/Nycolazs/WindWakerHD-Android-Plus.
   A fork of the Wind Waker HD recomp already in both packs that reuses its
   package id, with a signing key that has changed across releases.
-- **hakuX-Advanced** - https://github.com/Jdewitz/hakuX-Advanced. An
-  experimental fork of hakuX, already in both packs, that reuses its package id.
+- **Donkey Kong 64 (DK64 Recompiled)** - https://github.com/deivid22srk/dk64-recomp-android.
+  Went quiet after its first releases; the game is covered by the DK64
+  Recompiled DS port in both packs.
+- **Persona 5 Royal (p5r-android) and NieR:Automata (nier-android)** - https://github.com/Brandon04Gonzalez/p5r-android
+  and https://github.com/Brandon04Gonzalez/nier-android. Maintenance stopped by
+  their author.
+- **Final Fantasy IX deck (Thor FF IX)** - https://github.com/harmssi/thor-ffix.
+  Needs a patched game DLL shipped in each release and installed by script,
+  beyond an APK.

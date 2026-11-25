@@ -49,7 +49,8 @@
   },
   {
     "url": "https://github.com/Maddex712/WiiDS",
-    "reason": "Held for an owner decision on takedown exposure: releases now install over one another, but the APK ships Nintendo menu music, HUD art and cover scans, and a prerelease adds a Brawl engine that its own notes say still contains original Nintendo data with redistribution permission unrecorded; remove this denial once the owner accepts that risk."
+    "reason": "Its README requires an AYN Thor with both screens.",
+    "packs": ["single"]
   },
   {
     "url": "https://github.com/mastercook777/Heimdall-AYN-Thor-Assistant",
@@ -64,6 +65,11 @@
   {
     "url": "https://github.com/Thor-Wayfinder/thor-wayfinder",
     "reason": "An AYN Thor second-screen tool with no use on one display.",
+    "packs": ["single"]
+  },
+  {
+    "url": "https://github.com/BrianJr03/command-panel",
+    "reason": "A replacement for the AYN Thor's stock dual-screen assistant with no use on one display.",
     "packs": ["single"]
   },
   {

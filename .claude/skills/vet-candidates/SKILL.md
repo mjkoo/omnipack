@@ -113,18 +113,25 @@ inferring it. Each candidate needs:
 - Suspicious signs: a brand-new account or organization with a single burst of
   commits, reuploaded binaries with no source, impersonation of an established
   project, releases with no downloads, a one-off fork far behind its upstream.
+- A young project is not a suspicious sign by itself. An author whose work is
+  already in the packs, or whose account has a real track record, carries that
+  record to a new project: it passes without waiting for a history of its own
+  when the rest of the bar holds.
 - Signals that help clear a project: stars, issues and outside contributors,
   download counts, press or community coverage, a real upstream it builds on, a
   small reviewable diff from upstream.
-- Legal murk (reverse-engineered closed code, for example) is a takedown risk,
-  not a malware risk. Surface it and let the owner decide.
+- Takedown exposure is not a criterion and is not written up: never hold, deny
+  or annotate an app over legal risk, bundled first-party assets or the chance
+  of a takedown. A project that might disappear is a reason to include it,
+  since the archive pipeline preserves what the packs track. Stating a removal
+  that already happened, such as a repository blocked by a DMCA notice, is fine.
 - No requirement may exceed what Obtainium itself requires: no host, signing or
   agreement prerequisites of our own.
 
 Verdicts: **ADD**, **WAIT** (would pass but is not trackable or mature yet;
 state what would promote it), or **SKIP** (out of scope or rejected; one line).
-Questions that are genuinely the owner's call (legal risk, a fork replacing an
-established entry, a borderline high-reach app) go to the owner with the
+Questions that are genuinely the owner's call (a fork replacing an established
+entry, a borderline high-reach app) go to the owner with the
 background needed to decide, not as a bare question.
 
 ## 3. Write additions

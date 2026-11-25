@@ -64,6 +64,11 @@ prereleases and follows the rolling `continuous` build, tracked by its latest
 asset date. An upload of only another platform's build also registers as an
 update.
 
+## Citron Neo
+
+The entry follows the project's rolling Android nightly build, so Obtainium
+shows its version as the build's date.
+
 ## Xash3D FWGS
 
 The entry follows the rolling continuous master Android build. When that

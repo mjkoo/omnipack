@@ -368,6 +368,94 @@
     }
   },
   {
+    "id": "org.sonicr.android",
+    "url": "https://github.com/ZinexDa/sonic-r-android",
+    "name": "Sonic R (sonic-r-android)",
+    "author": "ZinexDa",
+    "categories": ["Decomps/Recomps"]
+  },
+  {
+    "id": "jr.brian.commandpannel",
+    "url": "https://github.com/BrianJr03/command-panel",
+    "name": "Thor Command Panel",
+    "author": "BrianJr03",
+    "categories": ["Utilities"],
+    "dualScreen": true,
+    "additionalSettings": {
+      "apkFilterRegEx": "^(?!tcp-sc-).*[.]apk$"
+    }
+  },
+  {
+    "id": "com.aure.totk",
+    "url": "https://github.com/AurelioB/totk-android",
+    "name": "Zelda: Tears of the Kingdom (TotK Native)",
+    "author": "AurelioB",
+    "categories": ["Decomps/Recomps"],
+    "dualScreen": true
+  },
+  {
+    "id": "de.harmssi.thoraok",
+    "url": "https://github.com/harmssi/thor-aok",
+    "name": "Age of Empires II (Thor AoK)",
+    "author": "harmssi",
+    "categories": ["PC Ports"],
+    "dualScreen": true
+  },
+  {
+    "id": "com.skiesofarcadia.recomp",
+    "url": "https://github.com/ogdanimal/SkiesOfArcadiaLegends-Recomp",
+    "name": "Skies of Arcadia Legends: Recompiled",
+    "author": "ogdanimal",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {
+      "includePrereleases": true
+    }
+  },
+  {
+    "id": "com.nfscarbon.android",
+    "url": "https://github.com/codepdbh/NFS-CARBON-360-ANDROID-RECOMP",
+    "name": "Need for Speed: Carbon (NFS-CARBON-360-ANDROID-RECOMP)",
+    "author": "codepdbh",
+    "categories": ["Decomps/Recomps"]
+  },
+  {
+    "id": "com.sporere.game",
+    "url": "https://github.com/VinTeRuS/spore-re",
+    "name": "Spore (spore-re)",
+    "author": "VinTeRuS",
+    "categories": ["Decomps/Recomps"],
+    "additionalSettings": {
+      "versionDetection": false
+    }
+  },
+  {
+    "id": "com.batinium.gtastories",
+    "url": "https://github.com/batinium/gta-stories-recompiled",
+    "name": "Grand Theft Auto: Liberty City Stories and Vice City Stories (GTA Stories Recompiled)",
+    "author": "batinium",
+    "categories": ["Decomps/Recomps"]
+  },
+  {
+    "id": "org.citron.citron_emu",
+    "url": "https://git.mythrax-rs.org/Citron-NEO/CI",
+    "name": "Citron Neo",
+    "author": "Citron-NEO",
+    "categories": ["Emulator"],
+    "overrideSource": "Codeberg",
+    "additionalSettings": {
+      "includePrereleases": true,
+      "fallbackToOlderReleases": true,
+      "filterReleaseTitlesByRegEx": "^Citron nightly .*\\(android\\)$",
+      "verifyLatestTag": false,
+      "useLatestAssetDateAsReleaseDate": true,
+      "releaseDateAsVersion": true,
+      "apkFilterRegEx": "^(?!.*-8elite[.]apk$).*[.]apk$",
+      "versionDetection": false,
+      "trackOnly": false,
+      "about": "Nintendo Switch emulator"
+    }
+  },
+  {
     "id": "809443320",
     "url": "https://github.com/mjkoo/omnipack",
     "name": "Omnipack Updates",

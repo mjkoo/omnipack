@@ -92,14 +92,23 @@ stable/beta pair sharing a numeric version requires revisiting the policy.
 Cemu uses its release tag rather than its release title, retaining its source
 URL and asset selection. RPCSX retains v20250425 unchanged.
 
-CTR, Shipwright, Vita3K, XenDroid, Ludashi, Cmod and Mjolnir explicitly
-set only `versionDetection: false`. Their complete source versions remain
-intact. Source polling, installation, background checks and notifications
-remain enabled; this does not turn them into track-only entries.
+Citron Neo is an explicit extra on the project's self-hosted Forgejo CI
+repository, read through Obtainium's Forgejo source (`overrideSource:
+Codeberg`, which accepts other hosts). Each platform's nightly build replaces
+the assets of one fixed release marked as a prerelease, so the entry opts into
+prereleases, selects the Android nightly with the title filter
+`^Citron nightly .*\(android\)$`, turns off version detection and versions by
+the latest asset date.
+
+CTR, Shipwright, Vita3K, XenDroid, Ludashi, Cmod, Mjolnir and Spore (spore-re)
+explicitly set only `versionDetection: false`. Their complete source versions
+remain intact. Source polling, installation, background checks and
+notifications remain enabled; this does not turn them into track-only entries.
 Shipwright's v9.0.2, v9.0.2P1 and v9.0.2P2 must remain distinguishable even
 though the inspected APK reports 9.0.2. Vita3K's build number is distinct
 from its APK version. Date tags, commit hashes, hotfix markers and Cmod's
-labels likewise require preserving source identity.
+labels likewise require preserving source identity. Every Spore APK reports
+version 0.1 whatever its release tag.
 
 LEGO Island Portable (isle-portable) publishes every build under one rolling
 `continuous` tag, so it sets `releaseDateAsVersion: true` with
@@ -117,10 +126,12 @@ build, which is listed first. Moonlight keeps the non-root build, X360 Mobile
 and SleepManager keep the main app rather than their companion apps (which
 declare their own packages), GameNative keeps the non-XR build, and GT3
 Revisited keeps the phone build rather than the Meta Quest build, which
-declares the same package. Paper Cut publishes one APK per disc region, each
+declares the same package. Citron keeps the standard build rather than the
+Snapdragon 8 Elite build. Paper Cut publishes one APK per disc region, each
 declaring its own package, so its filter excludes the EU and JP builds and its
-id is the US build's. Terraduo Companion flags every release as a prerelease,
-so its entry opts into prereleases. Releases
+id is the US build's. Terraduo Companion and Skies of Arcadia Legends:
+Recompiled flag every release as a prerelease, so their entries opt into
+prereleases. Releases
 whose APKs are alternative builds of one app for different Android versions,
 regions or preferences, such as ARMSX2 and Simpsons Hit and Run,
 keep every alternative, so Obtainium asks which one to install. Filters exclude
