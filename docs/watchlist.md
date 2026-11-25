@@ -93,17 +93,17 @@ they are not re-proposed unless something material changes.
 - **WiiDS** - https://github.com/Maddex712/WiiDS. Denied in
   `config/deny.json`. Releases now install over one another under one signing
   key, and its notes report Super Mario Galaxy booting on an AYN Thor, but it
-  has grown into a multi-game Wii and GameCube hub that ships Nintendo's own menu music, HUD
-  art and cover scans, bundles a large mod patch, and in stable releases adds a
-  Brawl engine, with Brawl content generated from the user's own disc but
-  redistribution permission for the engine unrecorded. It requests all-files storage, and
-  its install permission serves an in-app updater, readable in the repository,
-  that installs only the latest stable release after checking GitHub's asset
-  digest, its own release inventory and the installed signing key. The author
-  has replaced APKs under an existing release tag, which Obtainium does not
-  detect as an update. Its notes do not say whether Brawl works on a single
-  screen. Promote by removing the denial when the owner accepts the
-  takedown exposure; triage then decides single as
+  has grown into a multi-game Wii and GameCube hub that ships Nintendo's own
+  menu music, HUD art and cover scans, bundles a large mod patch, and in stable
+  releases adds a Brawl engine, with Brawl content generated from the user's own
+  disc but redistribution permission for the engine unrecorded. It requests
+  all-files storage, and its install permission serves an in-app updater,
+  readable in the repository, that installs only the latest stable release
+  after checking GitHub's asset digest, its own release inventory and the
+  installed signing key. The author has replaced APKs under an existing release
+  tag, which Obtainium does not detect as an update. Its notes do not say
+  whether Brawl works on a single screen. Promote by removing the denial when
+  the owner accepts the takedown exposure; triage then decides single as
   for any codm arrival, with a
   `"packs": ["single"]` denial if it does not work on one display.
 - **MOTHER 3 (Mother3Recomp)** - https://github.com/josiahg2502-glitch/Mother3Recomp.
@@ -246,7 +246,8 @@ they are not re-proposed unless something material changes.
 - **Super Mario All-Stars (SuperMarioAllStars)** - https://github.com/Darhkfox/SuperMarioAllStars.
   An MIT native port that runs from the user's own SNES ROM, with an Android
   APK beside PC builds in each release, signed with a debug certificate, from a
-  small account in a single burst of commits. Promote when it has a sustained history.
+  small account in a single burst of commits. Promote when it has a sustained
+  history.
 - **Banjo-Tooie (Tooie Recompiled)** - https://github.com/Frostie77/Tooie-Recompiled.
   An N64Recomp and RT64 port, well documented with device reports and only the
   internet permission, but from a brand-new account in a single burst of
@@ -260,8 +261,9 @@ they are not re-proposed unless something material changes.
 - **Raitchi** - https://github.com/igawa6/Raitchi.
   An experimental runtime that runs Switch games natively with an Eden-derived
   frontend, with one APK per release beside source and documentation files,
-  signed with a local test certificate; every release is a prerelease and most listed games only boot. Promote when
-  it leaves the experimental stage with a release that is not a prerelease.
+  signed with a local test certificate; every release is a prerelease and most
+  listed games only boot. Promote when it leaves the experimental stage with a
+  release that is not a prerelease.
 - **Final Fantasy VII (FF7Recomp)** - https://github.com/bhuiyah/ff7-recomp-android.
   A GPL static recomp of the Steam PC game on pcrecomp and FFNx, compiled on the
   device from the user's own copy, with one APK per release under a stable
@@ -288,9 +290,9 @@ they are not re-proposed unless something material changes.
   An AYN Thor companion that sets Dolphin controls per game and shows a button
   guide on the bottom screen, from a brand-new, entirely AI-written repository
   with no stated license. It publishes rolling `latest` and `beta` releases,
-  each carrying one APK with a checksum file, and it requests an accessibility service
-  plus self-update permissions. Promote when it states a license, publishes
-  versioned releases and has a sustained history.
+  each carrying one APK with a checksum file, and it requests an accessibility
+  service plus self-update permissions. Promote when it states a license,
+  publishes versioned releases and has a sustained history.
 - **Boxshelf** - https://github.com/sassiestrhihno/boxshelf-beta.
   A GPL 3D box-art frontend for emulators and PC ports, with source published
   per beta in https://github.com/sassiestrhihno/boxshelf-source, wide outside
