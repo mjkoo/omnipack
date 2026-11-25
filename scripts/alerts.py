@@ -86,8 +86,9 @@ main-advanced outcome accounts for adds the same finding. A step result is its
 value counts for nothing.
 
 nightly-prepare: PREPARE_STAGE and PREPARE_STAGES, the prepare step's `stage`
-and `stages` outputs (stages comma-separated), and the build report at --report
-(default .build/report.json).
+and `stages` outputs (stages comma-separated), the build report at --report
+(default .build/report.json), and, after a successful build, the size of
+README.md in the working directory.
 nightly-publish: PUSH_OUTCOME and RELEASE_OUTCOME, the push and release steps'
 `outcome` outputs (ok, main-advanced or failed; empty when a step did not run).
 SOURCE-check, for each reviewed SOURCE: GENERATION_RESULT, STAGING_RESULT,
@@ -613,6 +614,11 @@ DEFAULT_OUTPUT = Path(".build/alerts/findings.json")
 BUILD_REPORT = Path(".build/report.json")
 LIVE_CHECK_REPORT = Path(".build/live-check/report.json")
 ARCHIVE_REPORT = Path(".build/archive/report.json")
+README = Path("README.md")
+# GitHub stops rendering a README after README_RENDER_LIMIT bytes, silently.
+# The finding is raised README_SIZE_THRESHOLD bytes in, about 50 KiB earlier.
+README_RENDER_LIMIT = 512_000
+README_SIZE_THRESHOLD = 460_800
 # The prepare stage names `scripts.nightly` reports, mapped to the slug each
 # one has in a key. A test outside the 3.12 run keeps these keys equal to that
 # script's stage names other than `complete`.
@@ -635,6 +641,7 @@ BUILD_STALE_CATEGORY = _BUILD_PREFIX + "stale-category/"
 BUILD_REDUNDANT_PATCH = _BUILD_PREFIX + "redundant-patch/"
 BUILD_LISTED_EXTRA = _BUILD_PREFIX + "listed-extra/"
 BUILD_REPEATED_ID = _BUILD_PREFIX + "repeated-id/"
+BUILD_README_SIZE = _BUILD_PREFIX + "readme-size"
 _LIVE_PREFIX = LIVE_CHECK.prefixes[0]
 LIVE_READ = _LIVE_PREFIX + "read"
 LIVE_GONE = _LIVE_PREFIX + "gone/"
@@ -739,9 +746,12 @@ def _result(environ: Mapping[str, str], name: str) -> StepOutcome | None:
 
 
 def emit_nightly_prepare(
-    environ: Mapping[str, str], report_path: Path = BUILD_REPORT
+    environ: Mapping[str, str],
+    report_path: Path = BUILD_REPORT,
+    readme_path: Path = README,
 ) -> FindingsFile:
-    """Stage findings from the prepare step's outputs, build warnings from its report."""
+    """Stage findings from the prepare step's outputs, build warnings from its
+    report, and a README-size finding from the README a successful build wrote."""
     owner = NIGHTLY_PREPARE
     prefix = owner.prefixes[0]
     findings: list[Finding] = []
@@ -767,6 +777,7 @@ def emit_nightly_prepare(
         findings += _build_warnings(report)
         if parse_literal(report.get("status"), REPORT_STATUSES) == "success":
             scope.append(_BUILD_PREFIX)
+            findings += _readme_size(readme_path)
     return _finish(
         owner,
         environ,
@@ -865,6 +876,36 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
                 )
             )
     return findings
+
+
+def _readme_size(path: Path) -> list[Finding]:
+    """The README-size finding when the README at `path` exceeds the threshold."""
+    if regular_file_problem(path) is not None:
+        return []
+    try:
+        size = path.stat().st_size
+    except OSError:
+        return []
+    if size <= README_SIZE_THRESHOLD:
+        return []
+    # The title carries no size, so a growing README does not retitle the
+    # issue every night.
+    state = (
+        "is past GitHub's render limit and is cut off"
+        if size > README_RENDER_LIMIT
+        else "is nearing GitHub's render limit"
+    )
+    return [
+        _finding(
+            BUILD_README_SIZE,
+            f"README {state}",
+            [
+                f"README.md size: {size} bytes",
+                f"Warning threshold: {README_SIZE_THRESHOLD} bytes",
+                f"GitHub render limit: {README_RENDER_LIMIT} bytes",
+            ],
+        )
+    ]
 
 
 class WriteStep(NamedTuple):
@@ -1122,12 +1163,17 @@ def _entry_line(item: Mapping[str, object]) -> list[str]:
 
 
 def emit(
-    owner: Owner, environ: Mapping[str, str], report_path: Path | None = None
+    owner: Owner,
+    environ: Mapping[str, str],
+    report_path: Path | None = None,
+    readme_path: Path = README,
 ) -> FindingsFile:
     """The findings file for `owner` from the environment `EMIT_HELP` documents."""
     match owner.job, owner.source:
         case "nightly-prepare", None:
-            return emit_nightly_prepare(environ, report_path or BUILD_REPORT)
+            return emit_nightly_prepare(
+                environ, report_path or BUILD_REPORT, readme_path
+            )
         case "nightly-publish", None:
             return emit_nightly_publish(environ)
         case "live-check", None:

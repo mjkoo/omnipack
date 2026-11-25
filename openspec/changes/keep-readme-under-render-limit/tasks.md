@@ -17,7 +17,7 @@
 
 ## 2. The nightly raises an alert when the README nears the limit
 
-- [ ] 2.1 After a build report records a successful build, make the
+- [x] 2.1 After a build report records a successful build, make the
   nightly-prepare alert step read `README.md`'s size and raise the
   `build/readme-size` finding when it exceeds the 460,800-byte threshold,
   titled by whether it exceeds GitHub's 512,000-byte limit with no byte count,
@@ -25,7 +25,7 @@
   tests for a README of 470,000 bytes (nearing), 520,000 bytes (past), exactly
   460,800 bytes (no finding), and a failed build (no finding, not in scope),
   adding rows to an existing build-warning table where one fits
-- [ ] 2.2 Document the `build/readme-size` key and what it guards in
+- [x] 2.2 Document the `build/readme-size` key and what it guards in
   `docs/alerts.md`, beside the other `build/` keys; verify the key table and
   the prose agree with the alert code
 
