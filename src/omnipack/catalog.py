@@ -16,6 +16,8 @@ from omnipack.composition_policy import (
     rendered_key,
     repeated_labels,
 )
+from omnipack.model import SourceType
+from omnipack.settings_defaults import SETTINGS_DEFAULTS
 
 START_MARKER = b"<!-- omnipack:catalog:start -->"
 END_MARKER = b"<!-- omnipack:catalog:end -->"
@@ -186,7 +188,7 @@ def _cell(record: dict[str, Any] | None) -> str:
     source_url = escape(quote(record["url"], safe=":/?&=#%+@;,"), quote=True)
     try:
         compact = json.dumps(
-            record,
+            _without_default_settings(record),
             ensure_ascii=False,
             allow_nan=False,
             separators=(",", ":"),
@@ -202,6 +204,50 @@ def _cell(record: dict[str, Any] | None) -> str:
         f'<a href="{source_url}">{_inline_html_text(source)}</a> · '
         f'<a href="{redirect_url}">Add to Obtainium</a>'
     )
+
+
+_TRIMMED_SOURCES = (SourceType.GITHUB, SourceType.GITLAB)
+
+
+def _without_default_settings(record: dict[str, Any]) -> dict[str, Any]:
+    """The record a catalog link carries: GitHub and GitLab settings equal to
+    their source's defaults table value are left out.
+
+    Obtainium fills a setting an app deep link omits with its source's default
+    on import, and a complete record per link makes the README too large for
+    GitHub to render. HTML entries keep every setting, because Obtainium's HTML
+    import migrations read the settings as sent. Settings that are not a JSON
+    object string are linked unchanged.
+    """
+    source = record.get("overrideSource")
+    settings = record.get("additionalSettings")
+    if source not in _TRIMMED_SOURCES or not isinstance(settings, str):
+        return record
+    try:
+        decoded = json.loads(settings)
+        if not isinstance(decoded, dict):
+            return record
+        defaults = SETTINGS_DEFAULTS[SourceType(source)]
+        kept = {
+            key: value
+            for key, value in decoded.items()
+            if not _is_default(value, defaults.get(key, _ABSENT))
+        }
+        trimmed = json.dumps(
+            kept, ensure_ascii=False, allow_nan=False, separators=(",", ":")
+        )
+    except ValueError:
+        return record
+    return {**record, "additionalSettings": trimmed}
+
+
+_ABSENT = object()
+
+
+def _is_default(value: object, default: object) -> bool:
+    # Python treats 0 and False as equal; a setting matches its default only
+    # with the default's type.
+    return type(value) is type(default) and value == default
 
 
 def _standalone_line(data: bytes, marker: bytes) -> tuple[int, int] | None:

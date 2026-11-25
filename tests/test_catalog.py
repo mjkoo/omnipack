@@ -82,7 +82,7 @@ def decoded_apps(catalog: bytes) -> list[dict[str, object]]:
     return links
 
 
-def test_catalog_groups_variants_by_current_family_and_preserves_exact_apps() -> None:
+def test_catalog_groups_variants_and_links_apps_without_default_settings() -> None:
     single = app(
         "org.example.standard",
         "Shared App",
@@ -96,7 +96,7 @@ def test_catalog_groups_variants_by_current_family_and_preserves_exact_apps() ->
         "Different Name",
         "https://example.test/dual",
         categories=["Other upstream category"],
-        additionalSettings='{"trackOnly":true}',
+        additionalSettings='{"trackOnly":true,"includePrereleases":false}',
     )
     catalog = generate_catalog(
         pack(single, settings={"packWide": "excluded"}),
@@ -115,7 +115,10 @@ def test_catalog_groups_variants_by_current_family_and_preserves_exact_apps() ->
     assert text.count("| Shared App |") == 1
     assert "<summary>Utilities</summary>" in text
     assert text.index("standard?x=1&amp;y=%25#release") < text.index("Add to Obtainium")
-    assert decoded_apps(catalog) == [single, dual]
+    assert decoded_apps(catalog) == [
+        single,
+        {**dual, "additionalSettings": '{"trackOnly":true}'},
+    ]
 
 
 def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() -> None:
@@ -124,11 +127,33 @@ def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() ->
         "Aurora Store",
         "https://gitlab.com/AuroraOSS/Parent/AuroraStore",
         source="GitLab",
-        additionalSettings=json.dumps({"fallbackToOlderReleases": True}),
+        additionalSettings=json.dumps(
+            {"fallbackToOlderReleases": True, "apkFilterRegEx": "x"}
+        ),
     )
     catalog = generate_catalog(pack(gitlab), pack(dict(gitlab)), policy())
     assert catalog.decode().count(">GitLab</a>") == 2
-    assert decoded_apps(catalog) == [gitlab, gitlab]
+    linked = {**gitlab, "additionalSettings": '{"apkFilterRegEx":"x"}'}
+    assert decoded_apps(catalog) == [linked, linked]
+
+
+@pytest.mark.parametrize(
+    "settings",
+    [
+        # 0 == False in Python, but a 0 is not the boolean default.
+        '{"includePrereleases":0}',
+        "[false]",
+        "not json",
+    ],
+)
+def test_github_link_keeps_settings_that_are_not_default_valued_objects(
+    settings: str,
+) -> None:
+    github = app(
+        "org.example.app", "App", "https://github.com/o/r", additionalSettings=settings
+    )
+    catalog = generate_catalog(pack(github), pack(), policy())
+    assert decoded_apps(catalog) == [github]
 
 
 def test_entry_without_a_source_type_is_labelled_by_its_host() -> None:

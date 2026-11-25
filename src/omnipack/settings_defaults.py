@@ -4,6 +4,13 @@ The GitHub and HTML key sets were seeded from Obtainium v1.6.14 and checked
 against the exports produced by RJNY/Obtainium-Emulation-Pack. The bounded
 GitLab defaults were checked against Obtainium v1.6.15. Source schema:
 https://github.com/ImranR98/Obtainium/tree/v1.6.14/lib/app_sources
+
+Every GitHub and GitLab value listed here also equals what Obtainium v1.7.5
+uses when an imported app omits that key. README catalog links depend on this:
+they leave out GitHub and GitLab settings equal to these values, and Obtainium
+fills each omitted setting with its default when it imports the link. If
+Obtainium changes one of these defaults, a trimmed link imports the new value
+while the packs keep the old one.
 """
 
 from __future__ import annotations
