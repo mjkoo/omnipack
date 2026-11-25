@@ -97,23 +97,11 @@ they are not re-proposed unless something material changes.
   GPU drivers without a digest check and is debug-signed. A catalog lists it,
   so it is denied meanwhile. Promote, by removing the denial and categorizing
   it, when it has a sustained history and outside use.
-- **Skies of Arcadia Legends: Recompiled** - https://github.com/ogdanimal/SkiesOfArcadiaLegends-Recomp.
-  A GPL GameCube static recomp on a patched Dolphin Android app, by the author
-  of the Goemon and Hybrid Heaven recomps, with one APK per release and a pinned
-  signing key. Every release is a beta prerelease, some carry no APK, and it
-  requests all-files storage for an optional data folder.
-  Promote when a release that is not a prerelease carries an Android APK.
-- **Need for Speed Carbon (NFS-CARBON-360-ANDROID-RECOMP)** - https://github.com/codepdbh/NFS-CARBON-360-ANDROID-RECOMP.
-  An experimental ReXGlue static recomp of the Xbox 360 game by the author of
-  the Need for Speed Underground and Most Wanted ports in the packs, with one
-  APK per release signed with the same key as those ports. It requests
-  all-files storage for its game folder, and its releases stopped after a short
-  burst. A continuation of the Underground 2 port by another author,
-  https://github.com/mininxd/NFSU2-Revived-Android, signs its releases with a
-  keystore whose password is committed to the public repository, so anyone can
-  build an APK that installs over it; it waits until the history is sustained.
-  Promote when Android releases have kept installing over one another for about
-  a month.
+- **Need for Speed: Underground 2 (NFSU2-Revived-Android)** - https://github.com/mininxd/NFSU2-Revived-Android.
+  A continuation of codepdbh's Underground 2 port, which is in the packs, by
+  another author. It signs its releases with a keystore whose password is
+  committed to the public repository, so anyone can build an APK that installs
+  over it. Promote when the history is sustained.
 - **Link's Awakening (LASRecomp Android Plus)** - https://github.com/Nycolazs/LASRecomp-Android-Plus.
   An almost entirely AI-written Android fork of the LASRecomp Switch recomp,
   with one APK per Android release beside upstream test tags. The game is
@@ -292,14 +280,6 @@ they are not re-proposed unless something material changes.
   the repository, whose app source no longer follows the releases. Promote when
   the package id holds across several releases, releases are built from the
   published source, and the ownership is settled.
-- **Spore (spore-re)** - https://github.com/VinTeRuS/spore-re.
-  A static x86 recomp of the PC game on the author's own Win32 and D3D9 layer,
-  run from the user's own copy, from an established account. Releases carry
-  two APKs (Vulkan 1.3 and Vulkan 1.1 builds sharing one package id), there is
-  no license file, APKs are debug-signed, and the history is single-author and
-  early-stage, tested on one phone. It requests all-files storage for its game
-  folder. Promote when it has a sustained history and releases keep installing
-  over one another.
 - **Resident Evil 4 Wii (RE4Wii-Android)** - https://github.com/PotatoRecomp/RE4Wii-Android.
   A GPL static recomp on WiiCompiled, run from the user's own disc, with one
   APK per release, from a brand-new organization with an entirely AI-written
@@ -308,13 +288,6 @@ they are not re-proposed unless something material changes.
   GitHub's asset digest. The same organization's DefJam-FFNY-Android waits on
   the same terms. Promote when the history is sustained and releases keep
   installing over one another.
-- **GTA Liberty City Stories and Vice City Stories (gta-stories-recompiled)** - https://github.com/batinium/gta-stories-recompiled.
-  A GPL port built on gta-vcs-recomp and PS2Recomp from an established
-  account, with one APK per release beside desktop builds and a history of
-  release snapshots only. The APK is a runtime; the game library is built on a
-  PC from the user's disc and imported. Its install permission serves an
-  updater that checks the published digest and signing key. Promote when the
-  history is sustained.
 - **Metroid: Samus Returns (msr2ds)** - https://github.com/gminustwo/msr2ds.
   A GPL native port recompiled from the user's own 3DS dump, with one APK per
   release beside desktop builds and only the vibrate permission, from a very
@@ -322,11 +295,6 @@ they are not re-proposed unless something material changes.
   says the developers have no Android device to test on, and the Android game
   code is built on a PC first. Promote when Android is tested and the history
   is sustained.
-- **Age of Kings (Thor AoK)** - https://github.com/harmssi/thor-aok.
-  An MIT fork of openaok, keeping upstream history, by the author of the Thor
-  Diablo II and Half-Life ports in the packs, with one APK per release and
-  only internet and vibrate. Game data is converted on a PC from the user's
-  copy. The history is short. Promote when it has a sustained release history.
 - **hakuX-Advanced** - https://github.com/Jdewitz/hakuX-Advanced.
   An unofficial fork of hakuX, which is in both packs, adding shaders, themes,
   mods and trainers, from a young single-author repository that is largely
