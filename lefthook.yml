@@ -25,6 +25,9 @@ pre-commit:
 
     - name: no-fancy-dashes
       glob: "*"
+      # `openspec update` generates these skills; keep them as generated.
+      exclude:
+        - ".agents/skills/openspec-*/**"
       run: >
         ! grep -nIE "$(printf '\342\200\222|\342\200\223|\342\200\224|\342\200\225|\342\210\222')" {staged_files} ||
         { echo "Found em-dash or en-dash characters. Use plain hyphens instead."; exit 1; }
