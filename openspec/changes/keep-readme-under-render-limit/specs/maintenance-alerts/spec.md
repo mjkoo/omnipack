@@ -34,7 +34,7 @@ a finding for each of these problems, and for no other outcome:
 - each package id the build report lists as repeated within a variant, one
   finding per variant and package id;
 - a README a successful nightly build rendered that exceeds 460,800 bytes,
-  one finding;
+  one finding, which counts as a build warning;
 - a release archive run that cannot read the committed packs or reach its
   bucket;
 - a producing job whose findings do not reach the alert job intact, that

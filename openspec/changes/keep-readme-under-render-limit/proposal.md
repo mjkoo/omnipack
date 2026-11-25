@@ -33,8 +33,8 @@ This retires the guarantee that decoding a catalog link recovers the exported
 app record exactly: for GitHub and GitLab entries it recovers the record minus
 default-valued settings. It retires nothing else.
 
-Estimated size: one modified requirement each in readme-catalog and
-maintenance-alerts, and about five scenarios; about 50 implementation lines and
+Estimated size: two modified requirements in readme-catalog, one each in
+maintenance-alerts and pack-verification, and about five scenarios; about 50 implementation lines and
 60 test lines.
 
 ## Capabilities
@@ -50,6 +50,9 @@ None.
   record.
 - `maintenance-alerts`: a README a successful nightly build rendered over
   450 KiB raises one finding.
+- `pack-verification`: the stale-import-link scenario describes a link left
+  behind by an earlier configuration, since a trimmed link legitimately
+  differs from the exported record.
 
 ## Impact
 

@@ -83,8 +83,9 @@ applies to the file. Gating on a successful build keeps the check inside the
 issue, and a failed build neither raises nor closes it.
 
 The title says whether the README is nearing or past the limit and carries no
-byte count, so a growing README does not re-edit the issue every night; the
-details give the size, the threshold and the limit. A single nightly can add
+byte count, so a growing README does not retitle the issue every night; the
+details give the size, the threshold and the limit, so a changed size updates
+the issue body as any finding's new details do. A single nightly can add
 enough apps to cross both numbers at once, and the title then says the README
 is already truncated. With one README there is one key and no subject.
 
