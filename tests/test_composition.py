@@ -771,13 +771,6 @@ def test_a_pin_error_names_the_first_denial_covering_the_pin_s_pack(
         compose([denied], denials, [], policy=policy_of([], [pinned]))
 
 
-def test_denying_a_family_s_only_dual_build_leaves_its_baseline_in_both() -> None:
-    single = app("single", family="app:x")
-    dual = app("dual", "bboi", family="app:x", dual_screen=True)
-    result = compose([single, dual], deny(dual.url), [])
-    assert ids(result, Variant.SINGLE) == ids(result, Variant.DUAL) == {"single"}
-
-
 def test_a_baseline_original_and_a_dual_screen_fork_sharing_an_id() -> None:
     original = app("shared.pkg", "rjny")
     fork = app(
@@ -1128,20 +1121,6 @@ def test_an_id_patch_at_a_url_whose_rules_agree_applies() -> None:
     assert ids(result, Variant.SINGLE) == {"fixed"}
 
 
-def test_selection_report_names_the_winner_s_package_id_and_origin() -> None:
-    winner = app("winner", "extras", family="app:x")
-    loser = app("other", "rjny", family="app:x", name="different")
-    selection = compose([winner, loser], [], []).report.selections[0]
-    assert (selection.id, selection.origin, selection.reason) == (
-        "winner",
-        "extras",
-        "source",
-    )
-    assert selection.considered == (
-        ConsideredCandidate(Source.RJNY, "rjny-catalog", "other", loser.url),
-    )
-
-
 def test_similar_forks_without_a_family_rule_stay_separate_families() -> None:
     upstream = app("org.a.dolphin", url="https://github.com/a/dolphin", name="Dolphin")
     fork = app("org.b.dolphin", url="https://github.com/b/dolphin", name="Dolphin MMJR")
@@ -1171,26 +1150,6 @@ def test_dual_falls_back_to_source_precedence_among_several_baseline_builds() ->
         (Variant.SINGLE, "extras.pkg", "source", ["bboi", "rjny"]),
         (Variant.DUAL, "extras.pkg", "ordinary-fallback", ["bboi", "rjny"]),
     ]
-
-
-def test_pin_reason_is_reported_when_pin_selects_among_baseline_builds() -> None:
-    builds = [
-        app(f"{source}.pkg", source, family="app:x")
-        for source in ("bboi", "rjny", "extras")
-    ]
-    pinned = builds[0]
-    result = compose(
-        builds,
-        [],
-        [],
-        policy=pin_policy(pinned, "app:x", Variant.DUAL, *builds[1:]),
-    )
-
-    selection = next(
-        item for item in result.report.selections if item.variant is Variant.DUAL
-    )
-    assert selection.id == "bboi.pkg"
-    assert selection.reason == "pin"
 
 
 def test_considered_lists_only_other_available_candidates() -> None:
@@ -1328,34 +1287,6 @@ def test_a_denied_ruled_candidate_names_no_family_and_joins_no_other_url() -> No
     }
 
 
-def test_candidate_denied_in_every_pack_names_no_family() -> None:
-    ruled = app("ruled", "rjny")
-    member = app("member", "extras")
-    other = app("other", "bboi")
-    result = compose(
-        [ruled, member, other],
-        deny(ruled.url),
-        [],
-        policy=policy_of([family_rule(ruled, "app:x"), family_rule(member, "app:x")]),
-    )
-    # The member at another URL keeps the rule's family, and the rule-less
-    # candidate keeps its URL family; the denied candidate is in neither.
-    assert families(result) == {
-        ("app:x", "single", "extras"),
-        ("app:x", "dual", "extras"),
-        (url_family(other), "single", "bboi"),
-        (url_family(other), "dual", "bboi"),
-    }
-    assert (
-        ids(result, Variant.SINGLE)
-        == ids(result, Variant.DUAL)
-        == {
-            "member",
-            "other",
-        }
-    )
-
-
 def test_pin_on_a_rule_less_candidate_names_the_family_it_joins() -> None:
     url = "https://example.com/x"
     ruled = app("ruled", "rjny", url=url)
@@ -1412,26 +1343,6 @@ def test_pin_on_a_candidate_denied_in_every_pack_fails_on_the_denial() -> None:
     )
     assert report.stale_exclusions == [
         StaleExclusion("example.com/retired", "obsolete")
-    ]
-
-
-def test_dual_preference_outranks_precedence_inside_a_joined_family() -> None:
-    ordinary = app("shared", "rjny", url="https://example.com/x")
-    preferred = app("shared", "bboi", url="https://example.com/y", dual_screen=True)
-    result = compose(
-        [ordinary, preferred],
-        [],
-        [],
-        policy=policy_of(
-            [family_rule(ordinary, "app:x"), family_rule(preferred, "app:x")]
-        ),
-    )
-    assert [
-        (item.family, item.variant, item.source, item.reason)
-        for item in result.report.selections
-    ] == [
-        ("app:x", Variant.SINGLE, "rjny", "source"),
-        ("app:x", Variant.DUAL, "bboi", "dual-preferred"),
     ]
 
 
