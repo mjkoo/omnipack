@@ -23,7 +23,6 @@ from scripts.alerts import (
     NIGHTLY_PREPARE,
     NIGHTLY_PUBLISH,
     OWNERS,
-    README,
     RELEASE_ARCHIVE,
     TITLE_LIMIT,
     Finding,
@@ -1000,6 +999,7 @@ def test_cli_rejects_a_malformed_producer_with_a_usage_error(
 # --- emitters --------------------------------------------------------------
 
 STAGES = "checkout,build,allowlist,README boundary,verify,drift after verify"
+ABSENT_README = Path(__file__).parent / "fixtures" / "absent-README.md"
 
 
 def _emit(
@@ -1011,7 +1011,12 @@ def _emit(
     **env: str,
 ) -> FindingsFile:
     """The emitted file, checked to survive validation unchanged."""
-    readme_path = README if tmp_path is None else tmp_path / "README.md"
+    # Never the repository's own README; an empty one unless the test wrote one.
+    readme_path = ABSENT_README
+    if tmp_path is not None:
+        readme_path = tmp_path / "README.md"
+        if not readme_path.exists():
+            readme_path.write_bytes(b"")
     report_path = None
     if report is not None:
         assert tmp_path is not None
@@ -1499,13 +1504,18 @@ def test_failed_build_report_raises_its_items_but_scopes_no_build_key(
         ("success", "complete", 512_000, "README is nearing GitHub's render limit"),
         ("success", "complete", 460_800, None),
         ("failure", "build", 520_000, None),
+        # A README that cannot be measured leaves its key unchecked.
+        ("success", "complete", None, None),
     ],
 )
 def test_readme_size_raises_one_finding_past_the_threshold_of_a_successful_build(
-    tmp_path: Path, job: str, stage: str, size: int, title: str | None
+    tmp_path: Path, job: str, stage: str, size: int | None, title: str | None
 ) -> None:
-    # Two bytes per character, so counting characters halves the size.
-    (tmp_path / "README.md").write_text("é" * (size // 2), encoding="utf-8")
+    if size is None:
+        (tmp_path / "README.md").mkdir()
+    else:
+        # Two bytes per character, so counting characters halves the size.
+        (tmp_path / "README.md").write_text("é" * (size // 2), encoding="utf-8")
     file = _emit(
         NIGHTLY_PREPARE,
         job,
@@ -1517,6 +1527,7 @@ def test_readme_size_raises_one_finding_past_the_threshold_of_a_successful_build
 
     raised = [f for f in file.findings if f.key == "build/readme-size"]
     assert [f.title for f in raised] == ([title] if title else [])
+    assert ("build/readme-size" in file.unchecked) == (size is None)
     if title:
         assert raised[0].details == (
             f"README.md size: {size} bytes",

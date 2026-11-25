@@ -162,8 +162,8 @@ than 460,800 bytes, about 50 KiB short of the limit, raises one finding keyed
 `build/readme-size`. Its title says whether the README is nearing the limit or
 already past it and cut off; its details give the size, the threshold and the
 limit. The title carries no byte count, so the issue is not retitled as the
-README grows. It closes when a successful nightly's README is back under the
-threshold. Most of the README's size is the catalog's "Add to Obtainium"
+README grows. It closes when the README after a later successful build is back
+under the threshold, and a README the step cannot read leaves it unchanged. Most of the README's size is the catalog's "Add to Obtainium"
 links; when trimming them is no longer enough, the catalog needs another
 shape, such as splitting it across linked documents.
 

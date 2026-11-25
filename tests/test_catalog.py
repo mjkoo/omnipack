@@ -154,12 +154,14 @@ def test_gitlab_catalog_link_and_individual_import_preserve_native_identity() ->
         '{"unknownKey":null}',
         "[false]",
         "not json",
+        # Nothing to trim, so the string is not re-serialized.
+        '{"x": 1E2}',
         # A lone surrogate escape cannot be re-encoded as UTF-8.
         '{"includePrereleases":false,"x":"\\ud800"}',
         # Deep enough that decoding raises RecursionError.
         '{"x":' + "[" * 1_000_000 + "]" * 1_000_000 + "}",
     ],
-    ids=["zero", "null", "array", "invalid", "surrogate", "deep"],
+    ids=["zero", "null", "array", "invalid", "untrimmed", "surrogate", "deep"],
 )
 def test_github_link_keeps_settings_that_are_not_default_valued_objects(
     settings: str,

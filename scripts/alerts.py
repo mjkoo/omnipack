@@ -758,6 +758,7 @@ def emit_nightly_prepare(
     owner = NIGHTLY_PREPARE
     prefix = owner.prefixes[0]
     findings: list[Finding] = []
+    unchecked: list[str] = []
     scope = [
         prefix + PREPARE_STAGE_SLUGS[name]
         for name in environ.get("PREPARE_STAGES", "").split(STAGE_SEPARATOR)
@@ -780,12 +781,18 @@ def emit_nightly_prepare(
         findings += _build_warnings(report)
         if parse_literal(report.get("status"), REPORT_STATUSES) == "success":
             scope.append(_BUILD_PREFIX)
-            findings += _readme_size(readme_path)
+            readme = _readme_size(readme_path)
+            if readme is None:
+                # An unmeasured README must not close an open size issue.
+                unchecked.append(BUILD_README_SIZE)
+            else:
+                findings += readme
     return _finish(
         owner,
         environ,
         findings,
         scope,
+        unchecked,
         accounted=failed_stage in PREPARE_STAGE_SLUGS,
     )
 
@@ -881,14 +888,15 @@ def _build_warnings(report: Mapping[str, object]) -> list[Finding]:
     return findings
 
 
-def _readme_size(path: Path) -> list[Finding]:
-    """The README-size finding when the README at `path` exceeds the threshold."""
+def _readme_size(path: Path) -> list[Finding] | None:
+    """The README-size finding when the README at `path` exceeds the threshold,
+    or None when it cannot be measured."""
     if regular_file_problem(path) is not None:
-        return []
+        return None
     try:
         size = path.stat().st_size
     except OSError:
-        return []
+        return None
     if size <= README_SIZE_THRESHOLD:
         return []
     # The title carries no size, so a growing README does not retitle the

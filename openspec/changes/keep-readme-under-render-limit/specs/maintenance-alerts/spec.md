@@ -62,7 +62,8 @@ source's differing fields. A finding for a repeated package id SHALL name the
 variant, the package id and each entry's family and project URL. A README-size
 finding's title SHALL say whether the README exceeds GitHub's 512,000-byte
 render limit and SHALL NOT carry the size, and its details SHALL give the
-size in bytes, the 460,800-byte threshold and the limit. No release
+size in bytes, the 460,800-byte threshold and the limit, and a README the
+alert step cannot read SHALL count as not re-checking that finding's key. No release
 archive target's outcome SHALL raise a finding, whatever that outcome is;
 per-target outcomes stay in the run report. A stale or
 archived finding SHALL NOT be
