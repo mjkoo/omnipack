@@ -49,7 +49,9 @@ structure or create HTML elements.
 #### Scenario: Variant builds differ
 
 - **WHEN** a family uses different package IDs, repositories or settings across variants
-- **THEN** one row presents both exact configurations and their own source links
+- **THEN** one row presents both configurations, each with its own source link
+  and an import link carrying that variant's record as the individual link
+  requirement defines it
 
 #### Scenario: Dual-only uncategorized app
 
@@ -88,9 +90,14 @@ structure or create HTML elements.
 
 ### Requirement: Individual links preserve exported app configuration
 
-Each link SHALL use the documented Obtainium HTTPS redirect with an app deep link
-carrying the complete final exported JSON object. Decoding the redirect parameter
-and deep-link payload SHALL recover that app object exactly, preserving field
+Each link SHALL use the documented Obtainium HTTPS redirect with an app deep
+link carrying the final exported JSON object, except that for an entry whose
+source type is GitHub or GitLab, each additionalSettings key whose value equals
+that source's value in omnipack's committed settings defaults table SHALL be
+left out. An entry whose additionalSettings string does not decode to a JSON
+object, or whose trimmed settings cannot be re-encoded as UTF-8, SHALL be linked
+with its settings unchanged. Decoding the redirect parameter and deep-link
+payload SHALL recover every other field and setting exactly, preserving field
 types, unknown fields and string-valued additionalSettings. Pack-wide settings
 SHALL NOT be included. Link generation SHALL be deterministic and network-free.
 
@@ -98,6 +105,27 @@ SHALL NOT be included. Link generation SHALL be deterministic and network-free.
 
 - **WHEN** app fields contain Unicode, percent signs, ampersands, hashes or regex escapes
 - **THEN** decoding the generated link recovers every value and type unchanged
+
+#### Scenario: A GitHub entry carries default-valued settings
+
+- **WHEN** a GitHub entry's additionalSettings hold one setting at its value
+  in the GitHub defaults table and one setting at another value
+- **THEN** decoding its link recovers the entry without the default-valued
+  setting, with the other setting and every other field unchanged
+
+#### Scenario: An HTML entry carries default-valued settings
+
+- **WHEN** an HTML entry's additionalSettings hold settings at their values in
+  the HTML defaults table
+- **THEN** decoding its link recovers the entry exactly, those settings
+  included
+
+#### Scenario: A GitHub entry's settings cannot be trimmed
+
+- **WHEN** a GitHub entry's additionalSettings string does not decode to a JSON
+  object, or decodes to one holding a lone surrogate escape that UTF-8 cannot
+  encode
+- **THEN** decoding its link recovers the entry exactly
 
 ### Requirement: Generation only replaces a marked catalog section
 
